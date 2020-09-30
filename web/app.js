@@ -971,7 +971,9 @@ const PDFViewerApplication = {
         const blob = new Blob([data], { type: "application/pdf" });
         downloadManager.download(blob, url, filename, sourceEventType);
       })
-      .catch(() => {
+      .catch((error) => {
+        console.log("Error during the download:");
+        console.log(error);
         this.download({ sourceEventType });
       })
       .finally(() => {
