@@ -145,7 +145,7 @@ class BaseViewer {
     this.viewer = options.viewer || options.container.firstElementChild;
 
     /** #495 modified by ngx-extended-pdf-viewer */
-    this.pageMode = "single";
+    this.pageViewMode = options.pageViewMode || "single";
     /** end of modification */
 
     if (
@@ -249,8 +249,8 @@ class BaseViewer {
     }
 
     /** #495 modified by ngx-extended-pdf-viewer */
-    this.hidePagesDependingOnPageMode();
-    if (this.pageMode === "single") {
+    this.hidePagesDependingOnpageViewMode();
+    if (this.pageViewMode === "single") {
       const pageView = this._pages[this.currentPageNumber-1];
       this._ensurePdfPageLoaded(pageView).then(() => {
         this.renderingQueue.renderView(pageView);
@@ -260,8 +260,8 @@ class BaseViewer {
   }
 
   /** #495 modified by ngx-extended-pdf-viewer */
-  hidePagesDependingOnPageMode() {
-    if (this.pageMode === "single") {
+  hidePagesDependingOnpageViewMode() {
+    if (this.pageViewMode === "single") {
       this._pages.forEach((page) => {
         page.div.style.display = (page.id === this.currentPageNumber) ? "block" : "none";
       });
@@ -600,7 +600,7 @@ class BaseViewer {
         });
 
         /** #495 modified by ngx-extended-pdf-viewer */
-        this.hidePagesDependingOnPageMode();
+        this.hidePagesDependingOnpageViewMode();
         /** end of modification */
 
         this.eventBus.dispatch("pagesinit", { source: this });
@@ -679,7 +679,7 @@ class BaseViewer {
 
   _scrollIntoView({ pageDiv, pageSpot = null, pageNumber = null }) {
     /** #495 modified by ngx-extended-pdf-viewer */
-    if (this.pageMode === "single") {
+    if (this.pageViewMode === "single") {
       this._pages.forEach(() => {
         pageDiv.style.display = "block";
       });
@@ -928,6 +928,13 @@ class BaseViewer {
       }
     }
 
+    /** #495 modified by ngx-extended-pdf-viewer */
+    this._ensurePdfPageLoaded(pageView).then(() => {
+      this.renderingQueue.renderView(pageView);
+    });
+    /** end of modification */
+
+
     if (scale === "page-fit" && !destArray[4]) {
       this._scrollIntoView({
         pageDiv: pageView.div,
@@ -1076,7 +1083,7 @@ class BaseViewer {
 
   _getVisiblePages() {
     /** #495 modified by ngx-extended-pdf-viewer */
-    if (this.pageMode === 'single') {
+    if (this.pageViewMode === 'single') {
       return this._getCurrentVisiblePage();
     }
     /** end of modification */
