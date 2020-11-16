@@ -10,9 +10,9 @@
     "@babel/runtime": "^7.12.5",
     "acorn": "^7.4.1",
     "autoprefixer": "^9.8.6",
-    "babel-loader": "^8.1.0",
+    "babel-loader": "^8.2.1",
     "canvas": "^2.6.1",
-    "canvas-size": "^1.2.0",
+    "canvas-size": "^1.2.1",
     "core-js": "^3.7.0",
     "cross-env": "^7.0.2",
     "es-module-shims": "^0.4.7",
@@ -20,9 +20,9 @@
     "eslint": "^7.12.1",
     "eslint-config-prettier": "^6.15.0",
     "eslint-plugin-fetch-options": "^0.0.5",
-    "eslint-plugin-html": "^6.1.0",
+    "eslint-plugin-html": "^6.1.1",
     "eslint-plugin-import": "^2.22.1",
-    "eslint-plugin-mozilla": "^2.8.0",
+    "eslint-plugin-mozilla": "^2.9.1",
     "eslint-plugin-no-unsanitized": "^3.1.4",
     "eslint-plugin-prettier": "^3.1.4",
     "eslint-plugin-unicorn": "^20.1.0",
@@ -59,7 +59,7 @@
     "vinyl-fs": "^3.0.3",
     "web-streams-polyfill": "^2.1.1",
     "webpack": "^4.44.2",
-    "webpack-stream": "~6.1.0",
+    "webpack-stream": "^6.1.1",
     "wintersmith": "^2.5.0",
     "yargs": "^11.1.1"
   },
@@ -72,7 +72,5 @@
     "url": "git://github.com/mozilla/pdf.js.git"
   },
   "license": "Apache-2.0",
-  "dependencies": {
-    "canvas-size": "^1.2.0"
-  }
+  "dependencies": {}
 }
