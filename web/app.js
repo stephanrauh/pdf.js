@@ -709,6 +709,15 @@ const PDFViewerApplication = {
       },
       onProgress(loaded, total) {
         PDFViewerApplication.progress(loaded / total);
+        // #588 modified by ngx-extended-pdf-viewer
+        this.eventBus.dispatch("progress", {
+          source: this,
+          type: "load",
+          total,
+          loaded,
+          percent: (100 * loaded) / total,
+        });
+        // #588 end of modification
       },
     });
   },
@@ -860,6 +869,15 @@ const PDFViewerApplication = {
 
     loadingTask.onProgress = ({ loaded, total }) => {
       this.progress(loaded / total);
+      // #588 modified by ngx-extended-pdf-viewer
+      this.eventBus.dispatch("progress", {
+        source: this,
+        type: "load",
+        total,
+        loaded,
+        percent: (100 * loaded) / total,
+      });
+      // #588 end of modification
     };
 
     // Listen for unsupported features to trigger the fallback UI.
@@ -1740,7 +1758,8 @@ const PDFViewerApplication = {
       printContainer,
       printResolution,
       optionalContentConfigPromise,
-      this.l10n
+      this.l10n,
+      this.pdfViewer.eventBus // #588 modified by ngx-extended-pdf-viewer
     );
     this.printService = printService;
     this.forceRendering();
