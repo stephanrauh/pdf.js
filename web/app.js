@@ -568,9 +568,9 @@ const PDFViewerApplication = {
 
     let newScale = this.pdfViewer.currentScale;
     // modified by ngx-extended-pdf-viewer #367
-    const maxScale = Number(AppOptions.get("maxZoom"));
+    let maxScale = Number(AppOptions.get("maxZoom"));
     if (!maxScale) {
-      maxScale = MAX_SCALE
+      maxScale = MAX_SCALE;
     }
     do {
       newScale = (newScale * DEFAULT_SCALE_DELTA).toFixed(2);
@@ -587,7 +587,7 @@ const PDFViewerApplication = {
     }
     let newScale = this.pdfViewer.currentScale;
     // modified by ngx-extended-pdf-viewer #367
-    const minScale = Number(AppOptions.get("minZoom"));
+    let minScale = Number(AppOptions.get("minZoom"));
     if (!minScale) {
       minScale = MIN_SCALE;
     }
