@@ -729,7 +729,6 @@ const PDFViewerApplication = {
   initializeLoadingBar() {
     const bar = new ProgressBar("#loadingBar");
     bar.hide();
-    console.log("Loading bar = " + bar);
     return shadow(this, "loadingBar", bar);
   },
   // get loadingBar() {
