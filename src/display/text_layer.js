@@ -599,12 +599,14 @@ const renderTextLayer = (function renderTextLayerClosure() {
           this._layoutTextLastFontFamily = fontFamily;
         }
         // Only measure the width for multi-char text divs, see `appendText`.
-        const { width } = this._layoutTextCtx.measureText(textDiv.textContent);
+        try { // #707 modified by ngx-extended-pdf-viewer
+	        const { width } = this._layoutTextCtx.measureText(textDiv.textContent);
 
-        if (width > 0) {
-          textDivProperties.scale = textDivProperties.canvasWidth / width;
-          transform = `scaleX(${textDivProperties.scale})`;
-        }
+	        if (width > 0) {
+	          textDivProperties.scale = textDivProperties.canvasWidth / width;
+	          transform = `scaleX(${textDivProperties.scale})`;
+	        }
+	      } catch (fingerprintingProtectionIsActiveException)  {} // #707 modified by ngx-extended-pdf-viewer
       }
       if (textDivProperties.angle !== 0) {
         transform = `rotate(${textDivProperties.angle}deg) ${transform}`;
