@@ -2777,7 +2777,7 @@ function webViewerUpdateViewarea(evt) {
   if (store && PDFViewerApplication.isInitialViewSet) {
     // #90 #543 modified by ngx-extended-pdf-viewer
     const settings = {};
-    if (location.pageNumber) {
+    if (location.pageNumber !== undefined || location.pageNumber !== null) {
       settings.page = location.pageNumber;
     }
     if (location.scale) {
@@ -2789,7 +2789,7 @@ function webViewerUpdateViewarea(evt) {
     if (location.top) {
       settings.scrollTop = location.top;
     }
-    if (location.rotation) {
+    if (location.rotation !== undefined || location.rotation !== null) {
       settings.rotation = location.rotation;
     }
     store
