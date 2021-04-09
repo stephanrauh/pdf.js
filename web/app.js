@@ -295,7 +295,8 @@ const PDFViewerApplication = {
 
     this._initializedCapability.resolve();
 
-    /* modified by ngx-extended-pdf-viewer #633. The shadow() function        */
+    /* modified by ngx-extended-pdf-viewer #633.
+       The shadow() function must be called each time the PDF viewer is initialized. */
     this.initializeLoadingBar();
     /* #633 end of modification */
   },
@@ -1003,6 +1004,7 @@ const PDFViewerApplication = {
     // Listen for unsupported features to trigger the fallback UI.
     loadingTask.onUnsupportedFeature = this.fallback.bind(this);
 
+    this.loadingBar.show(); // #707 added by ngx-extended-pdf-viewer
     return loadingTask.promise.then(
       pdfDocument => {
         this.load(pdfDocument);
