@@ -978,6 +978,12 @@ class PDFDocumentProxy {
   saveDocument() {
     if (
       (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+      arguments.length > 0
+    ) {
+      deprecated("saveDocument no longer accepts any options.");
+    }
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
       this._transport.annotationStorage.size <= 0
     ) {
       deprecated(
