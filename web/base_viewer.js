@@ -1148,6 +1148,9 @@ class BaseViewer {
       source: this,
       location: this._location,
     });
+    // #859 modified by ngx-extended-pdf-viewer
+    this.hidePagesDependingOnpageViewMode();
+    // #859 end of modification
   }
 
   containsElement(element) {
