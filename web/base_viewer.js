@@ -276,8 +276,35 @@ class BaseViewer {
   /** #495 modified by ngx-extended-pdf-viewer */
   hidePagesDependingOnpageViewMode() {
     if (this.pageViewMode === "single") {
-      this._pages.forEach((page) => {
-        page.div.style.display = (page.id === this.currentPageNumber) ? "block" : "none";
+      this._pages.forEach(page => {
+        page.div.style.display = "none";
+        page.div.style.left = 0;
+        page.div.style.marginTop = 0;
+      });
+      this._pages.forEach(page => {
+        const showIt = page.id === this.currentPageNumber;
+        if (showIt) {
+          page.div.style.display = "block";
+          if (page.div.parentElement.classList.contains("spread")) {
+            let width = 0;
+            let height = 0;
+            page.div.parentElement.childNodes.forEach((div, index) => {
+              div.style.display = "block";
+              if (index === 0) {
+                width = div.offsetWidth;
+                height = div.offsetHeight;
+              } else {
+                // put the second page to the left-hand side of the first page
+                div.style.left = width + "px";
+                div.style.marginTop = -height + "px";
+              }
+            });
+            if (page.div.parentElement.childNodes.length === 1)  {
+              // center the page
+              page.div.style.left = (page.div.offsetWidth / 2) + "px";
+            }
+          }
+        }
       });
     }
   }
@@ -304,13 +331,23 @@ class BaseViewer {
     /** #495 modified by ngx-extended-pdf-viewer */
     this.hidePagesDependingOnpageViewMode();
     if (this.pageViewMode === "single" || this.pageViewMode === "infinite-scroll") {
-      const pageView = this._pages[this.currentPageNumber-1];
-      this._ensurePdfPageLoaded(pageView).then(() => {
-        this.renderingQueue.renderView(pageView);
-      });
+      const pageView = this._pages[this.currentPageNumber - 1];
+      if (pageView.div.parentElement.classList.contains("spread")) {
+        pageView.div.parentElement.childNodes.forEach(div => {
+          const pageNumber = Number(div.getAttribute("data-page-number"));
+          const pv = this._pages[pageNumber - 1];
+          this._ensurePdfPageLoaded(pv).then(() => {
+            this.renderingQueue.renderView(pv);
+          });
+          div.style.display = "block";
+        });
+      } else {
+        this._ensurePdfPageLoaded(pageView).then(() => {
+          this.renderingQueue.renderView(pageView);
+        });
+      }
     }
     /** end of modification */
-
 
     this.eventBus.dispatch("pagechanging", {
       source: this,
@@ -1179,7 +1216,25 @@ class BaseViewer {
 
   _getVisiblePages() {
     /** #495 modified by ngx-extended-pdf-viewer */
-    if (this.pageViewMode === 'single') {
+    if (this.pageViewMode === "single") {
+      const pageView = this._pages[this._currentPageNumber - 1];
+      if (pageView.div.parentElement.classList.contains("spread")) {
+        const pageViews = [];
+        pageView.div.parentElement.childNodes.forEach(div => {
+          const pageNumber = Number(div.getAttribute("data-page-number"));
+          const pv = this._pages[pageNumber - 1];
+          const element = pv.div;
+
+          const view = {
+            id: pv.id,
+            x: element.offsetLeft + element.clientLeft,
+            y: element.offsetTop + element.clientTop,
+            view: pv,
+          };
+          pageViews.push(view);
+        });
+        return { first: pageViews[0], last: pageViews[pageViews.length - 1], views: pageViews };
+      }
       return this._getCurrentVisiblePage();
     }
     /** end of modification */
@@ -1573,8 +1628,10 @@ class BaseViewer {
     }
     const viewer = this.viewer,
       pages = this._pages;
+
     // Temporarily remove all the pages from the DOM.
     viewer.textContent = "";
+
 
     if (this._spreadMode === SpreadMode.NONE) {
       for (let i = 0, iMax = pages.length; i < iMax; ++i) {
@@ -1595,6 +1652,10 @@ class BaseViewer {
         spread.appendChild(pages[i].div);
       }
     }
+
+    // #859 modified by ngx-extended-pdf-viewer
+    this.hidePagesDependingOnpageViewMode();
+    // end of modification by ngx-extended-pdf-viewer
 
     if (!pageNumber) {
       return;
@@ -1680,6 +1741,10 @@ class BaseViewer {
         if (this._spreadMode === SpreadMode.NONE) {
           break; // Normal vertical scrolling.
         }
+        if (this.pageViewMode === "single") {
+          return 2;
+        }
+
         const parity = this._spreadMode - 1;
 
         if (previous && currentPageNumber % 2 !== parity) {
