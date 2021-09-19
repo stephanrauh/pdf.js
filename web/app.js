@@ -2035,9 +2035,11 @@ const PDFViewerApplication = {
 
     window.addEventListener("visibilitychange", webViewerVisibilityChange);
     window.addEventListener("wheel", webViewerWheel, { passive: false });
-    window.addEventListener("touchstart", webViewerTouchStart, {
-      passive: false,
-    });
+    // #914 modified by ngx-extended-pdf-viewer
+    // window.addEventListener("touchstart", webViewerTouchStart, {
+    //  passive: false,
+    // });
+    // #914 end of modification by ngx-extended-pdf-viewer
     window.addEventListener("click", webViewerClick);
     window.addEventListener("keydown", webViewerKeyDown);
     window.addEventListener("resize", _boundEvents.windowResize);
@@ -2112,9 +2114,11 @@ const PDFViewerApplication = {
 
     window.removeEventListener("visibilitychange", webViewerVisibilityChange);
     window.removeEventListener("wheel", webViewerWheel, { passive: false });
-    window.removeEventListener("touchstart", webViewerTouchStart, {
-      passive: false,
-    });
+    // #914 modified by ngx-extended-pdf-viewer
+    // window.removeEventListener("touchstart", webViewerTouchStart, {
+    //  passive: false,
+    // });
+    // #914 end of modification
     window.removeEventListener("click", webViewerClick);
     window.removeEventListener("keydown", webViewerKeyDown);
     window.removeEventListener("resize", _boundEvents.windowResize);
@@ -2881,8 +2885,9 @@ function webViewerWheel(evt) {
   }
 }
 
-function webViewerTouchStart(evt) {
-  if (evt.touches.length > 1) {
+// #914 modified by ngx-extended-pdf-viewer
+// function webViewerTouchStart(evt) {
+//  if (evt.touches.length > 1) {
     // Disable touch-based zooming, because the entire UI bits gets zoomed and
     // that doesn't look great. If we do want to have a good touch-based
     // zooming experience, we need to implement smooth zoom capability (probably
@@ -2891,9 +2896,10 @@ function webViewerTouchStart(evt) {
     // touchmove events to drive it. Or if we want to settle for a less good
     // experience we can make the touchmove events drive the existing step-zoom
     // behaviour that the ctrl+mousewheel path takes.
-    evt.preventDefault();
-  }
-}
+//    evt.preventDefault();
+//  }
+// }
+// #914 end of modification
 
 function webViewerClick(evt) {
   if (!PDFViewerApplication.secondaryToolbar.isOpen) {
