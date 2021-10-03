@@ -2080,6 +2080,12 @@ class AnnotationLayer {
       sortedAnnotations.push(...popupAnnotations);
     }
 
+    // #958 modified by ngx-extended-pdf-viewer
+    if (window.registerAcroformAnnotations) {
+      window.registerAcroformAnnotations(sortedAnnotations);
+    }
+    // #958 end of modification by ngx-extended-pdf-viewer
+
     for (const data of sortedAnnotations) {
       const element = AnnotationElementFactory.create({
         data,
