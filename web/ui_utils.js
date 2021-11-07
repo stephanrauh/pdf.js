@@ -112,7 +112,7 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
     return;
   }
   // #716 end of modification
-  
+
   let parent = element.offsetParent;
   if (!parent) {
     console.error("offsetParent is not set -- cannot scroll");
@@ -462,7 +462,7 @@ function getVisibleElements({
   horizontal = false,
   rtl = false,
 }) {
-  const top = scrollEl.scrollTop,
+  const top = scrollEl.scrollTop,   // performance measuring: 761 ms
     bottom = top + scrollEl.clientHeight;
   const left = scrollEl.scrollLeft,
     right = left + scrollEl.clientWidth;
@@ -722,7 +722,9 @@ const animationStarted = new Promise(function (resolve) {
     setTimeout(resolve, 20);
     return;
   }
-  window.requestAnimationFrame(resolve);
+  window.ngxZone.runOutsideAngular(() => {
+    window.requestAnimationFrame(resolve);
+  });
 });
 
 /**
@@ -906,7 +908,7 @@ class ProgressBar {
     if (!viewer) {
       return;
     }
-    const container = viewer.parentNode;
+    const container = viewer.parentNode; // performance measuring: 1274 ms
     const scrollbarWidth = container.offsetWidth - viewer.offsetWidth;
     if (scrollbarWidth > 0) {
       const doc = document.documentElement;
