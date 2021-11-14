@@ -99,7 +99,7 @@ class PDFScriptingManager {
     try {
       this._scripting = this._createScripting();
     } catch (error) {
-      console.error(`PDFScriptingManager.setDocument: "${error?.message}".`);
+      Window['ngxConsole'].error(`PDFScriptingManager.setDocument: "${error?.message}".`);
 
       await this._destroyScripting();
       return;
@@ -177,7 +177,7 @@ class PDFScriptingManager {
 
       this._eventBus.dispatch("sandboxcreated", { source: this });
     } catch (error) {
-      console.error(`PDFScriptingManager.setDocument: "${error?.message}".`);
+      Window['ngxConsole'].error(`PDFScriptingManager.setDocument: "${error?.message}".`);
 
       await this._destroyScripting();
       return;
@@ -284,7 +284,7 @@ class PDFScriptingManager {
           console.clear();
           break;
         case "error":
-          console.error(value);
+          Window['ngxConsole'].error(value);
           break;
         case "layout":
           this._pdfViewer.spreadMode = apiPageLayoutToSpreadMode(value);
@@ -297,7 +297,7 @@ class PDFScriptingManager {
           this._eventBus.dispatch("print", { source: this });
           break;
         case "println":
-          console.log(value);
+          Window['ngxConsole'].log(value);
           break;
         case "zoom":
           if (isInPresentationMode) {

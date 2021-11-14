@@ -84,7 +84,7 @@ class Sandbox {
         [buf, this._alertOnError]
       );
     } catch (error) {
-      console.error(error);
+      Window['ngxConsole'].error(error);
     } finally {
       if (buf) {
         this._module.ccall("free", "number", ["number"], [buf]);

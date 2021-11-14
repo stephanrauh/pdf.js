@@ -543,7 +543,7 @@ function loadScript(src, removeScriptElement = false) {
 
 // Deprecated API function -- display regardless of the `verbosity` setting.
 function deprecated(details) {
-  console.log("Deprecated API usage: " + details);
+  Window['ngxConsole'].log("Deprecated API usage: " + details);
 }
 
 let pdfDateStringRegex;

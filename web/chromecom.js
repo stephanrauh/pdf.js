@@ -44,7 +44,7 @@ const ChromeCom = {
       data,
     };
     if (!chrome.runtime) {
-      console.error("chrome.runtime is undefined.");
+      Window['ngxConsole'].error("chrome.runtime is undefined.");
       if (callback) {
         callback();
       }

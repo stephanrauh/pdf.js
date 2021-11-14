@@ -88,7 +88,7 @@ class PDFThumbnailViewer {
     const thumbnailView = this._thumbnails[pageNumber - 1];
 
     if (!thumbnailView) {
-      console.error('scrollThumbnailIntoView: Invalid "pageNumber" parameter.');
+      Window['ngxConsole'].error('scrollThumbnailIntoView: Invalid "pageNumber" parameter.');
       return;
     }
 
@@ -227,7 +227,7 @@ class PDFThumbnailViewer {
         thumbnailView.div.classList.add(THUMBNAIL_SELECTED_CLASS);
       })
       .catch(reason => {
-        console.error("Unable to initialize thumbnail viewer", reason);
+        Window['ngxConsole'].error("Unable to initialize thumbnail viewer", reason);
       });
   }
 
@@ -255,7 +255,7 @@ class PDFThumbnailViewer {
       !(Array.isArray(labels) && this.pdfDocument.numPages === labels.length)
     ) {
       this._pageLabels = null;
-      console.error("PDFThumbnailViewer_setPageLabels: Invalid page labels.");
+      Window['ngxConsole'].error("PDFThumbnailViewer_setPageLabels: Invalid page labels.");
     } else {
       this._pageLabels = labels;
     }
@@ -287,7 +287,7 @@ class PDFThumbnailViewer {
         return pdfPage;
       })
       .catch(reason => {
-        console.error("Unable to get page for thumb view", reason);
+        Window['ngxConsole'].error("Unable to get page for thumb view", reason);
         // Page error -- there is nothing that can be done.
         this._pagesRequests.delete(thumbView);
       });
