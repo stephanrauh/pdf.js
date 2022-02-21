@@ -2600,6 +2600,9 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
         url = { url, originalUrl: file.name };
       }
       PDFViewerApplication.open(url);
+      if (window["setNgxExtendedPdfViewerSource"]) {
+        window["setNgxExtendedPdfViewerSource"](file.name ? file.name : url);
+      }
     } else {
       PDFViewerApplication.setTitleUsingUrl(file.name);
       // Read the local file into a Uint8Array.
