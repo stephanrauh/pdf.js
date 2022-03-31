@@ -481,15 +481,7 @@ class LinkAnnotationElement extends AnnotationElement {
     const link = document.createElement("a");
 
     if (data.url) {
-      if (
-        (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
-        !linkService.addLinkAttributes
-      ) {
-        warn(
-          "LinkAnnotationElement.render - missing `addLinkAttributes`-method on the `linkService`-instance."
-        );
-      }
-      linkService.addLinkAttributes?.(link, data.url, data.newWindow);
+      linkService.addLinkAttributes(link, data.url, data.newWindow);
     } else if (data.action) {
       this._bindNamedAction(link, data.action);
     } else if (data.dest) {
@@ -1377,18 +1369,9 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
     const storage = this.annotationStorage;
     const id = this.data.id;
 
-    // For printing/saving we currently only support choice widgets with one
-    // option selection. Therefore, listboxes (#12189) and comboboxes (#12224)
-    // are not properly printed/saved yet, so we only store the first item in
-    // the field value array instead of the entire array. Once support for those
-    // two field types is implemented, we should use the same pattern as the
-    // other interactive widgets where the return value of `getValue`
-    // is used and the full array of field values is stored.
-    const fieldvalue = storage.getValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
-      value: this.data.fieldValue.length > 0 ? this.data.fieldValue[0] : undefined,
-    }).value; // #718 modified by ngx-extended-pdf-viewer
-
-    this.data.fieldValue = fieldvalue; // #718 modified by ngx-extended-pdf-viewer
+    const storedData = storage.getValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
+      value: this.data.fieldValue,
+    });
 
     let { fontSize } = this.data.defaultAppearanceData;
     if (!fontSize) {
@@ -1428,7 +1411,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
       if (this.data.combo) {
         optionElement.style.fontSize = fontSizeStyle;
       }
-      if (this.data.fieldValue.includes(option.exportValue)) {
+      if (storedData.value.includes(option.exportValue)) {
         optionElement.setAttribute("selected", true);
       }
       selectElement.appendChild(optionElement);
@@ -1584,7 +1567,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
     } else {
       selectElement.addEventListener("input", event => { // #718 modified by ngx-extended-pdf-viewer
         storage.setValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
-          value: getValue(event),
+          value: getValue(event, /* isExport */ true),
           radioValue: getValue(event, true), // #718 modified by ngx-extended-pdf-viewer
         });
       });
