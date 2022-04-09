@@ -505,6 +505,9 @@ async function _fetchDocument(worker, source, pdfDataRangeTransport, docId) {
   if (cMapUrl.constructor.name === "Function") {
     cMapUrl = cMapUrl();
   }
+  // #1292 modified by ngx-extended-pdf-viewer
+  const standardFontDataUrl = typeof source.standardFontDataUrl === "function" ? source.standardFontDataUrl() : source.standardFontDataUrl;
+  // #1292 end of modification by ngx-extended-pdf-viewer
   const workerId = await worker.messageHandler.sendWithPromise(
     "GetDocRequest",
     {
@@ -532,7 +535,7 @@ async function _fetchDocument(worker, source, pdfDataRangeTransport, docId) {
       useSystemFonts: source.useSystemFonts,
       cMapUrl: source.useWorkerFetch ? cMapUrl : null,
       standardFontDataUrl: source.useWorkerFetch
-        ? source.standardFontDataUrl
+        ? standardFontDataUrl // #1292 modified by ngx-extended-pdf-viewer
         : null,
     }
   );
