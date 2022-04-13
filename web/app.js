@@ -2766,6 +2766,14 @@ function setZoomDisabledTimeout() {
 }
 
 function webViewerWheel(evt) {
+  // #1302 modified by ngx-extended-pdf-viewer
+  const element = document.getElementById("viewerContainer");
+  const hover = element.parentNode.querySelector(":hover");
+  if (hover !== element) {
+    return;
+  }
+  // end of modification by ngx-extended-pdf-viewer
+
   const { pdfViewer, supportedMouseWheelZoomModifierKeys } =
     PDFViewerApplication;
 
