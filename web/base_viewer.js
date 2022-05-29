@@ -1116,6 +1116,12 @@ class BaseViewer {
   // #1301 end of modification by ngx-extended-pdf-viewer
 
   #scrollIntoView(pageView, pageSpot = null) {
+    // modified by ngx-extended-pdf-viewer
+    // to fix a bug that's basically caused by the showcase demo
+    if (!pageView) {
+      return;
+    }
+    // end of modification by ngx-extended-pdf-viewer
     const { div, id } = pageView;
 
     if (this._scrollMode === ScrollMode.PAGE) {
