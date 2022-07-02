@@ -377,7 +377,7 @@ function abort() {
 }
 
 function renderProgress(index, total, l10n, eventBus) { // #588 modified by ngx-extended-pdf-viewer
-  dialog ||= document.getElementById("printServiceDialog");
+  dialog = document.getElementById("printServiceDialog"); // #1434 modified by ngx-extended-pdf-viewer
   const progress = Math.round((100 * index) / total);
   const progressBar = dialog.querySelector("progress");
   const progressPerc = dialog.querySelector(".relative-progress");
@@ -441,7 +441,7 @@ function ensureOverlay() {
     if (!overlayManager) {
       throw new Error("The overlay manager has not yet been initialized.");
     }
-    dialog ||= document.getElementById("printServiceDialog");
+    dialog = document.getElementById("printServiceDialog"); // #1434 modified by ngx-extended-pdf-viewer
 
     overlayPromise = overlayManager.register(
       dialog,
