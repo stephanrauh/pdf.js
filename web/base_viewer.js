@@ -128,7 +128,6 @@ function isValidAnnotationEditorMode(mode) {
  *   mainly for annotation icons. Include trailing slash.
  * @property {boolean} [enablePrintAutoRotate] - Enables automatic rotation of
  *   landscape pages upon printing. The default is `false`.
- * @property {string} renderer - 'canvas' or 'svg'. The default is 'canvas'.
  * @property {boolean} [useOnlyCssZoom] - Enables CSS only zooming. The default
  *   value is `false`.
  * @property {number} [maxCanvasPixels] - The maximum supported canvas size in
@@ -276,7 +275,12 @@ class BaseViewer {
       options.annotationEditorMode ?? ANNOTATION_EDITOR_MODE;
     this.imageResourcesPath = options.imageResourcesPath || "";
     this.enablePrintAutoRotate = options.enablePrintAutoRotate || false;
-    this.renderer = options.renderer || RendererType.CANVAS;
+    if (
+      typeof PDFJSDev === "undefined" ||
+      PDFJSDev.test("!PRODUCTION || GENERIC")
+    ) {
+      this.renderer = options.renderer || RendererType.CANVAS;
+    }
     this.useOnlyCssZoom = options.useOnlyCssZoom || false;
     this.maxCanvasPixels = options.maxCanvasPixels;
     this.l10n = options.l10n || NullL10n;
@@ -875,6 +879,7 @@ class BaseViewer {
             });
 
             this.#annotationEditorUIManager = new AnnotationEditorUIManager(
+              this.container,
               this.eventBus
             );
             if (mode !== AnnotationEditorType.NONE) {
@@ -955,7 +960,10 @@ class BaseViewer {
 
           // In addition to 'disableAutoFetch' being set, also attempt to reduce
           // resource usage when loading *very* long/large documents.
-          if (pdfDocument.loadingParams.disableAutoFetch || pagesCount > PagesCountLimit.FORCE_LAZY_PAGE_INIT) {
+          if (
+            pdfDocument.loadingParams.disableAutoFetch ||
+            pagesCount > PagesCountLimit.FORCE_LAZY_PAGE_INIT
+          ) {
             // XXX: Printing is semi-broken with auto fetch disabled.
             this._pagesCapability.resolve();
             return;
@@ -1074,7 +1082,10 @@ class BaseViewer {
       this._onAfterDraw = null;
     }
     if (this.#onVisibilityChange) {
-      document.removeEventListener("visibilitychange", this.#onVisibilityChange);
+      document.removeEventListener(
+        "visibilitychange",
+        this.#onVisibilityChange
+      );
       this.#onVisibilityChange = null;
     }
     // Remove the pages from the DOM...

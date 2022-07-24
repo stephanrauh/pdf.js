@@ -82,7 +82,6 @@ import { warn } from "../src/shared/util.js";
  * @property {Object} [textHighlighterFactory]
  * @property {string} [imageResourcesPath] - Path for image resources, mainly
  *   for annotation icons. Include trailing slash.
- * @property {string} renderer - 'canvas' or 'svg'. The default is 'canvas'.
  * @property {boolean} [useOnlyCssZoom] - Enables CSS only zooming. The default
  *   value is `false`.
  * @property {number} [maxCanvasPixels] - The maximum supported canvas size in
@@ -141,7 +140,12 @@ class PDFPageView {
         this.eventBus
       );
     this.structTreeLayerFactory = options.structTreeLayerFactory;
-    this.renderer = options.renderer || RendererType.CANVAS;
+    if (
+      typeof PDFJSDev === "undefined" ||
+      PDFJSDev.test("!PRODUCTION || GENERIC")
+    ) {
+      this.renderer = options.renderer || RendererType.CANVAS;
+    }
     this.l10n = options.l10n || NullL10n;
 
     this.paintTask = null;
@@ -346,7 +350,11 @@ class PDFPageView {
       }
       this._resetZoomLayer();
     }
-    if (this.svg) {
+    if (
+      (typeof PDFJSDev === "undefined" ||
+        PDFJSDev.test("!PRODUCTION || GENERIC")) &&
+      this.svg
+    ) {
       this.paintedViewportMap.delete(this.svg);
       delete this.svg;
     }
@@ -382,7 +390,11 @@ class PDFPageView {
       docStyle.setProperty("--scale-factor", this.viewport.scale);
     }
 
-    if (this.svg) {
+    if (
+      (typeof PDFJSDev === "undefined" ||
+        PDFJSDev.test("!PRODUCTION || GENERIC")) &&
+      this.svg
+    ) {
       this.cssTransform({
         target: this.svg,
         redrawAnnotationLayer: true,
@@ -735,6 +747,8 @@ class PDFPageView {
     };
 
     const paintTask =
+      (typeof PDFJSDev === "undefined" ||
+        PDFJSDev.test("!PRODUCTION || GENERIC")) &&
       this.renderer === RendererType.SVG
         ? this.paintOnSvg(canvasWrapper)
         : this.paintOnCanvas(canvasWrapper);

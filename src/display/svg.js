@@ -14,6 +14,7 @@
  */
 /* globals __non_webpack_require__ */
 
+import { deprecated, DOMSVGFactory } from "./display_utils.js";
 import {
   FONT_IDENTITY_MATRIX,
   IDENTITY_MATRIX,
@@ -24,10 +25,7 @@ import {
   Util,
   warn,
 } from "../shared/util.js";
-import { DOMSVGFactory } from "./display_utils.js";
-// modified by ngx-extended-pdf-viewer
-// import { isNodeJS } from "../shared/is_node.js";
-// end of modification
+import { isNodeJS } from "../shared/is_node.js";
 
 /** @type {any} */
 let SVGGraphics = class {
@@ -440,6 +438,9 @@ if (
 
   SVGGraphics = class {
     constructor(commonObjs, objs, forceDataSchema = false) {
+      deprecated(
+        "The SVG back-end is no longer maintained and *may* be removed in the future."
+      );
       this.svgFactory = new DOMSVGFactory();
 
       this.current = new SVGExtraState();

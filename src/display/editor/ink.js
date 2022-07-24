@@ -36,13 +36,13 @@ class InkEditor extends AnnotationEditor {
 
   #baseWidth = 0;
 
-  #boundCanvasMousemove;
+  #boundCanvasPointermove = this.canvasPointermove.bind(this);
 
-  #boundCanvasMouseleave;
+  #boundCanvasPointerleave = this.canvasPointerleave.bind(this);
 
-  #boundCanvasMouseup;
+  #boundCanvasPointerup = this.canvasPointerup.bind(this);
 
-  #boundCanvasMousedown;
+  #boundCanvasPointerdown = this.canvasPointerdown.bind(this);
 
   #disableEditing = false;
 
@@ -58,6 +58,8 @@ class InkEditor extends AnnotationEditor {
 
   static _defaultThickness = 1;
 
+  static _l10nPromise;
+
   constructor(params) {
     super({ ...params, name: "inkEditor" });
     this.color = params.color || null;
@@ -69,39 +71,15 @@ class InkEditor extends AnnotationEditor {
     this.translationX = this.translationY = 0;
     this.x = 0;
     this.y = 0;
-
-    this.#boundCanvasMousemove = this.canvasMousemove.bind(this);
-    this.#boundCanvasMouseleave = this.canvasMouseleave.bind(this);
-    this.#boundCanvasMouseup = this.canvasMouseup.bind(this);
-    this.#boundCanvasMousedown = this.canvasMousedown.bind(this);
   }
 
-  /** @inheritdoc */
-  copy() {
-    const editor = new InkEditor({
-      parent: this.parent,
-      id: this.parent.getNextId(),
-    });
-
-    editor.x = this.x;
-    editor.y = this.y;
-    editor.width = this.width;
-    editor.height = this.height;
-    editor.color = this.color;
-    editor.thickness = this.thickness;
-    editor.paths = this.paths.slice();
-    editor.bezierPath2D = this.bezierPath2D.slice();
-    editor.scaleFactor = this.scaleFactor;
-    editor.translationX = this.translationX;
-    editor.translationY = this.translationY;
-    editor.#aspectRatio = this.#aspectRatio;
-    editor.#baseWidth = this.#baseWidth;
-    editor.#baseHeight = this.#baseHeight;
-    editor.#disableEditing = this.#disableEditing;
-    editor.#realWidth = this.#realWidth;
-    editor.#realHeight = this.#realHeight;
-
-    return editor;
+  static initialize(l10n) {
+    this._l10nPromise = new Map(
+      ["editor_ink_canvas_aria_label", "editor_ink_aria_label"].map(str => [
+        str,
+        l10n.get(str),
+      ])
+    );
   }
 
   static updateDefaultParams(type, value) {
@@ -140,8 +118,16 @@ class InkEditor extends AnnotationEditor {
   /** @inheritdoc */
   get propertiesToUpdate() {
     return [
-      [AnnotationEditorParamsType.INK_THICKNESS, this.thickness],
-      [AnnotationEditorParamsType.INK_COLOR, this.color],
+      [
+        AnnotationEditorParamsType.INK_THICKNESS,
+        this.thickness || InkEditor._defaultThickness,
+      ],
+      [
+        AnnotationEditorParamsType.INK_COLOR,
+        this.color ||
+          InkEditor._defaultColor ||
+          AnnotationEditor._defaultLineColor,
+      ],
     ];
   }
 
@@ -154,11 +140,11 @@ class InkEditor extends AnnotationEditor {
     this.parent.addCommands({
       cmd: () => {
         this.thickness = thickness;
-        this.#fitToContent();
+        this.#fitToContent(/* thicknessChanged = */ true);
       },
       undo: () => {
         this.thickness = savedThickness;
-        this.#fitToContent();
+        this.#fitToContent(/* thicknessChanged = */ true);
       },
       mustExec: true,
       type: AnnotationEditorParamsType.INK_THICKNESS,
@@ -191,6 +177,7 @@ class InkEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   rebuild() {
+    super.rebuild();
     if (this.div === null) {
       return;
     }
@@ -238,8 +225,8 @@ class InkEditor extends AnnotationEditor {
 
     super.enableEditMode();
     this.div.draggable = false;
-    this.canvas.addEventListener("mousedown", this.#boundCanvasMousedown);
-    this.canvas.addEventListener("mouseup", this.#boundCanvasMouseup);
+    this.canvas.addEventListener("pointerdown", this.#boundCanvasPointerdown);
+    this.canvas.addEventListener("pointerup", this.#boundCanvasPointerup);
   }
 
   /** @inheritdoc */
@@ -252,8 +239,11 @@ class InkEditor extends AnnotationEditor {
     this.div.draggable = !this.isEmpty();
     this.div.classList.remove("editing");
 
-    this.canvas.removeEventListener("mousedown", this.#boundCanvasMousedown);
-    this.canvas.removeEventListener("mouseup", this.#boundCanvasMouseup);
+    this.canvas.removeEventListener(
+      "pointerdown",
+      this.#boundCanvasPointerdown
+    );
+    this.canvas.removeEventListener("pointerup", this.#boundCanvasPointerup);
   }
 
   /** @inheritdoc */
@@ -301,6 +291,7 @@ class InkEditor extends AnnotationEditor {
    * @param {number} y
    */
   #startDrawing(x, y) {
+    this.isEditing = true;
     if (!this.#isCanvasInitialized) {
       this.#isCanvasInitialized = true;
       this.#setCanvasDims();
@@ -351,7 +342,7 @@ class InkEditor extends AnnotationEditor {
       const xy = [x, y];
       bezier = [[xy, xy.slice(), xy.slice(), xy]];
     }
-    const path2D = this.#buildPath2D(bezier);
+    const path2D = InkEditor.#buildPath2D(bezier);
     this.currentPath.length = 0;
 
     const cmd = () => {
@@ -400,13 +391,13 @@ class InkEditor extends AnnotationEditor {
 
   /**
    * Commit the curves we have in this editor.
-   * @returns {undefined}
    */
   commit() {
     if (this.#disableEditing) {
       return;
     }
 
+    this.isEditing = false;
     this.disableEditMode();
 
     // This editor must be on top of the main ink editor.
@@ -418,20 +409,26 @@ class InkEditor extends AnnotationEditor {
     this.#fitToContent();
 
     this.parent.addInkEditorIfNeeded(/* isCommitting = */ true);
+
+    // When commiting, the position of this editor is changed, hence we must
+    // move it to the right position in the DOM.
+    this.parent.moveDivInDOM(this);
+    // After the div has been moved in the DOM, the focus may have been stolen
+    // by document.body, hence we just keep it here.
+    this.div.focus();
   }
 
   /** @inheritdoc */
-  focusin(/* event */) {
-    super.focusin();
+  focusin(event) {
+    super.focusin(event);
     this.enableEditMode();
   }
 
   /**
-   * onmousedown callback for the canvas we're drawing on.
-   * @param {MouseEvent} event
-   * @returns {undefined}
+   * onpointerdown callback for the canvas we're drawing on.
+   * @param {PointerEvent} event
    */
-  canvasMousedown(event) {
+  canvasPointerdown(event) {
     if (event.button !== 0 || !this.isInEditMode() || this.#disableEditing) {
       return;
     }
@@ -440,30 +437,32 @@ class InkEditor extends AnnotationEditor {
     // Since it's the last child, there's no need to give it a higher z-index.
     this.setInForeground();
 
+    if (event.type !== "mouse") {
+      this.div.focus();
+    }
+
     event.stopPropagation();
 
-    this.canvas.addEventListener("mouseleave", this.#boundCanvasMouseleave);
-    this.canvas.addEventListener("mousemove", this.#boundCanvasMousemove);
+    this.canvas.addEventListener("pointerleave", this.#boundCanvasPointerleave);
+    this.canvas.addEventListener("pointermove", this.#boundCanvasPointermove);
 
     this.#startDrawing(event.offsetX, event.offsetY);
   }
 
   /**
-   * onmousemove callback for the canvas we're drawing on.
-   * @param {MouseEvent} event
-   * @returns {undefined}
+   * onpointermove callback for the canvas we're drawing on.
+   * @param {PointerEvent} event
    */
-  canvasMousemove(event) {
+  canvasPointermove(event) {
     event.stopPropagation();
     this.#draw(event.offsetX, event.offsetY);
   }
 
   /**
-   * onmouseup callback for the canvas we're drawing on.
-   * @param {MouseEvent} event
-   * @returns {undefined}
+   * onpointerup callback for the canvas we're drawing on.
+   * @param {PointerEvent} event
    */
-  canvasMouseup(event) {
+  canvasPointerup(event) {
     if (event.button !== 0) {
       return;
     }
@@ -478,24 +477,29 @@ class InkEditor extends AnnotationEditor {
   }
 
   /**
-   * onmouseleave callback for the canvas we're drawing on.
-   * @param {MouseEvent} event
-   * @returns {undefined}
+   * onpointerleave callback for the canvas we're drawing on.
+   * @param {PointerEvent} event
    */
-  canvasMouseleave(event) {
+  canvasPointerleave(event) {
     this.#endDrawing(event);
     this.setInBackground();
   }
 
   /**
    * End the drawing.
-   * @param {MouseEvent} event
+   * @param {PointerEvent} event
    */
   #endDrawing(event) {
     this.#stopDrawing(event.offsetX, event.offsetY);
 
-    this.canvas.removeEventListener("mouseleave", this.#boundCanvasMouseleave);
-    this.canvas.removeEventListener("mousemove", this.#boundCanvasMousemove);
+    this.canvas.removeEventListener(
+      "pointerleave",
+      this.#boundCanvasPointerleave
+    );
+    this.canvas.removeEventListener(
+      "pointermove",
+      this.#boundCanvasPointermove
+    );
   }
 
   /**
@@ -505,6 +509,10 @@ class InkEditor extends AnnotationEditor {
     this.canvas = document.createElement("canvas");
     this.canvas.width = this.canvas.height = 0;
     this.canvas.className = "inkEditorCanvas";
+
+    InkEditor._l10nPromise
+      .get("editor_ink_canvas_aria_label")
+      .then(msg => this.canvas?.setAttribute("aria-label", msg));
     this.div.append(this.canvas);
     this.ctx = this.canvas.getContext("2d");
   }
@@ -535,6 +543,11 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.render();
+
+    InkEditor._l10nPromise
+      .get("editor_ink_aria_label")
+      .then(msg => this.div?.setAttribute("aria-label", msg));
+
     const [x, y, w, h] = this.#getInitialBBox();
     this.setAt(x, y, 0, 0);
     this.setDims(w, h);
@@ -543,7 +556,6 @@ class InkEditor extends AnnotationEditor {
 
     if (this.width) {
       // This editor was created in using copy (ctrl+c).
-      this.#isCanvasInitialized = true;
       const [parentWidth, parentHeight] = this.parent.viewportBaseDimensions;
       this.setAt(
         baseX * parentWidth,
@@ -551,9 +563,11 @@ class InkEditor extends AnnotationEditor {
         this.width * parentWidth,
         this.height * parentHeight
       );
-      this.setDims(this.width * parentWidth, this.height * parentHeight);
+      this.#isCanvasInitialized = true;
       this.#setCanvasDims();
+      this.setDims(this.width * parentWidth, this.height * parentHeight);
       this.#redraw();
+      this.#setMinDims();
       this.div.classList.add("disabled");
     } else {
       this.div.classList.add("editing");
@@ -570,8 +584,8 @@ class InkEditor extends AnnotationEditor {
       return;
     }
     const [parentWidth, parentHeight] = this.parent.viewportBaseDimensions;
-    this.canvas.width = this.width * parentWidth;
-    this.canvas.height = this.height * parentHeight;
+    this.canvas.width = Math.ceil(this.width * parentWidth);
+    this.canvas.height = Math.ceil(this.height * parentHeight);
     this.#updateTransform();
   }
 
@@ -610,16 +624,20 @@ class InkEditor extends AnnotationEditor {
     this.height = height / parentHeight;
 
     if (this.#disableEditing) {
-      const padding = this.#getPadding();
-      const scaleFactorW = (width - padding) / this.#baseWidth;
-      const scaleFactorH = (height - padding) / this.#baseHeight;
-      this.scaleFactor = Math.min(scaleFactorW, scaleFactorH);
+      this.#setScaleFactor(width, height);
     }
 
     this.#setCanvasDims();
     this.#redraw();
 
     this.canvas.style.visibility = "visible";
+  }
+
+  #setScaleFactor(width, height) {
+    const padding = this.#getPadding();
+    const scaleFactorW = (width - padding) / this.#baseWidth;
+    const scaleFactorH = (height - padding) / this.#baseHeight;
+    this.scaleFactor = Math.min(scaleFactorW, scaleFactorH);
   }
 
   /**
@@ -642,7 +660,7 @@ class InkEditor extends AnnotationEditor {
    * @param {Arra<Array<number>} bezier
    * @returns {Path2D}
    */
-  #buildPath2D(bezier) {
+  static #buildPath2D(bezier) {
     const path2D = new Path2D();
     for (let i = 0, ii = bezier.length; i < ii; i++) {
       const [first, control1, control2, second] = bezier[i];
@@ -828,7 +846,9 @@ class InkEditor extends AnnotationEditor {
    * @returns {number}
    */
   #getPadding() {
-    return Math.ceil(this.thickness * this.parent.scaleFactor);
+    return this.#disableEditing
+      ? Math.ceil(this.thickness * this.parent.scaleFactor)
+      : 0;
   }
 
   /**
@@ -836,7 +856,7 @@ class InkEditor extends AnnotationEditor {
    * the bounding box of the contents.
    * @returns {undefined}
    */
-  #fitToContent() {
+  #fitToContent(thicknessChanged = false) {
     if (this.isEmpty()) {
       return;
     }
@@ -848,8 +868,8 @@ class InkEditor extends AnnotationEditor {
 
     const bbox = this.#getBbox();
     const padding = this.#getPadding();
-    this.#baseWidth = bbox[2] - bbox[0];
-    this.#baseHeight = bbox[3] - bbox[1];
+    this.#baseWidth = Math.max(RESIZER_SIZE, bbox[2] - bbox[0]);
+    this.#baseHeight = Math.max(RESIZER_SIZE, bbox[3] - bbox[1]);
 
     const width = Math.ceil(padding + this.#baseWidth * this.scaleFactor);
     const height = Math.ceil(padding + this.#baseHeight * this.scaleFactor);
@@ -859,14 +879,7 @@ class InkEditor extends AnnotationEditor {
     this.height = height / parentHeight;
 
     this.#aspectRatio = width / height;
-    const { style } = this.div;
-    if (this.#aspectRatio >= 1) {
-      style.minHeight = `${RESIZER_SIZE}px`;
-      style.minWidth = `${Math.round(this.#aspectRatio * RESIZER_SIZE)}px`;
-    } else {
-      style.minWidth = `${RESIZER_SIZE}px`;
-      style.minHeight = `${Math.round(RESIZER_SIZE / this.#aspectRatio)}px`;
-    }
+    this.#setMinDims();
 
     const prevTranslationX = this.translationX;
     const prevTranslationY = this.translationY;
@@ -880,10 +893,75 @@ class InkEditor extends AnnotationEditor {
     this.#realHeight = height;
 
     this.setDims(width, height);
+    const unscaledPadding = thicknessChanged
+      ? 0
+      : padding / this.scaleFactor / 2;
     this.translate(
-      prevTranslationX - this.translationX,
-      prevTranslationY - this.translationY
+      prevTranslationX - this.translationX - unscaledPadding,
+      prevTranslationY - this.translationY - unscaledPadding
     );
+  }
+
+  #setMinDims() {
+    const { style } = this.div;
+    if (this.#aspectRatio >= 1) {
+      style.minHeight = `${RESIZER_SIZE}px`;
+      style.minWidth = `${Math.round(this.#aspectRatio * RESIZER_SIZE)}px`;
+    } else {
+      style.minWidth = `${RESIZER_SIZE}px`;
+      style.minHeight = `${Math.round(RESIZER_SIZE / this.#aspectRatio)}px`;
+    }
+  }
+
+  /** @inheritdoc */
+  static deserialize(data, parent) {
+    const editor = super.deserialize(data, parent);
+
+    editor.thickness = data.thickness;
+    editor.color = Util.makeHexColor(...data.color);
+
+    const [pageWidth, pageHeight] = parent.pageDimensions;
+    const width = editor.width * pageWidth;
+    const height = editor.height * pageHeight;
+    const scaleFactor = parent.scaleFactor;
+    const padding = data.thickness / 2;
+
+    editor.#aspectRatio = width / height;
+    editor.#disableEditing = true;
+    editor.#realWidth = Math.round(width);
+    editor.#realHeight = Math.round(height);
+
+    for (const { bezier } of data.paths) {
+      const path = [];
+      editor.paths.push(path);
+      let p0 = scaleFactor * (bezier[0] - padding);
+      let p1 = scaleFactor * (height - bezier[1] - padding);
+      for (let i = 2, ii = bezier.length; i < ii; i += 6) {
+        const p10 = scaleFactor * (bezier[i] - padding);
+        const p11 = scaleFactor * (height - bezier[i + 1] - padding);
+        const p20 = scaleFactor * (bezier[i + 2] - padding);
+        const p21 = scaleFactor * (height - bezier[i + 3] - padding);
+        const p30 = scaleFactor * (bezier[i + 4] - padding);
+        const p31 = scaleFactor * (height - bezier[i + 5] - padding);
+        path.push([
+          [p0, p1],
+          [p10, p11],
+          [p20, p21],
+          [p30, p31],
+        ]);
+        p0 = p30;
+        p1 = p31;
+      }
+      const path2D = this.#buildPath2D(path);
+      editor.bezierPath2D.push(path2D);
+    }
+
+    const bbox = editor.#getBbox();
+    editor.#baseWidth = bbox[2] - bbox[0];
+    editor.#baseHeight = bbox[3] - bbox[1];
+    editor.#setScaleFactor(width, height);
+
+    return editor;
   }
 
   /** @inheritdoc */
