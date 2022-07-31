@@ -353,9 +353,14 @@ function getDocument(src) {
   if (!Number.isInteger(params.maxImageSize) || params.maxImageSize < -1) {
     params.maxImageSize = -1;
   }
-  if (typeof params.cMapUrl !== "string") {
+
+  // #1463 modified by ngx-extended-pdf-viewer
+  if (typeof params.cMapUrl === "function") {
+    params.cMapUrl = params.cMapUrl();
+  } else if (typeof params.cMapUrl !== "string") {
     params.cMapUrl = null;
   }
+  // #1463 end of modification by ngx-extended-pdf-viewer
 
   // #1292 modified by ngx-extended-pdf-viewer
   if (typeof params.standardFontDataUrl === "function") {
