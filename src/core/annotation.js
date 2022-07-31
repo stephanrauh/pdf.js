@@ -884,11 +884,16 @@ class Annotation {
   ) {
     const data = this.data;
     let appearance = this.appearance;
-    const isUsingOwnCanvas =
-      this.data.hasOwnCanvas && intent & RenderingIntentFlag.DISPLAY;
+    const isUsingOwnCanvas = !!(
+      this.data.hasOwnCanvas && intent & RenderingIntentFlag.DISPLAY
+    );
     if (!appearance) {
       if (!isUsingOwnCanvas) {
-        return new OperatorList();
+        return {
+          opList: new OperatorList(),
+          separateForm: false,
+          separateCanvas: false,
+        };
       }
       appearance = new StringStream("");
       appearance.dict = new Dict();
@@ -937,7 +942,7 @@ class Annotation {
       opList.addOp(OPS.endMarkedContent, []);
     }
     this.reset();
-    return opList;
+    return { opList, separateForm: false, separateCanvas: isUsingOwnCanvas };
   }
 
   async save(evaluator, task, annotationStorage) {
@@ -1641,7 +1646,11 @@ class WidgetAnnotation extends Annotation {
     // Do not render form elements on the canvas when interactive forms are
     // enabled. The display layer is responsible for rendering them instead.
     if (renderForms && !(this instanceof SignatureWidgetAnnotation)) {
-      return new OperatorList();
+      return {
+        opList: new OperatorList(),
+        separateForm: true,
+        separateCanvas: false,
+      };
     }
 
     if (!this._hasText) {
@@ -1669,12 +1678,12 @@ class WidgetAnnotation extends Annotation {
       );
     }
 
-    const operatorList = new OperatorList();
+    const opList = new OperatorList();
 
     // Even if there is an appearance stream, ignore it. This is the
     // behaviour used by Adobe Reader.
     if (!this._defaultAppearance || content === null) {
-      return operatorList;
+      return { opList, separateForm: false, separateCanvas: false };
     }
 
     const matrix = [1, 0, 0, 1, 0, 0];
@@ -1694,14 +1703,15 @@ class WidgetAnnotation extends Annotation {
       );
     }
     if (optionalContent !== undefined) {
-      operatorList.addOp(OPS.beginMarkedContentProps, ["OC", optionalContent]);
+      opList.addOp(OPS.beginMarkedContentProps, ["OC", optionalContent]);
     }
 
-    operatorList.addOp(OPS.beginAnnotation, [
+    opList.addOp(OPS.beginAnnotation, [
       this.data.id,
       this.data.rect,
       transform,
       this.getRotationMatrix(annotationStorage),
+      /* isUsingOwnCanvas = */ false,
     ]);
 
     const stream = new StringStream(content);
@@ -1709,14 +1719,14 @@ class WidgetAnnotation extends Annotation {
       stream,
       task,
       resources: this._fieldResources.mergedResources,
-      operatorList,
+      operatorList: opList,
     });
-    operatorList.addOp(OPS.endAnnotation, []);
+    opList.addOp(OPS.endAnnotation, []);
 
     if (optionalContent !== undefined) {
-      operatorList.addOp(OPS.endMarkedContent, []);
+      opList.addOp(OPS.endMarkedContent, []);
     }
-    return operatorList;
+    return { opList, separateForm: false, separateCanvas: false };
   }
 
   _getMKDict(rotation) {
@@ -2498,7 +2508,11 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
     }
 
     // No appearance
-    return new OperatorList();
+    return {
+      opList: new OperatorList(),
+      separateForm: false,
+      separateCanvas: false,
+    };
   }
 
   async save(evaluator, task, annotationStorage) {
@@ -3780,7 +3794,7 @@ class InkAnnotation extends MarkupAnnotation {
   }
 
   static async createNewAppearanceStream(annotation, xref, params) {
-    const { color, rect, rotation, paths, thickness } = annotation;
+    const { color, rect, rotation, paths, thickness, opacity } = annotation;
     const [x1, y1, x2, y2] = rect;
     let w = x2 - x1;
     let h = y2 - y1;
@@ -3793,6 +3807,11 @@ class InkAnnotation extends MarkupAnnotation {
       `${thickness} w 1 J 1 j`,
       `${getPdfColor(color, /* isFill */ false)}`,
     ];
+
+    if (opacity !== 1) {
+      appearanceBuffer.push("/R0 gs");
+    }
+
     const buffer = [];
     for (const { bezier } of paths) {
       buffer.length = 0;
@@ -3821,6 +3840,17 @@ class InkAnnotation extends MarkupAnnotation {
     if (rotation) {
       const matrix = WidgetAnnotation._getRotationMatrix(rotation, w, h);
       appearanceStreamDict.set("Matrix", matrix);
+    }
+
+    if (opacity !== 1) {
+      const resources = new Dict(xref);
+      const extGState = new Dict(xref);
+      const r0 = new Dict(xref);
+      r0.set("CA", opacity);
+      r0.set("Type", Name.get("ExtGState"));
+      extGState.set("R0", r0);
+      resources.set("ExtGState", extGState);
+      appearanceStreamDict.set("Resources", resources);
     }
 
     const ap = new StringStream(appearance);

@@ -30,6 +30,18 @@ function bindEvents(obj, element, names) {
     element.addEventListener(name, obj[name].bind(obj));
   }
 }
+
+/**
+ * Convert a number between 0 and 100 into an hex number between 0 and 255.
+ * @param {number} opacity
+ * @return {string}
+ */
+function opacityToHex(opacity) {
+  return Math.round(Math.min(255, Math.max(1, 255 * opacity)))
+    .toString(16)
+    .padStart(2, "0");
+}
+
 /**
  * Class to create some unique ids for the different editors.
  */
@@ -53,6 +65,8 @@ class IdManager {
  */
 class CommandManager {
   #commands = [];
+
+  #locked = false;
 
   #maxSize;
 
@@ -88,8 +102,17 @@ class CommandManager {
       cmd();
     }
 
+    if (this.#locked) {
+      return;
+    }
+
     const save = { cmd, undo, type };
     if (this.#position === -1) {
+      if (this.#commands.length > 0) {
+        // All the commands have been undone and then a new one is added
+        // hence we clear the queue.
+        this.#commands.length = 0;
+      }
       this.#position = 0;
       this.#commands.push(save);
       return;
@@ -127,7 +150,12 @@ class CommandManager {
       // Nothing to undo.
       return;
     }
+
+    // Avoid to insert something during the undo execution.
+    this.#locked = true;
     this.#commands[this.#position].undo();
+    this.#locked = false;
+
     this.#position -= 1;
   }
 
@@ -137,7 +165,11 @@ class CommandManager {
   redo() {
     if (this.#position < this.#commands.length - 1) {
       this.#position += 1;
+
+      // Avoid to insert something during the redo execution.
+      this.#locked = true;
       this.#commands[this.#position].cmd();
+      this.#locked = false;
     }
   }
 
@@ -244,6 +276,7 @@ class KeyboardManager {
       return;
     }
     callback.bind(self)();
+    event.stopPropagation();
     event.preventDefault();
   }
 }
@@ -433,7 +466,7 @@ class AnnotationEditorUIManager {
       ],
       AnnotationEditorUIManager.prototype.delete,
     ],
-    [["Escape"], AnnotationEditorUIManager.prototype.unselectAll],
+    [["Escape", "mac+Escape"], AnnotationEditorUIManager.prototype.unselectAll],
   ]);
 
   constructor(container, eventBus) {
@@ -1024,4 +1057,5 @@ export {
   ColorManager,
   CommandManager,
   KeyboardManager,
+  opacityToHex,
 };

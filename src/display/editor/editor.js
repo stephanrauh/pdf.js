@@ -16,7 +16,7 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("./annotation_editor_layer.js").AnnotationEditorLayer} AnnotationEditorLayer */
 
-import { bindEvents, ColorManager } from "./tools.js";
+import { bindEvents, ColorManager, KeyboardManager } from "./tools.js";
 import { shadow, unreachable } from "../../shared/util.js";
 
 /**
@@ -137,6 +137,13 @@ class AnnotationEditor {
   }
 
   /**
+   * Commit the data contained in this editor.
+   */
+  commit() {
+    this.parent.addToAnnotationStorage(this);
+  }
+
+  /**
    * We use drag-and-drop in order to move an editor on a page.
    * @param {DragEvent} event
    */
@@ -249,12 +256,18 @@ class AnnotationEditor {
    * @param {PointerEvent} event
    */
   pointerdown(event) {
-    if (event.button !== 0) {
+    const isMac = KeyboardManager.platform.isMac;
+    if (event.button !== 0 || (event.ctrlKey && isMac)) {
       // Avoid to focus this editor because of a non-left click.
       event.preventDefault();
+      return;
     }
 
-    if (event.ctrlKey || event.shiftKey) {
+    if (
+      (event.ctrlKey && !isMac) ||
+      event.shiftKey ||
+      (event.metaKey && isMac)
+    ) {
       this.parent.toggleSelected(this);
     } else {
       this.parent.setSelected(this);

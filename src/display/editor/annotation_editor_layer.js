@@ -21,8 +21,8 @@
 /** @typedef {import("../../web/interfaces").IL10n} IL10n */
 
 import { AnnotationEditorType, shadow } from "../../shared/util.js";
+import { bindEvents, KeyboardManager } from "./tools.js";
 import { binarySearchFirstItem } from "../display_utils.js";
-import { bindEvents } from "./tools.js";
 import { FreeTextEditor } from "./freetext.js";
 import { InkEditor } from "./ink.js";
 
@@ -32,7 +32,7 @@ import { InkEditor } from "./ink.js";
  * @property {HTMLDivElement} div
  * @property {AnnotationEditorUIManager} uiManager
  * @property {boolean} enabled
- * @property {AnnotationStorage} annotationStorag
+ * @property {AnnotationStorage} annotationStorage
  * @property {number} pageIndex
  * @property {IL10n} l10n
  */
@@ -426,7 +426,7 @@ class AnnotationEditorLayer {
    */
   add(editor) {
     this.#changeParent(editor);
-    this.annotationStorage.setValue(editor.id, editor);
+    this.addToAnnotationStorage(editor);
     this.#uiManager.addEditor(editor);
     this.attach(editor);
 
@@ -438,6 +438,16 @@ class AnnotationEditorLayer {
 
     this.moveDivInDOM(editor);
     editor.onceAdded();
+  }
+
+  /**
+   * Add an editor in the annotation storage.
+   * @param {AnnotationEditor} editor
+   */
+  addToAnnotationStorage(editor) {
+    if (!editor.isEmpty() && !this.annotationStorage.has(editor.id)) {
+      this.annotationStorage.setValue(editor.id, editor);
+    }
   }
 
   /**
@@ -577,6 +587,12 @@ class AnnotationEditorLayer {
    * @param {PointerEvent} event
    */
   pointerup(event) {
+    const isMac = KeyboardManager.platform.isMac;
+    if (event.button !== 0 || (event.ctrlKey && isMac)) {
+      // Don't create an editor on right click.
+      return;
+    }
+
     if (event.target !== this.div) {
       return;
     }
@@ -594,6 +610,12 @@ class AnnotationEditorLayer {
    * @param {PointerEvent} event
    */
   pointerdown(event) {
+    const isMac = KeyboardManager.platform.isMac;
+    if (event.button !== 0 || (event.ctrlKey && isMac)) {
+      // Do nothing on right click.
+      return;
+    }
+
     if (event.target !== this.div) {
       return;
     }

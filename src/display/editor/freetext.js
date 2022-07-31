@@ -217,6 +217,10 @@ class FreeTextEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   enableEditMode() {
+    if (this.isInEditMode()) {
+      return;
+    }
+
     this.parent.setEditingState(false);
     this.parent.updateToolbar(AnnotationEditorType.FREETEXT);
     super.enableEditMode();
@@ -230,6 +234,10 @@ class FreeTextEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   disableEditMode() {
+    if (!this.isInEditMode()) {
+      return;
+    }
+
     this.parent.setEditingState(true);
     super.disableEditMode();
     this.overlayDiv.classList.add("enabled");
@@ -238,6 +246,10 @@ class FreeTextEditor extends AnnotationEditor {
     this.editorDiv.removeEventListener("keydown", this.#boundEditorDivKeydown);
     this.editorDiv.removeEventListener("focus", this.#boundEditorDivFocus);
     this.editorDiv.removeEventListener("blur", this.#boundEditorDivBlur);
+
+    // On Chrome, the focus is given to <body> when contentEditable is set to
+    // false, hence we focus the div.
+    this.div.focus();
 
     // In case the blur callback hasn't been called.
     this.isEditing = false;
@@ -255,7 +267,6 @@ class FreeTextEditor extends AnnotationEditor {
   onceAdded() {
     if (this.width) {
       // The editor was created in using ctrl+c.
-      this.parent.setActiveEditor(this);
       return;
     }
     this.enableEditMode();
@@ -264,7 +275,7 @@ class FreeTextEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   isEmpty() {
-    return this.editorDiv.innerText.trim() === "";
+    return !this.editorDiv || this.editorDiv.innerText.trim() === "";
   }
 
   /** @inheritdoc */
@@ -309,6 +320,7 @@ class FreeTextEditor extends AnnotationEditor {
    * @returns {undefined}
    */
   commit() {
+    super.commit();
     if (!this.#hasAlreadyBeenCommitted) {
       // This editor has something and it's the first time
       // it's commited so we can add it in the undo/redo stack.

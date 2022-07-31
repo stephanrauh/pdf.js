@@ -1510,6 +1510,7 @@ class PDFPageProxy {
         fnArray: [],
         argsArray: [],
         lastChunk: false,
+        separateAnnots: null,
       };
 
       if (this._stats) {
@@ -1633,6 +1634,7 @@ class PDFPageProxy {
         fnArray: [],
         argsArray: [],
         lastChunk: false,
+        separateAnnots: null,
       };
 
       if (this._stats) {
@@ -1834,6 +1836,7 @@ class PDFPageProxy {
       intentState.operatorList.argsArray.push(operatorListChunk.argsArray[i]);
     }
     intentState.operatorList.lastChunk = operatorListChunk.lastChunk;
+    intentState.operatorList.separateAnnots = operatorListChunk.separateAnnots;
 
     // Notify all the rendering tasks there are more operators to be consumed.
     for (const internalRenderTask of intentState.renderTasks) {
@@ -3243,8 +3246,10 @@ class PDFObjects {
  * Allows controlling of the rendering tasks.
  */
 class RenderTask {
+  #internalRenderTask = null;
+
   constructor(internalRenderTask) {
-    this._internalRenderTask = internalRenderTask;
+    this.#internalRenderTask = internalRenderTask;
 
     /**
      * Callback for incremental rendering -- a function that will be called
@@ -3260,7 +3265,7 @@ class RenderTask {
    * @type {Promise<void>}
    */
   get promise() {
-    return this._internalRenderTask.capability.promise;
+    return this.#internalRenderTask.capability.promise;
   }
 
   /**
@@ -3269,7 +3274,23 @@ class RenderTask {
    * this object extends will be rejected when cancelled.
    */
   cancel() {
-    this._internalRenderTask.cancel();
+    this.#internalRenderTask.cancel();
+  }
+
+  /**
+   * Whether form fields are rendered separately from the main operatorList.
+   * @type {boolean}
+   */
+  get separateAnnots() {
+    const { separateAnnots } = this.#internalRenderTask.operatorList;
+    if (!separateAnnots) {
+      return false;
+    }
+    const { annotationCanvasMap } = this.#internalRenderTask;
+    return (
+      separateAnnots.form ||
+      (separateAnnots.canvas && annotationCanvasMap?.size > 0)
+    );
   }
 }
 

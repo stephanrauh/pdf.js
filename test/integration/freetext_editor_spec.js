@@ -25,7 +25,7 @@ describe("Editor", () => {
     let pages;
 
     beforeAll(async () => {
-      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+      pages = await loadAndWait("aboutstacks.pdf", ".annotationEditorLayer");
     });
 
     afterAll(async () => {
@@ -197,6 +197,28 @@ describe("Editor", () => {
           }, `${editorPrefix}4`);
 
           expect(hasEditor).withContext(`In ${browserName}`).toEqual(false);
+
+          for (let i = 0; i < 2; i++) {
+            await page.keyboard.down("Control");
+            await page.keyboard.press("v");
+            await page.keyboard.up("Control");
+          }
+
+          let length = await page.evaluate(sel => {
+            return document.querySelectorAll(sel).length;
+          }, `${editorPrefix}5, ${editorPrefix}6`);
+          expect(length).withContext(`In ${browserName}`).toEqual(2);
+
+          for (let i = 0; i < 2; i++) {
+            await page.keyboard.down("Control");
+            await page.keyboard.press("z");
+            await page.keyboard.up("Control");
+          }
+
+          length = await page.evaluate(sel => {
+            return document.querySelectorAll(sel).length;
+          }, `${editorPrefix}5, ${editorPrefix}6`);
+          expect(length).withContext(`In ${browserName}`).toEqual(0);
         })
       );
     });
@@ -204,13 +226,13 @@ describe("Editor", () => {
     it("must check that aria-owns is correct", async () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
-          const [adobeComRect, oldAriaOwns] = await page.$eval(
+          const [stacksRect, oldAriaOwns] = await page.$eval(
             ".textLayer",
             el => {
               for (const span of el.querySelectorAll(
                 `span[role="presentation"]`
               )) {
-                if (span.innerText.includes("adobe.com")) {
+                if (span.innerText.includes("Stacks are simple to create")) {
                   span.setAttribute("pdfjs", true);
                   const { x, y, width, height } = span.getBoundingClientRect();
                   return [
@@ -227,21 +249,13 @@ describe("Editor", () => {
 
           const data = "Hello PDF.js World !!";
           await page.mouse.click(
-            adobeComRect.x + adobeComRect.width + 10,
-            adobeComRect.y + adobeComRect.height / 2
+            stacksRect.x + stacksRect.width + 1,
+            stacksRect.y + stacksRect.height / 2
           );
-          await page.type(`${editorPrefix}5 .internal`, data);
-
-          const editorRect = await page.$eval(`${editorPrefix}5`, el => {
-            const { x, y, width, height } = el.getBoundingClientRect();
-            return { x, y, width, height };
-          });
+          await page.type(`${editorPrefix}7 .internal`, data);
 
           // Commit.
-          await page.mouse.click(
-            editorRect.x,
-            editorRect.y + 2 * editorRect.height
-          );
+          await page.keyboard.press("Escape");
 
           const ariaOwns = await page.$eval(".textLayer", el => {
             const span = el.querySelector(`span[pdfjs="true"]`);
@@ -250,7 +264,71 @@ describe("Editor", () => {
 
           expect(ariaOwns)
             .withContext(`In ${browserName}`)
-            .toEqual(`${editorPrefix}5-editor`.slice(1));
+            .toEqual(`${editorPrefix}7-editor`.slice(1));
+        })
+      );
+    });
+
+    it("must check that right click doesn't select", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          await page.keyboard.down("Control");
+          await page.keyboard.press("a");
+          await page.keyboard.up("Control");
+
+          await page.keyboard.down("Control");
+          await page.keyboard.press("Backspace");
+          await page.keyboard.up("Control");
+
+          const data = "Hello PDF.js World !!";
+          await page.mouse.click(rect.x + 100, rect.y + 100);
+          await page.type(`${editorPrefix}8 .internal`, data);
+
+          const editorRect = await page.$eval(`${editorPrefix}8`, el => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          });
+
+          // Commit.
+          await page.keyboard.press("Escape");
+
+          expect(await getSelectedEditors(page))
+            .withContext(`In ${browserName}`)
+            .toEqual([8]);
+
+          await page.keyboard.press("Escape");
+          expect(await getSelectedEditors(page))
+            .withContext(`In ${browserName}`)
+            .toEqual([]);
+
+          await page.mouse.click(
+            editorRect.x + editorRect.width / 2,
+            editorRect.y + editorRect.height / 2
+          );
+
+          expect(await getSelectedEditors(page))
+            .withContext(`In ${browserName}`)
+            .toEqual([8]);
+
+          // Escape.
+          await page.keyboard.press("Escape");
+
+          expect(await getSelectedEditors(page))
+            .withContext(`In ${browserName}`)
+            .toEqual([]);
+
+          // TODO: uncomment that stuff once we've a way to dismiss
+          // the context menu.
+          /* await page.mouse.click(
+            editorRect.x + editorRect.width / 2,
+            editorRect.y + editorRect.height / 2,
+            { button: "right" }
+          ); */
         })
       );
     });
@@ -260,7 +338,7 @@ describe("Editor", () => {
     let pages;
 
     beforeAll(async () => {
-      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+      pages = await loadAndWait("aboutstacks.pdf", ".annotationEditorLayer");
     });
 
     afterAll(async () => {

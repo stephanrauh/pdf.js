@@ -101,6 +101,11 @@ const MAX_CANVAS_PIXELS = compatibilityParams.maxCanvasPixels || 16777216;
 class PDFPageView {
   #annotationMode = AnnotationMode.ENABLE_FORMS;
 
+  #useThumbnailCanvas = {
+    initialOptionalContent: true,
+    regularAnnotations: true,
+  };
+
   /**
    * @param {PDFPageViewOptions} options
    */
@@ -135,10 +140,10 @@ class PDFPageView {
     this.annotationEditorLayerFactory = options.annotationEditorLayerFactory;
     this.xfaLayerFactory = options.xfaLayerFactory;
     this.textHighlighter =
-      options.textHighlighterFactory?.createTextHighlighter(
-        this.id - 1,
-        this.eventBus
-      );
+      options.textHighlighterFactory?.createTextHighlighter({
+        pageIndex: this.id - 1,
+        eventBus: this.eventBus,
+      });
     this.structTreeLayerFactory = options.structTreeLayerFactory;
     if (
       typeof PDFJSDev === "undefined" ||
@@ -153,7 +158,12 @@ class PDFPageView {
     this.renderingState = RenderingStates.INITIAL;
     this.resume = null;
     this._renderError = null;
-    this._isStandalone = !this.renderingQueue?.hasViewer();
+    if (
+      typeof PDFJSDev === "undefined" ||
+      PDFJSDev.test("!PRODUCTION || GENERIC")
+    ) {
+      this._isStandalone = !this.renderingQueue?.hasViewer();
+    }
 
     this._annotationCanvasMap = null;
 
@@ -176,6 +186,27 @@ class PDFPageView {
     this.div = div;
 
     container?.append(div);
+
+    if (
+      (typeof PDFJSDev === "undefined" ||
+        PDFJSDev.test("!PRODUCTION || GENERIC")) &&
+      this._isStandalone
+    ) {
+      const { optionalContentConfigPromise } = options;
+      if (optionalContentConfigPromise) {
+        // Ensure that the thumbnails always display the *initial* document
+        // state, for documents with optional content.
+        optionalContentConfigPromise.then(optionalContentConfig => {
+          if (
+            optionalContentConfigPromise !== this._optionalContentConfigPromise
+          ) {
+            return;
+          }
+          this.#useThumbnailCanvas.initialOptionalContent =
+            optionalContentConfig.hasInitialVisibility;
+        });
+      }
+    }
   }
 
   setPdfPage(pdfPage) {
@@ -361,7 +392,11 @@ class PDFPageView {
 
     this.loadingIconDiv = document.createElement("div");
     this.loadingIconDiv.className = "loadingIcon notVisible";
-    if (this._isStandalone) {
+    if (
+      (typeof PDFJSDev === "undefined" ||
+        PDFJSDev.test("!PRODUCTION || GENERIC")) &&
+      this._isStandalone
+    ) {
       this.toggleLoadingIconSpinner(/* viewVisible = */ true);
     }
     this.loadingIconDiv.setAttribute("role", "img");
@@ -378,6 +413,18 @@ class PDFPageView {
     }
     if (optionalContentConfigPromise instanceof Promise) {
       this._optionalContentConfigPromise = optionalContentConfigPromise;
+
+      // Ensure that the thumbnails always display the *initial* document state,
+      // for documents with optional content.
+      optionalContentConfigPromise.then(optionalContentConfig => {
+        if (
+          optionalContentConfigPromise !== this._optionalContentConfigPromise
+        ) {
+          return;
+        }
+        this.#useThumbnailCanvas.initialOptionalContent =
+          optionalContentConfig.hasInitialVisibility;
+      });
     }
 
     const totalRotation = (this.rotation + this.pdfPageRotate) % 360;
@@ -386,7 +433,11 @@ class PDFPageView {
       rotation: totalRotation,
     });
 
-    if (this._isStandalone) {
+    if (
+      (typeof PDFJSDev === "undefined" ||
+        PDFJSDev.test("!PRODUCTION || GENERIC")) &&
+      this._isStandalone
+    ) {
       docStyle.setProperty("--scale-factor", this.viewport.scale);
     }
 
@@ -659,14 +710,15 @@ class PDFPageView {
         div.append(textLayerDiv);
       }
 
-      textLayer = this.textLayerFactory.createTextLayerBuilder(
+      textLayer = this.textLayerFactory.createTextLayerBuilder({
         textLayerDiv,
-        this.id - 1,
-        this.viewport,
-        this.textLayerMode === TextLayerMode.ENABLE_ENHANCE,
-        this.eventBus,
-        this.textHighlighter
-      );
+        pageIndex: this.id - 1,
+        viewport: this.viewport,
+        enhanceTextSelection:
+          this.textLayerMode === TextLayerMode.ENABLE_ENHANCE,
+        eventBus: this.eventBus,
+        highlighter: this.textHighlighter,
+      });
     }
     this.textLayer = textLayer;
 
@@ -676,19 +728,14 @@ class PDFPageView {
     ) {
       this._annotationCanvasMap ||= new Map();
       this.annotationLayer ||=
-        this.annotationLayerFactory.createAnnotationLayerBuilder(
-          div,
+        this.annotationLayerFactory.createAnnotationLayerBuilder({
+          pageDiv: div,
           pdfPage,
-          /* annotationStorage = */ null,
-          this.imageResourcesPath,
-          this.#annotationMode === AnnotationMode.ENABLE_FORMS,
-          this.l10n,
-          /* enableScripting = */ null,
-          /* hasJSActionsPromise = */ null,
-          /* mouseState = */ null,
-          /* fieldObjectsPromise = */ null,
-          /* annotationCanvasMap */ this._annotationCanvasMap
-        );
+          imageResourcesPath: this.imageResourcesPath,
+          renderForms: this.#annotationMode === AnnotationMode.ENABLE_FORMS,
+          l10n: this.l10n,
+          annotationCanvasMap: this._annotationCanvasMap,
+        });
     }
 
     if (this.xfaLayer?.div) {
@@ -733,6 +780,10 @@ class PDFPageView {
       }
       this._resetZoomLayer(/* removeFromDOM = */ true);
 
+      // Ensure that the thumbnails won't become partially (or fully) blank,
+      // for documents that contain interactive form elements.
+      this.#useThumbnailCanvas.regularAnnotations = !paintTask.separateAnnots;
+
       this.eventBus.dispatch("pagerendered", {
         source: this,
         pageNumber: this.id,
@@ -771,10 +822,11 @@ class PDFPageView {
               if (this.annotationEditorLayerFactory) {
                 this.annotationEditorLayer ||=
                   this.annotationEditorLayerFactory.createAnnotationEditorLayerBuilder(
-                    div,
-                    pdfPage,
-                    this.l10n,
-                    /* annotationStorage = */ null
+                    {
+                      pageDiv: div,
+                      pdfPage,
+                      l10n: this.l10n,
+                    }
                   );
                 this._renderAnnotationEditorLayer();
               }
@@ -789,11 +841,10 @@ class PDFPageView {
 
     if (this.xfaLayerFactory) {
       if (!this.xfaLayer) {
-        this.xfaLayer = this.xfaLayerFactory.createXfaLayerBuilder(
-          div,
+        this.xfaLayer = this.xfaLayerFactory.createXfaLayerBuilder({
+          pageDiv: div,
           pdfPage,
-          /* annotationStorage = */ null
-        );
+        });
       }
       this._renderXfaLayer();
     }
@@ -827,7 +878,7 @@ class PDFPageView {
       };
       this.eventBus._on("textlayerrendered", this._onTextLayerRendered);
       this.structTreeLayer =
-        this.structTreeLayerFactory.createStructTreeLayerBuilder(pdfPage);
+        this.structTreeLayerFactory.createStructTreeLayerBuilder({ pdfPage });
     }
 
     div.setAttribute("data-loaded", true);
@@ -848,6 +899,9 @@ class PDFPageView {
       },
       cancel() {
         renderTask.cancel();
+      },
+      get separateAnnots() {
+        return renderTask.separateAnnots;
       },
     };
 
@@ -1040,6 +1094,9 @@ class PDFPageView {
       cancel() {
         cancelled = true;
       },
+      get separateAnnots() {
+        return false;
+      },
     };
   }
 
@@ -1079,6 +1136,16 @@ class PDFPageView {
     return 16384;
   }
   // end of modification
+
+  /**
+   * For use by the `PDFThumbnailView.setImage`-method.
+   * @ignore
+   */
+  get thumbnailCanvas() {
+    const { initialOptionalContent, regularAnnotations } =
+      this.#useThumbnailCanvas;
+    return initialOptionalContent && regularAnnotations ? this.canvas : null;
+  }
 }
 
 export { PDFPageView };
