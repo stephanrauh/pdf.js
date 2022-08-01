@@ -47,6 +47,7 @@ const CHARACTERS_TO_NORMALIZE = {
   "\u00BC": "1/4", // Vulgar fraction one quarter
   "\u00BD": "1/2", // Vulgar fraction one half
   "\u00BE": "3/4", // Vulgar fraction three quarters
+  "\n": " ", // #1449 modified by ngx-extended-pdf-viewer
 };
 
 let normalizationRegex = null;
@@ -59,9 +60,14 @@ function normalize(text) {
   }
   let diffs = null;
   const normalizedText = text.replace(normalizationRegex, function (ch, index) {
-    const normalizedCh = CHARACTERS_TO_NORMALIZE[ch],
-      diff = normalizedCh.length - ch.length;
-    if (diff !== 0) {
+    const normalizedCh = CHARACTERS_TO_NORMALIZE[ch];
+    // #1449 modified by ngx-extended-pdf-viewer
+    const diff = normalizedCh.length - ch.length;
+    if (ch === "\n") {
+      (diffs ||= []).push([index - 1, 1]);
+    }
+    // #1449 end of modification by ngx-extended-pdf-viewer
+    else if (diff !== 0) {
       (diffs ||= []).push([index, diff]);
     }
     return normalizedCh;
@@ -81,10 +87,10 @@ function getOriginalIndex(matchIndex, diffs = null) {
   for (const [index, diff] of diffs) {
     const currentIndex = index + totalDiff;
 
-    if (currentIndex >= matchIndex) {
+    if (index >= matchIndex) { // #1449 modified by ngx-extended-pdf-viewer
       break;
     }
-    if (currentIndex + diff > matchIndex) {
+    if (index + diff > matchIndex) { // #1449 modified by ngx-extended-pdf-viewer
       totalDiff += matchIndex - currentIndex;
       break;
     }
@@ -751,6 +757,11 @@ class PDFFindController {
 
                 for (let j = 0, jj = textItems.length; j < jj; j++) {
                   strBuf.push(textItems[j].str);
+                  // #1449 modified by ngx-extended-pdf-viewer
+                  if (textItems[j].hasEOL) {
+                    strBuf.push("\n");
+                  }
+                  // #1449 end of modification by ngx-extended-pdf-viewer
                 }
 
                 // Store the normalized page content (text items) as one string.
