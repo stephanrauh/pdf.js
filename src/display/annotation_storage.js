@@ -31,6 +31,7 @@ class AnnotationStorage {
     // can have undesirable effects.
     this.onSetModified = null;
     this.onResetModified = null;
+    this.onAnnotationEditor = null;
   }
 
   /**
@@ -162,6 +163,13 @@ class AnnotationStorage {
       }
       // #718 end of modification by ngx-extended-pdf-viewer
     }
+
+    if (
+      value instanceof AnnotationEditor &&
+      typeof this.onAnnotationEditor === "function"
+    ) {
+      this.onAnnotationEditor(value.constructor._type);
+    }
   }
 
   /**
@@ -224,6 +232,15 @@ class AnnotationStorage {
       }
     }
     return clone;
+  }
+
+  get hasAnnotationEditors() {
+    for (const value of this._storage.values()) {
+      if (value instanceof AnnotationEditor) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

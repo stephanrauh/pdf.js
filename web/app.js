@@ -1101,6 +1101,15 @@ const PDFViewerApplication = {
       await this.pdfScriptingManager.dispatchDidSave();
       this._saveInProgress = false;
     }
+
+    if (this.pdfDocument?.annotationStorage.hasAnnotationEditors) {
+      this.externalServices.reportTelemetry({
+        type: "editing",
+        data: {
+          type: "save",
+        },
+      });
+    }
   },
 
   downloadOrSave() {
@@ -1809,6 +1818,12 @@ const PDFViewerApplication = {
         delete this._annotationStorageModified;
       }
     };
+    annotationStorage.onAnnotationEditor = typeStr => {
+      this.externalServices.reportTelemetry({
+        type: "editing",
+        data: { type: typeStr },
+      });
+    };
   },
 
   setInitialView(
@@ -1955,6 +1970,15 @@ const PDFViewerApplication = {
     this.externalServices.reportTelemetry({
       type: "print",
     });
+
+    if (this.pdfDocument?.annotationStorage.hasAnnotationEditors) {
+      this.externalServices.reportTelemetry({
+        type: "editing",
+        data: {
+          type: "print",
+        },
+      });
+    }
   },
 
   afterPrint() {

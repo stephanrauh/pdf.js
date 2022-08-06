@@ -67,7 +67,6 @@ import {
 } from "./ui_utils.js";
 import { AnnotationEditorLayerBuilder } from "./annotation_editor_layer_builder.js";
 import { AnnotationLayerBuilder } from "./annotation_layer_builder.js";
-import { compatibilityParams } from "./app_options.js";
 import { NullL10n } from "./l10n_utils.js";
 import { PageFlip } from "./page-flip.module.js"; // #716 modified by ngx-extended-pdf-viewer
 import { PDFPageView } from "./pdf_page_view.js";
@@ -86,9 +85,6 @@ const PagesCountLimit = {
   FORCE_LAZY_PAGE_INIT: 7500,
   PAUSE_EAGER_PAGE_INIT: 250,
 };
-
-const ANNOTATION_EDITOR_MODE =
-  compatibilityParams.annotationEditorMode ?? AnnotationEditorType.DISABLE;
 
 function isValidAnnotationEditorMode(mode) {
   return (
@@ -272,7 +268,7 @@ class BaseViewer {
     this.#annotationMode =
       options.annotationMode ?? AnnotationMode.ENABLE_FORMS;
     this.#annotationEditorMode =
-      options.annotationEditorMode ?? ANNOTATION_EDITOR_MODE;
+      options.annotationEditorMode ?? AnnotationEditorType.DISABLE;
     this.imageResourcesPath = options.imageResourcesPath || "";
     this.enablePrintAutoRotate = options.enablePrintAutoRotate || false;
     if (

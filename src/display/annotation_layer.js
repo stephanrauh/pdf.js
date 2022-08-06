@@ -222,6 +222,9 @@ class AnnotationElement {
       if (horizontalRadius > 0 || verticalRadius > 0) {
         const radius = `calc(${horizontalRadius}px * var(--scale-factor)) / calc(${verticalRadius}px * var(--scale-factor))`;
         container.style.borderRadius = radius;
+      } else if (this instanceof RadioButtonWidgetAnnotationElement) {
+        const radius = `calc(${width}px * var(--scale-factor)) / calc(${height}px * var(--scale-factor))`;
+        container.style.borderRadius = radius;
       }
 
       switch (data.borderStyle.style) {
@@ -1968,10 +1971,22 @@ class FreeTextAnnotationElement extends AnnotationElement {
       parameters.data.richText?.str
     );
     super(parameters, { isRenderable, ignoreBorder: true });
+    this.textContent = parameters.data.textContent;
   }
 
   render() {
     this.container.className = "freeTextAnnotation";
+
+    if (this.textContent) {
+      const content = document.createElement("div");
+      content.className = "annotationTextContent";
+      for (const line of this.textContent) {
+        const lineSpan = document.createElement("span");
+        lineSpan.textContent = line;
+        content.append(lineSpan);
+      }
+      this.container.append(content);
+    }
 
     if (!this.data.hasPopup) {
       this._createPopup(null, this.data);
@@ -2501,36 +2516,18 @@ class AnnotationLayer {
 
     this.#setDimensions(div, viewport);
 
-    const sortedAnnotations = [],
-      popupAnnotations = [];
-    // Ensure that Popup annotations are handled last, since they're dependant
-    // upon the parent annotation having already been rendered (please refer to
-    // the `PopupAnnotationElement.render` method); fixes issue 11362.
-    for (const data of annotations) {
-      if (!data) {
-        continue;
-      }
-      if (data.annotationType === AnnotationType.POPUP) {
-        popupAnnotations.push(data);
-        continue;
-      }
-      const { width, height } = getRectDims(data.rect);
-      if (width <= 0 || height <= 0) {
-        continue; // Ignore empty annotations.
-      }
-      sortedAnnotations.push(data);
-    }
-    if (popupAnnotations.length) {
-      sortedAnnotations.push(...popupAnnotations);
-    }
-
     // #958 modified by ngx-extended-pdf-viewer
     if (window.registerAcroformAnnotations) {
-      window.registerAcroformAnnotations(sortedAnnotations);
+      window.registerAcroformAnnotations(annotations);
     }
-    // #958 end of modification by ngx-extended-pdf-viewer
 
-    for (const data of sortedAnnotations) {
+    for (const data of annotations) {
+      if (data.annotationType !== AnnotationType.POPUP) {
+        const { width, height } = getRectDims(data.rect);
+        if (width <= 0 || height <= 0) {
+          continue; // Ignore empty annotations.
+        }
+      }
       const element = AnnotationElementFactory.create({
         data,
         layer: div,
