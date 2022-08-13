@@ -1285,7 +1285,6 @@ gulp.task(
       const MOZCENTRAL_DIR = BUILD_DIR + "mozcentral/",
         MOZCENTRAL_EXTENSION_DIR = MOZCENTRAL_DIR + "browser/extensions/pdfjs/",
         MOZCENTRAL_CONTENT_DIR = MOZCENTRAL_EXTENSION_DIR + "content/",
-        FIREFOX_EXTENSION_DIR = "extensions/firefox/",
         MOZCENTRAL_L10N_DIR =
           MOZCENTRAL_DIR + "browser/locales/en-US/pdfviewer/",
         FIREFOX_CONTENT_DIR = EXTENSION_SRC_DIR + "/firefox/content/";
@@ -1297,10 +1296,6 @@ gulp.task(
 
       // Clear out everything in the firefox extension build directory
       rimraf.sync(MOZCENTRAL_DIR);
-
-      const versionJSON = getVersionJSON();
-      const version = versionJSON.version,
-        commit = versionJSON.commit;
 
       return merge([
         createMainBundle(defines).pipe(
@@ -1344,11 +1339,6 @@ gulp.task(
         gulp
           .src("l10n/en-US/*.properties")
           .pipe(gulp.dest(MOZCENTRAL_L10N_DIR)),
-        gulp
-          .src(FIREFOX_EXTENSION_DIR + "README.mozilla")
-          .pipe(replace(/\bPDFJSSCRIPT_VERSION\b/g, version))
-          .pipe(replace(/\bPDFJSSCRIPT_COMMIT\b/g, commit))
-          .pipe(gulp.dest(MOZCENTRAL_EXTENSION_DIR)),
         gulp.src("LICENSE").pipe(gulp.dest(MOZCENTRAL_EXTENSION_DIR)),
         gulp
           .src(FIREFOX_CONTENT_DIR + "PdfJsDefaultPreferences.jsm")

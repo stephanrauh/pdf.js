@@ -488,7 +488,7 @@ class InkEditor extends AnnotationEditor {
 
     // When commiting, the position of this editor is changed, hence we must
     // move it to the right position in the DOM.
-    this.parent.moveDivInDOM(this);
+    this.parent.moveEditorInDOM(this);
     // After the div has been moved in the DOM, the focus may have been stolen
     // by document.body, hence we just keep it here.
     this.div.focus();
@@ -1034,8 +1034,8 @@ class InkEditor extends AnnotationEditor {
     }
 
     const bbox = editor.#getBbox();
-    editor.#baseWidth = bbox[2] - bbox[0];
-    editor.#baseHeight = bbox[3] - bbox[1];
+    editor.#baseWidth = Math.max(RESIZER_SIZE, bbox[2] - bbox[0]);
+    editor.#baseHeight = Math.max(RESIZER_SIZE, bbox[3] - bbox[1]);
     editor.#setScaleFactor(width, height);
 
     return editor;

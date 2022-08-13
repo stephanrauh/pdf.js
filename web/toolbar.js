@@ -53,6 +53,8 @@ const PAGE_NUMBER_LOADING_INDICATOR = "visiblePageIsLoading";
  */
 
 class Toolbar {
+  #wasLocalized = false;
+
   /**
    * @param {ToolbarOptions} options
    * @param {EventBus} eventBus
@@ -109,29 +111,28 @@ class Toolbar {
       editorInkParamsToolbar: options.editorInkParamsToolbar,
     };
 
-    this._wasLocalized = false;
-    this.reset();
-
     // Bind the event listeners for click and various other actions.
-    this._bindListeners(options);
+    this.#bindListeners(options);
+
+    this.reset();
   }
 
   setPageNumber(pageNumber, pageLabel) {
     this.pageNumber = pageNumber;
     this.pageLabel = pageLabel;
-    this._updateUIState(false);
+    this.#updateUIState(false);
   }
 
   setPagesCount(pagesCount, hasPageLabels) {
     this.pagesCount = pagesCount;
     this.hasPageLabels = hasPageLabels;
-    this._updateUIState(true);
+    this.#updateUIState(true);
   }
 
   setPageScale(pageScaleValue, pageScale) {
     this.pageScaleValue = (pageScaleValue || pageScale).toString();
     this.pageScale = pageScale;
-    this._updateUIState(false);
+    this.#updateUIState(false);
   }
 
   reset() {
@@ -152,14 +153,14 @@ class Toolbar {
     }
     // #556 #543 end of modification
 
-    this._updateUIState(true);
+    this.#updateUIState(true);
     this.updateLoadingIndicatorState();
 
     // Reset the Editor buttons too, since they're document specific.
     this.eventBus.dispatch("toolbarreset", { source: this });
   }
 
-  _bindListeners(options) {
+  #bindListeners(options) {
     const { pageNumber, scaleSelect } = this.items;
     const self = this;
 
@@ -214,9 +215,9 @@ class Toolbar {
     scaleSelect.oncontextmenu = noContextMenuHandler;
 
     this.eventBus._on("localized", () => {
-      this._wasLocalized = true;
+      this.#wasLocalized = true;
       this.#adjustScaleWidth();
-      this._updateUIState(true);
+      this.#updateUIState(true);
     });
 
     this.#bindEditorToolsListener(options);
@@ -266,8 +267,8 @@ class Toolbar {
     });
   }
 
-  _updateUIState(resetNumPages = false) {
-    if (!this._wasLocalized) {
+  #updateUIState(resetNumPages = false) {
+    if (!this.#wasLocalized) {
       // Don't update the UI state until we localize the toolbar.
       return;
     }

@@ -29,6 +29,7 @@ import {
   warn,
 } from "../shared/util.js";
 import {
+  AnnotationPrefix,
   DOMSVGFactory,
   getFilenameFromUrl,
   PDFDateString,
@@ -1940,7 +1941,8 @@ class PopupElement {
     }
     if (this.hideElement.hidden) {
       this.hideElement.hidden = false;
-      this.container.style.zIndex += 1;
+      this.container.style.zIndex =
+        parseInt(this.container.style.zIndex) + 1000;
     }
   }
 
@@ -1957,7 +1959,8 @@ class PopupElement {
     }
     if (!this.hideElement.hidden && !this.pinned) {
       this.hideElement.hidden = true;
-      this.container.style.zIndex -= 1;
+      this.container.style.zIndex =
+        parseInt(this.container.style.zIndex) - 1000;
     }
   }
 }
@@ -1980,6 +1983,7 @@ class FreeTextAnnotationElement extends AnnotationElement {
     if (this.textContent) {
       const content = document.createElement("div");
       content.className = "annotationTextContent";
+      content.setAttribute("role", "comment");
       for (const line of this.textContent) {
         const lineSpan = document.createElement("span");
         lineSpan.textContent = line;
@@ -2504,6 +2508,19 @@ class FileAttachmentAnnotationElement extends AnnotationElement {
  */
 
 class AnnotationLayer {
+  static #appendElement(element, id, div, accessibilityManager) {
+    const contentElement = element.firstChild || element;
+    contentElement.id = `${AnnotationPrefix}${id}`;
+
+    div.append(element);
+    accessibilityManager?.moveElementInDOM(
+      div,
+      element,
+      contentElement,
+      /* isRemovable = */ false
+    );
+  }
+
   /**
    * Render a new annotation layer with all annotation elements.
    *
@@ -2512,9 +2529,10 @@ class AnnotationLayer {
    * @memberof AnnotationLayer
    */
   static render(parameters) {
-    const { annotations, div, viewport } = parameters;
+    const { annotations, div, viewport, accessibilityManager } = parameters;
 
     this.#setDimensions(div, viewport);
+    let zIndex = 0;
 
     // #958 modified by ngx-extended-pdf-viewer
     if (window.registerAcroformAnnotations) {
@@ -2552,15 +2570,33 @@ class AnnotationLayer {
         }
         if (Array.isArray(rendered)) {
           for (const renderedElement of rendered) {
-            div.append(renderedElement);
+            renderedElement.style.zIndex = zIndex++;
+            AnnotationLayer.#appendElement(
+              renderedElement,
+              data.id,
+              div,
+              accessibilityManager
+            );
           }
         } else {
+          // The accessibility manager will move the annotation in the DOM in
+          // order to match the visual ordering.
+          // But if an annotation is above an other one, then we must draw it
+          // after the other one whatever the order is in the DOM, hence the
+          // use of the z-index.
+          rendered.style.zIndex = zIndex++;
+
           if (element instanceof PopupAnnotationElement) {
             // Popup annotation elements should not be on top of other
             // annotation elements to prevent interfering with mouse events.
             div.prepend(rendered);
           } else {
-            div.append(rendered);
+            AnnotationLayer.#appendElement(
+              rendered,
+              data.id,
+              div,
+              accessibilityManager
+            );
           }
         }
       }

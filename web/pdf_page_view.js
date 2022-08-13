@@ -51,6 +51,7 @@ import {
 } from "./ui_utils.js";
 import { compatibilityParams } from "./app_options.js";
 import { NullL10n } from "./l10n_utils.js";
+import { TextAccessibilityManager } from "./text_accessibility.js";
 import canvasSize from "canvas-size";
 import { warn } from "../src/shared/util.js";
 
@@ -699,6 +700,7 @@ class PDFPageView {
 
     let textLayer = null;
     if (this.textLayerMode !== TextLayerMode.DISABLE && this.textLayerFactory) {
+      this._accessibilityManager ||= new TextAccessibilityManager();
       const textLayerDiv = document.createElement("div");
       textLayerDiv.className = "textLayer";
       textLayerDiv.style.width = canvasWrapper.style.width;
@@ -718,6 +720,7 @@ class PDFPageView {
           this.textLayerMode === TextLayerMode.ENABLE_ENHANCE,
         eventBus: this.eventBus,
         highlighter: this.textHighlighter,
+        accessibilityManager: this._accessibilityManager,
       });
     }
     this.textLayer = textLayer;
@@ -735,6 +738,7 @@ class PDFPageView {
           renderForms: this.#annotationMode === AnnotationMode.ENABLE_FORMS,
           l10n: this.l10n,
           annotationCanvasMap: this._annotationCanvasMap,
+          accessibilityManager: this._accessibilityManager,
         });
     }
 
@@ -826,6 +830,7 @@ class PDFPageView {
                       pageDiv: div,
                       pdfPage,
                       l10n: this.l10n,
+                      accessibilityManager: this._accessibilityManager,
                     }
                   );
                 this._renderAnnotationEditorLayer();
