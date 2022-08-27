@@ -66,7 +66,12 @@ class TextHighlighter {
       throw new Error("Text divs and strings have not been set.");
     }
     if (this.enabled) {
-      throw new Error("TextHighlighter is already enabled.");
+      // #1501 modified by ngx-extended-pdf-viewer
+      // silently swallow the error message because calling this method doesn't
+      // seem to cause error, and sometime it does happen in the wild
+      return;
+      // throw new Error("TextHighlighter is already enabled.");
+      // #1501 end of modification by ngx-extended-pdf-viewer
     }
     this.enabled = true;
     if (!this._onUpdateTextLayerMatches) {
