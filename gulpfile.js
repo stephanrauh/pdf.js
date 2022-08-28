@@ -62,7 +62,7 @@ const SRC_DIR = "src/";
 const LIB_DIR = BUILD_DIR + "lib/";
 const DIST_DIR = BUILD_DIR + "dist/";
 const TYPES_DIR = BUILD_DIR + "types/";
-const TMP_DIR = BUILD_DIR + "tmp/";
+let TMP_DIR = BUILD_DIR + "tmp/"; // modified by ngx-extended-pdf-viewer to allow for parrallel builds
 const TYPESTEST_DIR = BUILD_DIR + "typestest/";
 const COMMON_WEB_FILES = [
   "web/images/*.{png,svg,gif}",
@@ -78,18 +78,22 @@ const builder = require("./external/builder/builder.js");
 const CONFIG_FILE = "pdfjs.config";
 const config = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
 
+const ENV_TARGETS = [
+  "last 2 versions",
+  "Chrome >= 76",
+  "Firefox ESR",
+  "Safari >= 13.1",
+  "> 1%",
+  "not IE > 0",
+  "not dead",
+];
+
 // Default Autoprefixer config used for generic, components, minified-pre
 const AUTOPREFIXER_CONFIG = {
-  overrideBrowserslist: [
-    "last 2 versions",
-    "Chrome >= 76",
-    "Firefox ESR",
-    "Safari >= 13.1",
-    "> 1%",
-    "not IE > 0",
-    "not dead",
-  ],
+  overrideBrowserslist: ENV_TARGETS,
 };
+// Default Babel targets used for generic, components, minified-pre
+const BABEL_TARGETS = ENV_TARGETS.join(", ");
 
 const DEFINES = Object.freeze({
   PRODUCTION: true,
@@ -172,7 +176,7 @@ function createWebpackConfig(
   output,
   {
     disableVersionInfo = false,
-    disableSourceMaps = false,
+    disableSourceMaps = true, // modified by ngx-extended-pdf-viewer
     disableLicenseHeader = false,
     defaultPreferencesDir = null,
   } = {}
@@ -213,16 +217,7 @@ function createWebpackConfig(
   }
   const babelExcludeRegExp = new RegExp(`(${babelExcludes.join("|")})`);
 
-  const babelPlugins = [
-    "@babel/plugin-transform-modules-commonjs",
-    [
-      "@babel/plugin-transform-runtime",
-      {
-        helpers: false,
-        regenerator: true,
-      },
-    ],
-  ];
+  const babelPlugins = ["@babel/plugin-transform-modules-commonjs"];
 
   const plugins = [];
   if (!disableLicenseHeader) {
@@ -236,18 +231,6 @@ function createWebpackConfig(
 
   // Required to expose e.g., the `window` object.
   output.globalObject = "globalThis";
-
-  if (skipBabel) {
-    if (fs.existsSync("babel.config.js")) {
-      fs.unlinkSync("babel.config.js");
-      console.log("Deactivated Babel");
-    }
-  } else {
-    if (!fs.existsSync("babel.config.js")) {
-      fs.copyFileSync("deactivated-babel.config.js", "babel.config.js");
-      console.log("Activated Babel");
-    }
-  }
 
   return {
     mode: "none",
@@ -272,8 +255,9 @@ function createWebpackConfig(
           loader: "babel-loader",
           exclude: babelExcludeRegExp,
           options: {
-//            presets: skipBabel ? undefined : ["@babel/preset-env"],
+            presets: skipBabel ? undefined : ["@babel/preset-env"],
             plugins: babelPlugins,
+            targets: BABEL_TARGETS,
           },
         },
         {
@@ -357,27 +341,9 @@ function replaceJSRootName(amdName, jsName) {
   );
 }
 
-// ngx-extended-pdf-viewer start
-function addSuffix(filename, defines) {
-  let suffix = ".js";
-  if (!defines.MINIFIED) {
-    suffix = ".min.js";
-  }
-  if (!defines.SKIP_BABEL) {
-    if (!defines.MINIFIED) {
-      suffix = "-es5.min.js";
-    } else {
-      suffix = "-es5.js";
-    }
-  }
-  return filename.replace(".js", suffix);
-}
-// ngx-extended-pdf-viewer end
-
 function createMainBundle(defines) {
   const mainAMDName = "pdfjs-dist/build/pdf";
-  let mainOutputName = "pdf.js";
-  mainOutputName = addSuffix(mainOutputName, defines); // modified by ngx-extended-pdf-viewer
+  const mainOutputName = "pdf.js";
 
   const mainFileConfig = createWebpackConfig(defines, {
     filename: mainOutputName,
@@ -446,7 +412,7 @@ function createTemporaryScriptingBundle(defines, extraOptions = undefined) {
 
 function createSandboxBundle(defines, extraOptions = undefined) {
   const sandboxAMDName = "pdfjs-dist/build/pdf.sandbox";
-  const sandboxOutputName = addSuffix("pdf.sandbox.js", defines);
+  const sandboxOutputName = "pdf.sandbox.js";
 
   const scriptingPath = TMP_DIR + "pdf.scripting.js";
   // Insert the source as a string to be `eval`-ed in the sandbox.
@@ -476,8 +442,7 @@ function createSandboxBundle(defines, extraOptions = undefined) {
 
 function createWorkerBundle(defines) {
   const workerAMDName = "pdfjs-dist/build/pdf.worker";
-  let workerOutputName = "pdf.worker.js";
-  workerOutputName = addSuffix(workerOutputName, defines); // modified by ngx-extended-pdf-viewer
+  const workerOutputName = "pdf.worker.js";
 
   const workerFileConfig = createWebpackConfig(defines, {
     filename: workerOutputName,
@@ -494,7 +459,7 @@ function createWorkerBundle(defines) {
 }
 
 function createWebBundle(defines, options) {
-  const viewerOutputName = addSuffix("viewer.js", defines); // modifed by ngx-extended-pdf-viewer
+  const viewerOutputName = "viewer.js";
 
   const viewerFileConfig = createWebpackConfig(
     defines,
@@ -513,7 +478,7 @@ function createWebBundle(defines, options) {
 
 function createComponentsBundle(defines) {
   const componentsAMDName = "pdfjs-dist/web/pdf_viewer";
-  const componentsOutputName = addSuffix('viewer.js', defines); // modified by ngx-extended-pdf-viewer
+  const componentsOutputName = "pdf_viewer.js";
 
   const componentsFileConfig = createWebpackConfig(defines, {
     filename: componentsOutputName,
@@ -531,7 +496,7 @@ function createComponentsBundle(defines) {
 
 function createImageDecodersBundle(defines) {
   const imageDecodersAMDName = "pdfjs-dist/image_decoders/pdf.image_decoders";
-  const imageDecodersOutputName = addSuffix("pdf.image_decoders.js", defines); // modified by ngx-extended-pdf-viewer
+  const imageDecodersOutputName = "pdf.image_decoders.js";
 
   const componentsFileConfig = createWebpackConfig(defines, {
     filename: imageDecodersOutputName,
@@ -1118,21 +1083,27 @@ function buildMinified(defines, dir) {
   ]);
 }
 
-async function parseMinified(dir, suffix) {
-  const pdfFile = fs.readFileSync(dir + "/build/pdf" + suffix + ".js").toString();
-  const pdfWorkerFile = fs.readFileSync(dir + "/build/pdf.worker" + suffix + ".js").toString();
-  const pdfSandboxFile = fs.readFileSync(dir + "/build/pdf.sandbox" + suffix + ".js").toString();
-  /*
+async function parseMinified(dir) {
+  const pdfFile = fs.readFileSync(dir + "/build/pdf.js").toString();
+  const pdfWorkerFile = fs
+    .readFileSync(dir + "/build/pdf.worker.js")
+    .toString();
+  const pdfSandboxFile = fs
+    .readFileSync(dir + "/build/pdf.sandbox.js")
+    .toString();
   const pdfImageDecodersFile = fs
     .readFileSync(dir + "/image_decoders/pdf.image_decoders.js")
     .toString();
-    */
+  const viewerFiles = {
+    "pdf.js": pdfFile,
+    "viewer.js": fs.readFileSync(dir + "/web/viewer.js").toString(),
+  };
 
   console.log();
   console.log("### Minifying js files");
 
   const Terser = require("terser");
-  let options = {
+  const options = {
     compress: {
       // V8 chokes on very long sequences, work around that.
       sequences: false,
@@ -1141,40 +1112,47 @@ async function parseMinified(dir, suffix) {
     keep_fnames: true,
   };
 
-  const viewerFile = fs.readFileSync(dir + "/web/viewer" + suffix + ".js").toString();
-
-  const miniViewer = await Terser.minify(viewerFile, options);
-
   fs.writeFileSync(
-    dir + "/web/viewer" + suffix + ".min.js",
-    miniViewer.code
+    dir + "/web/pdf.viewer.js",
+    (await Terser.minify(viewerFiles, options)).code
+  );
+  fs.writeFileSync(
+    dir + "/build/pdf.min.js",
+    (await Terser.minify(pdfFile, options)).code
+  );
+  fs.writeFileSync(
+    dir + "/build/pdf.worker.min.js",
+    (await Terser.minify(pdfWorkerFile, options)).code
+  );
+  fs.writeFileSync(
+    dir + "/build/pdf.sandbox.min.js",
+    (await Terser.minify(pdfSandboxFile, options)).code
+  );
+  fs.writeFileSync(
+    dir + "image_decoders/pdf.image_decoders.min.js",
+    (await Terser.minify(pdfImageDecodersFile, options)).code
   );
 
-  options = {
-    compress: {
-      // V8 chokes on very long sequences, work around that.
-      sequences: false,
-    },
-    keep_classnames: true,
-    keep_fnames: true,
-  };
-  const miniPdf = await Terser.minify(pdfFile, options);
-  fs.writeFileSync(
-    dir + "/build/pdf" + suffix + ".min.js",
-    miniPdf.code
-  );
+  console.log();
+  console.log("### Cleaning js files");
 
-  const miniPdfSandbox = await Terser.minify(pdfSandboxFile, options);
-
-  fs.writeFileSync(
-    dir + "/build/pdf.sandbox" + suffix + ".min.js",
-    miniPdfSandbox.code
-  );
-  const miniPdfWorker = await Terser.minify(pdfWorkerFile, options);
-  fs.writeFileSync(
-    dir + "/build/pdf.worker" + suffix + ".min.js",
-    miniPdfWorker.code
-  );
+  // modififed by ngx-extended-pdf-viewer
+  // fs.unlinkSync(dir + "/web/viewer.js");
+  // fs.unlinkSync(dir + "/web/debugger.js");
+  // fs.unlinkSync(dir + "/build/pdf.js");
+  // fs.unlinkSync(dir + "/build/pdf.worker.js");
+  // fs.unlinkSync(dir + "/build/pdf.sandbox.js");
+//
+  // fs.renameSync(dir + "/build/pdf.min.js", dir + "/build/pdf.js");
+  // fs.renameSync(dir + "/build/pdf.worker.min.js", dir + "/build/pdf.worker.js");
+  // fs.renameSync(
+  //   dir + "/build/pdf.sandbox.min.js",
+  //   dir + "/build/pdf.sandbox.js"
+  // );
+  // fs.renameSync(
+  //   dir + "/image_decoders/pdf.image_decoders.min.js",
+  //   dir + "/image_decoders/pdf.image_decoders.js"
+  // );
 }
 
 gulp.task(
@@ -1197,7 +1175,7 @@ gulp.task(
       return buildMinified(defines, MINIFIED_DIR);
     },
     async function compressMinified(done) {
-      await parseMinified(MINIFIED_DIR, "");
+      await parseMinified(MINIFIED_DIR);
       done();
     }
   )
@@ -1206,8 +1184,13 @@ gulp.task(
 gulp.task(
   "minified-legacy",
   gulp.series(
+    async function setup(done) { // modified by ngx-extended-pdf-viewer to allow for parrallel builds
+      TMP_DIR = BUILD_DIR + "tmp-legacy/";
+      console.log("Mini");
+      done();
+    },
     createBuildNumber,
-    "locale",
+    // "locale", // modified by ngx-extended-pdf-viewer to allow for parrallel builds
     function scriptingMinifiedLegacy() {
       const defines = builder.merge(DEFINES, {
         MINIFIED: true,
@@ -1231,7 +1214,7 @@ gulp.task(
       return buildMinified(defines, MINIFIED_LEGACY_DIR);
     },
     async function compressMinifiedLegacy(done) {
-      await parseMinified(MINIFIED_LEGACY_DIR, '-es5');
+      await parseMinified(MINIFIED_LEGACY_DIR);
       done();
     }
   )
@@ -1512,15 +1495,9 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       presets: skipBabel ? undefined : ["@babel/preset-env"],
       plugins: [
         "@babel/plugin-transform-modules-commonjs",
-        [
-          "@babel/plugin-transform-runtime",
-          {
-            helpers: false,
-            regenerator: true,
-          },
-        ],
         babelPluginReplaceNonWebpackImports,
       ],
+      targets: BABEL_TARGETS,
     }).code;
     const removeCjsSrc =
       /^(var\s+\w+\s*=\s*(_interopRequireDefault\()?require\(".*?)(?:\/src)(\/[^"]*"\)\)?;)$/gm;
