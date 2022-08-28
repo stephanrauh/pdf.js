@@ -169,7 +169,7 @@ class Toolbar {
 
     // The buttons within the toolbar.
     for (const { element, eventName, eventDetails } of this.buttons) {
-      element.addEventListener("click", evt => {
+      element?.addEventListener("click", evt => {
         if (eventName !== null) {
           const details = { source: this };
           if (eventDetails) {
