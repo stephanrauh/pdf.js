@@ -1924,9 +1924,9 @@ class PopupElement {
 
     // Attach the event listeners to the trigger element.
     for (const element of this.trigger) {
-      element.addEventListener("click", this._toggle.bind(this));
-      element.addEventListener("mouseover", this._show.bind(this, false));
-      element.addEventListener("mouseout", this._hide.bind(this, false));
+      element?.addEventListener("click", this._toggle.bind(this));
+      element?.addEventListener("mouseover", this._show.bind(this, false));
+      element?.addEventListener("mouseout", this._hide.bind(this, false));
     }
     popup.addEventListener("click", this._hide.bind(this, true));
 
