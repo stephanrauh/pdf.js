@@ -1007,7 +1007,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
         value: this.data.fieldValue,
       });
       let textContent = storedData.formattedValue || storedData.value || "";
-      const maxLen = storage.getValue(id, {
+      const maxLen = storage.getValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
         charLimit: this.data.maxLen,
       }).charLimit;
       if (maxLen && textContent.length > maxLen) {
