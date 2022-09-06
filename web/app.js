@@ -261,7 +261,6 @@ const PDFViewerApplication = {
   _saveInProgress: false,
   _docStats: null,
   _wheelUnusedTicks: 0,
-  _idleCallbacks: new Set(),
   _PDFBug: null,
   _hasAnnotationEditors: false,
   _title: document.title,
@@ -856,19 +855,6 @@ const PDFViewerApplication = {
   },
 
   /**
-   * @private
-   */
-  _cancelIdleCallbacks() {
-    if (!this._idleCallbacks.size) {
-      return;
-    }
-    for (const callback of this._idleCallbacks) {
-      window.cancelIdleCallback(callback);
-    }
-    this._idleCallbacks.clear();
-  },
-
-  /**
    * Closes opened PDF document.
    * @returns {Promise} - Returns the promise, which is resolved when all
    *                      destruction is completed.
@@ -925,7 +911,6 @@ const PDFViewerApplication = {
     this._docStats = null;
     this._hasAnnotationEditors = false;
 
-    this._cancelIdleCallbacks();
     promises.push(this.pdfScriptingManager.destroyPromise);
 
     this.setTitle();
@@ -1489,19 +1474,6 @@ const PDFViewerApplication = {
         }
         this.pdfLayerViewer.render({ optionalContentConfig, pdfDocument });
       });
-      if (
-        (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
-        "requestIdleCallback" in window
-      ) {
-        const callback = window.requestIdleCallback(
-          () => {
-            this._collectTelemetry(pdfDocument);
-            this._idleCallbacks.delete(callback);
-          },
-          { timeout: 1000 }
-        );
-        this._idleCallbacks.add(callback);
-      }
     });
 
     this._initializePageLabels(pdfDocument);
@@ -1546,23 +1518,6 @@ const PDFViewerApplication = {
       numPages: this.pagesCount,
       URL: this.url,
     };
-  },
-
-  /**
-   * A place to fetch data for telemetry after one page is rendered and the
-   * viewer is idle.
-   * @private
-   */
-  async _collectTelemetry(pdfDocument) {
-    const markInfo = await this.pdfDocument.getMarkInfo();
-    if (pdfDocument !== this.pdfDocument) {
-      return; // Document was closed while waiting for mark info.
-    }
-    const tagged = markInfo?.Marked || false;
-    this.externalServices.reportTelemetry({
-      type: "tagged",
-      tagged,
-    });
   },
 
   /**

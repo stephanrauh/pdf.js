@@ -17,6 +17,8 @@
 /** @typedef {import("../src/display/api").PDFPageProxy} PDFPageProxy */
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/display_utils").PageViewport} PageViewport */
+// eslint-disable-next-line max-len
+/** @typedef {import("../src/display/optional_content_config").OptionalContentConfig} OptionalContentConfig */
 /** @typedef {import("./event_utils").EventBus} EventBus */
 /** @typedef {import("./interfaces").IDownloadManager} IDownloadManager */
 /** @typedef {import("./interfaces").IL10n} IL10n */
@@ -783,12 +785,9 @@ class BaseViewer {
       this._cancelRendering();
       this._resetView();
 
-      if (this.findController) {
-        this.findController.setDocument(null);
-      }
-      if (this._scriptingManager) {
-        this._scriptingManager.setDocument(null);
-      }
+      this.findController?.setDocument(null);
+      this._scriptingManager?.setDocument(null);
+
       if (this.#annotationEditorUIManager) {
         this.#annotationEditorUIManager.destroy();
         this.#annotationEditorUIManager = null;
@@ -942,12 +941,8 @@ class BaseViewer {
         // starts to create the correct size canvas. Wait until one page is
         // rendered so we don't tie up too many resources early on.
         this.#onePageRenderedOrForceFetch().then(async () => {
-          if (this.findController) {
-            this.findController.setDocument(pdfDocument); // Enable searching.
-          }
-          if (this._scriptingManager) {
-            this._scriptingManager.setDocument(pdfDocument); // Enable scripting.
-          }
+          this.findController?.setDocument(pdfDocument); // Enable searching.
+          this._scriptingManager?.setDocument(pdfDocument); // Enable scripting.
 
           if (this.#annotationEditorUIManager) {
             // Ensure that the Editor buttons, in the toolbar, are updated.

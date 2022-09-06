@@ -1392,9 +1392,7 @@ class PDFPageProxy {
     pageColors = null,
     printAnnotationStorage = null,
   }) {
-    if (this._stats) {
-      this._stats.time("Overall");
-    }
+    this._stats?.time("Overall");
 
     const intentArgs = this._transport.getRenderingIntent(
       intent,
@@ -1439,9 +1437,7 @@ class PDFPageProxy {
         separateAnnots: null,
       };
 
-      if (this._stats) {
-        this._stats.time("Page Request");
-      }
+      this._stats?.time("Page Request");
       this._pumpOperatorList(intentArgs);
     }
 
@@ -1465,10 +1461,9 @@ class PDFPageProxy {
       } else {
         internalRenderTask.capability.resolve();
       }
-      if (this._stats) {
-        this._stats.timeEnd("Rendering");
-        this._stats.timeEnd("Overall");
-      }
+
+      this._stats?.timeEnd("Rendering");
+      this._stats?.timeEnd("Overall");
     };
 
     const internalRenderTask = new InternalRenderTask({
@@ -1504,9 +1499,8 @@ class PDFPageProxy {
           complete();
           return;
         }
-        if (this._stats) {
-          this._stats.time("Rendering");
-        }
+        this._stats?.time("Rendering");
+
         internalRenderTask.initializeGraphics({
           transparency,
           optionalContentConfig,
@@ -1562,9 +1556,7 @@ class PDFPageProxy {
         separateAnnots: null,
       };
 
-      if (this._stats) {
-        this._stats.time("Page Request");
-      }
+      this._stats?.time("Page Request");
       this._pumpOperatorList(intentArgs);
     }
     return intentState.opListReadCapability.promise;
@@ -1741,14 +1733,11 @@ class PDFPageProxy {
     if (!intentState) {
       return; // Rendering was cancelled.
     }
-    if (this._stats) {
-      this._stats.timeEnd("Page Request");
-    }
+    this._stats?.timeEnd("Page Request");
+
     // TODO Refactor RenderPageRequest to separate rendering
     // and operator list logic
-    if (intentState.displayReadyCapability) {
-      intentState.displayReadyCapability.resolve(transparency);
-    }
+    intentState.displayReadyCapability?.resolve(transparency);
   }
 
   /**
@@ -3315,17 +3304,14 @@ class InternalRenderTask {
     });
     this.operatorListIdx = 0;
     this.graphicsReady = true;
-    if (this.graphicsReadyCallback) {
-      this.graphicsReadyCallback();
-    }
+    this.graphicsReadyCallback?.();
   }
 
   cancel(error = null) {
     this.running = false;
     this.cancelled = true;
-    if (this.gfx) {
-      this.gfx.endDrawing();
-    }
+    this.gfx?.endDrawing();
+
     if (this._canvas) {
       InternalRenderTask.#canvasInUse.delete(this._canvas);
     }
@@ -3345,10 +3331,7 @@ class InternalRenderTask {
       }
       return;
     }
-
-    if (this.stepper) {
-      this.stepper.updateOperatorList(this.operatorList);
-    }
+    this.stepper?.updateOperatorList(this.operatorList);
 
     if (this.running) {
       return;
