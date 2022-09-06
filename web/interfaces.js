@@ -111,6 +111,11 @@ class IPDFLinkService {
   executeNamedAction(action) {}
 
   /**
+   * @param {Object} action
+   */
+  executeSetOCGState(action) {}
+
+  /**
    * @param {number} pageNum - page number.
    * @param {Object} pageRef - reference to the page.
    */
@@ -161,7 +166,6 @@ class IPDFTextLayerFactory {
    * @property {HTMLDivElement} textLayerDiv
    * @property {number} pageIndex
    * @property {PageViewport} viewport
-   * @property {boolean} [enhanceTextSelection]
    * @property {EventBus} eventBus
    * @property {TextHighlighter} highlighter
    * @property {TextAccessibilityManager} [accessibilityManager]
@@ -175,7 +179,6 @@ class IPDFTextLayerFactory {
     textLayerDiv,
     pageIndex,
     viewport,
-    enhanceTextSelection = false,
     eventBus,
     highlighter,
     accessibilityManager,

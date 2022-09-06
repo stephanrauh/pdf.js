@@ -597,6 +597,9 @@ class LinkAnnotationElement extends AnnotationElement {
     } else if (data.action) {
       this._bindNamedAction(link, data.action);
       isBound = true;
+    } else if (data.setOCGState) {
+      this.#bindSetOCGState(link, data.setOCGState);
+      isBound = true;
     } else if (data.dest) {
       this._bindLink(link, data.dest);
       isBound = true;
@@ -673,6 +676,20 @@ class LinkAnnotationElement extends AnnotationElement {
     link.href = this.linkService.getAnchorUrl("");
     link.onclick = () => {
       this.linkService.executeNamedAction(action);
+      return false;
+    };
+    link.className = "internalLink";
+  }
+
+  /**
+   * Bind SetOCGState actions to the link element.
+   * @param {Object} link
+   * @param {Object} action
+   */
+  #bindSetOCGState(link, action) {
+    link.href = this.linkService.getAnchorUrl("");
+    link.onclick = () => {
+      this.linkService.executeSetOCGState(action);
       return false;
     };
     link.className = "internalLink";
@@ -1775,35 +1792,31 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
 }
 
 class PopupAnnotationElement extends AnnotationElement {
+  // Do not render popup annotations for parent elements with these types as
+  // they create the popups themselves (because of custom trigger divs).
+  static IGNORE_TYPES = new Set([
+    "Line",
+    "Square",
+    "Circle",
+    "PolyLine",
+    "Polygon",
+    "Ink",
+  ]);
+
   constructor(parameters) {
-    const isRenderable = !!(
-      parameters.data.titleObj?.str ||
-      parameters.data.contentsObj?.str ||
-      parameters.data.richText?.str
-    );
+    const { data } = parameters;
+    const isRenderable =
+      !PopupAnnotationElement.IGNORE_TYPES.has(data.parentType) &&
+      !!(data.titleObj?.str || data.contentsObj?.str || data.richText?.str);
     super(parameters, { isRenderable });
   }
 
   render() {
-    // Do not render popup annotations for parent elements with these types as
-    // they create the popups themselves (because of custom trigger divs).
-    const IGNORE_TYPES = [
-      "Line",
-      "Square",
-      "Circle",
-      "PolyLine",
-      "Polygon",
-      "Ink",
-    ];
-
     this.container.className = "popupAnnotation";
 
-    if (IGNORE_TYPES.includes(this.data.parentType)) {
-      return this.container;
-    }
-
-    const selector = `[data-annotation-id="${this.data.parentId}"]`;
-    const parentElements = this.layer.querySelectorAll(selector);
+    const parentElements = this.layer.querySelectorAll(
+      `[data-annotation-id="${this.data.parentId}"]`
+    );
     if (parentElements.length === 0) {
       return this.container;
     }

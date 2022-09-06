@@ -74,10 +74,9 @@ class FreeTextEditor extends AnnotationEditor {
 
   static initialize(l10n) {
     this._l10nPromise = new Map(
-      ["free_text_default_content", "editor_free_text_aria_label"].map(str => [
-        str,
-        l10n.get(str),
-      ])
+      ["free_text2_default_content", "editor_free_text2_aria_label"].map(
+        str => [str, l10n.get(str)]
+      )
     );
 
     const style = getComputedStyle(document.documentElement);
@@ -231,6 +230,7 @@ class FreeTextEditor extends AnnotationEditor {
     this.editorDiv.addEventListener("keydown", this.#boundEditorDivKeydown);
     this.editorDiv.addEventListener("focus", this.#boundEditorDivFocus);
     this.editorDiv.addEventListener("blur", this.#boundEditorDivBlur);
+    this.parent.div.classList.remove("freeTextEditing");
   }
 
   /** @inheritdoc */
@@ -255,6 +255,7 @@ class FreeTextEditor extends AnnotationEditor {
 
     // In case the blur callback hasn't been called.
     this.isEditing = false;
+    this.parent.div.classList.add("freeTextEditing");
   }
 
   /** @inheritdoc */
@@ -284,6 +285,7 @@ class FreeTextEditor extends AnnotationEditor {
   remove() {
     this.isEditing = false;
     this.parent.setEditingState(true);
+    this.parent.div.classList.add("freeTextEditing");
     super.remove();
   }
 
@@ -405,11 +407,11 @@ class FreeTextEditor extends AnnotationEditor {
     this.enableEditing();
 
     FreeTextEditor._l10nPromise
-      .get("editor_free_text_aria_label")
+      .get("editor_free_text2_aria_label")
       .then(msg => this.editorDiv?.setAttribute("aria-label", msg));
 
     FreeTextEditor._l10nPromise
-      .get("free_text_default_content")
+      .get("free_text2_default_content")
       .then(msg => this.editorDiv?.setAttribute("default-content", msg));
     this.editorDiv.contentEditable = true;
 
