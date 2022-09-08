@@ -313,13 +313,13 @@ class AnnotationElement {
       display: event => {
         const hidden = event.detail.display % 2 === 1;
         this.container.style.visibility = hidden ? "hidden" : "visible";
-        this.annotationStorage.setValue(this.data.id, {
+        this.annotationStorage.setValue(this.data.id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
           hidden,
           print: event.detail.display === 0 || event.detail.display === 3,
         });
       },
       print: event => {
-        this.annotationStorage.setValue(this.data.id, {
+        this.annotationStorage.setValue(this.data.id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
           print: event.detail.print,
         });
       },
@@ -327,7 +327,7 @@ class AnnotationElement {
         this.container.style.visibility = event.detail.hidden
           ? "hidden"
           : "visible";
-        this.annotationStorage.setValue(this.data.id, {
+        this.annotationStorage.setValue(this.data.id, this.data.fieldName, {
           hidden: event.detail.hidden,
         });
       },
@@ -369,7 +369,7 @@ class AnnotationElement {
       rotation: event => {
         const angle = event.detail.rotation;
         this.setRotation(angle);
-        this.annotationStorage.setValue(this.data.id, {
+        this.annotationStorage.setValue(this.data.id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
           rotation: angle,
         });
       },
@@ -788,19 +788,19 @@ class LinkAnnotationElement extends AnnotationElement {
         switch (field.type) {
           case "text": {
             const value = field.defaultValue || "";
-            storage.setValue(id, { value });
+            storage.setValue(id, this.data.fieldName, { value }); // #718 modified by ngx-extended-pdf-viewer
             break;
           }
           case "checkbox":
           case "radiobutton": {
             const value = field.defaultValue === field.exportValues;
-            storage.setValue(id, { value });
+            storage.setValue(id, this.data.fieldName, { value }); // #718 modified by ngx-extended-pdf-viewer
             break;
           }
           case "combobox":
           case "listbox": {
             const value = field.defaultValue || "";
-            storage.setValue(id, { value });
+            storage.setValue(id, this.data.fieldName, { value }); // #718 modified by ngx-extended-pdf-viewer
             break;
           }
           default:
@@ -1137,7 +1137,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
               }
               value = value.slice(0, charLimit);
               target.value = elementData.userValue = value;
-              storage.setValue(id, { value });
+              storage.setValue(id, this.data.fieldName, { value });
 
               this.linkService.eventBus?.dispatch("dispatcheventinsandbox", {
                 source: this,
