@@ -1239,6 +1239,8 @@ class BaseViewer {
   }
 
   _setScaleUpdatePages(newScale, newValue, noScroll = false, preset = false) {
+    const previousScale = isNaN(Number(this.currentScale)) ? undefined : Number(this.currentScale);
+    const previousScaleValue = this.currentScaleValue;
     this._currentScaleValue = newValue.toString();
 
     if (this.#isSameScale(newScale)) {
@@ -1247,6 +1249,8 @@ class BaseViewer {
           source: this,
           scale: newScale,
           presetValue: newValue,
+          previousScale,
+          previousPresetValue: previousScaleValue,
         });
       }
       return;
@@ -1281,6 +1285,8 @@ class BaseViewer {
       source: this,
       scale: newScale,
       presetValue: preset ? newValue : undefined,
+      previousScale,
+      previousPresetValue: previousScaleValue,
     });
 
     if (this.defaultRenderingQueue) {
