@@ -797,7 +797,7 @@ const PDFViewerApplication = {
       onProgress: (loaded, total) => {
         this.progress(loaded / total);
         // #588 modified by ngx-extended-pdf-viewer
-        this.eventBus.dispatch("progress", {
+        this.eventBus?.dispatch("progress", {
           source: this,
           type: "load",
           total,
@@ -1010,7 +1010,7 @@ const PDFViewerApplication = {
     loadingTask.onProgress = ({ loaded, total }) => {
         this.progress(loaded / total);
         // #588 modified by ngx-extended-pdf-viewer
-        this.eventBus.dispatch("progress", {
+        this.eventBus?.dispatch("progress", {
           source: this,
           type: "load",
           total,
@@ -1276,7 +1276,7 @@ const PDFViewerApplication = {
       this.loadingBar.hide();
 
       firstPagePromise.then(() => {
-        this.eventBus.dispatch("documentloaded", { source: this });
+        this.eventBus?.dispatch("documentloaded", { source: this });
       });
     });
 
@@ -1720,7 +1720,7 @@ const PDFViewerApplication = {
       formType,
     });
 
-    this.eventBus.dispatch("metadataloaded", { source: this });
+    this.eventBus?.dispatch("metadataloaded", { source: this });
   },
 
   /**
