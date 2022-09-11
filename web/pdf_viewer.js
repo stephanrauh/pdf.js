@@ -2244,6 +2244,28 @@ class PDFViewer {
     }
     this.update();
   }
+
+  // #950 modified by ngx-extended-pdf-viewer
+  /**
+   * Adds a page to the rendering queue
+   * @param {number} pageIndex Index of the page to render
+   * @returns {boolean} false, if the page has already been rendered
+   * or if it's out of range
+   */
+   addPageToRenderQueue(pageIndex = 0) {
+    if (pageIndex >= 0 && pageIndex <= this._pages.length - 1) {
+      const pageView = this._pages[pageIndex];
+      const isLoading = pageView.div.querySelector(".loadingIcon");
+      if (isLoading) {
+        this.#ensurePdfPageLoaded(pageView).then(() => {
+          this.renderingQueue.renderView(pageView);
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+  // #950 end of modification by ngx-extended-pdf-viewer
 }
 
 export { PagesCountLimit, PDFPageViewBuffer, PDFViewer };
