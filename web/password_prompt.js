@@ -97,6 +97,7 @@ class PasswordPrompt {
     if (this.overlayManager.active === this.dialog) {
       this.overlayManager.close(this.dialog);
       this.input.value = ""; // modified by ngx-extended-pdf-viewer
+      this.input.type = "hidden"; // #8 modified by ngx-extended-pdf-viewer
     }
   }
 
