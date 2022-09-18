@@ -259,6 +259,7 @@ function createWebpackConfig(
             presets: skipBabel ? undefined : ["@babel/preset-env"],
             plugins: babelPlugins,
             targets: BABEL_TARGETS,
+            compact: skipBabel ? "auto" : true,
           },
         },
         {
