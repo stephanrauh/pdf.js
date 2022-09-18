@@ -598,11 +598,12 @@ const PDFViewerApplication = {
         appConfig.annotationEditorParams,
         eventBus
       );
+    } else {
       for (const element of [
         document.getElementById("editorModeButtons"),
         document.getElementById("editorModeSeparator"),
       ]) {
-        element.classList.remove("hidden");
+        element.hidden = true;
       }
     }
 
@@ -626,7 +627,8 @@ const PDFViewerApplication = {
 
     this.secondaryToolbar = new SecondaryToolbar(
       appConfig.secondaryToolbar,
-      eventBus
+      eventBus,
+      this.externalServices
     );
 
     if (this.supportsFullscreen) {
@@ -835,7 +837,9 @@ const PDFViewerApplication = {
       // Embedded PDF viewers should not be changing their parent page's title.
       return;
     }
-    document.title = `${this._hasAnnotationEditors ? "* " : ""}${title}`;
+    const editorIndicator =
+      this._hasAnnotationEditors && !this.pdfRenderingQueue.printing;
+    document.title = `${editorIndicator ? "* " : ""}${title}`;
   },
 
   get _docFilename() {
@@ -1926,6 +1930,8 @@ const PDFViewerApplication = {
     );
     this.printService = printService;
     this.forceRendering();
+    // Disable the editor-indicator during printing (fixes bug 1790552).
+    this.setTitle();
 
     printService.layout();
 
@@ -1956,6 +1962,8 @@ const PDFViewerApplication = {
       this.pdfDocument?.annotationStorage.resetModified();
     }
     this.forceRendering();
+    // Re-enable the editor-indicator after printing (fixes bug 1790552).
+    this.setTitle();
   },
 
   rotatePages(delta) {
@@ -2258,14 +2266,14 @@ const PDFViewerApplication = {
   },
 };
 
-let validateFileURL;
 if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
   const HOSTED_VIEWER_ORIGINS = [
     "null",
     "http://mozilla.github.io",
     "https://mozilla.github.io",
   ];
-  validateFileURL = function (file) {
+  // eslint-disable-next-line no-var
+  var validateFileURL = function (file) {
     if (!file) {
       return;
     }
@@ -2579,7 +2587,10 @@ function webViewerUpdateViewarea({ location }) {
 }
 
 function webViewerScrollModeChanged(evt) {
-  if (PDFViewerApplication.isInitialViewSet) {
+  if (
+    PDFViewerApplication.isInitialViewSet &&
+    !PDFViewerApplication.pdfViewer.isInPresentationMode
+  ) {
     // Only update the storage when the document has been loaded *and* rendered.
     PDFViewerApplication.store?.set("scrollMode", evt.mode).catch(() => {
       // Unable to write to storage.
@@ -2588,7 +2599,10 @@ function webViewerScrollModeChanged(evt) {
 }
 
 function webViewerSpreadModeChanged(evt) {
-  if (PDFViewerApplication.isInitialViewSet) {
+  if (
+    PDFViewerApplication.isInitialViewSet &&
+    !PDFViewerApplication.pdfViewer.isInPresentationMode
+  ) {
     // Only update the storage when the document has been loaded *and* rendered.
     PDFViewerApplication.store?.set("spreadMode", evt.mode).catch(() => {
       // Unable to write to storage.
@@ -3094,6 +3108,10 @@ function webViewerKeyDown(evt) {
       case 80: // p
         PDFViewerApplication.requestPresentationMode();
         handled = true;
+        PDFViewerApplication.externalServices.reportTelemetry({
+          type: "buttons",
+          data: { id: "presentationModeKeyboard" },
+        });
         break;
       case 71: // g
         // focuses input#pageNumber field

@@ -80,9 +80,10 @@ const config = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
 
 const ENV_TARGETS = [
   "last 2 versions",
-  "Chrome >= 76",
+  "Chrome >= 85",
   "Firefox ESR",
-  "Safari >= 13.1",
+  "Safari >= 14",
+  "Node >= 14",
   "> 1%",
   "not IE > 0",
   "not dead",
@@ -1406,7 +1407,7 @@ gulp.task(
             postcss([
               postcssLogical({ preserve: true }),
               postcssDirPseudoClass(),
-              autoprefixer({ overrideBrowserslist: ["Chrome >= 76"] }),
+              autoprefixer({ overrideBrowserslist: ["Chrome >= 85"] }),
             ])
           )
           .pipe(gulp.dest(CHROME_BUILD_CONTENT_DIR + "web")),
@@ -1979,7 +1980,7 @@ gulp.task("dev-css", function createDevCSS() {
         postcss([
           postcssLogical({ preserve: true }),
           postcssDirPseudoClass(),
-          autoprefixer({ overrideBrowserslist: ["last 2 versions"] }),
+          autoprefixer({ overrideBrowserslist: ["last 1 versions"] }),
         ])
       )
       .pipe(gulp.dest(cssDir)),
@@ -2176,14 +2177,6 @@ function packageJson() {
     dependencies: {
       dommatrix: "^1.0.3",
       "web-streams-polyfill": "^3.2.1",
-    },
-    peerDependencies: {
-      "worker-loader": "^3.0.8", // Used in `external/dist/webpack.js`.
-    },
-    peerDependenciesMeta: {
-      "worker-loader": {
-        optional: true,
-      },
     },
     browser: {
       canvas: false,
@@ -2466,9 +2459,5 @@ gulp.task("externaltest", function (done) {
 
 gulp.task(
   "ci-test",
-  gulp.series(
-    gulp.parallel("lint", "externaltest", "unittestcli"),
-    "lint-chromium",
-    "typestest"
-  )
+  gulp.series(gulp.parallel("lint", "externaltest", "unittestcli"), "typestest")
 );
