@@ -590,7 +590,7 @@ class PDFFindController {
   }
 
   // #832 modification by ngx-extended-pdf-viewer
-  _isInPageRanges(page = 1, commaSeparatedRanges = "1,3,6-7") {
+  _isInPageRanges(page = 1, commaSeparatedRanges) {
     try {
       if (!commaSeparatedRanges) {
         return true;
