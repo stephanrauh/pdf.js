@@ -885,7 +885,18 @@ class PDFFindController {
       }
       // We went beyond the current page's matches, so we advance to
       // the next page.
-      this._advanceOffsetPage(previous);
+      if (this.state.currentPage) {
+        if (previous) {
+          offset.matchIdx = numPageMatches - 1;
+        } else {
+          offset.matchIdx = 0;
+        }
+        this._updateMatch(/* found = */ true);
+        this._updateUIState(FindState.WRAPPED);
+        return;
+      } else {
+        this._advanceOffsetPage(previous);
+      }
     }
     // Start searching through the page.
     this._nextPageMatch();
