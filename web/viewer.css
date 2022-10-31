@@ -20,17 +20,13 @@
   --sidebar-width: 200px;
   --sidebar-transition-duration: 200ms;
   --sidebar-transition-timing-function: ease;
-  --scale-select-container-width: 140px;
-  --scale-select-overflow: 22px;
+  --scale-select-width: 140px;
 
   --toolbar-icon-opacity: 0.7;
   --doorhanger-icon-opacity: 0.9;
 
   --main-color: rgba(12, 12, 13, 1);
   --body-bg-color: rgba(237, 237, 240, 1);
-  /*#if !MOZCENTRAL*/
-  --errorWrapper-bg-color: rgba(255, 110, 110, 1);
-  /*#endif*/
   --progressBar-percent: 0%;
   --progressBar-end-offset: 0;
   --progressBar-color: rgba(10, 132, 255, 1);
@@ -71,7 +67,7 @@
   --doorhanger-hover-color: rgba(12, 12, 13, 1);
   --doorhanger-hover-bg-color: rgba(237, 237, 237, 1);
   --doorhanger-separator-color: rgba(222, 222, 222, 1);
-  --dialog-button-border: 0 none;
+  --dialog-button-border: none;
   --dialog-button-bg-color: rgba(12, 12, 13, 0.1);
   --dialog-button-hover-bg-color: rgba(12, 12, 13, 0.3);
 
@@ -126,9 +122,6 @@
   :root {
     --main-color: rgba(249, 249, 250, 1);
     --body-bg-color: rgba(42, 42, 46, 1);
-    /*#if !MOZCENTRAL*/
-    --errorWrapper-bg-color: rgba(169, 14, 14, 1);
-    /*#endif*/
     --progressBar-color: rgba(0, 96, 223, 1);
     --progressBar-indeterminate-bg-color: rgba(40, 40, 43, 1);
     --progressBar-indeterminate-blend-color: rgba(20, 68, 133, 1);
@@ -325,6 +318,7 @@ body {
 .toolbar select,
 .secondaryToolbar input,
 .secondaryToolbar button,
+.secondaryToolbar a,
 .secondaryToolbar select,
 .editorParamsToolbar input,
 .editorParamsToolbar button,
@@ -700,10 +694,11 @@ body {
 .toolbarButton,
 .secondaryToolbarButton,
 .dialogButton {
-  border: 0 none;
+  border: none;
   background: none;
   width: 28px;
   height: 28px;
+  outline: none;
 }
 
 .dialogButton:hover,
@@ -796,29 +791,27 @@ body {
 }
 
 .dropdownToolbarButton {
-  width: var(--scale-select-container-width);
+  width: var(--scale-select-width);
   padding: 0;
-  overflow: hidden;
   background-color: var(--dropdown-btn-bg-color);
   border: var(--dropdown-btn-border);
 }
 .dropdownToolbarButton::after {
   top: 6px;
-  inset-inline-end: 7px;
+  inset-inline-end: 6px;
   pointer-events: none;
   mask-image: var(--toolbarButton-menuArrow-icon);
 }
 
 .dropdownToolbarButton > select {
-  width: calc(
-    var(--scale-select-container-width) + var(--scale-select-overflow)
-  );
+  appearance: none;
+  width: inherit;
   height: 28px;
   font-size: 12px;
   color: var(--main-color);
   margin: 0;
   padding: 1px 0 2px;
-  padding-inline-start: 4px;
+  padding-inline-start: 6px;
   border: none;
   background-color: var(--dropdown-btn-bg-color);
 }
@@ -943,7 +936,7 @@ body {
 }
 
 a.secondaryToolbarButton {
-  padding-top: 6px;
+  padding-top: 5px;
   text-decoration: none;
 }
 a.toolbarButton[href="#"],
@@ -985,8 +978,8 @@ a.secondaryToolbarButton[href="#"] {
 .pdfSidebarNotification::after {
   position: absolute;
   display: inline-block;
-  top: 1px;
-  inset-inline-start: 17px;
+  top: 2px;
+  inset-inline-end: 2px;
   /* Create a filled circle, with a diameter of 9 pixels, using only CSS: */
   content: "";
   background-color: rgba(112, 219, 85, 1);
@@ -1096,7 +1089,7 @@ a.secondaryToolbarButton[href="#"] {
   color: var(--field-color);
   font-size: 12px;
   line-height: 16px;
-  outline-style: none;
+  outline: none;
 }
 
 .toolbarField[type="checkbox"] {
@@ -1286,37 +1279,6 @@ a:focus > .thumbnail > .thumbnailSelectionRing,
   border-radius: 2px;
   color: var(--treeitem-hover-color);
 }
-
-/*#if !MOZCENTRAL*/
-#errorWrapper {
-  background-color: var(--errorWrapper-bg-color);
-  color: var(--main-color);
-  left: 0;
-  position: absolute;
-  right: 0;
-  z-index: 1000;
-  padding: 3px 6px;
-}
-
-#errorMessageLeft {
-  float: left;
-}
-#errorMessageRight {
-  float: right;
-}
-
-#errorSpacer {
-  clear: both;
-}
-#errorMoreInfo {
-  background-color: var(--field-bg-color);
-  color: var(--field-color);
-  border: 1px solid var(--field-border-color);
-  padding: 3px;
-  margin: 3px;
-  width: 98%;
-}
-/*#endif*/
 
 .dialogButton {
   width: auto;

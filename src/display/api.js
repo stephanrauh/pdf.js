@@ -196,6 +196,10 @@ function setPDFNetworkStreamFactory(pdfNetworkStreamFactory) {
  * @property {boolean} [isEvalSupported] - Determines if we can evaluate strings
  *   as JavaScript. Primarily used to improve performance of font rendering, and
  *   when parsing PDF functions. The default value is `true`.
+ * @property {boolean} [isOffscreenCanvasSupported] - Determines if we can use
+ *   `OffscreenCanvas` in the worker. Primarily used to improve performance of
+ *   image conversion/rendering.
+ *   The default value is `true` in web environments and `false` in Node.js.
  * @property {boolean} [disableFontFace] - By default fonts are converted to
  *   OpenType fonts and loaded via the Font Loading API or `@font-face` rules.
  *   If disabled, fonts will be rendered using a built-in font renderer that
@@ -391,6 +395,9 @@ function getDocument(src) {
   if (typeof params.isEvalSupported !== "boolean") {
     params.isEvalSupported = true;
   }
+  if (typeof params.isOffscreenCanvasSupported !== "boolean") {
+    params.isOffscreenCanvasSupported = !isNodeJS;
+  }
   if (typeof params.disableFontFace !== "boolean") {
     params.disableFontFace = isNodeJS;
   }
@@ -533,33 +540,33 @@ async function _fetchDocument(worker, source, pdfDataRangeTransport, docId) {
   }
   const workerId = await worker.messageHandler.sendWithPromise(
     "GetDocRequest",
+    // Only send the required properties, and *not* the entire `source` object.
     {
       docId,
       apiVersion:
         typeof PDFJSDev !== "undefined" && !PDFJSDev.test("TESTING")
           ? PDFJSDev.eval("BUNDLE_VERSION")
           : null,
-      // Only send the required properties, and *not* the entire object.
-      source: {
-        data: source.data,
-        url: source.url,
-        password: source.password,
-        disableAutoFetch: source.disableAutoFetch,
-        rangeChunkSize: source.rangeChunkSize,
-        length: source.length,
-      },
-      maxImageSize: source.maxImageSize,
-      disableFontFace: source.disableFontFace,
+      data: source.data,
+      password: source.password,
+      disableAutoFetch: source.disableAutoFetch,
+      rangeChunkSize: source.rangeChunkSize,
+      length: source.length,
       docBaseUrl: source.docBaseUrl,
-      ignoreErrors: source.ignoreErrors,
-      isEvalSupported: source.isEvalSupported,
-      fontExtraProperties: source.fontExtraProperties,
       enableXfa: source.enableXfa,
-      useSystemFonts: source.useSystemFonts,
-      cMapUrl: source.useWorkerFetch ? cMapUrl : null,
-      standardFontDataUrl: source.useWorkerFetch
-        ? source.standardFontDataUrl
-        : null,
+      evaluatorOptions: {
+        maxImageSize: source.maxImageSize,
+        disableFontFace: source.disableFontFace,
+        ignoreErrors: source.ignoreErrors,
+        isEvalSupported: source.isEvalSupported,
+        isOffscreenCanvasSupported: source.isOffscreenCanvasSupported,
+        fontExtraProperties: source.fontExtraProperties,
+        useSystemFonts: source.useSystemFonts,
+        cMapUrl: source.useWorkerFetch ? source.cMapUrl : null,
+        standardFontDataUrl: source.useWorkerFetch
+          ? source.standardFontDataUrl
+          : null,
+      },
     }
   );
 
@@ -1897,34 +1904,33 @@ class PDFPageProxy {
 }
 
 class LoopbackPort {
-  constructor() {
-    this._listeners = [];
-    this._deferred = Promise.resolve();
-  }
+  #listeners = [];
+
+  #deferred = Promise.resolve();
 
   postMessage(obj, transfers) {
     const event = {
       data: structuredClone(obj, transfers),
     };
 
-    this._deferred.then(() => {
-      for (const listener of this._listeners) {
+    this.#deferred.then(() => {
+      for (const listener of this.#listeners) {
         listener.call(this, event);
       }
     });
   }
 
   addEventListener(name, listener) {
-    this._listeners.push(listener);
+    this.#listeners.push(listener);
   }
 
   removeEventListener(name, listener) {
-    const i = this._listeners.indexOf(listener);
-    this._listeners.splice(i, 1);
+    const i = this.#listeners.indexOf(listener);
+    this.#listeners.splice(i, 1);
   }
 
   terminate() {
-    this._listeners.length = 0;
+    this.#listeners.length = 0;
   }
 }
 
@@ -2331,7 +2337,6 @@ class WorkerTransport {
     this.loadingTask = loadingTask;
     this.commonObjs = new PDFObjects();
     this.fontLoader = new FontLoader({
-      docId: loadingTask.docId,
       onUnsupportedFeature: this._onUnsupportedFeature.bind(this),
       ownerDocument: params.ownerDocument,
       styleElement: params.styleElement,
@@ -3046,11 +3051,11 @@ class WorkerTransport {
   }
 
   async startCleanup(keepLoadedFonts = false) {
-    await this.messageHandler.sendWithPromise("Cleanup", null);
-
     if (this.destroyed) {
       return; // No need to manually clean-up when destruction has started.
     }
+    await this.messageHandler.sendWithPromise("Cleanup", null);
+
     for (const page of this.#pageCache.values()) {
       const cleanupSuccessful = page.cleanup();
 

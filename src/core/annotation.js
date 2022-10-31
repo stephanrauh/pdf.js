@@ -81,15 +81,19 @@ class AnnotationFactory {
       // Only necessary to prevent the `pdfManager.docBaseUrl`-getter, used
       // with certain Annotations, from throwing and thus breaking parsing:
       pdfManager.ensureCatalog("baseUrl"),
+      // Only necessary in the `Catalog.parseDestDictionary`-method,
+      // when parsing "GoToE" actions:
+      pdfManager.ensureCatalog("attachments"),
       pdfManager.ensureDoc("xfaDatasets"),
       collectFields ? this._getPageIndex(xref, ref, pdfManager) : -1,
-    ]).then(([acroForm, baseUrl, xfaDatasets, pageIndex]) =>
+    ]).then(([acroForm, baseUrl, attachments, xfaDatasets, pageIndex]) =>
       pdfManager.ensure(this, "_create", [
         xref,
         ref,
         pdfManager,
         idFactory,
         acroForm,
+        attachments,
         xfaDatasets,
         collectFields,
         pageIndex,
@@ -106,6 +110,7 @@ class AnnotationFactory {
     pdfManager,
     idFactory,
     acroForm,
+    attachments = null,
     xfaDatasets,
     collectFields,
     pageIndex = -1
@@ -131,6 +136,7 @@ class AnnotationFactory {
       id,
       pdfManager,
       acroForm: acroForm instanceof Dict ? acroForm : Dict.empty,
+      attachments,
       xfaDatasets,
       collectFields,
       pageIndex,
@@ -1788,13 +1794,13 @@ class WidgetAnnotation extends Annotation {
     if (this.borderColor) {
       mk.set(
         "BC",
-        Array.from(this.borderColor).map(c => c / 255)
+        Array.from(this.borderColor, c => c / 255)
       );
     }
     if (this.backgroundColor) {
       mk.set(
         "BG",
-        Array.from(this.backgroundColor).map(c => c / 255)
+        Array.from(this.backgroundColor, c => c / 255)
       );
     }
     return mk.size > 0 ? mk : null;
@@ -2916,6 +2922,7 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
       destDict: params.dict,
       resultObj: this.data,
       docBaseUrl: params.pdfManager.docBaseUrl,
+      docAttachments: params.attachments,
     });
   }
 
@@ -3244,6 +3251,7 @@ class LinkAnnotation extends Annotation {
       destDict: params.dict,
       resultObj: this.data,
       docBaseUrl: params.pdfManager.docBaseUrl,
+      docAttachments: params.attachments,
     });
   }
 }
@@ -3477,7 +3485,7 @@ class LineAnnotation extends MarkupAnnotation {
     if (!this.appearance) {
       // The default stroke color is black.
       const strokeColor = this.color
-        ? Array.from(this.color).map(c => c / 255)
+        ? Array.from(this.color, c => c / 255)
         : [0, 0, 0];
       const strokeAlpha = dict.get("CA");
 
@@ -3488,7 +3496,7 @@ class LineAnnotation extends MarkupAnnotation {
       if (interiorColor) {
         interiorColor = getRgbColor(interiorColor, null);
         fillColor = interiorColor
-          ? Array.from(interiorColor).map(c => c / 255)
+          ? Array.from(interiorColor, c => c / 255)
           : null;
       }
       const fillAlpha = fillColor ? strokeAlpha : null;
@@ -3542,7 +3550,7 @@ class SquareAnnotation extends MarkupAnnotation {
     if (!this.appearance) {
       // The default stroke color is black.
       const strokeColor = this.color
-        ? Array.from(this.color).map(c => c / 255)
+        ? Array.from(this.color, c => c / 255)
         : [0, 0, 0];
       const strokeAlpha = parameters.dict.get("CA");
 
@@ -3552,7 +3560,7 @@ class SquareAnnotation extends MarkupAnnotation {
       if (interiorColor) {
         interiorColor = getRgbColor(interiorColor, null);
         fillColor = interiorColor
-          ? Array.from(interiorColor).map(c => c / 255)
+          ? Array.from(interiorColor, c => c / 255)
           : null;
       }
       const fillAlpha = fillColor ? strokeAlpha : null;
@@ -3596,7 +3604,7 @@ class CircleAnnotation extends MarkupAnnotation {
     if (!this.appearance) {
       // The default stroke color is black.
       const strokeColor = this.color
-        ? Array.from(this.color).map(c => c / 255)
+        ? Array.from(this.color, c => c / 255)
         : [0, 0, 0];
       const strokeAlpha = parameters.dict.get("CA");
 
@@ -3606,7 +3614,7 @@ class CircleAnnotation extends MarkupAnnotation {
       if (interiorColor) {
         interiorColor = getRgbColor(interiorColor, null);
         fillColor = interiorColor
-          ? Array.from(interiorColor).map(c => c / 255)
+          ? Array.from(interiorColor, c => c / 255)
           : null;
       }
       const fillAlpha = fillColor ? strokeAlpha : null;
@@ -3689,7 +3697,7 @@ class PolylineAnnotation extends MarkupAnnotation {
     if (!this.appearance) {
       // The default stroke color is black.
       const strokeColor = this.color
-        ? Array.from(this.color).map(c => c / 255)
+        ? Array.from(this.color, c => c / 255)
         : [0, 0, 0];
       const strokeAlpha = dict.get("CA");
 
@@ -3775,7 +3783,7 @@ class InkAnnotation extends MarkupAnnotation {
     if (!this.appearance) {
       // The default stroke color is black.
       const strokeColor = this.color
-        ? Array.from(this.color).map(c => c / 255)
+        ? Array.from(this.color, c => c / 255)
         : [0, 0, 0];
       const strokeAlpha = parameters.dict.get("CA");
 
@@ -3938,7 +3946,7 @@ class HighlightAnnotation extends MarkupAnnotation {
         }
         // Default color is yellow in Acrobat Reader
         const fillColor = this.color
-          ? Array.from(this.color).map(c => c / 255)
+          ? Array.from(this.color, c => c / 255)
           : [1, 1, 0];
         const fillAlpha = parameters.dict.get("CA");
 
@@ -3978,7 +3986,7 @@ class UnderlineAnnotation extends MarkupAnnotation {
       if (!this.appearance) {
         // Default color is black
         const strokeColor = this.color
-          ? Array.from(this.color).map(c => c / 255)
+          ? Array.from(this.color, c => c / 255)
           : [0, 0, 0];
         const strokeAlpha = parameters.dict.get("CA");
 
@@ -4017,7 +4025,7 @@ class SquigglyAnnotation extends MarkupAnnotation {
       if (!this.appearance) {
         // Default color is black
         const strokeColor = this.color
-          ? Array.from(this.color).map(c => c / 255)
+          ? Array.from(this.color, c => c / 255)
           : [0, 0, 0];
         const strokeAlpha = parameters.dict.get("CA");
 
@@ -4063,7 +4071,7 @@ class StrikeOutAnnotation extends MarkupAnnotation {
       if (!this.appearance) {
         // Default color is black
         const strokeColor = this.color
-          ? Array.from(this.color).map(c => c / 255)
+          ? Array.from(this.color, c => c / 255)
           : [0, 0, 0];
         const strokeAlpha = parameters.dict.get("CA");
 

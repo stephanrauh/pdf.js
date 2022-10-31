@@ -187,9 +187,9 @@ class PDFFunction {
     }
 
     const fnArray = [];
-    for (let j = 0, jj = fnObj.length; j < jj; j++) {
+    for (const fn of fnObj) {
       fnArray.push(
-        this.parse({ xref, isEvalSupported, fn: xref.fetchIfRef(fnObj[j]) })
+        this.parse({ xref, isEvalSupported, fn: xref.fetchIfRef(fn) })
       );
     }
     return function (src, srcOffset, dest, destOffset) {
@@ -364,12 +364,9 @@ class PDFFunction {
       throw new FormatError("Bad domain for stiched function");
     }
 
-    const fnRefs = dict.get("Functions");
     const fns = [];
-    for (let i = 0, ii = fnRefs.length; i < ii; ++i) {
-      fns.push(
-        this.parse({ xref, isEvalSupported, fn: xref.fetchIfRef(fnRefs[i]) })
-      );
+    for (const fn of dict.get("Functions")) {
+      fns.push(this.parse({ xref, isEvalSupported, fn: xref.fetchIfRef(fn) }));
     }
 
     const bounds = toNumberArray(dict.getArray("Bounds"));
@@ -523,9 +520,7 @@ class PostScriptStack {
   }
 
   constructor(initialStack) {
-    this.stack = !initialStack
-      ? []
-      : Array.prototype.slice.call(initialStack, 0);
+    this.stack = initialStack ? Array.from(initialStack) : [];
   }
 
   push(value) {
@@ -1201,10 +1196,7 @@ class PostScriptCompiler {
           if (j === 0) {
             break; // just skipping -- there are nothing to rotate
           }
-          Array.prototype.push.apply(
-            stack,
-            stack.splice(stack.length - n, n - j)
-          );
+          stack.push(...stack.splice(stack.length - n, n - j));
           break;
         default:
           return null; // unsupported operator

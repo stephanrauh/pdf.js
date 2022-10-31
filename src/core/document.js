@@ -37,6 +37,7 @@ import {
   getNewAnnotationsMap,
   isWhiteSpace,
   MissingDataException,
+  PDF_VERSION_REGEXP,
   validateCSSFont,
   XRefEntryException,
   XRefParseException,
@@ -486,7 +487,11 @@ class Page {
                   "getOperatorList - ignoring annotation data during " +
                     `"${task.name}" task: "${reason}".`
                 );
-                return null;
+                return {
+                  opList: null,
+                  separateForm: false,
+                  separateCanvas: false,
+                };
               })
           );
         }
@@ -708,8 +713,6 @@ const FINGERPRINT_FIRST_BYTES = 1024;
 const EMPTY_FINGERPRINT =
   "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
 
-const PDF_HEADER_VERSION_REGEXP = /^[1-9]\.\d$/;
-
 function find(stream, signature, limit = 1024, backwards = false) {
   if (
     typeof PDFJSDev === "undefined" ||
@@ -814,14 +817,6 @@ class PDFDocument {
   parse(recoveryMode) {
     this.xref.parse(recoveryMode);
     this.catalog = new Catalog(this.pdfManager, this.xref);
-
-    // The `checkHeader` method is called before this method and parses the
-    // version from the header. The specification states in section 7.5.2
-    // that the version from the catalog, if present, should overwrite the
-    // version from the header.
-    if (this.catalog.version) {
-      this._version = this.catalog.version;
-    }
   }
 
   get linearization() {
@@ -896,19 +891,22 @@ class PDFDocument {
     }
     stream.moveStart();
 
+    // Skip over the "%PDF-" prefix, since it was found above.
+    stream.skip(PDF_HEADER_SIGNATURE.length);
     // Read the PDF format version.
-    const MAX_PDF_VERSION_LENGTH = 12;
     let version = "",
       ch;
-    while ((ch = stream.getByte()) > /* Space = */ 0x20) {
-      if (version.length >= MAX_PDF_VERSION_LENGTH) {
-        break;
-      }
+    while (
+      (ch = stream.getByte()) > /* Space = */ 0x20 &&
+      version.length < /* MAX_PDF_VERSION_LENGTH = */ 7
+    ) {
       version += String.fromCharCode(ch);
     }
-    if (!this._version) {
-      // Remove the "%PDF-" prefix.
-      this._version = version.substring(5);
+
+    if (PDF_VERSION_REGEXP.test(version)) {
+      this._version = version;
+    } else {
+      warn(`Invalid PDF header version: ${version}`);
     }
   }
 
@@ -1256,6 +1254,14 @@ class PDFDocument {
       : null;
   }
 
+  /**
+   * The specification states in section 7.5.2 that the version from
+   * the catalog, if present, should overwrite the version from the header.
+   */
+  get version() {
+    return this.catalog.version || this._version;
+  }
+
   get formInfo() {
     const formInfo = {
       hasFields: false,
@@ -1303,17 +1309,8 @@ class PDFDocument {
   }
 
   get documentInfo() {
-    let version = this._version;
-    if (
-      typeof version !== "string" ||
-      !PDF_HEADER_VERSION_REGEXP.test(version)
-    ) {
-      warn(`Invalid PDF header version number: ${version}`);
-      version = null;
-    }
-
     const docInfo = {
-      PDFFormatVersion: version,
+      PDFFormatVersion: this.version,
       Language: this.catalog.lang,
       EncryptFilterName: this.xref.encrypt
         ? this.xref.encrypt.filterName
@@ -1407,8 +1404,8 @@ class PDFDocument {
 
     function hexString(hash) {
       const buf = [];
-      for (let i = 0, ii = hash.length; i < ii; i++) {
-        const hex = hash[i].toString(16);
+      for (const num of hash) {
+        const hex = num.toString(16);
         buf.push(hex.padStart(2, "0"));
       }
       return buf.join("");

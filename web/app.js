@@ -24,7 +24,6 @@ import {
   isValidRotation,
   isValidScrollMode,
   isValidSpreadMode,
-  noContextMenuHandler,
   normalizeWheelEventDirection,
   parseQueryString,
   ProgressBar,
@@ -152,10 +151,6 @@ class DefaultExternalServices {
   static initPassiveLoading(callbacks) {}
 
   static reportTelemetry(data) {}
-
-  static print() {
-    window.print();
-  }
 
   static createDownloadManager(options) {
     throw new Error("Not implemented: createDownloadManager");
@@ -661,6 +656,7 @@ const PDFViewerApplication = {
       container: appConfig.sidebar.outlineView,
       eventBus,
       linkService: pdfLinkService,
+      downloadManager,
     });
 
     this.pdfAttachmentViewer = new PDFAttachmentViewer({
@@ -868,11 +864,6 @@ const PDFViewerApplication = {
   async close() {
     this._unblockDocumentLoadEvent();
     this._hideViewBookmark();
-
-    if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
-      const { container } = this.appConfig.errorWrapper;
-      container.hidden = true;
-    }
 
     if (!this.pdfLoadingTask) {
       return;
@@ -1123,7 +1114,7 @@ const PDFViewerApplication = {
   },
 
   /**
-   * Show the error box; used for errors affecting loading and/or parsing of
+   * Report the error; used for errors affecting loading and/or parsing of
    * the entire PDF document.
    */
   _documentError(message, moreInfo = null) {
@@ -1139,83 +1130,31 @@ const PDFViewerApplication = {
   },
 
   /**
-   * Show the error box; used for errors affecting e.g. only a single page.
-   *
+   * Report the error; used for errors affecting e.g. only a single page.
    * @param {string} message - A message that is human readable.
    * @param {Object} [moreInfo] - Further information about the error that is
-   *                              more technical.  Should have a 'message' and
+   *                              more technical. Should have a 'message' and
    *                              optionally a 'stack' property.
    */
   _otherError(message, moreInfo = null) {
-    const moreInfoText = [
-      this.l10n.get("error_version_info", {
-        version: version || "?",
-        build: build || "?",
-      }),
-    ];
+    const moreInfoText = [`PDF.js v${version || "?"} (build: ${build || "?"})`];
     if (moreInfo) {
-      moreInfoText.push(
-        this.l10n.get("error_message", { message: moreInfo.message })
-      );
+      moreInfoText.push(`Message: ${moreInfo.message}`);
+
       if (moreInfo.stack) {
-        moreInfoText.push(
-          this.l10n.get("error_stack", { stack: moreInfo.stack })
-        );
+        moreInfoText.push(`Stack: ${moreInfo.stack}`);
       } else {
         if (moreInfo.filename) {
-          moreInfoText.push(
-            this.l10n.get("error_file", { file: moreInfo.filename })
-          );
+          moreInfoText.push(`File: ${moreInfo.filename}`);
         }
         if (moreInfo.lineNumber) {
-          moreInfoText.push(
-            this.l10n.get("error_line", { line: moreInfo.lineNumber })
-          );
+          moreInfoText.push(`Line: ${moreInfo.lineNumber}`);
         }
       }
     }
 
-    if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
-      const errorWrapperConfig = this.appConfig.errorWrapper;
-      const errorWrapper = errorWrapperConfig.container;
-      errorWrapper.hidden = false;
-
-      const errorMessage = errorWrapperConfig.errorMessage;
-      errorMessage.textContent = message;
-
-      const closeButton = errorWrapperConfig.closeButton;
-      closeButton.onclick = function () {
-        errorWrapper.hidden = true;
-      };
-
-      const errorMoreInfo = errorWrapperConfig.errorMoreInfo;
-      const moreInfoButton = errorWrapperConfig.moreInfoButton;
-      const lessInfoButton = errorWrapperConfig.lessInfoButton;
-      moreInfoButton.onclick = function () {
-        errorMoreInfo.hidden = false;
-        moreInfoButton.hidden = true;
-        lessInfoButton.hidden = false;
-        errorMoreInfo.style.height = errorMoreInfo.scrollHeight + "px";
-      };
-      lessInfoButton.onclick = function () {
-        errorMoreInfo.hidden = true;
-        moreInfoButton.hidden = false;
-        lessInfoButton.hidden = true;
-      };
-      moreInfoButton.oncontextmenu = noContextMenuHandler;
-      lessInfoButton.oncontextmenu = noContextMenuHandler;
-      closeButton.oncontextmenu = noContextMenuHandler;
-      moreInfoButton.hidden = false;
-      lessInfoButton.hidden = true;
-      Promise.all(moreInfoText).then(parts => {
-        errorMoreInfo.value = parts.join("\n");
-      });
-    } else {
-      Promise.all(moreInfoText).then(parts => {
-        Window['ngxConsole'].error(message + "\n" + parts.join("\n"));
-      });
-      this.fallback();
-    }
+    console.error(`${message}\n\n${moreInfoText.join("\n")}`);
+    this.fallback();
   },
 
   progress(level) {
@@ -1586,25 +1525,12 @@ const PDFViewerApplication = {
     this._contentLength ??= contentLength; // See `getDownloadInfo`-call above.
 
     // Provides some basic debug information
-    const PDFViewerApplicationOptions = window.PDFViewerApplicationOptions;
-    if ((!PDFViewerApplicationOptions) || PDFViewerApplicationOptions.get("verbosity") > 0) {
-      Window['ngxConsole'].log(
-        "PDF viewer: ngx-extended-pdf-viewer running on pdf.js " +
-          (window["pdfjs-dist/build/pdf"]
-            ? window["pdfjs-dist/build/pdf"].version
-            : " developer version (?)")
-      );
-      Window['ngxConsole'].log(
-        `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
-          `${(info.Producer || "-").trim()} / ${(info.Creator || "-").trim()}] ` +
-          `(PDF.js: ${version || "-"}` +
-          `${
-            this.pdfViewer.enableWebGL ? " [WebGL]" : ""
-          }) modified by ngx-extended-pdf-viewer)`
-      );
-    }
-
-    let pdfTitle = info?.Title;
+    console.log(
+      `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
+        `${(info.Producer || "-").trim()} / ${(info.Creator || "-").trim()}] ` +
+        `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer`
+    );
+    let pdfTitle = info.Title;
 
     const metadataTitle = metadata?.get("dc:title");
     if (metadataTitle) {
@@ -2066,13 +1992,6 @@ const PDFViewerApplication = {
       const mediaQueryList = window.matchMedia(
         `(resolution: ${window.devicePixelRatio || 1}dppx)`
       );
-      if (
-        typeof PDFJSDev !== "undefined" &&
-        PDFJSDev.test("GENERIC && !SKIP_BABEL") &&
-        typeof mediaQueryList.addEventListener !== "function"
-      ) {
-        return; // Not supported in Safari<14.
-      }
       mediaQueryList.addEventListener("change", addWindowResolutionChange, {
         once: true,
       });

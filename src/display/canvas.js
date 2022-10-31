@@ -844,8 +844,7 @@ function copyCtxState(sourceCtx, destCtx) {
     "globalCompositeOperation",
     "font",
   ];
-  for (let i = 0, ii = properties.length; i < ii; i++) {
-    const property = properties[i];
+  for (const property of properties) {
     if (sourceCtx[property] !== undefined) {
       destCtx[property] = sourceCtx[property];
     }
@@ -1386,11 +1385,12 @@ class CanvasGraphics {
       // In case we've a pattern fill we just keep the scaled version of
       // the image.
       // Only the scaling part matters, the translation part is just used
-      // to compute offsets.
+      // to compute offsets (but not when filling patterns see #15573).
       // TODO: handle the case of a pattern fill if it's possible.
-      const withoutTranslation = currentTransform.slice(0, 4);
       cacheKey = JSON.stringify(
-        isPatternFill ? withoutTranslation : [withoutTranslation, fillColor]
+        isPatternFill
+          ? currentTransform
+          : [currentTransform.slice(0, 4), fillColor]
       );
 
       cache = this._cachedBitmapsMap.get(mainKey);
@@ -1555,11 +1555,7 @@ class CanvasGraphics {
   }
 
   setGState(states) {
-    for (let i = 0, ii = states.length; i < ii; i++) {
-      const state = states[i];
-      const key = state[0];
-      const value = state[1];
-
+    for (const [key, value] of states) {
       switch (key) {
         case "LW":
           this.setLineWidth(value);
@@ -1586,11 +1582,11 @@ class CanvasGraphics {
           this.setFont(value[0], value[1]);
           break;
         case "CA":
-          this.current.strokeAlpha = state[1];
+          this.current.strokeAlpha = value;
           break;
         case "ca":
-          this.current.fillAlpha = state[1];
-          this.ctx.globalAlpha = state[1];
+          this.current.fillAlpha = value;
+          this.ctx.globalAlpha = value;
           break;
         case "BM":
           this.ctx.globalCompositeOperation = value;

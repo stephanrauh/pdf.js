@@ -247,6 +247,11 @@ const defaultOptions = {
     value: true,
     kind: OptionKind.API,
   },
+  isOffscreenCanvasSupported: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.API,
+  },
   maxImageSize: {
     /** @type {number} */
     value: -1,
