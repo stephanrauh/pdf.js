@@ -72,6 +72,7 @@ import {
 import { AnnotationEditorLayerBuilder } from "./annotation_editor_layer_builder.js";
 import { AnnotationLayerBuilder } from "./annotation_layer_builder.js";
 import { NullL10n } from "./l10n_utils.js";
+import { PageFlip } from "./page-flip.module.js"; // #716 modified by ngx-extended-pdf-viewer
 import { PDFPageView } from "./pdf_page_view.js";
 import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
 import { SimpleLinkService } from "./pdf_link_service.js";
@@ -247,6 +248,10 @@ class PDFViewer {
     this.container = options.container;
     this.viewer = options.viewer || options.container.firstElementChild;
 
+    /** #495 modified by ngx-extended-pdf-viewer */
+    this.pageViewMode = options.pageViewMode || "multiple";
+    /** end of modification */
+
     if (
       typeof PDFJSDev === "undefined" ||
       PDFJSDev.test("!PRODUCTION || GENERIC")
@@ -382,11 +387,62 @@ class PDFViewer {
     if (!this.pdfDocument) {
       return;
     }
+
+    // #716 modified by ngx-extended-pdf-viewer
+    const flip = Math.abs(this._currentPageNumber - val) < 2;
+    // #716 end of modification
+
     // The intent can be to just reset a scroll position and/or scale.
     if (!this._setCurrentPageNumber(val, /* resetCurrentPageView = */ true)) {
-      console.error(`currentPageNumber: "${val}" is not a valid page.`);
+      Window["ngxConsole"].error(`currentPageNumber: "${val}" is not a valid page.`);
+    }
+    // #716 modified by ngx-extended-pdf-viewer
+    if (this.pageFlip) {
+      if (flip) {
+        Window["ngxConsole"].log("Flip");
+        this.pageFlip.flip(val - 1);
+      } else {
+        Window["ngxConsole"].log("turn to page");
+        this.pageFlip.turnToPage(val - 1);
+      }
+    }
+    // #716 end of modification
+  }
+
+  /** #495 modified by ngx-extended-pdf-viewer */
+  hidePagesDependingOnpageViewMode() {
+    if (this.pageViewMode === "book") {
+      if (!this.pageFlip) {
+        setTimeout(() => {
+          if (!this.pageFlip) {
+            const page1 = this._pages[0].div;
+            const htmlParentElement = page1.parentElement;
+            const viewer = htmlParentElement.parentElement;
+            viewer.style.width = 2 * page1.clientWidth + "px";
+            viewer.style.overflow = "hidden";
+            viewer.style.marginLeft = "auto";
+            viewer.style.marginRight = "auto";
+            this.pageFlip = new PageFlip(htmlParentElement, {
+              width: page1.clientWidth,
+              height: page1.clientHeight,
+              showCover: true,
+              size: "fixed",
+            });
+            this.pageFlip.loadFromHTML(document.querySelectorAll(".page"));
+            this.ensureAdjecentPagesAreLoaded();
+            // triggered by page turning
+            this.pageFlip.on("flip", e => {
+              if (this._currentPageNumber !== e.data + 1) {
+                this._setCurrentPageNumber(e.data + 1, false);
+              }
+            });
+          }
+        }, 100);
+      }
+      // #716 end of modification
     }
   }
+  /** end of modification */
 
   /**
    * @returns {boolean} Whether the pageNumber is valid (within bounds).
@@ -406,6 +462,33 @@ class PDFViewer {
     const previous = this._currentPageNumber;
     this._currentPageNumber = val;
 
+    /** #495 modified by ngx-extended-pdf-viewer */
+    this.hidePagesDependingOnpageViewMode();
+    // #716 modified by ngx-extended-pdf-viewer
+    if (this.pageViewMode === "book" || this.pageViewMode === "infinite-scroll") {
+      const pageView = this._pages[this.currentPageNumber - 1];
+      if (pageView.div.parentElement.classList.contains("spread")) {
+        pageView.div.parentElement.childNodes.forEach(div => {
+          const pageNumber = Number(div.getAttribute("data-page-number"));
+          const pv = this._pages[pageNumber - 1];
+          this.#ensurePdfPageLoaded(pv).then(() => {
+            this.renderingQueue.renderView(pv);
+          });
+          div.style.display = "inline-block";
+        });
+      } else {
+        this.#ensurePdfPageLoaded(pageView).then(() => {
+          this.renderingQueue.renderView(pageView);
+        });
+        // #716 modified by ngx-extended-pdf-viewer
+        if (this.pageViewMode === "book") {
+          this.ensureAdjecentPagesAreLoaded();
+        }
+        // #716 modified by ngx-extended-pdf-viewer
+      }
+    }
+    /** end of modification */
+
     this.eventBus.dispatch("pagechanging", {
       source: this,
       pageNumber: val,
@@ -418,6 +501,97 @@ class PDFViewer {
     }
     return true;
   }
+
+  // #950 modified by ngx-extended-pdf-viewer
+  /**
+   * Adds a page to the rendering queue
+   * @param {number} pageIndex Index of the page to render
+   * @returns {boolean} false, if the page has already been rendered
+   * or if it's out of range
+   */
+  addPageToRenderQueue(pageIndex = 0) {
+    if (pageIndex >= 0 && pageIndex <= this._pages.length - 1) {
+      const pageView = this._pages[pageIndex];
+      const isLoading = pageView.div.querySelector(".loadingIcon");
+      if (isLoading) {
+        this.#ensurePdfPageLoaded(pageView).then(() => {
+          this.renderingQueue.renderView(pageView);
+        });
+        return true;
+      }
+    }
+    return false;
+  }
+  // #950 end of modification by ngx-extended-pdf-viewer
+
+  // #716 modified by ngx-extended-pdf-viewer
+  ensureAdjecentPagesAreLoaded() {
+    if (!window.adjacentPagesLoader) {
+      window.adjacentPagesLoader = evt => {
+        Window["ngxConsole"].log("rendered", evt);
+        let pageView = this._pages[Math.min(this._pages.length - 1, this.currentPageNumber)];
+        if (pageView) {
+          let isLoading = pageView.div.querySelector(".loadingIcon");
+          if (isLoading) {
+            Window["ngxConsole"].log("asking for the next page");
+            this.#ensurePdfPageLoaded(pageView).then(() => {
+              this.renderingQueue.renderView(pageView);
+            });
+          } else {
+            pageView = this._pages[Math.min(this._pages.length - 1, this.currentPageNumber + 1)];
+            isLoading = pageView.div.querySelector(".loadingIcon");
+            if (isLoading) {
+              Window["ngxConsole"].log("asking for the next + 1 page");
+              this.#ensurePdfPageLoaded(pageView).then(() => {
+                this.renderingQueue.renderView(pageView);
+              });
+            } else {
+              pageView = this._pages[Math.min(this._pages.length - 1, this.currentPageNumber + 2)];
+              isLoading = pageView.div.querySelector(".loadingIcon");
+              if (isLoading) {
+                Window["ngxConsole"].log("asking for the next + 2 page");
+                this.#ensurePdfPageLoaded(pageView).then(() => {
+                  this.renderingQueue.renderView(pageView);
+                });
+              } else {
+                pageView = this._pages[Math.min(this._pages.length - 1, this.currentPageNumber + 3)];
+                isLoading = pageView.div.querySelector(".loadingIcon");
+                if (isLoading) {
+                  Window["ngxConsole"].log("asking for the next + 3 page");
+                  this.#ensurePdfPageLoaded(pageView).then(() => {
+                    this.renderingQueue.renderView(pageView);
+                  });
+                } else {
+                  pageView = this._pages[Math.max(0, this.currentPageNumber - 1)];
+                  isLoading = pageView.div.querySelector(".loadingIcon");
+                  if (isLoading) {
+                    Window["ngxConsole"].log("asking for the current page");
+                    this.#ensurePdfPageLoaded(pageView).then(() => {
+                      this.renderingQueue.renderView(pageView);
+                    });
+                  } else {
+                    pageView = this._pages[Math.max(0, this.currentPageNumber - 2)];
+                    isLoading = pageView.div.querySelector(".loadingIcon");
+                    if (isLoading) {
+                      Window["ngxConsole"].log("asking for the previous page");
+                      this.#ensurePdfPageLoaded(pageView).then(() => {
+                        this.renderingQueue.renderView(pageView);
+                      });
+                    } else {
+                      Window["ngxConsole"].log("Finished preloading the pages");
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      };
+      this.eventBus._on("pagerendered", window.adjacentPagesLoader);
+    }
+    window.adjacentPagesLoader();
+  }
+  // #716 modified by ngx-extended-pdf-viewer
 
   /**
    * @type {string|null} Returns the current page label, or `null` if no page
@@ -443,7 +617,7 @@ class PDFViewer {
     }
     // The intent can be to just reset a scroll position and/or scale.
     if (!this._setCurrentPageNumber(page, /* resetCurrentPageView = */ true)) {
-      console.error(`currentPageLabel: "${val}" is not a valid page.`);
+      Window["ngxConsole"].error(`currentPageLabel: "${val}" is not a valid page.`);
     }
   }
 
@@ -769,6 +943,7 @@ class PDFViewer {
             textHighlighterFactory: this,
             structTreeLayerFactory: this,
             imageResourcesPath: this.imageResourcesPath,
+            removePageBorders: this.removePageBorders, // #194
             renderer:
               typeof PDFJSDev === "undefined" ||
               PDFJSDev.test("!PRODUCTION || GENERIC")
@@ -857,6 +1032,10 @@ class PDFViewer {
           }
         });
 
+        /** #495 modified by ngx-extended-pdf-viewer */
+        this.hidePagesDependingOnpageViewMode();
+        /** end of modification */
+
         this.eventBus.dispatch("pagesinit", { source: this });
 
         pdfDocument.getMetadata().then(({ info }) => {
@@ -873,7 +1052,7 @@ class PDFViewer {
         }
       })
       .catch(reason => {
-        console.error("Unable to initialize viewer", reason);
+        Window["ngxConsole"].error("Unable to initialize viewer", reason);
 
         this._pagesCapability.reject(reason);
       });
@@ -892,7 +1071,7 @@ class PDFViewer {
       !(Array.isArray(labels) && this.pdfDocument.numPages === labels.length)
     ) {
       this._pageLabels = null;
-      console.error(`setPageLabels: Invalid page labels.`);
+      Window["ngxConsole"].error(`setPageLabels: Invalid page labels.`);
     } else {
       this._pageLabels = labels;
     }
@@ -908,7 +1087,10 @@ class PDFViewer {
     this._currentScale = UNKNOWN_SCALE;
     this._currentScaleValue = null;
     this._pageLabels = null;
-    this.#buffer = new PDFPageViewBuffer(DEFAULT_CACHE_SIZE);
+    // #950 modified by ngx-extended-pdf-viewer
+    const bufferSize = Number(PDFViewerApplicationOptions.get("defaultCacheSize")) || DEFAULT_CACHE_SIZE;
+    this.#buffer = new PDFPageViewBuffer(bufferSize);
+    // #950 end of modification by ngx-extended-pdf-viewer
     this._location = null;
     this._pagesRotation = 0;
     this._optionalContentConfigPromise = null;
@@ -1020,7 +1202,45 @@ class PDFViewer {
     this.update();
   }
 
+  // #1301 modified by ngx-extended-pdf-viewer:
+  // add an API to allow to scroll within a page
+  scrollPagePosIntoView(pageNumber, pageSpot) {
+    const pageDiv = this._pages[pageNumber - 1].div;
+
+    if (pageSpot) {
+      const targetPageSpot = { ...pageSpot };
+      if (typeof targetPageSpot.top === "string") {
+        if (targetPageSpot.top.endsWith("%")) {
+          const percent = Number(targetPageSpot.top.replace("%", ""));
+          const viewerHeight = this.viewer.querySelector(".page")?.clientHeight;
+          let height = pageDiv.clientHeight ? pageDiv.clientHeight : viewerHeight;
+          const visibleWindowHeight = this.viewer.parentElement.clientHeight;
+          height = Math.max(0, height - visibleWindowHeight);
+          targetPageSpot.top = (percent * height) / 100;
+        }
+      }
+      if (typeof targetPageSpot.left === "string") {
+        if (targetPageSpot.left.endsWith("%")) {
+          const percent = Number(targetPageSpot.left.replace("%", ""));
+          const viewerWidth = this.viewer.querySelector(".page")?.clientWidth;
+          const width = pageDiv.clientWidth ? pageDiv.clientWidth : viewerWidth;
+          targetPageSpot.left = (percent * width) / 100;
+        }
+      }
+      this.#scrollIntoView({ div: pageDiv, id: pageNumber }, targetPageSpot);
+    } else {
+      this.#scrollIntoView({ pageDiv, pageNumber });
+    }
+  }
+  // #1301 end of modification by ngx-extended-pdf-viewer
+
   #scrollIntoView(pageView, pageSpot = null) {
+    // modified by ngx-extended-pdf-viewer
+    // to fix a bug that's basically caused by the showcase demo
+    if (!pageView) {
+      return;
+    }
+    // end of modification by ngx-extended-pdf-viewer
     const { div, id } = pageView;
 
     if (this._scrollMode === ScrollMode.PAGE) {
@@ -1045,7 +1265,7 @@ class PDFViewer {
         pageSpot = { left: 0, top: 0 };
       }
     }
-    scrollIntoView(div, pageSpot);
+    scrollIntoView(div, pageSpot, false, this.pageViewMode === "infinite-scroll");
   }
 
   /**
@@ -1060,6 +1280,8 @@ class PDFViewer {
   }
 
   _setScaleUpdatePages(newScale, newValue, noScroll = false, preset = false) {
+    const previousScale = isNaN(Number(this.currentScale)) ? undefined : Number(this.currentScale);
+    const previousScaleValue = this.currentScaleValue;
     this._currentScaleValue = newValue.toString();
 
     if (this.#isSameScale(newScale)) {
@@ -1068,6 +1290,8 @@ class PDFViewer {
           source: this,
           scale: newScale,
           presetValue: newValue,
+          previousScale,
+          previousPresetValue: previousScaleValue,
         });
       }
       return;
@@ -1111,6 +1335,8 @@ class PDFViewer {
       source: this,
       scale: newScale,
       presetValue: preset ? newValue : undefined,
+      previousScale,
+      previousPresetValue: previousScaleValue,
     });
 
     if (this.defaultRenderingQueue) {
@@ -1133,7 +1359,17 @@ class PDFViewer {
   }
 
   _setScale(value, noScroll = false) {
+    // #90 modified by ngx-extended-pdf-viewer
+    if (!value) {
+      value = "auto";
+    }
+    // #90 end of modification
     let scale = parseFloat(value);
+    // #1095 modified by ngx-extended-pdf-viewer: prevent duplicate rendering
+    if (this._currentScale === scale) {
+      return; // nothing to do
+    }
+    // #1095 end of modification
 
     if (scale > 0) {
       this._setScaleUpdatePages(scale, value, noScroll, /* preset = */ false);
@@ -1181,7 +1417,7 @@ class PDFViewer {
           scale = Math.min(MAX_AUTO_SCALE, horizontalScale);
           break;
         default:
-          console.error(`_setScale: "${value}" is an unknown zoom value.`);
+          Window["ngxConsole"].error(`_setScale: "${value}" is an unknown zoom value.`);
           return;
       }
       this._setScaleUpdatePages(scale, value, noScroll, /* preset = */ true);
@@ -1341,6 +1577,17 @@ class PDFViewer {
       }
     }
 
+    /** #495 modified by ngx-extended-pdf-viewer */
+    this.#ensurePdfPageLoaded(pageView).then(() => {
+      this.renderingQueue.renderView(pageView);
+      if (this.pageViewMode === "single") {
+        if (this.currentPageNumber !== pageNumber) {
+          this.currentPageNumber = pageNumber;
+        }
+      }
+    });
+    /** end of modification */
+
     if (scale === "page-fit" && !destArray[4]) {
       this.#scrollIntoView(pageView);
       return;
@@ -1397,6 +1644,14 @@ class PDFViewer {
   }
 
   update() {
+    // #1201 modified by ngx-extended-pdf-viewer
+    if (this.scrollMode === ScrollMode.PAGE) {
+      this.viewer.classList.add("singlePageView");
+    } else {
+      this.viewer.classList.remove("singlePageView");
+    }
+    // #1201 end of modification by ngx-extended-pdf-viewer
+
     const visible = this._getVisiblePages();
     const visiblePages = visible.views,
       numVisiblePages = visiblePages.length;
@@ -1404,7 +1659,10 @@ class PDFViewer {
     if (numVisiblePages === 0) {
       return;
     }
-    const newCacheSize = Math.max(DEFAULT_CACHE_SIZE, 2 * numVisiblePages + 1);
+    // #950 modified by ngx-extended-pdf-viewer
+    const bufferSize = Number(PDFViewerApplicationOptions.get("defaultCacheSize")) || DEFAULT_CACHE_SIZE;
+    const newCacheSize = Math.max(bufferSize, 2 * numVisiblePages + 1);
+    // #950 end of modification
     this.#buffer.resize(newCacheSize, visible.ids);
 
     this.renderingQueue.renderHighestPriority(visible);
@@ -1434,6 +1692,9 @@ class PDFViewer {
       source: this,
       location: this._location,
     });
+    // #859 modified by ngx-extended-pdf-viewer
+    this.hidePagesDependingOnpageViewMode();
+    // #859 end of modification
   }
 
   containsElement(element) {
@@ -2009,6 +2270,10 @@ class PDFViewer {
       }
     }
 
+    // #859 modified by ngx-extended-pdf-viewer
+    this.hidePagesDependingOnpageViewMode();
+    // end of modification by ngx-extended-pdf-viewer
+
     if (!pageNumber) {
       return;
     }
@@ -2160,11 +2425,17 @@ class PDFViewer {
    */
   increaseScale(steps = 1) {
     let newScale = this._currentScale;
+    // modified by ngx-extended-pdf-viewer #367
+    let maxScale = Number(PDFViewerApplicationOptions.get("maxZoom"));
+    if (!maxScale) {
+      maxScale = MAX_SCALE;
+    }
     do {
       newScale = (newScale * DEFAULT_SCALE_DELTA).toFixed(2);
       newScale = Math.ceil(newScale * 10) / 10;
-      newScale = Math.min(MAX_SCALE, newScale);
-    } while (--steps > 0 && newScale < MAX_SCALE);
+      newScale = Math.min(maxScale, newScale);
+    } while (--steps > 0 && newScale < maxScale);
+    // end of modification
     this.currentScaleValue = newScale;
   }
 
@@ -2174,11 +2445,17 @@ class PDFViewer {
    */
   decreaseScale(steps = 1) {
     let newScale = this._currentScale;
+    // modified by ngx-extended-pdf-viewer #367
+    let minScale = Number(PDFViewerApplicationOptions.get("minZoom"));
+    if (!minScale) {
+      minScale = MIN_SCALE;
+    }
     do {
       newScale = (newScale / DEFAULT_SCALE_DELTA).toFixed(2);
       newScale = Math.floor(newScale * 10) / 10;
-      newScale = Math.max(MIN_SCALE, newScale);
-    } while (--steps > 0 && newScale > MIN_SCALE);
+      newScale = Math.max(minScale, newScale);
+    } while (--steps > 0 && newScale > minScale);
+    // end of modification
     this.currentScaleValue = newScale;
   }
 
@@ -2244,28 +2521,6 @@ class PDFViewer {
     }
     this.update();
   }
-
-  // #950 modified by ngx-extended-pdf-viewer
-  /**
-   * Adds a page to the rendering queue
-   * @param {number} pageIndex Index of the page to render
-   * @returns {boolean} false, if the page has already been rendered
-   * or if it's out of range
-   */
-   addPageToRenderQueue(pageIndex = 0) {
-    if (pageIndex >= 0 && pageIndex <= this._pages.length - 1) {
-      const pageView = this._pages[pageIndex];
-      const isLoading = pageView.div.querySelector(".loadingIcon");
-      if (isLoading) {
-        this.#ensurePdfPageLoaded(pageView).then(() => {
-          this.renderingQueue.renderView(pageView);
-        });
-        return true;
-      }
-    }
-    return false;
-  }
-  // #950 end of modification by ngx-extended-pdf-viewer
 }
 
 export { PagesCountLimit, PDFPageViewBuffer, PDFViewer };
