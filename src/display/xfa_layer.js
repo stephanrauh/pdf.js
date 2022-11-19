@@ -30,7 +30,19 @@ import { XfaText } from "./xfa_text.js";
 
 class XfaLayer {
   static setupStorage(html, id, element, storage, intent) {
-    const storedData = storage.getValue(id, { value: null });
+    // #1585 modified by ngx-extended-pdf-viewer
+    let fieldname = id;
+    let ancestor = html;
+    while (ancestor) {
+      if (ancestor.getAttribute("xfaname")) {
+        fieldname = ancestor.getAttribute("xfaname");
+        break;
+      }
+      ancestor = ancestor.parentElement;
+    }
+    // #1585 end of modification by ngx-extended-pdf-viewer
+    const storedData = storage.getValue(id, fieldname, { value: null });
+    // end of modification by ngx-extended-pdf-viewer
     switch (element.name) {
       case "textarea":
         if (storedData.value !== null) {
@@ -40,7 +52,7 @@ class XfaLayer {
           break;
         }
         html.addEventListener("input", event => {
-          storage.setValue(id, { value: event.target.value });
+          storage.setValue(id, fieldname, { value: event.target.value }); // #1585 end of modification by ngx-extended-pdf-viewer
         });
         break;
       case "input":
@@ -59,7 +71,7 @@ class XfaLayer {
             break;
           }
           html.addEventListener("change", event => {
-            storage.setValue(id, {
+            storage.setValue(id, fieldname, { // #1585 end of modification by ngx-extended-pdf-viewer
               value: event.target.checked
                 ? event.target.getAttribute("xfaOn")
                 : event.target.getAttribute("xfaOff"),
@@ -73,7 +85,7 @@ class XfaLayer {
             break;
           }
           html.addEventListener("input", event => {
-            storage.setValue(id, { value: event.target.value });
+            storage.setValue(id, fieldname, { value: event.target.value }); // #1585 end of modification by ngx-extended-pdf-viewer
           });
         }
         break;
@@ -91,7 +103,7 @@ class XfaLayer {
             options.selectedIndex === -1
               ? ""
               : options[options.selectedIndex].value;
-          storage.setValue(id, { value });
+          storage.setValue(id, fieldname, { value }); // #1585 end of modification by ngx-extended-pdf-viewer
         });
         break;
     }
