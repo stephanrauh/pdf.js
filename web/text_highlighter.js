@@ -222,7 +222,8 @@ class TextHighlighter {
       const begin = match.begin;
       const end = match.end;
       const isSelected = isSelectedPage && i === selectedMatchIdx;
-      const highlightSuffix = (isSelected ? " selected" : "") + " color" + match.color; // #201
+      const colorNumber = match.color % 5; // only 5 colors have CSS rules
+      const highlightSuffix = (isSelected ? " selected" : "") + " color" + colorNumber; // #201
       let selectedLeft = 0;
 
       // Match inside new div.
