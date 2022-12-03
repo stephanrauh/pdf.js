@@ -312,7 +312,9 @@ class PDFFindController {
   get _query() {
     if (this._state.query !== this._rawQuery) {
       this._rawQuery = this._state.query;
-      [this._normalizedQuery] = normalize(this._state.query);
+      const queries = this._state.query.split("\n");
+      const normalizedQueries = queries.map(q => normalize(q)[0]);
+      this._normalizedQuery = normalizedQueries.join("\n");
     }
     return this._normalizedQuery;
   }
@@ -766,7 +768,7 @@ class PDFFindController {
 
                 // Store the normalized page content (text items) as one string.
                 [this._pageContents[i], this._pageDiffs[i]] = normalize(
-                  strBuf.join("")
+                  strBuf.join(""), false
                 );
 
                 extractTextCapability.resolve(i);

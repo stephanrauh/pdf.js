@@ -133,7 +133,7 @@ class PDFFindBar {
       type,
       query: this.findFieldMultiline.classList.contains("hidden")
         ? this.findField.value
-        : this.findFieldMultiline.value, // #201
+        : this.findFieldMultiline.value + "\n", // #201
       phraseSearch: !this.multipleSearchTexts.checked, // #201
       caseSensitive: this.caseSensitive.checked,
       entireWord: this.entireWord.checked,
