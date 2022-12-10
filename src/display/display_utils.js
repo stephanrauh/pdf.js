@@ -450,6 +450,18 @@ function isValidFetchUrl(url, baseUrl) {
   }
 }
 
+// modified by ngx-extended-pdf-viewer #1512
+function generateTrustedURL(sourcePath) {
+  if (window.trustedTypes) {
+    const sanitizer = window.trustedTypes.createPolicy("foo", {
+      createScriptURL: url => url,
+    });
+    return sanitizer.createScriptURL(sourcePath);
+  }
+  return sourcePath;
+}
+// end of modification by ngx-extended-pdf-viewer #1512
+
 /**
  * @param {string} src
  * @param {boolean} [removeScriptElement]
@@ -458,12 +470,13 @@ function isValidFetchUrl(url, baseUrl) {
 function loadScript(src, removeScriptElement = false) {
   return new Promise((resolve, reject) => {
     const script = document.createElement("script");
-    // modified by ngx-extended-pdf-viewer
+    // modified by ngx-extended-pdf-viewer #1512
+    let source = src;
     if (src.constructor.name === "Function") {
-      script.src = src();
-    } else {
-      script.src = src;
+      source = src();
     }
+    const secureSource = generateTrustedURL(source);
+    script.src = secureSource;
     // end of modification
 
     script.onload = function (evt) {

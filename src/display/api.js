@@ -2002,11 +2002,7 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
 class PDFWorker {
   static #workerPorts = new WeakMap();
 
-  constructor({
-    name = null,
-    port = null,
-    verbosity = getVerbosityLevel(),
-  } = {}) {
+  constructor({ name = null, port = null, verbosity = getVerbosityLevel() } = {}) {
     if (port && PDFWorker.#workerPorts.has(port)) {
       throw new Error("Cannot use more than one PDFWorker per port.");
     }
@@ -2066,34 +2062,37 @@ class PDFWorker {
     });
   }
 
+  // modified by ngx-extended-pdf-viewer #1512
+  #generateTrustedURL(sourcePath) {
+    if (window.trustedTypes) {
+      const sanitizer = window.trustedTypes.createPolicy("foo", {
+        createScriptURL: url => url,
+      });
+      return sanitizer.createScriptURL(sourcePath);
+    }
+    return sourcePath;
+  }
+  // end of modification by ngx-extended-pdf-viewer #1512
+
   _initialize() {
     // If worker support isn't disabled explicit and the browser has worker
     // support, create a new web worker and test if it/the browser fulfills
     // all requirements to run parts of pdf.js in a web worker.
     // Right now, the requirement is, that an Uint8Array is still an
     // Uint8Array as it arrives on the worker. (Chrome added this with v.15.)
-    if (
-      !PDFWorkerUtil.isWorkerDisabled &&
-      !PDFWorker._mainThreadWorkerMessageHandler
-    ) {
+    if (!PDFWorkerUtil.isWorkerDisabled && !PDFWorker._mainThreadWorkerMessageHandler) {
       let { workerSrc } = PDFWorker;
 
       try {
         // Wraps workerSrc path into blob URL, if the former does not belong
         // to the same origin.
-        if (
-          typeof PDFJSDev !== "undefined" &&
-          PDFJSDev.test("GENERIC") &&
-          !PDFWorkerUtil.isSameOrigin(window.location.href, workerSrc)
-        ) {
-          workerSrc = PDFWorkerUtil.createCDNWrapper(
-            new URL(workerSrc, window.location).href
-          );
+        if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC") && !PDFWorkerUtil.isSameOrigin(window.location.href, workerSrc)) {
+          workerSrc = PDFWorkerUtil.createCDNWrapper(new URL(workerSrc, window.location).href);
         }
 
         // Some versions of FF can't create a worker on localhost, see:
         // https://bugzilla.mozilla.org/show_bug.cgi?id=683280
-        const worker = new Worker(workerSrc);
+        const worker = new Worker(this.#generateTrustedURL(workerSrc));
         const messageHandler = new MessageHandler("main", "worker", worker);
         const terminateEarly = () => {
           worker.removeEventListener("error", onWorkerError);
@@ -2206,9 +2205,7 @@ class PDFWorker {
         });
       })
       .catch(reason => {
-        this._readyCapability.reject(
-          new Error(`Setting up fake worker failed: "${reason.message}".`)
-        );
+        this._readyCapability.reject(new Error(`Setting up fake worker failed: "${reason.message}".`));
       });
   }
 
@@ -2256,10 +2253,7 @@ class PDFWorker {
       // end of modification
       return GlobalWorkerOptions.workerSrc;
     }
-    if (
-      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
-      PDFWorkerUtil.fallbackWorkerSrc !== null
-    ) {
+    if ((typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) && PDFWorkerUtil.fallbackWorkerSrc !== null) {
       if (!isNodeJS) {
         deprecated('No "GlobalWorkerOptions.workerSrc" specified.');
       }
