@@ -319,7 +319,7 @@ PDFPrintService.prototype = {
 };
 
 const print = window.print;
-window.printPDF = function () {
+window.printPDF = function printPdf() {
   if (!PDFViewerApplication.enablePrint) {
     return;
   }
