@@ -2175,8 +2175,10 @@ function packageJson() {
     homepage: DIST_HOMEPAGE,
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
+    optionalDependencies: {
+      canvas: "^2.10.2",
+    },
     dependencies: {
-      canvas: "^2.10.1",
       "web-streams-polyfill": "^3.2.1",
     },
     browser: {

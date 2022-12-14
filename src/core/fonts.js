@@ -35,9 +35,11 @@ import {
 } from "./fonts_utils.js";
 import {
   getCharUnicodeCategory,
+  getNormalizedUnicodes,
   getUnicodeForGlyph,
   getUnicodeRangeFor,
   mapSpecialUnicodeValues,
+  reverseIfRtl,
 } from "./unicode.js";
 import { getDingbatsGlyphsUnicode, getGlyphsUnicode } from "./glyphlist.js";
 import {
@@ -91,6 +93,7 @@ const EXPORT_DATA_PROPERTIES = [
   "fallbackName",
   "fontMatrix",
   "fontType",
+  "isInvalidPDFjsFont",
   "isType3Font",
   "italic",
   "loadedName",
@@ -212,11 +215,38 @@ class Glyph {
     this.operatorListId = operatorListId;
     this.isSpace = isSpace;
     this.isInFont = isInFont;
+  }
 
-    const category = getCharUnicodeCategory(unicode);
-    this.isWhitespace = category.isWhitespace;
-    this.isZeroWidthDiacritic = category.isZeroWidthDiacritic;
-    this.isInvisibleFormatMark = category.isInvisibleFormatMark;
+  /**
+   * This property, which is only used by `PartialEvaluator.getTextContent`,
+   * is purposely made non-serializable.
+   * @type {Object}
+   */
+  get category() {
+    return shadow(
+      this,
+      "category",
+      getCharUnicodeCategory(this.unicode),
+      /* nonSerializable = */ true
+    );
+  }
+
+  /**
+   * This property, which is only used by `PartialEvaluator.getTextContent`,
+   * is purposely made non-serializable.
+   * @type {string}
+   */
+  get normalizedUnicode() {
+    return shadow(
+      this,
+      "normalizedUnicode",
+      reverseIfRtl(Glyph._NormalizedUnicodes[this.unicode] || this.unicode),
+      /* nonSerializable = */ true
+    );
+  }
+
+  static get _NormalizedUnicodes() {
+    return shadow(this, "_NormalizedUnicodes", getNormalizedUnicodes());
   }
 }
 
@@ -923,13 +953,17 @@ class Font {
     this.type = type;
     this.subtype = subtype;
 
-    let fallbackName = "sans-serif";
-    if (this.isMonospace) {
-      fallbackName = "monospace";
+    const matches = name.match(/^InvalidPDFjsFont_(.*)_\d+$/);
+    this.isInvalidPDFjsFont = !!matches;
+    if (this.isInvalidPDFjsFont) {
+      this.fallbackName = matches[1];
+    } else if (this.isMonospace) {
+      this.fallbackName = "monospace";
     } else if (this.isSerifFont) {
-      fallbackName = "serif";
+      this.fallbackName = "serif";
+    } else {
+      this.fallbackName = "sans-serif";
     }
-    this.fallbackName = fallbackName;
 
     this.differences = properties.differences;
     this.widths = properties.widths;
@@ -1208,8 +1242,8 @@ class Font {
       // Attempt to improve the glyph mapping for (some) composite fonts that
       // appear to lack meaningful ToUnicode data.
       if (this.composite && this.toUnicode instanceof IdentityToUnicodeMap) {
-        if (/Verdana/i.test(name)) {
-          // Fixes issue11242_reduced.pdf
+        if (/Tahoma|Verdana/i.test(name)) {
+          // Fixes issue15719.pdf and issue11242_reduced.pdf.
           applyStandardFontGlyphMap(map, getGlyphMapForStandardFonts());
         }
       }

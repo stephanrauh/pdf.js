@@ -95,7 +95,7 @@ class WorkerTask {
 class WorkerMessageHandler {
   static setup(handler, port) {
     let testMessageProcessed = false;
-    handler.on("test", function wphSetupTest(data) {
+    handler.on("test", function (data) {
       if (testMessageProcessed) {
         return; // we already processed 'test' message once
       }
@@ -105,11 +105,11 @@ class WorkerMessageHandler {
       handler.send("test", data instanceof Uint8Array);
     });
 
-    handler.on("configure", function wphConfigure(data) {
+    handler.on("configure", function (data) {
       setVerbosityLevel(data.verbosity);
     });
 
-    handler.on("GetDocRequest", function wphSetupDoc(data) {
+    handler.on("GetDocRequest", function (data) {
       return WorkerMessageHandler.createDocumentHandler(data, port);
     });
   }
@@ -330,7 +330,7 @@ class WorkerMessageHandler {
         }
         cachedChunks = [];
       };
-      const readPromise = new Promise(function (resolve, reject) {
+      new Promise(function (resolve, reject) {
         const readChunk = function ({ value, done }) {
           try {
             ensureNotTerminated();
@@ -362,8 +362,7 @@ class WorkerMessageHandler {
           }
         };
         fullRequest.read().then(readChunk, reject);
-      });
-      readPromise.catch(function (e) {
+      }).catch(function (e) {
         pdfManagerCapability.reject(e);
         cancelXHRs = null;
       });
@@ -454,7 +453,7 @@ class WorkerMessageHandler {
         .then(pdfManagerReady, onFailure);
     }
 
-    handler.on("GetPage", function wphSetupGetPage(data) {
+    handler.on("GetPage", function (data) {
       return pdfManager.getPage(data.pageIndex).then(function (page) {
         return Promise.all([
           pdfManager.ensure(page, "rotate"),
@@ -472,28 +471,28 @@ class WorkerMessageHandler {
       });
     });
 
-    handler.on("GetPageIndex", function wphSetupGetPageIndex(data) {
+    handler.on("GetPageIndex", function (data) {
       const pageRef = Ref.get(data.num, data.gen);
       return pdfManager.ensureCatalog("getPageIndex", [pageRef]);
     });
 
-    handler.on("GetDestinations", function wphSetupGetDestinations(data) {
+    handler.on("GetDestinations", function (data) {
       return pdfManager.ensureCatalog("destinations");
     });
 
-    handler.on("GetDestination", function wphSetupGetDestination(data) {
+    handler.on("GetDestination", function (data) {
       return pdfManager.ensureCatalog("getDestination", [data.id]);
     });
 
-    handler.on("GetPageLabels", function wphSetupGetPageLabels(data) {
+    handler.on("GetPageLabels", function (data) {
       return pdfManager.ensureCatalog("pageLabels");
     });
 
-    handler.on("GetPageLayout", function wphSetupGetPageLayout(data) {
+    handler.on("GetPageLayout", function (data) {
       return pdfManager.ensureCatalog("pageLayout");
     });
 
-    handler.on("GetPageMode", function wphSetupGetPageMode(data) {
+    handler.on("GetPageMode", function (data) {
       return pdfManager.ensureCatalog("pageMode");
     });
 
@@ -505,15 +504,15 @@ class WorkerMessageHandler {
       return pdfManager.ensureCatalog("openAction");
     });
 
-    handler.on("GetAttachments", function wphSetupGetAttachments(data) {
+    handler.on("GetAttachments", function (data) {
       return pdfManager.ensureCatalog("attachments");
     });
 
-    handler.on("GetJavaScript", function wphSetupGetJavaScript(data) {
+    handler.on("GetJavaScript", function (data) {
       return pdfManager.ensureCatalog("javaScript");
     });
 
-    handler.on("GetDocJSActions", function wphSetupGetDocJSActions(data) {
+    handler.on("GetDocJSActions", function (data) {
       return pdfManager.ensureCatalog("jsActions");
     });
 
@@ -523,7 +522,7 @@ class WorkerMessageHandler {
       });
     });
 
-    handler.on("GetOutline", function wphSetupGetOutline(data) {
+    handler.on("GetOutline", function (data) {
       return pdfManager.ensureCatalog("documentOutline");
     });
 
@@ -535,18 +534,18 @@ class WorkerMessageHandler {
       return pdfManager.ensureCatalog("permissions");
     });
 
-    handler.on("GetMetadata", function wphSetupGetMetadata(data) {
+    handler.on("GetMetadata", function (data) {
       return Promise.all([
         pdfManager.ensureDoc("documentInfo"),
         pdfManager.ensureCatalog("metadata"),
       ]);
     });
 
-    handler.on("GetMarkInfo", function wphSetupGetMarkInfo(data) {
+    handler.on("GetMarkInfo", function (data) {
       return pdfManager.ensureCatalog("markInfo");
     });
 
-    handler.on("GetData", function wphSetupGetData(data) {
+    handler.on("GetData", function (data) {
       return pdfManager.requestLoadedStream().then(function (stream) {
         return stream.bytes;
       });
@@ -652,6 +651,11 @@ class WorkerMessageHandler {
             }
           }
 
+          const needAppearances =
+            acroFormRef &&
+            acroForm instanceof Dict &&
+            newRefs.some(ref => ref.needAppearances);
+
           const xfa = (acroForm instanceof Dict && acroForm.get("XFA")) || null;
           let xfaDatasetsRef = null;
           let hasXfaDatasetsEntry = false;
@@ -659,15 +663,13 @@ class WorkerMessageHandler {
             for (let i = 0, ii = xfa.length; i < ii; i += 2) {
               if (xfa[i] === "datasets") {
                 xfaDatasetsRef = xfa[i + 1];
-                acroFormRef = null;
                 hasXfaDatasetsEntry = true;
               }
             }
             if (xfaDatasetsRef === null) {
-              xfaDatasetsRef = xref.getNewRef();
+              xfaDatasetsRef = xref.getNewTemporaryRef();
             }
           } else if (xfa) {
-            acroFormRef = null;
             // TODO: Support XFA streams.
             warn("Unsupported XFA type.");
           }
@@ -688,7 +690,7 @@ class WorkerMessageHandler {
             newXrefInfo = {
               rootRef: xref.trailer.getRaw("Root") || null,
               encryptRef: xref.trailer.getRaw("Encrypt") || null,
-              newRef: xref.getNewRef(),
+              newRef: xref.getNewTemporaryRef(),
               infoRef: xref.trailer.getRaw("Info") || null,
               info: infoObj,
               fileIds: xref.trailer.get("ID") || null,
@@ -696,25 +698,29 @@ class WorkerMessageHandler {
               filename,
             };
           }
-          xref.resetNewRef();
 
-          return incrementalUpdate({
-            originalData: stream.bytes,
-            xrefInfo: newXrefInfo,
-            newRefs,
-            xref,
-            hasXfa: !!xfa,
-            xfaDatasetsRef,
-            hasXfaDatasetsEntry,
-            acroFormRef,
-            acroForm,
-            xfaData,
-          });
+          try {
+            return incrementalUpdate({
+              originalData: stream.bytes,
+              xrefInfo: newXrefInfo,
+              newRefs,
+              xref,
+              hasXfa: !!xfa,
+              xfaDatasetsRef,
+              hasXfaDatasetsEntry,
+              needAppearances,
+              acroFormRef,
+              acroForm,
+              xfaData,
+            });
+          } finally {
+            xref.resetNewTemporaryRef();
+          }
         });
       }
     );
 
-    handler.on("GetOperatorList", function wphSetupRenderPage(data, sink) {
+    handler.on("GetOperatorList", function (data, sink) {
       const pageIndex = data.pageIndex;
       pdfManager.getPage(pageIndex).then(function (page) {
         const task = new WorkerTask(`GetOperatorList: page ${pageIndex}`);
@@ -759,7 +765,7 @@ class WorkerMessageHandler {
       });
     });
 
-    handler.on("GetTextContent", function wphExtractText(data, sink) {
+    handler.on("GetTextContent", function (data, sink) {
       const pageIndex = data.pageIndex;
 
       pdfManager.getPage(pageIndex).then(function (page) {
@@ -803,7 +809,7 @@ class WorkerMessageHandler {
       });
     });
 
-    handler.on("GetStructTree", function wphGetStructTree(data) {
+    handler.on("GetStructTree", function (data) {
       return pdfManager.getPage(data.pageIndex).then(function (page) {
         return pdfManager.ensure(page, "getStructTree");
       });
@@ -813,11 +819,11 @@ class WorkerMessageHandler {
       return pdfManager.fontFallback(data.id, handler);
     });
 
-    handler.on("Cleanup", function wphCleanup(data) {
+    handler.on("Cleanup", function (data) {
       return pdfManager.cleanup(/* manuallyTriggered = */ true);
     });
 
-    handler.on("Terminate", function wphTerminate(data) {
+    handler.on("Terminate", function (data) {
       terminated = true;
 
       const waitOn = [];
@@ -848,7 +854,7 @@ class WorkerMessageHandler {
       });
     });
 
-    handler.on("Ready", function wphReady(data) {
+    handler.on("Ready", function (data) {
       setupDoc(docParams);
       docParams = null; // we don't need docParams anymore -- saving memory.
     });
