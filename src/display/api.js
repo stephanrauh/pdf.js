@@ -596,6 +596,8 @@ async function _fetchDocument(worker, source, pdfDataRangeTransport, docId) {
 class PDFDocumentLoadingTask {
   static #docId = 0;
 
+  #onUnsupportedFeature = null;
+
   constructor() {
     this._capability = createPromiseCapability();
     this._transport = null;
@@ -628,13 +630,26 @@ class PDFDocumentLoadingTask {
      * @type {function}
      */
     this.onProgress = null;
+  }
 
-    /**
-     * Callback for when an unsupported feature is used in the PDF document.
-     * The callback receives an {@link UNSUPPORTED_FEATURES} argument.
-     * @type {function}
-     */
-    this.onUnsupportedFeature = null;
+  /**
+   * @type {function | null} The current callback used with unsupported
+   * features.
+   */
+  get onUnsupportedFeature() {
+    return this.#onUnsupportedFeature;
+  }
+
+  /**
+   * Callback for when an unsupported feature is used in the PDF document.
+   * The callback receives an {@link UNSUPPORTED_FEATURES} argument.
+   * @type {function}
+   */
+  set onUnsupportedFeature(callback) {
+    deprecated(
+      "The PDFDocumentLoadingTask onUnsupportedFeature property will be removed in the future."
+    );
+    this.#onUnsupportedFeature = callback;
   }
 
   /**
@@ -795,6 +810,9 @@ class PDFDocumentProxy {
    *   structures, or `null` when no statistics exists.
    */
   get stats() {
+    deprecated(
+      "The PDFDocumentProxy stats property will be removed in the future."
+    );
     return this._transport.stats;
   }
 
@@ -1277,7 +1295,6 @@ class PDFPageProxy {
     this.cleanupAfterRender = false;
     this.pendingCleanup = false;
     this._intentStates = new Map();
-    this._annotationPromises = new Map();
     this.destroyed = false;
   }
 
@@ -1347,15 +1364,10 @@ class PDFPageProxy {
   getAnnotations({ intent = "display" } = {}) {
     const intentArgs = this._transport.getRenderingIntent(intent);
 
-    let promise = this._annotationPromises.get(intentArgs.cacheKey);
-    if (!promise) {
-      promise = this._transport.getAnnotations(
-        this._pageIndex,
-        intentArgs.renderingIntent
-      );
-      this._annotationPromises.set(intentArgs.cacheKey, promise);
-    }
-    return promise;
+    return this._transport.getAnnotations(
+      this._pageIndex,
+      intentArgs.renderingIntent
+    );
   }
 
   /**
@@ -1644,9 +1656,7 @@ class PDFPageProxy {
    *   or `null` when no structure tree is present for the current page.
    */
   getStructTree() {
-    return (this._structTreePromise ||= this._transport.getStructTree(
-      this._pageIndex
-    ));
+    return this._transport.getStructTree(this._pageIndex);
   }
 
   /**
@@ -1678,9 +1688,7 @@ class PDFPageProxy {
       bitmap.close();
     }
     this._bitmaps.clear();
-    this._annotationPromises.clear();
     this._jsActionsPromise = null;
-    this._structTreePromise = null;
     this.pendingCleanup = false;
     return Promise.all(waitOn);
   }
@@ -1718,9 +1726,7 @@ class PDFPageProxy {
 
     this._intentStates.clear();
     this.objs.clear();
-    this._annotationPromises.clear();
     this._jsActionsPromise = null;
-    this._structTreePromise = null;
     if (resetStats && this._stats) {
       this._stats = new StatTimer();
     }
@@ -1866,10 +1872,19 @@ class PDFPageProxy {
       // cancelled, since that will unnecessarily delay re-rendering when (for
       // partially parsed pages) e.g. zooming/rotation occurs in the viewer.
       if (reason instanceof RenderingCancelledException) {
+        let delay = RENDERING_CANCELLED_TIMEOUT;
+        if (reason.extraDelay > 0 && reason.extraDelay < /* ms = */ 1000) {
+          // Above, we prevent the total delay from becoming arbitrarily large.
+          delay += reason.extraDelay;
+        }
+
+        if (intentState.streamReaderCancelTimeout) {
+          clearTimeout(intentState.streamReaderCancelTimeout);
+        }
         intentState.streamReaderCancelTimeout = setTimeout(() => {
           this._abortOperatorList({ intentState, reason, force: true });
           intentState.streamReaderCancelTimeout = null;
-        }, RENDERING_CANCELLED_TIMEOUT);
+        }, delay);
         return;
       }
     }
@@ -3189,9 +3204,11 @@ class RenderTask {
    * Cancels the rendering task. If the task is currently rendering it will
    * not be cancelled until graphics pauses with a timeout. The promise that
    * this object extends will be rejected when cancelled.
+   *
+   * @param {number} [extraDelay]
    */
-  cancel() {
-    this.#internalRenderTask.cancel();
+  cancel(extraDelay = 0) {
+    this.#internalRenderTask.cancel(/* error = */ null, extraDelay);
   }
 
   /**
@@ -3310,7 +3327,7 @@ class InternalRenderTask {
     this.graphicsReadyCallback?.();
   }
 
-  cancel(error = null) {
+  cancel(error = null, extraDelay = 0) {
     this.running = false;
     this.cancelled = true;
     this.gfx?.endDrawing();
@@ -3322,7 +3339,8 @@ class InternalRenderTask {
       error ||
         new RenderingCancelledException(
           `Rendering cancelled, page ${this._pageIndex + 1}`,
-          "canvas"
+          "canvas",
+          extraDelay
         )
     );
   }

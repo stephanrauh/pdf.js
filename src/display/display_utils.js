@@ -19,7 +19,13 @@ import {
   BaseStandardFontDataFactory,
   BaseSVGFactory,
 } from "./base_factory.js";
-import { BaseException, stringToBytes, Util, warn } from "../shared/util.js";
+import {
+  BaseException,
+  shadow,
+  stringToBytes,
+  Util,
+  warn,
+} from "../shared/util.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -224,13 +230,13 @@ class PageViewport {
     if (rotateA === 0) {
       offsetCanvasX = Math.abs(centerY - viewBox[1]) * scale + offsetX;
       offsetCanvasY = Math.abs(centerX - viewBox[0]) * scale + offsetY;
-      width = Math.abs(viewBox[3] - viewBox[1]) * scale;
-      height = Math.abs(viewBox[2] - viewBox[0]) * scale;
+      width = (viewBox[3] - viewBox[1]) * scale;
+      height = (viewBox[2] - viewBox[0]) * scale;
     } else {
       offsetCanvasX = Math.abs(centerX - viewBox[0]) * scale + offsetX;
       offsetCanvasY = Math.abs(centerY - viewBox[1]) * scale + offsetY;
-      width = Math.abs(viewBox[2] - viewBox[0]) * scale;
-      height = Math.abs(viewBox[3] - viewBox[1]) * scale;
+      width = (viewBox[2] - viewBox[0]) * scale;
+      height = (viewBox[3] - viewBox[1]) * scale;
     }
     // creating transform for the following operations:
     // translate(-centerX, -centerY), rotate and flip vertically,
@@ -246,6 +252,20 @@ class PageViewport {
 
     this.width = width;
     this.height = height;
+  }
+
+  /**
+   * The original, un-scaled, viewport dimensions.
+   * @type {Object}
+   */
+  get rawDims() {
+    const { viewBox } = this;
+    return shadow(this, "rawDims", {
+      pageWidth: viewBox[2] - viewBox[0],
+      pageHeight: viewBox[3] - viewBox[1],
+      pageX: viewBox[0],
+      pageY: viewBox[1],
+    });
   }
 
   /**
@@ -312,9 +332,10 @@ class PageViewport {
 }
 
 class RenderingCancelledException extends BaseException {
-  constructor(msg, type) {
+  constructor(msg, type, extraDelay = 0) {
     super(msg, "RenderingCancelledException");
     this.type = type;
+    this.extraDelay = extraDelay;
   }
 }
 
@@ -642,6 +663,45 @@ function getCurrentTransformInverse(ctx) {
   return [a, b, c, d, e, f];
 }
 
+/**
+ * @param {HTMLDivElement} div
+ * @param {PageViewport} viewport
+ * @param {boolean} mustFlip
+ * @param {boolean} mustRotate
+ */
+function setLayerDimensions(
+  div,
+  viewport,
+  mustFlip = false,
+  mustRotate = true
+) {
+  if (viewport instanceof PageViewport) {
+    const { pageWidth, pageHeight } = viewport.rawDims;
+    const { style } = div;
+
+    // TODO: Investigate if it could be interesting to use the css round
+    // function (https://developer.mozilla.org/en-US/docs/Web/CSS/round):
+    // const widthStr =
+    //   `round(down, var(--scale-factor) * ${pageWidth}px, 1px)`;
+    // const heightStr =
+    //   `round(down, var(--scale-factor) * ${pageHeight}px, 1px)`;
+    const widthStr = `calc(var(--scale-factor) * ${pageWidth}px)`;
+    const heightStr = `calc(var(--scale-factor) * ${pageHeight}px)`;
+
+    if (!mustFlip || viewport.rotation % 180 === 0) {
+      style.width = widthStr;
+      style.height = heightStr;
+    } else {
+      style.width = heightStr;
+      style.height = widthStr;
+    }
+  }
+
+  if (mustRotate) {
+    div.setAttribute("data-main-rotation", viewport.rotation);
+  }
+}
+
 export {
   AnnotationPrefix,
   deprecated,
@@ -664,5 +724,6 @@ export {
   PDFDateString,
   PixelsPerInch,
   RenderingCancelledException,
+  setLayerDimensions,
   StatTimer,
 };

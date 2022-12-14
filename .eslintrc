@@ -61,6 +61,7 @@
     "unicorn/prefer-modern-dom-apis": "error",
     "unicorn/prefer-regexp-test": "error",
     "unicorn/prefer-string-starts-ends-with": "error",
+    "unicorn/no-typeof-undefined": ["error", { "checkGlobalVariables": false, }],
 
     // Possible errors
     "for-direction": "error",
@@ -158,7 +159,7 @@
     "no-undef-init": "error",
     "no-undef": ["error", { "typeof": true, }],
     "no-unused-vars": ["error", {
-      "vars": "local",
+      "vars": "all",
       "args": "none",
     }],
     "no-use-before-define": ["error", {

@@ -375,7 +375,7 @@ class PDFNodeStreamRangeReader extends BaseRangeReader {
     this._httpHeaders = {};
     for (const property in stream.httpHeaders) {
       const value = stream.httpHeaders[property];
-      if (typeof value === "undefined") {
+      if (value === undefined) {
         continue;
       }
       this._httpHeaders[property] = value;

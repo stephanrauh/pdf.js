@@ -1887,8 +1887,7 @@ class CanvasGraphics {
     this.ctx.closePath();
   }
 
-  stroke(consumePath) {
-    consumePath = typeof consumePath !== "undefined" ? consumePath : true;
+  stroke(consumePath = true) {
     const ctx = this.ctx;
     const strokeColor = this.current.strokeColor;
     // For stroke we want to temporarily change the global alpha to the
@@ -1921,8 +1920,7 @@ class CanvasGraphics {
     this.stroke();
   }
 
-  fill(consumePath) {
-    consumePath = typeof consumePath !== "undefined" ? consumePath : true;
+  fill(consumePath = true) {
     const ctx = this.ctx;
     // #916 modified by ngx-extended-pdf-viewer
     let draw = true;

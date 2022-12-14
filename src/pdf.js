@@ -23,6 +23,7 @@
 /** @typedef {import("./display/text_layer").TextLayerRenderTask} TextLayerRenderTask */
 
 import {
+  AbortException,
   AnnotationEditorParamsType,
   AnnotationEditorType,
   AnnotationMode,
@@ -52,19 +53,21 @@ import {
   getFilenameFromUrl,
   getPdfFilenameFromUrl,
   getXfaPageViewport,
+  isDataScheme,
   isPdfFile,
   isValidFetchUrl,
   loadScript,
   PDFDateString,
   PixelsPerInch,
   RenderingCancelledException,
+  setLayerDimensions,
 } from "./display/display_utils.js";
+import { renderTextLayer, updateTextLayer } from "./display/text_layer.js";
 import { AnnotationEditorLayer } from "./display/editor/annotation_editor_layer.js";
 import { AnnotationEditorUIManager } from "./display/editor/tools.js";
 import { AnnotationLayer } from "./display/annotation_layer.js";
 import { GlobalWorkerOptions } from "./display/worker_options.js";
 import { isNodeJS } from "./shared/is_node.js";
-import { renderTextLayer } from "./display/text_layer.js";
 import { SVGGraphics } from "./display/svg.js";
 import { XfaLayer } from "./display/xfa_layer.js";
 
@@ -109,6 +112,7 @@ if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
 }
 
 export {
+  AbortException,
   AnnotationEditorLayer,
   AnnotationEditorParamsType,
   AnnotationEditorType,
@@ -125,6 +129,7 @@ export {
   getXfaPageViewport,
   GlobalWorkerOptions,
   InvalidPDFException,
+  isDataScheme,
   isPdfFile,
   loadScript,
   MissingPDFException,
@@ -137,10 +142,12 @@ export {
   PixelsPerInch,
   RenderingCancelledException,
   renderTextLayer,
+  setLayerDimensions,
   shadow,
   SVGGraphics,
   UnexpectedResponseException,
   UNSUPPORTED_FEATURES,
+  updateTextLayer,
   Util,
   VerbosityLevel,
   version,

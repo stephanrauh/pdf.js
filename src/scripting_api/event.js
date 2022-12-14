@@ -91,6 +91,10 @@ class EventDispatcher {
       if (id === "doc") {
         const eventName = event.name;
         if (eventName === "Open") {
+          // Initialize named actions before calling formatAll to avoid any
+          // errors in the case where a formatter is using one of those named
+          // actions (see #15818).
+          this._document.obj._initActions();
           // Before running the Open event, we format all the fields
           // (see bug 1766987).
           this.formatAll();
@@ -137,6 +141,7 @@ class EventDispatcher {
       case "Keystroke":
         savedChange = {
           value: event.value,
+          changeEx: event.changeEx,
           change: event.change,
           selStart: event.selStart,
           selEnd: event.selEnd,
@@ -170,6 +175,16 @@ class EventDispatcher {
       if (event.willCommit) {
         this.runValidation(source, event);
       } else {
+        if (source.obj._isChoice) {
+          source.obj.value = savedChange.changeEx;
+          source.obj._send({
+            id: source.obj._id,
+            siblings: source.obj._siblings,
+            value: source.obj.value,
+          });
+          return;
+        }
+
         const value = (source.obj.value = this.mergeChange(event));
         let selStart, selEnd;
         if (
@@ -253,6 +268,7 @@ class EventDispatcher {
         value: "",
         formattedValue: null,
         selRange: [0, 0],
+        focus: true, // Stay in the field.
       });
     }
   }

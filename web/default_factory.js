@@ -57,7 +57,6 @@ class DefaultAnnotationLayerFactory {
    * @property {IL10n} l10n
    * @property {boolean} [enableScripting]
    * @property {Promise<boolean>} [hasJSActionsPromise]
-   * @property {Object} [mouseState]
    * @property {Promise<Object<string, Array<Object>> | null>}
    *   [fieldObjectsPromise]
    * @property {Map<string, HTMLCanvasElement>} [annotationCanvasMap] - Map some
@@ -78,7 +77,6 @@ class DefaultAnnotationLayerFactory {
     l10n = NullL10n,
     enableScripting = false,
     hasJSActionsPromise = null,
-    mouseState = null,
     fieldObjectsPromise = null,
     annotationCanvasMap = null,
     accessibilityManager = null,
@@ -94,7 +92,6 @@ class DefaultAnnotationLayerFactory {
       enableScripting,
       hasJSActionsPromise,
       fieldObjectsPromise,
-      mouseState,
       annotationCanvasMap,
       accessibilityManager,
     });
@@ -111,9 +108,7 @@ class DefaultAnnotationEditorLayerFactory {
    * @property {HTMLDivElement} pageDiv
    * @property {PDFPageProxy} pdfPage
    * @property {IL10n} l10n
-   * @property {AnnotationStorage} [annotationStorage] - Storage for annotation
    * @property {TextAccessibilityManager} [accessibilityManager]
-   *   data in forms.
    */
 
   /**
@@ -126,7 +121,6 @@ class DefaultAnnotationEditorLayerFactory {
     pdfPage,
     accessibilityManager = null,
     l10n,
-    annotationStorage = null,
   }) {
     return new AnnotationEditorLayerBuilder({
       uiManager,
@@ -134,7 +128,6 @@ class DefaultAnnotationEditorLayerFactory {
       pdfPage,
       accessibilityManager,
       l10n,
-      annotationStorage,
     });
   }
 }
@@ -144,18 +137,10 @@ class DefaultAnnotationEditorLayerFactory {
  */
 class DefaultStructTreeLayerFactory {
   /**
-   * @typedef {Object} CreateStructTreeLayerBuilderParameters
-   * @property {PDFPageProxy} pdfPage
-   */
-
-  /**
-   * @param {CreateStructTreeLayerBuilderParameters}
    * @returns {StructTreeLayerBuilder}
    */
-  createStructTreeLayerBuilder({ pdfPage }) {
-    return new StructTreeLayerBuilder({
-      pdfPage,
-    });
+  createStructTreeLayerBuilder() {
+    return new StructTreeLayerBuilder();
   }
 }
 
@@ -165,12 +150,9 @@ class DefaultStructTreeLayerFactory {
 class DefaultTextLayerFactory {
   /**
    * @typedef {Object} CreateTextLayerBuilderParameters
-   * @property {HTMLDivElement} textLayerDiv
-   * @property {number} pageIndex
-   * @property {PageViewport} viewport
-   * @property {EventBus} eventBus
    * @property {TextHighlighter} highlighter
    * @property {TextAccessibilityManager} [accessibilityManager]
+   * @property {boolean} [isOffscreenCanvasSupported]
    */
 
   /**
@@ -178,20 +160,14 @@ class DefaultTextLayerFactory {
    * @returns {TextLayerBuilder}
    */
   createTextLayerBuilder({
-    textLayerDiv,
-    pageIndex,
-    viewport,
-    eventBus,
     highlighter,
     accessibilityManager = null,
+    isOffscreenCanvasSupported = true,
   }) {
     return new TextLayerBuilder({
-      textLayerDiv,
-      pageIndex,
-      viewport,
-      eventBus,
       highlighter,
       accessibilityManager,
+      isOffscreenCanvasSupported,
     });
   }
 }

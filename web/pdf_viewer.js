@@ -129,6 +129,8 @@ function isValidAnnotationEditorMode(mode) {
  *   landscape pages upon printing. The default is `false`.
  * @property {boolean} [useOnlyCssZoom] - Enables CSS only zooming. The default
  *   value is `false`.
+ * @property {boolean} [isOffscreenCanvasSupported] - Allows to use an
+ *   OffscreenCanvas if needed.
  * @property {number} [maxCanvasPixels] - The maximum supported canvas size in
  *   total pixels, i.e. width * height. Use -1 for no limit. The default value
  *   is 4096 * 4096 (16 mega-pixels).
@@ -292,6 +294,8 @@ class PDFViewer {
       this.renderer = options.renderer || RendererType.CANVAS;
     }
     this.useOnlyCssZoom = options.useOnlyCssZoom || false;
+    this.isOffscreenCanvasSupported =
+      options.isOffscreenCanvasSupported ?? true;
     this.maxCanvasPixels = options.maxCanvasPixels;
     this.l10n = options.l10n || NullL10n;
     this.#enablePermissions = options.enablePermissions || false;
@@ -900,7 +904,8 @@ class PDFViewer {
           } else if (isValidAnnotationEditorMode(mode)) {
             this.#annotationEditorUIManager = new AnnotationEditorUIManager(
               this.container,
-              this.eventBus
+              this.eventBus,
+              this.pdfDocument?.annotationStorage
             );
             if (mode !== AnnotationEditorType.NONE) {
               this.#annotationEditorUIManager.updateMode(mode);
@@ -916,6 +921,10 @@ class PDFViewer {
         const viewport = firstPdfPage.getViewport({
           scale: scale * PixelsPerInch.PDF_TO_CSS_UNITS,
         });
+        // Ensure that the various layers always get the correct initial size,
+        // see issue 15795.
+        docStyle.setProperty("--scale-factor", viewport.scale);
+
         const textLayerFactory =
           textLayerMode !== TextLayerMode.DISABLE && !isPureXfa ? this : null;
         const annotationLayerFactory =
@@ -950,6 +959,7 @@ class PDFViewer {
                 ? this.renderer
                 : null,
             useOnlyCssZoom: this.useOnlyCssZoom,
+            isOffscreenCanvasSupported: this.isOffscreenCanvasSupported,
             maxCanvasPixels: this.maxCanvasPixels,
             pageColors: this.pageColors,
             l10n: this.l10n,
@@ -1393,7 +1403,14 @@ class PDFViewer {
         vPadding = VERTICAL_PADDING;
 
       if (this.isInPresentationMode) {
-        hPadding = vPadding = 4;
+        // Pages have a 2px (transparent) border in PresentationMode, see
+        // the `web/pdf_viewer.css` file.
+        hPadding = vPadding = 4; // 2 * 2px
+        if (this._spreadMode !== SpreadMode.NONE) {
+          // Account for two pages being visible in PresentationMode, thus
+          // "doubling" the total border width.
+          hPadding *= 2;
+        }
       } else if (this.removePageBorders) {
         hPadding = vPadding = 0;
       } else if (this._scrollMode === ScrollMode.HORIZONTAL) {
@@ -1896,12 +1913,9 @@ class PDFViewer {
 
   /**
    * @typedef {Object} CreateTextLayerBuilderParameters
-   * @property {HTMLDivElement} textLayerDiv
-   * @property {number} pageIndex
-   * @property {PageViewport} viewport
-   * @property {EventBus} eventBus
    * @property {TextHighlighter} highlighter
    * @property {TextAccessibilityManager} [accessibilityManager]
+   * @property {boolean} [isOffscreenCanvasSupported]
    */
 
   /**
@@ -1909,20 +1923,14 @@ class PDFViewer {
    * @returns {TextLayerBuilder}
    */
   createTextLayerBuilder({
-    textLayerDiv,
-    pageIndex,
-    viewport,
-    eventBus,
     highlighter,
     accessibilityManager = null,
+    isOffscreenCanvasSupported = true,
   }) {
     return new TextLayerBuilder({
-      textLayerDiv,
-      eventBus,
-      pageIndex,
-      viewport,
       highlighter,
       accessibilityManager,
+      isOffscreenCanvasSupported,
     });
   }
 
@@ -1940,7 +1948,7 @@ class PDFViewer {
     return new TextHighlighter({
       eventBus,
       pageIndex,
-      findController: this.isInPresentationMode ? null : this.findController,
+      findController: this.findController,
     });
   }
 
@@ -1956,7 +1964,6 @@ class PDFViewer {
    * @property {IL10n} l10n
    * @property {boolean} [enableScripting]
    * @property {Promise<boolean>} [hasJSActionsPromise]
-   * @property {Object} [mouseState]
    * @property {Promise<Object<string, Array<Object>> | null>}
    *   [fieldObjectsPromise]
    * @property {Map<string, HTMLCanvasElement>} [annotationCanvasMap] - Map some
@@ -1977,7 +1984,6 @@ class PDFViewer {
     l10n = NullL10n,
     enableScripting = this.enableScripting,
     hasJSActionsPromise = this.pdfDocument?.hasJSActions(),
-    mouseState = this._scriptingManager?.mouseState,
     fieldObjectsPromise = this.pdfDocument?.getFieldObjects(),
     annotationCanvasMap = null,
     accessibilityManager = null,
@@ -1993,7 +1999,6 @@ class PDFViewer {
       l10n,
       enableScripting,
       hasJSActionsPromise,
-      mouseState,
       fieldObjectsPromise,
       annotationCanvasMap,
       accessibilityManager,
@@ -2006,9 +2011,7 @@ class PDFViewer {
    * @property {HTMLDivElement} pageDiv
    * @property {PDFPageProxy} pdfPage
    * @property {IL10n} l10n
-   * @property {AnnotationStorage} [annotationStorage] - Storage for annotation
    * @property {TextAccessibilityManager} [accessibilityManager]
-   *   data in forms.
    */
 
   /**
@@ -2021,13 +2024,11 @@ class PDFViewer {
     pdfPage,
     accessibilityManager = null,
     l10n,
-    annotationStorage = this.pdfDocument?.annotationStorage,
   }) {
     return new AnnotationEditorLayerBuilder({
       uiManager,
       pageDiv,
       pdfPage,
-      annotationStorage,
       accessibilityManager,
       l10n,
     });
@@ -2059,18 +2060,10 @@ class PDFViewer {
   }
 
   /**
-   * @typedef {Object} CreateStructTreeLayerBuilderParameters
-   * @property {PDFPageProxy} pdfPage
-   */
-
-  /**
-   * @param {CreateStructTreeLayerBuilderParameters}
    * @returns {StructTreeLayerBuilder}
    */
-  createStructTreeLayerBuilder({ pdfPage }) {
-    return new StructTreeLayerBuilder({
-      pdfPage,
-    });
+  createStructTreeLayerBuilder() {
+    return new StructTreeLayerBuilder();
   }
 
   /**

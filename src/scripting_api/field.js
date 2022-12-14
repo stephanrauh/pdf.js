@@ -80,7 +80,7 @@ class Field extends PDFObject {
     this._page = data.page || 0;
     this._strokeColor = data.strokeColor || ["G", 0];
     this._textColor = data.textColor || ["G", 0];
-    this._value = data.value || "";
+    this._value = null;
     this._kidIds = data.kidIds || null;
     this._fieldType = getFieldType(this._actions);
     this._siblings = data.siblings || null;
@@ -88,6 +88,9 @@ class Field extends PDFObject {
 
     this._globalEval = data.globalEval;
     this._appObjects = data.appObjects;
+
+    // The value is set depending on the field type.
+    this.value = data.value || "";
   }
 
   get currentValueIndices() {
@@ -239,16 +242,22 @@ class Field extends PDFObject {
   }
 
   set value(value) {
+    if (this._isChoice) {
+      this._setChoiceValue(value);
+      return;
+    }
+
     if (value === "") {
       this._value = "";
     } else if (typeof value === "string") {
       switch (this._fieldType) {
+        case FieldType.none:
+          this._value = !isNaN(value) ? parseFloat(value) : value;
+          break;
         case FieldType.number:
         case FieldType.percent:
-          value = parseFloat(value);
-          if (!isNaN(value)) {
-            this._value = value;
-          }
+          const number = parseFloat(value);
+          this._value = !isNaN(number) ? number : 0;
           break;
         default:
           this._value = value;
@@ -256,23 +265,37 @@ class Field extends PDFObject {
     } else {
       this._value = value;
     }
-    if (this._isChoice) {
-      if (this.multipleSelection) {
-        const values = new Set(value);
-        if (Array.isArray(this._currentValueIndices)) {
-          this._currentValueIndices.length = 0;
-        } else {
-          this._currentValueIndices = [];
-        }
-        this._items.forEach(({ displayValue }, i) => {
-          if (values.has(displayValue)) {
-            this._currentValueIndices.push(i);
-          }
-        });
+  }
+
+  _setChoiceValue(value) {
+    if (this.multipleSelection) {
+      if (!Array.isArray(value)) {
+        value = [value];
+      }
+      const values = new Set(value);
+      if (Array.isArray(this._currentValueIndices)) {
+        this._currentValueIndices.length = 0;
+        this._value.length = 0;
       } else {
-        this._currentValueIndices = this._items.findIndex(
-          ({ displayValue }) => value === displayValue
-        );
+        this._currentValueIndices = [];
+        this._value = [];
+      }
+      this._items.forEach((item, i) => {
+        if (values.has(item.exportValue)) {
+          this._currentValueIndices.push(i);
+          this._value.push(item.exportValue);
+        }
+      });
+    } else {
+      if (Array.isArray(value)) {
+        value = value[0];
+      }
+      const index = this._items.findIndex(
+        ({ exportValue }) => value === exportValue
+      );
+      if (index !== -1) {
+        this._currentValueIndices = index;
+        this._value = this._items[index].exportValue;
       }
     }
   }
@@ -563,6 +586,9 @@ class RadioButtonField extends Field {
         this._id = radioData.id;
       }
     }
+
+    this._hasBeenInitialized = true;
+    this._value = data.value || "";
   }
 
   get value() {
@@ -570,6 +596,10 @@ class RadioButtonField extends Field {
   }
 
   set value(value) {
+    if (!this._hasBeenInitialized) {
+      return;
+    }
+
     if (value === null || value === undefined) {
       this._value = "";
     }
