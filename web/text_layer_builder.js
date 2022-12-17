@@ -59,6 +59,7 @@ class TextLayerBuilder {
 
     this.div = document.createElement("div");
     this.div.className = "textLayer";
+    this.hide();
   }
 
   #finishRendering() {
@@ -124,8 +125,8 @@ class TextLayerBuilder {
     await this.textLayerRenderTask.promise;
     this.#finishRendering();
     this.#scale = scale;
-    this.accessibilityManager?.enable();
     this.show();
+    this.accessibilityManager?.enable();
   }
 
   hide() {

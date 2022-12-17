@@ -103,6 +103,7 @@ const DEFINES = Object.freeze({
   // The main build targets:
   GENERIC: false,
   MOZCENTRAL: false,
+  GECKOVIEW: false,
   CHROME: false,
   MINIFIED: false,
   COMPONENTS: false,
@@ -474,6 +475,25 @@ function createWebBundle(defines, options) {
   );
   return gulp
     .src("./web/viewer.js")
+    .pipe(webpack2Stream(viewerFileConfig))
+    .pipe(replaceNonWebpackImport());
+}
+
+function createGVWebBundle(defines, options) {
+  const viewerOutputName = "viewer-geckoview.js";
+  defines = builder.merge(defines, { GECKOVIEW: true });
+
+  const viewerFileConfig = createWebpackConfig(
+    defines,
+    {
+      filename: viewerOutputName,
+    },
+    {
+      defaultPreferencesDir: options.defaultPreferencesDir,
+    }
+  );
+  return gulp
+    .src("./web/viewer-geckoview.js")
     .pipe(webpack2Stream(viewerFileConfig))
     .pipe(replaceNonWebpackImport());
 }
@@ -1298,6 +1318,9 @@ gulp.task(
         createWebBundle(defines, { defaultPreferencesDir: "mozcentral/" }).pipe(
           gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")
         ),
+        createGVWebBundle(defines, {
+          defaultPreferencesDir: "mozcentral/",
+        }).pipe(gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")),
         gulp
           .src(MOZCENTRAL_WEB_FILES, { base: "web/" })
           .pipe(gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")),
@@ -1311,7 +1334,21 @@ gulp.task(
         preprocessHTML("web/viewer.html", defines).pipe(
           gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")
         ),
+        preprocessHTML("web/viewer-geckoview.html", defines).pipe(
+          gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")
+        ),
+
         preprocessCSS("web/viewer.css", defines)
+          .pipe(
+            postcss([
+              autoprefixer({
+                overrideBrowserslist: ["last 1 firefox versions"],
+              }),
+            ])
+          )
+          .pipe(gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")),
+
+        preprocessCSS("web/viewer-geckoview.css", defines)
           .pipe(
             postcss([
               autoprefixer({
