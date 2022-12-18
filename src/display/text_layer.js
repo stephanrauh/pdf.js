@@ -259,14 +259,14 @@ function layout(params) {
     }
 
     // Only measure the width for multi-char text divs, see `appendText`.
-	try { // #707 modified by ngx-extended-pdf-viewer
-	  const { width } = this._layoutTextCtx.measureText(textDiv.textContent);
-	} catch (fingerprintIsBlockedException) {} // #707 modified by ngx-extended-pdf-viewer
-
-    if (width > 0) {
-      transform = `scaleX(${(canvasWidth * scale) / width})`;
-    }
+    try { // #707 modified by ngx-extended-pdf-viewer
+      const { width } = ctx.measureText(div.textContent);
+      if (width > 0) {
+        transform = `scaleX(${(canvasWidth * scale) / width})`;
+      }
+    } catch (fingerprintIsBlockedException) {} // #707 modified by ngx-extended-pdf-viewer
   }
+
   if (properties.angle !== 0) {
     transform = `rotate(${properties.angle}deg) ${transform}`;
   }
