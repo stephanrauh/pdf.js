@@ -820,7 +820,7 @@ class PDFDocumentProxy {
    * @type {boolean} True if only XFA form.
    */
   get isPureXfa() {
-    return !!this._transport._htmlForXfa;
+    return shadow(this, "isPureXfa", !!this._transport._htmlForXfa);
   }
 
   /**
@@ -1378,6 +1378,13 @@ class PDFPageProxy {
     return (this._jsActionsPromise ||= this._transport.getPageJSActions(
       this._pageIndex
     ));
+  }
+
+  /**
+   * @type {boolean} True if only XFA form.
+   */
+  get isPureXfa() {
+    return shadow(this, "isPureXfa", !!this._transport._htmlForXfa);
   }
 
   /**
