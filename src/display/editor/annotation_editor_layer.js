@@ -288,7 +288,7 @@ class AnnotationEditorLayer {
    */
   addToAnnotationStorage(editor) {
     if (!editor.isEmpty() && !this.annotationStorage.has(editor.id)) {
-      this.annotationStorage.setValue(editor.id, editor);
+      this.annotationStorage.setValue(editor.id, null, editor);
     }
   }
 
