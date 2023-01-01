@@ -217,6 +217,8 @@ class PDFViewer {
 
   #onVisibilityChange = null;
 
+  #scaleTimeoutId = null;
+
   /**
    * @param {PDFViewerOptions} options
    */
@@ -628,7 +630,7 @@ class PDFViewer {
     if (!this.pdfDocument) {
       return;
     }
-    this._setScale(val, false);
+    this._setScale(val, { noScroll: false });
   }
 
   /**
@@ -645,7 +647,7 @@ class PDFViewer {
     if (!this.pdfDocument) {
       return;
     }
-    this._setScale(val, false);
+    this._setScale(val, { noScroll: false });
   }
 
   /**
@@ -677,14 +679,12 @@ class PDFViewer {
 
     const pageNumber = this._currentPageNumber;
 
-    const updateArgs = { rotation };
-    for (const pageView of this._pages) {
-      pageView.update(updateArgs);
-    }
+    this.refresh(true, { rotation });
+
     // Prevent errors in case the rotation changes *before* the scale has been
     // set to a non-default value.
     if (this._currentScaleValue) {
-      this._setScale(this._currentScaleValue, true);
+      this._setScale(this._currentScaleValue, { noScroll: true });
     }
 
     this.eventBus.dispatch("rotationchanging", {
@@ -1300,7 +1300,11 @@ class PDFViewer {
     );
   }
 
-  _setScaleUpdatePages(newScale, newValue, noScroll = false, preset = false) {
+  _setScaleUpdatePages(
+    newScale,
+    newValue,
+    { noScroll = false, preset = false, drawingDelay = -1 }
+  ) {
     const previousScale = isNaN(Number(this.currentScale)) ? undefined : Number(this.currentScale);
     const previousScaleValue = this.currentScaleValue;
     this._currentScaleValue = newValue.toString();
@@ -1323,10 +1327,19 @@ class PDFViewer {
       newScale * PixelsPerInch.PDF_TO_CSS_UNITS
     );
 
-    const updateArgs = { scale: newScale };
-    for (const pageView of this._pages) {
-      pageView.update(updateArgs);
+    const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
+    this.refresh(true, {
+      scale: newScale,
+      drawingDelay: postponeDrawing ? drawingDelay : -1,
+    });
+
+    if (postponeDrawing) {
+      this.#scaleTimeoutId = setTimeout(() => {
+        this.#scaleTimeoutId = null;
+        this.refresh();
+      }, drawingDelay);
     }
+
     this._currentScale = newScale;
 
     if (!noScroll) {
@@ -1378,7 +1391,7 @@ class PDFViewer {
     return 1;
   }
 
-  _setScale(value, noScroll = false) {
+  _setScale(value, options) {
     // #90 modified by ngx-extended-pdf-viewer
     if (!value) {
       value = "auto";
@@ -1392,7 +1405,8 @@ class PDFViewer {
     // #1095 end of modification
 
     if (scale > 0) {
-      this._setScaleUpdatePages(scale, value, noScroll, /* preset = */ false);
+      options.preset = false;
+      this._setScaleUpdatePages(scale, value, options);
     } else {
       const currentPage = this._pages[this._currentPageNumber - 1];
       if (!currentPage) {
@@ -1447,7 +1461,8 @@ class PDFViewer {
           Window["ngxConsole"].error(`_setScale: "${value}" is an unknown zoom value.`);
           return;
       }
-      this._setScaleUpdatePages(scale, value, noScroll, /* preset = */ true);
+      options.preset = true;
+      this._setScaleUpdatePages(scale, value, options);
     }
   }
 
@@ -1459,7 +1474,7 @@ class PDFViewer {
 
     if (this.isInPresentationMode) {
       // Fixes the case when PDF has different page sizes.
-      this._setScale(this._currentScaleValue, true);
+      this._setScale(this._currentScaleValue, { noScroll: true });
     }
     this.#scrollIntoView(pageView);
   }
@@ -1869,23 +1884,6 @@ class PDFViewer {
     return this.scroll.down;
   }
 
-  /**
-   * Only show the `loadingIcon`-spinner on visible pages (see issue 14242).
-   */
-  #toggleLoadingIconSpinner(visibleIds) {
-    for (const id of visibleIds) {
-      const pageView = this._pages[id - 1];
-      pageView?.toggleLoadingIconSpinner(/* viewVisible = */ true);
-    }
-    for (const pageView of this.#buffer) {
-      if (visibleIds.has(pageView.id)) {
-        // Handled above, since the "buffer" may not contain all visible pages.
-        continue;
-      }
-      pageView.toggleLoadingIconSpinner(/* viewVisible = */ false);
-    }
-  }
-
   forceRendering(currentlyVisiblePages) {
     const visiblePages = currentlyVisiblePages || this._getVisiblePages();
     const scrollAhead = this.#getScrollAhead(visiblePages);
@@ -1899,7 +1897,6 @@ class PDFViewer {
       scrollAhead,
       preRenderExtra
     );
-    this.#toggleLoadingIconSpinner(visiblePages.ids);
 
     if (pageView) {
       this.#ensurePdfPageLoaded(pageView).then(() => {
@@ -1986,11 +1983,7 @@ class PDFViewer {
     }
     this._optionalContentConfigPromise = promise;
 
-    const updateArgs = { optionalContentConfigPromise: promise };
-    for (const pageView of this._pages) {
-      pageView.update(updateArgs);
-    }
-    this.update();
+    this.refresh(false, { optionalContentConfigPromise: promise });
 
     this.eventBus.dispatch("optionalcontentconfigchanged", {
       source: this,
@@ -2053,7 +2046,7 @@ class PDFViewer {
     // Call this before re-scrolling to the current page, to ensure that any
     // changes in scale don't move the current page.
     if (this._currentScaleValue && isNaN(this._currentScaleValue)) {
-      this._setScale(this._currentScaleValue, true);
+      this._setScale(this._currentScaleValue, { noScroll: true });
     }
     this._setCurrentPageNumber(pageNumber, /* resetCurrentPageView = */ true);
     this.update();
@@ -2129,7 +2122,7 @@ class PDFViewer {
     // Call this before re-scrolling to the current page, to ensure that any
     // changes in scale don't move the current page.
     if (this._currentScaleValue && isNaN(this._currentScaleValue)) {
-      this._setScale(this._currentScaleValue, true);
+      this._setScale(this._currentScaleValue, { noScroll: true });
     }
     this._setCurrentPageNumber(pageNumber, /* resetCurrentPageView = */ true);
     this.update();
@@ -2270,8 +2263,9 @@ class PDFViewer {
   /**
    * Increase the current zoom level one, or more, times.
    * @param {number} [steps] - Defaults to zooming once.
+   * @param {Object|null} [options]
    */
-  increaseScale(steps = 1) {
+  increaseScale(steps = 1, options = null) {
     let newScale = this._currentScale;
     // modified by ngx-extended-pdf-viewer #367
     let maxScale = Number(PDFViewerApplicationOptions.get("maxZoom"));
@@ -2284,14 +2278,18 @@ class PDFViewer {
       newScale = Math.min(maxScale, newScale);
     } while (--steps > 0 && newScale < maxScale);
     // end of modification
-    this.currentScaleValue = newScale;
+
+    options ||= Object.create(null);
+    options.noScroll = false;
+    this._setScale(newScale, options);
   }
 
   /**
    * Decrease the current zoom level one, or more, times.
    * @param {number} [steps] - Defaults to zooming once.
+   * @param {Object|null} [options]
    */
-  decreaseScale(steps = 1) {
+  decreaseScale(steps = 1, options = null) {
     let newScale = this._currentScale;
     // modified by ngx-extended-pdf-viewer #367
     let minScale = Number(PDFViewerApplicationOptions.get("minZoom"));
@@ -2304,7 +2302,10 @@ class PDFViewer {
       newScale = Math.max(minScale, newScale);
     } while (--steps > 0 && newScale > minScale);
     // end of modification
-    this.currentScaleValue = newScale;
+
+    options ||= Object.create(null);
+    options.noScroll = false;
+    this._setScale(newScale, options);
   }
 
   #updateContainerHeightCss(height = this.container.clientHeight) {
@@ -2375,15 +2376,20 @@ class PDFViewer {
     this.#annotationEditorUIManager.updateParams(type, value);
   }
 
-  refresh() {
+  refresh(noUpdate = false, updateArgs = Object.create(null)) {
     if (!this.pdfDocument) {
       return;
     }
-    const updateArgs = {};
     for (const pageView of this._pages) {
       pageView.update(updateArgs);
     }
-    this.update();
+    if (this.#scaleTimeoutId !== null) {
+      clearTimeout(this.#scaleTimeoutId);
+      this.#scaleTimeoutId = null;
+    }
+    if (!noUpdate) {
+      this.update();
+    }
   }
 }
 

@@ -1375,9 +1375,7 @@ class PDFPageProxy {
    *   {Object} with JS actions.
    */
   getJSActions() {
-    return (this._jsActionsPromise ||= this._transport.getPageJSActions(
-      this._pageIndex
-    ));
+    return this._transport.getPageJSActions(this._pageIndex);
   }
 
   /**
@@ -1695,7 +1693,6 @@ class PDFPageProxy {
       bitmap.close();
     }
     this._bitmaps.clear();
-    this._jsActionsPromise = null;
     this.pendingCleanup = false;
     return Promise.all(waitOn);
   }
@@ -1733,7 +1730,6 @@ class PDFPageProxy {
 
     this._intentStates.clear();
     this.objs.clear();
-    this._jsActionsPromise = null;
     if (resetStats && this._stats) {
       this._stats = new StatTimer();
     }
@@ -1869,6 +1865,12 @@ class PDFPageProxy {
     if (!intentState.streamReader) {
       return;
     }
+    // Ensure that a pending `streamReader` cancel timeout is always aborted.
+    if (intentState.streamReaderCancelTimeout) {
+      clearTimeout(intentState.streamReaderCancelTimeout);
+      intentState.streamReaderCancelTimeout = null;
+    }
+
     if (!force) {
       // Ensure that an Error occurring in *only* one `InternalRenderTask`, e.g.
       // multiple render() calls on the same canvas, won't break all rendering.
@@ -1885,12 +1887,9 @@ class PDFPageProxy {
           delay += reason.extraDelay;
         }
 
-        if (intentState.streamReaderCancelTimeout) {
-          clearTimeout(intentState.streamReaderCancelTimeout);
-        }
         intentState.streamReaderCancelTimeout = setTimeout(() => {
-          this._abortOperatorList({ intentState, reason, force: true });
           intentState.streamReaderCancelTimeout = null;
+          this._abortOperatorList({ intentState, reason, force: true });
         }, delay);
         return;
       }

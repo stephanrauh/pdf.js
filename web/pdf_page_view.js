@@ -47,7 +47,6 @@ import { AnnotationEditorLayerBuilder } from "./annotation_editor_layer_builder.
 import { AnnotationLayerBuilder } from "./annotation_layer_builder.js";
 import { compatibilityParams } from "./app_options.js";
 import { NullL10n } from "./l10n_utils.js";
-import { SimpleLinkService } from "./pdf_link_service.js";
 import { StructTreeLayerBuilder } from "./struct_tree_layer_builder.js";
 import { TextAccessibilityManager } from "./text_accessibility.js";
 import canvasSize from "canvas-size";
@@ -106,7 +105,10 @@ const DEFAULT_LAYER_PROPERTIES = () => {
     fieldObjectsPromise: null,
     findController: null,
     hasJSActionsPromise: null,
-    linkService: new SimpleLinkService(),
+    get linkService() {
+      const { SimpleLinkService } = require("./pdf_link_service.js");
+      return new SimpleLinkService();
+    },
   };
 };
 
@@ -117,6 +119,10 @@ class PDFPageView {
   #annotationMode = AnnotationMode.ENABLE_FORMS;
 
   #layerProperties = null;
+
+  #previousRotation = null;
+
+  #renderingState = RenderingStates.INITIAL;
 
   #useThumbnailCanvas = {
     initialOptionalContent: true,
@@ -165,7 +171,6 @@ class PDFPageView {
 
     this.paintTask = null;
     this.paintedViewportMap = new WeakMap();
-    this.renderingState = RenderingStates.INITIAL;
     this.resume = null;
     this._renderError = null;
     if (
@@ -194,7 +199,6 @@ class PDFPageView {
     this.div = div;
 
     this.#setDimensions();
-
     container?.append(div);
 
     if (
@@ -226,10 +230,41 @@ class PDFPageView {
     }
   }
 
+  get renderingState() {
+    return this.#renderingState;
+  }
+
+  set renderingState(state) {
+    this.#renderingState = state;
+
+    switch (state) {
+      case RenderingStates.INITIAL:
+      case RenderingStates.PAUSED:
+        this.loadingIconDiv?.classList.add("notVisible");
+        break;
+      case RenderingStates.RUNNING:
+        this.loadingIconDiv?.classList.remove("notVisible");
+        break;
+      case RenderingStates.FINISHED:
+        if (this.loadingIconDiv) {
+          this.loadingIconDiv.remove();
+          delete this.loadingIconDiv;
+        }
+        break;
+    }
+  }
+
   #setDimensions() {
-    const { div, viewport } = this;
+    const { viewport } = this;
+    if (this.pdfPage) {
+      if (this.#previousRotation === viewport.rotation) {
+        return;
+      }
+      this.#previousRotation = viewport.rotation;
+    }
+
     setLayerDimensions(
-      div,
+      this.div,
       viewport,
       /* mustFlip = */ true,
       /* mustRotate = */ false
@@ -245,6 +280,7 @@ class PDFPageView {
       scale: this.scale * PixelsPerInch.PDF_TO_CSS_UNITS,
       rotation: totalRotation,
     });
+    this.#setDimensions();
     this.reset();
   }
 
@@ -417,7 +453,6 @@ class PDFPageView {
     });
     this.renderingState = RenderingStates.INITIAL;
 
-    this.#setDimensions();
     const div = this.div;
 
     const childNodes = div.childNodes,
@@ -488,20 +523,15 @@ class PDFPageView {
         this.loadingIconDiv?.setAttribute("aria-label", msg);
       });
       div.append(this.loadingIconDiv);
-    } else {
-      this.toggleLoadingIconSpinner();
-    }
-
-    if (
-      (typeof PDFJSDev === "undefined" ||
-        PDFJSDev.test("!PRODUCTION || GENERIC")) &&
-      this._isStandalone
-    ) {
-      this.toggleLoadingIconSpinner(/* viewVisible = */ true);
     }
   }
 
-  update({ scale = 0, rotation = null, optionalContentConfigPromise = null }) {
+  update({
+    scale = 0,
+    rotation = null,
+    optionalContentConfigPromise = null,
+    drawingDelay = -1,
+  }) {
     this.scale = scale || this.scale;
     if (typeof rotation === "number") {
       this.rotation = rotation; // The rotation may be zero.
@@ -527,6 +557,7 @@ class PDFPageView {
       scale: this.scale * PixelsPerInch.PDF_TO_CSS_UNITS,
       rotation: totalRotation,
     });
+    this.#setDimensions();
 
     if (
       (typeof PDFJSDev === "undefined" ||
@@ -570,18 +601,40 @@ class PDFPageView {
         isScalingRestricted = true;
       }
     }
+    const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
 
     if (this.canvas) {
       if (
+        postponeDrawing ||
         this.useOnlyCssZoom ||
         (this.hasRestrictedScaling && isScalingRestricted)
       ) {
+        if (
+          postponeDrawing &&
+          this.renderingState !== RenderingStates.FINISHED
+        ) {
+          this.cancelRendering({
+            keepZoomLayer: true,
+            keepAnnotationLayer: true,
+            keepAnnotationEditorLayer: true,
+            keepXfaLayer: true,
+            keepTextLayer: true,
+            cancelExtraDelay: drawingDelay,
+          });
+          // It isn't really finished, but once we have finished
+          // to postpone, we'll call this.reset(...) which will set
+          // the rendering state to INITIAL, hence the next call to
+          // PDFViewer.update() will trigger a redraw (if it's mandatory).
+          this.renderingState = RenderingStates.FINISHED;
+        }
+
         this.cssTransform({
           target: this.canvas,
           redrawAnnotationLayer: true,
           redrawAnnotationEditorLayer: true,
           redrawXfaLayer: true,
-          redrawTextLayer: true,
+          redrawTextLayer: !postponeDrawing,
+          hideTextLayer: postponeDrawing,
         });
 
         this.eventBus.dispatch("pagerendered", {
@@ -619,9 +672,10 @@ class PDFPageView {
     keepAnnotationEditorLayer = false,
     keepXfaLayer = false,
     keepTextLayer = false,
+    cancelExtraDelay = 0,
   } = {}) {
     if (this.paintTask) {
-      this.paintTask.cancel();
+      this.paintTask.cancel(cancelExtraDelay);
       this.paintTask = null;
     }
     this.resume = null;
@@ -661,31 +715,49 @@ class PDFPageView {
     redrawAnnotationEditorLayer = false,
     redrawXfaLayer = false,
     redrawTextLayer = false,
+    hideTextLayer = false,
   }) {
     // Scale target (canvas or svg), its wrapper and page container.
-    const width = this.viewport.width;
-    const height = this.viewport.height;
-    const div = this.div;
-    target.style.width =
-      target.parentNode.style.width =
-      div.style.width =
-        Math.floor(width) + "px";
-    target.style.height =
-      target.parentNode.style.height =
-      div.style.height =
-        Math.floor(height) + "px";
-    // The canvas may have been originally rotated; rotate relative to that.
-    const relativeRotation =
-      this.viewport.rotation - this.paintedViewportMap.get(target).rotation;
-    const absRotation = Math.abs(relativeRotation);
-    let scaleX = 1,
-      scaleY = 1;
-    if (absRotation === 90 || absRotation === 270) {
-      // Scale x and y because of the rotation.
-      scaleX = height / width;
-      scaleY = width / height;
+
+    if (target instanceof HTMLCanvasElement) {
+      if (!target.hasAttribute("zooming")) {
+        target.setAttribute("zooming", true);
+        const { style } = target;
+        style.width = style.height = "";
+      }
+    } else {
+      const div = this.div;
+      const { width, height } = this.viewport;
+
+      target.style.width =
+        target.parentNode.style.width =
+        div.style.width =
+          Math.floor(width) + "px";
+      target.style.height =
+        target.parentNode.style.height =
+        div.style.height =
+          Math.floor(height) + "px";
     }
-    target.style.transform = `rotate(${relativeRotation}deg) scale(${scaleX}, ${scaleY})`;
+
+    const originalViewport = this.paintedViewportMap.get(target);
+    if (this.viewport !== originalViewport) {
+      // The canvas may have been originally rotated; rotate relative to that.
+      const relativeRotation =
+        this.viewport.rotation - originalViewport.rotation;
+      const absRotation = Math.abs(relativeRotation);
+      let scaleX = 1,
+        scaleY = 1;
+      if (absRotation === 90 || absRotation === 270) {
+        const { width, height } = this.viewport;
+        // Scale x and y because of the rotation.
+        scaleX = height / width;
+        scaleY = width / height;
+      }
+
+      if (absRotation !== 0) {
+        target.style.transform = `rotate(${relativeRotation}deg) scale(${scaleX}, ${scaleY})`;
+      }
+    }
 
     if (redrawAnnotationLayer && this.annotationLayer) {
       this.#renderAnnotationLayer();
@@ -696,8 +768,13 @@ class PDFPageView {
     if (redrawXfaLayer && this.xfaLayer) {
       this.#renderXfaLayer();
     }
-    if (redrawTextLayer && this.textLayer) {
-      this.#renderTextLayer();
+
+    if (this.textLayer) {
+      if (hideTextLayer) {
+        this.textLayer.hide();
+      } else if (redrawTextLayer) {
+        this.#renderTextLayer();
+      }
     }
   }
 
@@ -713,13 +790,6 @@ class PDFPageView {
     return this.viewport.convertToPdfPoint(x, y);
   }
 
-  /**
-   * @ignore
-   */
-  toggleLoadingIconSpinner(viewVisible = false) {
-    this.loadingIconDiv?.classList.toggle("notVisible", !viewVisible);
-  }
-
   draw() {
     if (this.renderingState !== RenderingStates.INITIAL) {
       Window['ngxConsole'].error("Must be in new state before drawing");
@@ -729,11 +799,6 @@ class PDFPageView {
 
     if (!pdfPage) {
       this.renderingState = RenderingStates.FINISHED;
-
-      if (this.loadingIconDiv) {
-        this.loadingIconDiv.remove();
-        delete this.loadingIconDiv;
-      }
       return Promise.reject(new Error("pdfPage is not loaded"));
     }
 
@@ -743,19 +808,7 @@ class PDFPageView {
     // overflow will be hidden in Firefox.
     const canvasWrapper = document.createElement("div");
     canvasWrapper.classList.add("canvasWrapper");
-
-    if (this.textLayer) {
-      this.textLayer.div.before(canvasWrapper);
-    } else {
-      const lastDivBeforeTextDiv =
-        this.annotationLayer?.div || this.annotationEditorLayer?.div;
-      if (lastDivBeforeTextDiv) {
-        // The annotation layer needs to stay on top.
-        lastDivBeforeTextDiv.before(canvasWrapper);
-      } else {
-        div.append(canvasWrapper);
-      }
-    }
+    div.append(canvasWrapper);
 
     if (
       !this.textLayer &&
@@ -769,7 +822,7 @@ class PDFPageView {
         accessibilityManager: this._accessibilityManager,
         isOffscreenCanvasSupported: this.isOffscreenCanvasSupported,
       });
-      canvasWrapper.after(this.textLayer.div);
+      div.append(this.textLayer.div);
     }
 
     if (
@@ -838,11 +891,6 @@ class PDFPageView {
       this._renderError = error;
 
       this.renderingState = RenderingStates.FINISHED;
-
-      if (this.loadingIconDiv) {
-        this.loadingIconDiv.remove();
-        delete this.loadingIconDiv;
-      }
       this._resetZoomLayer(/* removeFromDOM = */ true);
 
       // Ensure that the thumbnails won't become partially (or fully) blank,
@@ -932,8 +980,8 @@ class PDFPageView {
       onRenderContinue(cont) {
         cont();
       },
-      cancel() {
-        renderTask.cancel();
+      cancel(extraDelay = 0) {
+        renderTask.cancel(extraDelay);
       },
       get separateAnnots() {
         return renderTask.separateAnnots;
@@ -941,6 +989,7 @@ class PDFPageView {
     };
 
     const viewport = this.viewport;
+    let { width, height } = viewport;
     const canvas = document.createElement("canvas");
     canvas.setAttribute("role", "presentation");
 
@@ -967,12 +1016,12 @@ class PDFPageView {
       });
       // Use a scale that makes the canvas have the originally intended size
       // of the page.
-      outputScale.sx *= actualSizeViewport.width / viewport.width;
-      outputScale.sy *= actualSizeViewport.height / viewport.height;
+      outputScale.sx *= actualSizeViewport.width / width;
+      outputScale.sy *= actualSizeViewport.height / height;
     }
 
     if (this.maxCanvasPixels > 0) {
-      const pixelsInViewport = viewport.width * viewport.height;
+      const pixelsInViewport = width * height;
       const maxScale = Math.sqrt(this.maxCanvasPixels / pixelsInViewport);
       if (outputScale.sx > maxScale || outputScale.sy > maxScale) {
         outputScale.sx = maxScale;
@@ -987,8 +1036,8 @@ class PDFPageView {
     const sfy = approximateFraction(outputScale.sy);
 
     // modified by ngx-extended-pdf-viewer #387, #1095
-    const width = roundToDivide(viewport.width * outputScale.sx, sfx[0]);
-    const height = roundToDivide(viewport.height * outputScale.sy, sfy[0]);
+    width = roundToDivide(width * outputScale.sx, sfx[0]);
+    height = roundToDivide(height * outputScale.sy, sfy[0]);
     let divisor = 1;
     if (width >= 4096 || height >= 4096) {
       if (!!this.maxWidth || !canvasSize.test({ width, height })) {
@@ -997,14 +1046,7 @@ class PDFPageView {
         if (divisor > 1) {
           const newScale = Math.floor((100 * this.scale) / divisor) / 100; // round to integer percentages
           divisor = this.scale / newScale; // re-calculate the divisor to reflect the rounding to percentages
-          // this.scale = newScale;
 
-          // const PDFViewerApplicationOptions = window.PDFViewerApplicationOptions;
-          // PDFViewerApplicationOptions.set("maxZoom", newScale);
-
-          // PDFViewerApplication.pdfViewer.currentScaleValue = this.scale;
-          // outputScale.sx *= divisor;
-          // outputScale.sy *= divisor;
           viewport.width /= divisor;
           viewport.height /= divisor;
           warn(`Page ${this.id}: Reduced the maximum zoom to ${newScale} because the browser can't render larger canvases.`);
@@ -1049,7 +1091,7 @@ class PDFPageView {
     const renderContext = {
       canvasContext: ctx,
       transform,
-      viewport: this.viewport,
+      viewport,
       annotationMode: this.#annotationMode,
       optionalContentConfigPromise: this._optionalContentConfigPromise,
       background,
