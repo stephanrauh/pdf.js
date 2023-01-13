@@ -1699,7 +1699,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
                 options[0].selected = true;
               }
             }
-            storage.setValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
+            storage.setValue(id, fieldName, { // #718 modified by ngx-extended-pdf-viewer
               value: getValue(/* isExport */ true),
               items: getItems(event),
             });
@@ -1709,7 +1709,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
             while (selectElement.length !== 0) {
               selectElement.remove(0);
             }
-            storage.setValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
+            storage.setValue(id, fieldName, { // #718 modified by ngx-extended-pdf-viewer
               value: null,
               items: [],
             });
@@ -1727,7 +1727,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
             } else {
               selectElement.append(optionElement);
             }
-            storage.setValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
+            storage.setValue(id, fieldName, { // #718 modified by ngx-extended-pdf-viewer
               value: getValue(/* isExport */ true),
               items: getItems(event),
             });
@@ -1748,7 +1748,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
             if (selectElement.options.length > 0) {
               selectElement.options[0].selected = true;
             }
-            storage.setValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
+            storage.setValue(id, fieldName, { // #718 modified by ngx-extended-pdf-viewer
               value: getValue(/* isExport */ true),
               items: getItems(event),
             });
@@ -1759,7 +1759,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
             for (const option of event.target.options) {
               option.selected = indices.has(option.index);
             }
-            storage.setValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
+            storage.setValue(id, fieldName, { // #718 modified by ngx-extended-pdf-viewer
               value: getValue(/* isExport */ true),
             });
             selectedValues = getValue(/* isExport */ false);
@@ -1805,8 +1805,9 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
         event => event.target.checked
       );
     } else {
+      const fieldName = this.data.fieldName; // #1648 modified by ngx-extended-pdf-viewer
       selectElement.addEventListener("input", function (event) { // #718 modified by ngx-extended-pdf-viewer
-        storage.setValue(id, this.data.fieldName, { // #718 modified by ngx-extended-pdf-viewer
+        storage.setValue(id, fieldName, { // #718 modified by ngx-extended-pdf-viewer
           value: getValue(/* isExport */ true),
           radioValue: getValue(true), // #718 modified by ngx-extended-pdf-viewer
         });
