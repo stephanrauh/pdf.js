@@ -731,6 +731,10 @@ class PDFFindController {
       this._updateUIResultsCount();
     } else if (pageIndex + 1 === this._pageContents.length && this._matchesCountTotal === 0) { // #832 modification by ngx-extended-pdf-viewer
       this._updateUIResultsCount(); // #832 modification by ngx-extended-pdf-viewer
+      // #1624 modified by ngx-extended-pdf-viewer
+    } else if (currentPage && !ignoreCurrentPage) {
+      this._updateMatch(false);
+      // #1624 end of modification by ngx-extended-pdf-viewer
     }
   }
 
