@@ -600,13 +600,17 @@ const PDFViewerApplication = {
       });
     }
 
-    if (appConfig.passwordOverlay) {
-      this.passwordPrompt = new PasswordPrompt(
-        appConfig.passwordOverlay,
-        this.overlayManager,
-        this.l10n,
-        this.isViewerEmbedded
-      );
+    // #763 modified by ngx-extended-pdf-viewer
+    let prompt = AppOptions.get("passwordPrompt");
+    if (!prompt) {
+      if (appConfig.passwordOverlay) {
+        prompt = new PasswordPrompt(
+          appConfig.passwordOverlay,
+          this.overlayManager,
+          this.l10n,
+          this.isViewerEmbedded
+        );
+      }
     }
     this.passwordPrompt = prompt;
     // #763 end of modification by ngx-extended-pdf-viewer=======
