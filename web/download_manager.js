@@ -77,6 +77,13 @@ class DownloadManager {
         blobUrl = URL.createObjectURL(new Blob([data], { type: contentType }));
         this.#openBlobUrls.set(element, blobUrl);
       }
+      // #1657 modified by ngx-extended-pdf-viewer
+      // The lines below try to open the PDF file in the viewer.
+      // That doesn't work if the viewer is embedded in an Angular application.
+      // Angular tries to take over and doesn't know what to do with the blob.
+      // The solution is to simply open the blob in a new window without
+      // adding anything to the URL.
+      /*
       let viewerUrl;
       if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
         // The current URL is the viewer, let's use it and append the file.
@@ -90,9 +97,14 @@ class DownloadManager {
           "?file=" +
           encodeURIComponent(blobUrl + "#" + filename);
       }
+      */
 
       try {
+        /*
         window.open(viewerUrl);
+        */
+        window.open(blobUrl);
+        // #1657 end of modification by ngx-extended-pdf-viewer
         return true;
       } catch (ex) {
         Window['ngxConsole'].error(`openOrDownloadData: ${ex}`);
