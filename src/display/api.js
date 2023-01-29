@@ -47,6 +47,7 @@ import {
   DOMCMapReaderFactory,
   DOMStandardFontDataFactory,
   isDataScheme,
+  isValidFetchUrl,
   loadScript,
   PageViewport,
   RenderingCancelledException,
@@ -88,32 +89,37 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC") && isNodeJS) {
   DefaultStandardFontDataFactory = NodeStandardFontDataFactory;
 }
 
-/**
- * @typedef {function} IPDFStreamFactory
- * @param {DocumentInitParameters} params - The document initialization
- *   parameters. The "url" key is always present.
- * @returns {Promise} A promise, which is resolved with an instance of
- *   {IPDFStream}.
- * @ignore
- */
-
-/**
- * @type {IPDFStreamFactory}
- * @private
- */
 let createPDFNetworkStream;
+if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
+  const streamsPromise = Promise.all([
+    import("./network.js"),
+    import("./fetch_stream.js"),
+  ]);
 
-/**
- * Sets the function that instantiates an {IPDFStream} as an alternative PDF
- * data transport.
- *
- * @param {IPDFStreamFactory} pdfNetworkStreamFactory - The factory function
- *   that takes document initialization parameters (including a "url") and
- *   returns a promise which is resolved with an instance of {IPDFStream}.
- * @ignore
- */
-function setPDFNetworkStreamFactory(pdfNetworkStreamFactory) {
-  createPDFNetworkStream = pdfNetworkStreamFactory;
+  createPDFNetworkStream = async params => {
+    const [{ PDFNetworkStream }, { PDFFetchStream }] = await streamsPromise;
+
+    return isValidFetchUrl(params.url)
+      ? new PDFFetchStream(params)
+      : new PDFNetworkStream(params);
+  };
+} else if (PDFJSDev.test("GENERIC || CHROME")) {
+  if (PDFJSDev.test("GENERIC") && isNodeJS) {
+    const { PDFNodeStream } = require("./node_stream.js");
+
+    createPDFNetworkStream = params => {
+      return new PDFNodeStream(params);
+    };
+  } else {
+    const { PDFNetworkStream } = require("./network.js");
+    const { PDFFetchStream } = require("./fetch_stream.js");
+
+    createPDFNetworkStream = params => {
+      return isValidFetchUrl(params.url)
+        ? new PDFFetchStream(params)
+        : new PDFNetworkStream(params);
+    };
+  }
 }
 
 /**
@@ -140,16 +146,17 @@ function setPDFNetworkStreamFactory(pdfNetworkStreamFactory) {
  * @typedef {Object} DocumentInitParameters
  * @property {string | URL} [url] - The URL of the PDF.
  * @property {BinaryData} [data] - Binary PDF data.
- *   Use typed arrays (Uint8Array) to improve the memory usage. If PDF data is
+ *   Use TypedArrays (Uint8Array) to improve the memory usage. If PDF data is
  *   BASE64-encoded, use `atob()` to convert it to a binary string first.
+ *
+ *   NOTE: If TypedArrays are used they will generally be transferred to the
+ *   worker-thread. This will help reduce main-thread memory usage, however
+ *   it will take ownership of the TypedArrays.
  * @property {Object} [httpHeaders] - Basic authentication headers.
  * @property {boolean} [withCredentials] - Indicates whether or not
  *   cross-site Access-Control requests should be made using credentials such
  *   as cookies or authorization headers. The default is `false`.
  * @property {string} [password] - For decrypting password-protected PDFs.
- * @property {TypedArray} [initialData] - A typed array with the first portion
- *   or all of the pdf data. Used by the extension since some data is already
- *   loaded before the switch to range requests.
  * @property {number} [length] - The PDF file length. It's used for progress
  *   reports and range requests operations.
  * @property {PDFDataRangeTransport} [range] - Allows for using a custom range
@@ -233,85 +240,83 @@ function setPDFNetworkStreamFactory(pdfNetworkStreamFactory) {
  */
 
 /**
- * @typedef { string | URL | TypedArray | ArrayBuffer |
- *            PDFDataRangeTransport | DocumentInitParameters
- * } GetDocumentParameters
- */
-
-/**
  * This is the main entry point for loading a PDF and interacting with it.
  *
  * NOTE: If a URL is used to fetch the PDF data a standard Fetch API call (or
  * XHR as fallback) is used, which means it must follow same origin rules,
  * e.g. no cross-domain requests without CORS.
  *
- * @param {GetDocumentParameters}
+ * @param {string | URL | TypedArray | ArrayBuffer | DocumentInitParameters}
  *   src - Can be a URL where a PDF file is located, a typed array (Uint8Array)
  *         already populated with data, or a parameter object.
  * @returns {PDFDocumentLoadingTask}
  */
 function getDocument(src) {
+  if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+    if (typeof src === "string" || src instanceof URL) {
+      src = { url: src };
+    } else if (isArrayBuffer(src)) {
+      src = { data: src };
+    } else if (src instanceof PDFDataRangeTransport) {
+      deprecated(
+        "`PDFDataRangeTransport`-instance, " +
+          "please use a parameter object with `range`-property instead."
+      );
+      src = { range: src };
+    } else {
+      if (typeof src !== "object") {
+        throw new Error(
+          "Invalid parameter in getDocument, " +
+            "need either string, URL, TypedArray, or parameter object."
+        );
+      }
+    }
+  } else if (typeof src !== "object") {
+    throw new Error("Invalid parameter in getDocument, need parameter object.");
+  }
+  if (!src.url && !src.data && !src.range) {
+    throw new Error(
+      "Invalid parameter object: need either .data, .range or .url"
+    );
+  }
   const task = new PDFDocumentLoadingTask();
 
-  let source;
-  if (typeof src === "string" || src instanceof URL) {
-    source = { url: src };
-  } else if (isArrayBuffer(src)) {
-    source = { data: src };
-  } else if (src instanceof PDFDataRangeTransport) {
-    source = { range: src };
-  } else {
-    if (typeof src !== "object") {
-      throw new Error(
-        "Invalid parameter in getDocument, " +
-          "need either string, URL, TypedArray, or parameter object."
-      );
-    }
-    if (!src.url && !src.data && !src.range) {
-      throw new Error(
-        "Invalid parameter object: need either .data, .range or .url"
-      );
-    }
-    source = src;
-  }
-  const baseHref = src.baseHref;
   const params = Object.create(null);
   let rangeTransport = null,
     worker = null;
 
-  for (const key in source) {
-    const value = source[key];
+  for (const key in src) {
+    const val = src[key];
 
     switch (key) {
       case "url":
-        if (typeof window !== "undefined") {
-          try {
-            // The full path is required in the 'url' field.
-            // #929/#813 modified by ngx-extended-pdf-viewer
-            // to restore the drag'n'drop functionality
-            if (baseHref) {
-              params[key] = new URL(value, window.location.origin + baseHref).href;
-            } else {
-              params[key] = new URL(value, window.location).href;
-            }
-            // #929/#813 end of modification
-            continue;
-          } catch (ex) {
-            warn(`Cannot create valid URL: "${ex}".`);
-          }
-        } else if (typeof value === "string" || value instanceof URL) {
-          params[key] = value.toString(); // Support Node.js environments.
+        if (val instanceof URL) {
+          params[key] = val.href;
           continue;
+        }
+        try {
+          // The full path is required in the 'url' field.
+          params[key] = new URL(val, window.location).href;
+          continue;
+        } catch (ex) {
+          if (
+            typeof PDFJSDev !== "undefined" &&
+            PDFJSDev.test("GENERIC") &&
+            isNodeJS &&
+            typeof val === "string"
+          ) {
+            break; // Use the url as-is in Node.js environments.
+          }
         }
         throw new Error(
           "Invalid PDF url data: " +
             "either string or URL-object is expected in the url property."
         );
       case "range":
-        rangeTransport = value;
+        rangeTransport = val;
         continue;
       case "worker":
-        worker = value;
+        worker = val;
         continue;
       case "data":
         // Converting string or array-like data to Uint8Array.
@@ -320,21 +325,24 @@ function getDocument(src) {
           PDFJSDev.test("GENERIC") &&
           isNodeJS &&
           typeof Buffer !== "undefined" && // eslint-disable-line no-undef
-          value instanceof Buffer // eslint-disable-line no-undef
+          val instanceof Buffer // eslint-disable-line no-undef
         ) {
-          params[key] = new Uint8Array(value);
-        } else if (value instanceof Uint8Array) {
-          break; // Use the data as-is when it's already a Uint8Array.
-        } else if (typeof value === "string") {
-          params[key] = stringToBytes(value);
+          params[key] = new Uint8Array(val);
         } else if (
-          typeof value === "object" &&
-          value !== null &&
-          !isNaN(value.length)
+          val instanceof Uint8Array &&
+          val.byteLength === val.buffer.byteLength
         ) {
-          params[key] = new Uint8Array(value);
-        } else if (isArrayBuffer(value)) {
-          params[key] = new Uint8Array(value);
+          // Use the data as-is when it's already a Uint8Array that completely
+          // "utilizes" its underlying ArrayBuffer, to prevent any possible
+          // issues when transferring it to the worker-thread.
+          break;
+        } else if (typeof val === "string") {
+          params[key] = stringToBytes(val);
+        } else if (
+          (typeof val === "object" && val !== null && !isNaN(val.length)) ||
+          isArrayBuffer(val)
+        ) {
+          params[key] = new Uint8Array(val);
         } else {
           throw new Error(
             "Invalid PDF binary data: either TypedArray, " +
@@ -343,7 +351,7 @@ function getDocument(src) {
         }
         continue;
     }
-    params[key] = value;
+    params[key] = val;
   }
 
   params.CMapReaderFactory =
@@ -389,8 +397,11 @@ function getDocument(src) {
   }
   if (typeof params.useWorkerFetch !== "boolean") {
     params.useWorkerFetch =
-      params.CMapReaderFactory === DOMCMapReaderFactory &&
-      params.StandardFontDataFactory === DOMStandardFontDataFactory;
+      (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
+      (params.CMapReaderFactory === DOMCMapReaderFactory &&
+        params.StandardFontDataFactory === DOMStandardFontDataFactory &&
+        isValidFetchUrl(params.cMapUrl, document.baseURI) &&
+        isValidFetchUrl(params.standardFontDataUrl, document.baseURI));
   }
   if (typeof params.isEvalSupported !== "boolean") {
     params.isEvalSupported = true;
@@ -464,6 +475,9 @@ function getDocument(src) {
             rangeTransport
           );
         } else if (!params.data) {
+          if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+            throw new Error("Not implemented: createPDFNetworkStream");
+          }
           networkStream = createPDFNetworkStream({
             url: params.url,
             length: params.length,
@@ -533,11 +547,8 @@ async function _fetchDocument(worker, source, pdfDataRangeTransport, docId) {
     source.contentDispositionFilename =
       pdfDataRangeTransport.contentDispositionFilename;
   }
-  // #376 modified by ngx-extended-pdf-viewer
-  let cMapUrl = source.cMapUrl;
-  if (cMapUrl?.constructor.name === "Function") {
-    cMapUrl = cMapUrl();
-  }
+  const transfers = source.data ? [source.data.buffer] : null;
+
   const workerId = await worker.messageHandler.sendWithPromise(
     "GetDocRequest",
     // Only send the required properties, and *not* the entire `source` object.
@@ -567,14 +578,9 @@ async function _fetchDocument(worker, source, pdfDataRangeTransport, docId) {
           ? source.standardFontDataUrl
           : null,
       },
-    }
+    },
+    transfers
   );
-
-  // Release the TypedArray data, when it exists, since it's no longer needed
-  // on the main-thread *after* it's been sent to the worker-thread.
-  if (source.data) {
-    source.data = null;
-  }
 
   if (worker.destroyed) {
     throw new Error("Worker was destroyed");
@@ -646,10 +652,12 @@ class PDFDocumentLoadingTask {
    * @type {function}
    */
   set onUnsupportedFeature(callback) {
-    deprecated(
-      "The PDFDocumentLoadingTask onUnsupportedFeature property will be removed in the future."
-    );
-    this.#onUnsupportedFeature = callback;
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      deprecated(
+        "The PDFDocumentLoadingTask onUnsupportedFeature property will be removed in the future."
+      );
+      this.#onUnsupportedFeature = callback;
+    }
   }
 
   /**
@@ -679,11 +687,15 @@ class PDFDocumentLoadingTask {
 
 /**
  * Abstract class to support range requests file loading.
+ *
+ * NOTE: The TypedArrays passed to the constructor and relevant methods below
+ * will generally be transferred to the worker-thread. This will help reduce
+ * main-thread memory usage, however it will take ownership of the TypedArrays.
  */
 class PDFDataRangeTransport {
   /**
    * @param {number} length
-   * @param {Uint8Array} initialData
+   * @param {Uint8Array|null} initialData
    * @param {boolean} [progressiveDone]
    * @param {string} [contentDispositionFilename]
    */
@@ -705,28 +717,48 @@ class PDFDataRangeTransport {
     this._readyCapability = createPromiseCapability();
   }
 
+  /**
+   * @param {function} listener
+   */
   addRangeListener(listener) {
     this._rangeListeners.push(listener);
   }
 
+  /**
+   * @param {function} listener
+   */
   addProgressListener(listener) {
     this._progressListeners.push(listener);
   }
 
+  /**
+   * @param {function} listener
+   */
   addProgressiveReadListener(listener) {
     this._progressiveReadListeners.push(listener);
   }
 
+  /**
+   * @param {function} listener
+   */
   addProgressiveDoneListener(listener) {
     this._progressiveDoneListeners.push(listener);
   }
 
+  /**
+   * @param {number} begin
+   * @param {Uint8Array|null} chunk
+   */
   onDataRange(begin, chunk) {
     for (const listener of this._rangeListeners) {
       listener(begin, chunk);
     }
   }
 
+  /**
+   * @param {number} loaded
+   * @param {number|undefined} total
+   */
   onDataProgress(loaded, total) {
     this._readyCapability.promise.then(() => {
       for (const listener of this._progressListeners) {
@@ -735,6 +767,9 @@ class PDFDataRangeTransport {
     });
   }
 
+  /**
+   * @param {Uint8Array|null} chunk
+   */
   onDataProgressiveRead(chunk) {
     this._readyCapability.promise.then(() => {
       for (const listener of this._progressiveReadListeners) {
@@ -755,6 +790,10 @@ class PDFDataRangeTransport {
     this._readyCapability.resolve();
   }
 
+  /**
+   * @param {number} begin
+   * @param {number} end
+   */
   requestDataRange(begin, end) {
     unreachable("Abstract method PDFDataRangeTransport.requestDataRange");
   }
@@ -793,27 +832,6 @@ class PDFDocumentProxy {
    */
   get fingerprints() {
     return this._pdfInfo.fingerprints;
-  }
-
-  /**
-   * @typedef {Object} PDFDocumentStats
-   * @property {Object<string, boolean>} streamTypes - Used stream types in the
-   *   document (an item is set to true if specific stream ID was used in the
-   *   document).
-   * @property {Object<string, boolean>} fontTypes - Used font types in the
-   *   document (an item is set to true if specific font ID was used in the
-   *   document).
-   */
-
-  /**
-   * @type {PDFDocumentStats | null} The current statistics about document
-   *   structures, or `null` when no statistics exists.
-   */
-  get stats() {
-    deprecated(
-      "The PDFDocumentProxy stats property will be removed in the future."
-    );
-    return this._transport.stats;
   }
 
   /**
@@ -2339,8 +2357,6 @@ class PDFWorker {
  * @ignore
  */
 class WorkerTransport {
-  #docStats = null;
-
   #pageCache = new Map();
 
   #pagePromises = new Map();
@@ -2387,10 +2403,6 @@ class WorkerTransport {
 
   get annotationStorage() {
     return shadow(this, "annotationStorage", new AnnotationStorage());
-  }
-
-  get stats() {
-    return this.#docStats;
   }
 
   getRenderingIntent(
@@ -2528,7 +2540,7 @@ class WorkerTransport {
               return;
             }
             assert(
-              isArrayBuffer(value),
+              value instanceof ArrayBuffer,
               "GetReader - expected an ArrayBuffer."
             );
             // Enqueue data chunk into sink, and transfer it
@@ -2614,7 +2626,7 @@ class WorkerTransport {
               return;
             }
             assert(
-              isArrayBuffer(value),
+              value instanceof ArrayBuffer,
               "GetRangeReader - expected an ArrayBuffer."
             );
             sink.enqueue(new Uint8Array(value), 1, [value]);
@@ -2823,22 +2835,12 @@ class WorkerTransport {
       });
     });
 
-    messageHandler.on("DocStats", data => {
-      if (this.destroyed) {
-        return; // Ignore any pending requests if the worker was terminated.
-      }
-      // Ensure that a `PDFDocumentProxy.stats` call-site cannot accidentally
-      // modify this internal data.
-      this.#docStats = Object.freeze({
-        streamTypes: Object.freeze(data.streamTypes),
-        fontTypes: Object.freeze(data.fontTypes),
-      });
-    });
-
-    messageHandler.on(
-      "UnsupportedFeature",
-      this._onUnsupportedFeature.bind(this)
-    );
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      messageHandler.on(
+        "UnsupportedFeature",
+        this._onUnsupportedFeature.bind(this)
+      );
+    }
 
     messageHandler.on("FetchBuiltInCMap", data => {
       if (this.destroyed) {
@@ -2870,10 +2872,12 @@ class WorkerTransport {
   }
 
   _onUnsupportedFeature({ featureId }) {
-    if (this.destroyed) {
-      return; // Ignore any pending requests if the worker was terminated.
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      if (this.destroyed) {
+        return; // Ignore any pending requests if the worker was terminated.
+      }
+      this.loadingTask.onUnsupportedFeature?.(featureId);
     }
-    this.loadingTask.onUnsupportedFeature?.(featureId);
   }
 
   getData() {
@@ -3434,6 +3438,5 @@ export {
   PDFWorker,
   PDFWorkerUtil,
   RenderTask,
-  setPDFNetworkStreamFactory,
   version,
 };

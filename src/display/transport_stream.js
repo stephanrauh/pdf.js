@@ -18,27 +18,41 @@ import { isPdfFile } from "./display_utils.js";
 
 /** @implements {IPDFStream} */
 class PDFDataTransportStream {
-  constructor(params, pdfDataRangeTransport) {
+  constructor(
+    {
+      length,
+      initialData,
+      progressiveDone = false,
+      contentDispositionFilename = null,
+      disableRange = false,
+      disableStream = false,
+    },
+    pdfDataRangeTransport
+  ) {
     assert(
       pdfDataRangeTransport,
       'PDFDataTransportStream - missing required "pdfDataRangeTransport" argument.'
     );
 
     this._queuedChunks = [];
-    this._progressiveDone = params.progressiveDone || false;
-    this._contentDispositionFilename =
-      params.contentDispositionFilename || null;
+    this._progressiveDone = progressiveDone;
+    this._contentDispositionFilename = contentDispositionFilename;
 
-    const initialData = params.initialData;
     if (initialData?.length > 0) {
-      const buffer = new Uint8Array(initialData).buffer;
+      // Prevent any possible issues by only transferring a Uint8Array that
+      // completely "utilizes" its underlying ArrayBuffer.
+      const buffer =
+        initialData instanceof Uint8Array &&
+        initialData.byteLength === initialData.buffer.byteLength
+          ? initialData.buffer
+          : new Uint8Array(initialData).buffer;
       this._queuedChunks.push(buffer);
     }
 
     this._pdfDataRangeTransport = pdfDataRangeTransport;
-    this._isStreamingSupported = !params.disableStream;
-    this._isRangeSupported = !params.disableRange;
-    this._contentLength = params.length;
+    this._isStreamingSupported = !disableStream;
+    this._isRangeSupported = !disableRange;
+    this._contentLength = length;
 
     this._fullRequestReader = null;
     this._rangeReaders = [];
@@ -62,9 +76,16 @@ class PDFDataTransportStream {
     this._pdfDataRangeTransport.transportReady();
   }
 
-  _onReceiveData(args) {
-    const buffer = new Uint8Array(args.chunk).buffer;
-    if (args.begin === undefined) {
+  _onReceiveData({ begin, chunk }) {
+    // Prevent any possible issues by only transferring a Uint8Array that
+    // completely "utilizes" its underlying ArrayBuffer.
+    const buffer =
+      chunk instanceof Uint8Array &&
+      chunk.byteLength === chunk.buffer.byteLength
+        ? chunk.buffer
+        : new Uint8Array(chunk).buffer;
+
+    if (begin === undefined) {
       if (this._fullRequestReader) {
         this._fullRequestReader._enqueue(buffer);
       } else {
@@ -72,7 +93,7 @@ class PDFDataTransportStream {
       }
     } else {
       const found = this._rangeReaders.some(function (rangeReader) {
-        if (rangeReader._begin !== args.begin) {
+        if (rangeReader._begin !== begin) {
           return false;
         }
         rangeReader._enqueue(buffer);

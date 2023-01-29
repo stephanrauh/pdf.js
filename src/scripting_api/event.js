@@ -91,6 +91,9 @@ class EventDispatcher {
       if (id === "doc") {
         const eventName = event.name;
         if (eventName === "Open") {
+          // The user has decided to open this pdf, hence we enable
+          // userActivation.
+          this.userActivation();
           // Initialize named actions before calling formatAll to avoid any
           // errors in the case where a formatter is using one of those named
           // actions (see #15818).
@@ -246,7 +249,8 @@ class EventDispatcher {
 
       this.runCalculate(source, event);
 
-      const savedValue = (event.value = source.obj.value);
+      const savedValue = source.obj._getValue();
+      event.value = source.obj.value;
       let formattedValue = null;
 
       if (this.runActions(source, source, event, "Format")) {

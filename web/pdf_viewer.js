@@ -231,8 +231,6 @@ class PDFViewer {
       );
     }
     this.container = options.container;
-    this.#resizeObserver.observe(this.container);
-
     this.viewer = options.viewer || options.container.firstElementChild;
 
     /** #495 modified by ngx-extended-pdf-viewer */
@@ -243,12 +241,7 @@ class PDFViewer {
       typeof PDFJSDev === "undefined" ||
       PDFJSDev.test("!PRODUCTION || GENERIC")
     ) {
-      if (
-        !(
-          this.container?.tagName.toUpperCase() === "DIV" &&
-          this.viewer?.tagName.toUpperCase() === "DIV"
-        )
-      ) {
+      if (this.container?.tagName !== "DIV" || this.viewer?.tagName !== "DIV") {
         throw new Error("Invalid `container` and/or `viewer` option.");
       }
 
@@ -259,6 +252,8 @@ class PDFViewer {
         throw new Error("The `container` must be absolutely positioned.");
       }
     }
+    this.#resizeObserver.observe(this.container);
+
     this.eventBus = options.eventBus;
     this.linkService = options.linkService || new SimpleLinkService();
     this.downloadManager = options.downloadManager || null;
@@ -937,7 +932,7 @@ class PDFViewer {
         });
         // Ensure that the various layers always get the correct initial size,
         // see issue 15795.
-        docStyle.setProperty("--scale-factor", viewport.scale);
+        this.viewer.style.setProperty("--scale-factor", viewport.scale);
 
         for (let pageNum = 1; pageNum <= pagesCount; ++pageNum) {
           const pageView = new PDFPageView({
@@ -1322,7 +1317,7 @@ class PDFViewer {
       return;
     }
 
-    docStyle.setProperty(
+    this.viewer.style.setProperty(
       "--scale-factor",
       newScale * PixelsPerInch.PDF_TO_CSS_UNITS
     );
@@ -2262,48 +2257,93 @@ class PDFViewer {
 
   /**
    * Increase the current zoom level one, or more, times.
-   * @param {number} [steps] - Defaults to zooming once.
    * @param {Object|null} [options]
    */
-  increaseScale(steps = 1, options = null) {
+  increaseScale(options = null) {
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+      typeof options === "number"
+    ) {
+      console.error(
+        "The `increaseScale` method-signature was updated, please use an object instead."
+      );
+      options = { steps: options };
+    }
+
+    if (!this.pdfDocument) {
+      return;
+    }
+
+    options ||= Object.create(null);
+
     let newScale = this._currentScale;
     // modified by ngx-extended-pdf-viewer #367
     let maxScale = Number(PDFViewerApplicationOptions.get("maxZoom"));
     if (!maxScale) {
       maxScale = MAX_SCALE;
     }
-    do {
-      newScale = (newScale * DEFAULT_SCALE_DELTA).toFixed(2);
-      newScale = Math.ceil(newScale * 10) / 10;
-      newScale = Math.min(maxScale, newScale);
-    } while (--steps > 0 && newScale < maxScale);
-    // end of modification
 
-    options ||= Object.create(null);
+    if (options.scaleFactor > 1) {
+      newScale = Math.min(
+        maxScale,
+        Math.round(newScale * options.scaleFactor * 100) / 100
+      );
+    } else {
+      let steps = options.steps ?? 1;
+      do {
+        newScale = (newScale * DEFAULT_SCALE_DELTA).toFixed(2);
+        newScale = Math.ceil(newScale * 10) / 10;
+        newScale = Math.min(maxScale, newScale);
+      } while (--steps > 0 && newScale < maxScale);
+      // end of modification by ngx-extended-pdf-viewer
+    }
+
     options.noScroll = false;
     this._setScale(newScale, options);
   }
 
   /**
    * Decrease the current zoom level one, or more, times.
-   * @param {number} [steps] - Defaults to zooming once.
    * @param {Object|null} [options]
    */
-  decreaseScale(steps = 1, options = null) {
+  decreaseScale(options = null) {
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+      typeof options === "number"
+    ) {
+      console.error(
+        "The `decreaseScale` method-signature was updated, please use an object instead."
+      );
+      options = { steps: options };
+    }
+
+    if (!this.pdfDocument) {
+      return;
+    }
+
+    options ||= Object.create(null);
+
     let newScale = this._currentScale;
     // modified by ngx-extended-pdf-viewer #367
     let minScale = Number(PDFViewerApplicationOptions.get("minZoom"));
     if (!minScale) {
       minScale = MIN_SCALE;
     }
-    do {
-      newScale = (newScale / DEFAULT_SCALE_DELTA).toFixed(2);
-      newScale = Math.floor(newScale * 10) / 10;
-      newScale = Math.max(minScale, newScale);
-    } while (--steps > 0 && newScale > minScale);
-    // end of modification
+    if (options.scaleFactor > 0 && options.scaleFactor < 1) {
+      newScale = Math.max(
+        minScale,
+        Math.round(newScale * options.scaleFactor * 100) / 100
+      );
+    } else {
+      let steps = options.steps ?? 1;
+      do {
+        newScale = (newScale / DEFAULT_SCALE_DELTA).toFixed(2);
+        newScale = Math.floor(newScale * 10) / 10;
+        newScale = Math.max(minScale, newScale);
+      } while (--steps > 0 && newScale > minScale);
+      // end of modification by ngx-extended-pdf-viewer
+    }
 
-    options ||= Object.create(null);
     options.noScroll = false;
     this._setScale(newScale, options);
   }
