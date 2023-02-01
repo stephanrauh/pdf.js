@@ -281,6 +281,9 @@ function getDocument(src) {
   }
   const task = new PDFDocumentLoadingTask();
 
+  // #929/#813 modified by ngx-extended-pdf-viewer
+  const baseHref = src.baseHref;
+  // #929/#813 end of modification by ngx-extended-pdf-viewer
   const params = Object.create(null);
   let rangeTransport = null,
     worker = null;
@@ -296,7 +299,14 @@ function getDocument(src) {
         }
         try {
           // The full path is required in the 'url' field.
-          params[key] = new URL(val, window.location).href;
+          // #929/#813 modified by ngx-extended-pdf-viewer
+          // to restore the drag'n'drop functionality
+          if (baseHref) {
+            params[key] = new URL(val, window.location.origin + baseHref).href;
+          } else {
+            params[key] = new URL(val, window.location).href;
+          }
+          // #929/#813 end of modification by ngx-extended-pdf-viewer
           continue;
         } catch (ex) {
           if (
