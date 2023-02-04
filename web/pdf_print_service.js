@@ -53,6 +53,7 @@ function renderPage(
   }
 
   PRINT_UNITS *= scale;
+  // end of modification by ngx-extended-pdf-viewer #530
   scratchCanvas.width = Math.floor(size.width * PRINT_UNITS);
   scratchCanvas.height = Math.floor(size.height * PRINT_UNITS);
 
