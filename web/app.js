@@ -310,7 +310,12 @@ const PDFViewerApplication = {
     const { mainContainer, viewerContainer } = this.appConfig,
       params = parseQueryString(hash);
 
-    if (params.get("disableworker") === "true") {
+    if (
+      (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) &&
+      params.get("workermodules") === "true"
+    ) {
+      AppOptions.set("workerSrc", "../src/pdf.worker.js");
+    } else if (params.get("disableworker") === "true") {
       try {
         await loadFakeWorker();
       } catch (ex) {
@@ -582,11 +587,15 @@ const PDFViewerApplication = {
       );
     }
 
-    this.pdfCursorTools = new PDFCursorTools({
-      container,
-      eventBus,
-      cursorToolOnLoad: AppOptions.get("cursorToolOnLoad"),
-    });
+    // NOTE: The cursor-tools are unlikely to be helpful/useful in GeckoView,
+    // in particular the `HandTool` which basically simulates touch scrolling.
+    if (appConfig.secondaryToolbar?.cursorHandToolButton) {
+      this.pdfCursorTools = new PDFCursorTools({
+        container,
+        eventBus,
+        cursorToolOnLoad: AppOptions.get("cursorToolOnLoad"),
+      });
+    }
 
     if (appConfig.toolbar) {
       this.toolbar = new Toolbar(appConfig.toolbar, eventBus, this.l10n);
@@ -767,8 +776,8 @@ const PDFViewerApplication = {
       throw new Error("Not implemented: initPassiveLoading");
     }
     this.externalServices.initPassiveLoading({
-      onOpenWithTransport: (url, length, transport) => {
-        this.open({ url, length, range: transport });
+      onOpenWithTransport: range => {
+        this.open({ range });
       },
       onOpenWithData: (data, contentDispositionFilename) => {
         if (isPdfFile(contentDispositionFilename)) {
@@ -800,6 +809,8 @@ const PDFViewerApplication = {
   },
 
   setTitleUsingUrl(url = "", downloadUrl = null) {
+    // #1669 modified by ngx-extended-pdf-viewer because of NPEs when opening a BLOB
+    /*
     this.url = url;
     this.baseUrl = url.split("#")[0];
     if (downloadUrl) {
@@ -820,6 +831,8 @@ const PDFViewerApplication = {
       }
     }
     this.setTitle(title);
+    */
+   // #1669 end of modification by ngx-extended-pdf-viewer
   },
 
   setTitle(title = this._title) {
@@ -953,12 +966,9 @@ const PDFViewerApplication = {
       await this.close();
     }
     // Set the necessary global worker parameters, using the available options.
-    const workerParameters = AppOptions.getAll(OptionKind.WORKER);
-    for (const key in workerParameters) {
-      GlobalWorkerOptions[key] = workerParameters[key];
-    }
+    const workerParams = AppOptions.getAll(OptionKind.WORKER);
+    Object.assign(GlobalWorkerOptions, workerParams);
 
-    const parameters = Object.create(null);
     if (
       (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
       args.url
@@ -972,26 +982,16 @@ const PDFViewerApplication = {
         this.setTitleUsingUrl(args.url, /* downloadUrl = */ args.url);
       }
     }
-    // Set the necessary API parameters, using the available options.
-    const apiParameters = AppOptions.getAll(OptionKind.API);
-    for (const key in apiParameters) {
-      let value = apiParameters[key];
+    // Set the necessary API parameters, using all the available options.
+    const apiParams = AppOptions.getAll(OptionKind.API);
+    const params = { ...apiParams, ...args };
 
-      if (key === "docBaseUrl") {
-        if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
-          value ||= document.URL.split("#")[0];
-        } else if (PDFJSDev.test("MOZCENTRAL || CHROME")) {
-          value ||= this.baseUrl;
-        }
-      }
-      parameters[key] = value;
+    if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
+      params.docBaseUrl ||= document.URL.split("#")[0];
+    } else if (PDFJSDev.test("MOZCENTRAL || CHROME")) {
+      params.docBaseUrl ||= this.baseUrl;
     }
-    // Finally, update the API parameters with the arguments.
-    for (const key in args) {
-      parameters[key] = args[key];
-    }
-
-    const loadingTask = getDocument(parameters);
+    const loadingTask = getDocument(params);
     this.pdfLoadingTask = loadingTask;
 
     loadingTask.onPassword = (updateCallback, reason) => {
@@ -2219,7 +2219,7 @@ async function loadFakeWorker() {
   }
   // end of modification
   if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
-    window.pdfjsWorker = await import("pdfjs/core/worker.js");
+    window.pdfjsWorker = await import("pdfjs/pdf.worker.js");
     return;
   }
   await loadScript(PDFWorker.workerSrc);

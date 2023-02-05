@@ -173,7 +173,7 @@ if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
  * @property {string} [cMapUrl] - The URL where the predefined Adobe CMaps are
  *   located. Include the trailing slash.
  * @property {boolean} [cMapPacked] - Specifies if the Adobe CMaps are binary
- *   packed or not.
+ *   packed or not. The default value is `true`.
  * @property {Object} [CMapReaderFactory] - The factory that will be used when
  *   reading built-in CMap files. Providing a custom factory is useful for
  *   environments without Fetch API or `XMLHttpRequest` support, such as
@@ -293,35 +293,39 @@ function getDocument(src) {
 
     switch (key) {
       case "url":
-        if (val instanceof URL) {
-          params[key] = val.href;
-          continue;
-        }
-        try {
-          // The full path is required in the 'url' field.
-          // #929/#813 modified by ngx-extended-pdf-viewer
-          // to restore the drag'n'drop functionality
-          if (baseHref) {
-            params[key] = new URL(val, window.location.origin + baseHref).href;
-          } else {
-            params[key] = new URL(val, window.location).href;
+        if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+          continue; // The 'url' is unused with `PDFDataRangeTransport`.
+        } else {
+          if (val instanceof URL) {
+            params[key] = val.href;
+            continue;
           }
-          // #929/#813 end of modification by ngx-extended-pdf-viewer
-          continue;
-        } catch (ex) {
-          if (
-            typeof PDFJSDev !== "undefined" &&
-            PDFJSDev.test("GENERIC") &&
-            isNodeJS &&
-            typeof val === "string"
-          ) {
-            break; // Use the url as-is in Node.js environments.
+          try {
+            // The full path is required in the 'url' field.
+            // #929/#813 modified by ngx-extended-pdf-viewer
+            // to restore the drag'n'drop functionality
+            if (baseHref) {
+              params[key] = new URL(val, window.location.origin + baseHref).href;
+            } else {
+              params[key] = new URL(val, window.location).href;
+            }
+            // #929/#813 end of modification by ngx-extended-pdf-viewer
+            continue;
+          } catch (ex) {
+            if (
+              typeof PDFJSDev !== "undefined" &&
+              PDFJSDev.test("GENERIC") &&
+              isNodeJS &&
+              typeof val === "string"
+            ) {
+              break; // Use the url as-is in Node.js environments.
+            }
           }
+          throw new Error(
+            "Invalid PDF url data: " +
+              "either string or URL-object is expected in the url property."
+          );
         }
-        throw new Error(
-          "Invalid PDF url data: " +
-            "either string or URL-object is expected in the url property."
-        );
       case "range":
         rangeTransport = val;
         continue;
@@ -364,6 +368,7 @@ function getDocument(src) {
     params[key] = val;
   }
 
+  params.cMapPacked = params.cMapPacked !== false;
   params.CMapReaderFactory =
     params.CMapReaderFactory || DefaultCMapReaderFactory;
   params.StandardFontDataFactory =
@@ -2141,7 +2146,12 @@ class PDFWorker {
 
         // Some versions of FF can't create a worker on localhost, see:
         // https://bugzilla.mozilla.org/show_bug.cgi?id=683280
-        const worker = new Worker(this.#generateTrustedURL(workerSrc));
+        const worker =
+          (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) &&
+          !workerSrc.endsWith("/build/pdf.worker.js") &&
+          !workerSrc.endsWith("/src/worker_loader.js")
+            ? new Worker(this.#generateTrustedURL(workerSrc), { type: "module" })
+            : new Worker(this.#generateTrustedURL(workerSrc));
         const messageHandler = new MessageHandler("main", "worker", worker);
         const terminateEarly = () => {
           worker.removeEventListener("error", onWorkerError);
@@ -2329,7 +2339,7 @@ class PDFWorker {
         return mainWorkerMessageHandler;
       }
       if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
-        const worker = await import("pdfjs/core/worker.js");
+        const worker = await import("pdfjs/pdf.worker.js");
         return worker.WorkerMessageHandler;
       }
       if (
@@ -2367,11 +2377,11 @@ class PDFWorker {
  * @ignore
  */
 class WorkerTransport {
+  #methodPromises = new Map();
+
   #pageCache = new Map();
 
   #pagePromises = new Map();
-
-  #metadataPromise = null;
 
   constructor(messageHandler, loadingTask, networkStream, params) {
     this.messageHandler = messageHandler;
@@ -2409,6 +2419,17 @@ class WorkerTransport {
     this.downloadInfoCapability = createPromiseCapability();
 
     this.setupMessageHandler();
+  }
+
+  #cacheSimpleMethod(name, data = null) {
+    const cachedPromise = this.#methodPromises.get(name);
+    if (cachedPromise) {
+      return cachedPromise;
+    }
+    const promise = this.messageHandler.sendWithPromise(name, data);
+
+    this.#methodPromises.set(name, promise);
+    return promise;
   }
 
   get annotationStorage() {
@@ -2507,9 +2528,7 @@ class WorkerTransport {
     Promise.all(waitOn).then(() => {
       this.commonObjs.clear();
       this.fontLoader.clear();
-      this.#metadataPromise = null;
-      this._getFieldObjectsPromise = null;
-      this._hasJSActionsPromise = null;
+      this.#methodPromises.clear();
 
       if (this._networkStream) {
         this._networkStream.cancelAllRequests(
@@ -2974,15 +2993,11 @@ class WorkerTransport {
   }
 
   getFieldObjects() {
-    return (this._getFieldObjectsPromise ||=
-      this.messageHandler.sendWithPromise("GetFieldObjects", null));
+    return this.#cacheSimpleMethod("GetFieldObjects");
   }
 
   hasJSActions() {
-    return (this._hasJSActionsPromise ||= this.messageHandler.sendWithPromise(
-      "HasJSActions",
-      null
-    ));
+    return this.#cacheSimpleMethod("HasJSActions");
   }
 
   getCalculationOrderIds() {
@@ -3063,8 +3078,13 @@ class WorkerTransport {
   }
 
   getMetadata() {
-    return (this.#metadataPromise ||= this.messageHandler
-      .sendWithPromise("GetMetadata", null)
+    const name = "GetMetadata",
+      cachedPromise = this.#methodPromises.get(name);
+    if (cachedPromise) {
+      return cachedPromise;
+    }
+    const promise = this.messageHandler
+      .sendWithPromise(name, null)
       .then(results => {
         return {
           info: results[0],
@@ -3072,7 +3092,9 @@ class WorkerTransport {
           contentDispositionFilename: this._fullReader?.filename ?? null,
           contentLength: this._fullReader?.contentLength ?? null,
         };
-      }));
+      });
+    this.#methodPromises.set(name, promise);
+    return promise;
   }
 
   getMarkInfo() {
@@ -3098,9 +3120,7 @@ class WorkerTransport {
     if (!keepLoadedFonts) {
       this.fontLoader.clear();
     }
-    this.#metadataPromise = null;
-    this._getFieldObjectsPromise = null;
-    this._hasJSActionsPromise = null;
+    this.#methodPromises.clear();
   }
 
   get loadingParams() {
