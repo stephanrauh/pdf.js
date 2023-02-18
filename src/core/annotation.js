@@ -1814,6 +1814,8 @@ class WidgetAnnotation extends Annotation {
     return mk.size > 0 ? mk : null;
   }
 
+  amendSavedDict(annotationStorage, dict) {}
+
   async save(evaluator, task, annotationStorage) {
     const storageEntry = annotationStorage
       ? annotationStorage.get(this.data.id)
@@ -1891,6 +1893,7 @@ class WidgetAnnotation extends Annotation {
         : stringToUTF16String(val, /* bigEndian = */ true);
     };
     dict.set("V", Array.isArray(value) ? value.map(encoder) : encoder(value));
+    this.amendSavedDict(annotationStorage, dict);
 
     const maybeMK = this._getMKDict(rotation);
     if (maybeMK) {
@@ -1917,13 +1920,11 @@ class WidgetAnnotation extends Annotation {
       let newTransform = null;
       if (encrypt) {
         newTransform = encrypt.createCipherTransform(newRef.num, newRef.gen);
-        appearance = newTransform.encryptString(appearance);
       }
 
       const resources = this._getSaveFieldResources(xref);
       const appearanceStream = new StringStream(appearance);
       const appearanceDict = (appearanceStream.dict = new Dict(xref));
-      appearanceDict.set("Length", appearance.length);
       appearanceDict.set("Subtype", Name.get("Form"));
       appearanceDict.set("Resources", resources);
       appearanceDict.set("BBox", [
@@ -2003,15 +2004,14 @@ class WidgetAnnotation extends Annotation {
     }
 
     assert(typeof value === "string", "Expected `value` to be a string.");
+    value = value.trim();
 
-    if (!this.data.combo) {
-      value = value.trim();
-    } else {
-      // The value is supposed to be one of the exportValue.
-      const option =
-        this.data.options.find(({ exportValue }) => value === exportValue) ||
-        this.data.options[0];
-      value = (option && option.displayValue) || "";
+    if (this.data.combo) {
+      // The value can be one of the exportValue or any other values.
+      const option = this.data.options.find(
+        ({ exportValue }) => value === exportValue
+      );
+      value = (option && option.displayValue) || value;
     }
 
     if (value === "") {
@@ -3169,6 +3169,10 @@ class ChoiceWidgetAnnotation extends WidgetAnnotation {
     super(params);
 
     const { dict, xref } = params;
+
+    this.indices = dict.getArray("I");
+    this.hasIndices = Array.isArray(this.indices) && this.indices.length > 0;
+
     // Determine the options. The options array may consist of strings or
     // arrays. If the array consists of arrays, then the first element of
     // each array is the export value and the second element of each array is
@@ -3197,14 +3201,28 @@ class ChoiceWidgetAnnotation extends WidgetAnnotation {
       }
     }
 
-    // The field value can be `null` if no item is selected, a string if one
-    // item is selected or an array of strings if multiple items are selected.
-    // For consistency in the API and convenience in the display layer, we
-    // always make the field value an array with zero, one or multiple items.
-    if (typeof this.data.fieldValue === "string") {
-      this.data.fieldValue = [this.data.fieldValue];
-    } else if (!this.data.fieldValue) {
+    if (!this.hasIndices) {
+      // The field value can be `null` if no item is selected, a string if one
+      // item is selected or an array of strings if multiple items are selected.
+      // For consistency in the API and convenience in the display layer, we
+      // always make the field value an array with zero, one or multiple items.
+      if (typeof this.data.fieldValue === "string") {
+        this.data.fieldValue = [this.data.fieldValue];
+      } else if (!this.data.fieldValue) {
+        this.data.fieldValue = [];
+      }
+    } else {
+      // The specs say that we should have an indices array only with
+      // multiselectable Choice and the "V" entry should have the
+      // precedence, but Acrobat itself is using it whatever the
+      // the "V" entry is (see bug 1770750).
       this.data.fieldValue = [];
+      const ii = this.data.options.length;
+      for (const i of this.indices) {
+        if (Number.isInteger(i) && i >= 0 && i < ii) {
+          this.data.fieldValue.push(this.data.options[i].exportValue);
+        }
+      }
     }
 
     // Process field flags for the display layer.
@@ -3235,6 +3253,28 @@ class ChoiceWidgetAnnotation extends WidgetAnnotation {
       rotation: this.rotation,
       type,
     };
+  }
+
+  amendSavedDict(annotationStorage, dict) {
+    if (!this.hasIndices) {
+      return;
+    }
+    const storageEntry = annotationStorage
+      ? annotationStorage.get(this.data.id)
+      : undefined;
+    let values = storageEntry && storageEntry.value;
+    if (!Array.isArray(values)) {
+      values = [values];
+    }
+    const indices = [];
+    const { options } = this.data;
+    for (let i = 0, j = 0, ii = options.length; i < ii; i++) {
+      if (options[i].exportValue === values[j]) {
+        indices.push(i);
+        j += 1;
+      }
+    }
+    dict.set("I", indices);
   }
 
   async _getAppearance(evaluator, task, intent, annotationStorage) {
@@ -3536,8 +3576,8 @@ class FreeTextAnnotation extends MarkupAnnotation {
     const { xref } = params;
     this.data.annotationType = AnnotationType.FREETEXT;
     this.setDefaultAppearance(params);
-
     if (!this.appearance && this._isOffscreenCanvasSupported) {
+      const strokeAlpha = params.dict.get("CA");
       const fakeUnicodeFont = new FakeUnicodeFont(xref, "sans-serif");
       const fontData = this.data.defaultAppearanceData;
       this.appearance = fakeUnicodeFont.createAppearance(
@@ -3545,7 +3585,8 @@ class FreeTextAnnotation extends MarkupAnnotation {
         this.rectangle,
         this.rotation,
         fontData.fontSize || 10,
-        fontData.fontColor
+        fontData.fontColor,
+        strokeAlpha
       );
       this._streams.push(this.appearance, FakeUnicodeFont.toUnicodeStream);
     } else if (!this._isOffscreenCanvasSupported) {
@@ -3692,7 +3733,6 @@ class FreeTextAnnotation extends MarkupAnnotation {
     appearanceStreamDict.set("Subtype", Name.get("Form"));
     appearanceStreamDict.set("Type", Name.get("XObject"));
     appearanceStreamDict.set("BBox", [0, 0, w, h]);
-    appearanceStreamDict.set("Length", appearance.length);
     appearanceStreamDict.set("Resources", resources);
 
     if (rotation) {
