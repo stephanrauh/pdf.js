@@ -1133,7 +1133,12 @@ class Annotation {
       }
 
       if (loopDict.has("T")) {
-        fieldName.unshift(stringToPDFString(loopDict.get("T")));
+        const t = stringToPDFString(loopDict.get("T"));
+        if (!t.startsWith("#")) {
+          // If it starts with a # then it's a class which is not a concept for
+          // datasets elements (https://www.pdfa.org/norm-refs/XFA-3_3.pdf#page=96).
+          fieldName.unshift(t);
+        }
       }
     }
     return fieldName.join(".");
@@ -1883,7 +1888,7 @@ class WidgetAnnotation extends Annotation {
     }
 
     const xfa = {
-      path: stringToPDFString(dict.get("T") || ""),
+      path: this.data.fieldName,
       value,
     };
 
@@ -2810,7 +2815,7 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
     }
 
     const xfa = {
-      path: stringToPDFString(dict.get("T") || ""),
+      path: this.data.fieldName,
       value: value ? this.data.exportValue : "",
     };
 
@@ -2873,7 +2878,7 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
     }
 
     const xfa = {
-      path: stringToPDFString(dict.get("T") || ""),
+      path: this.data.fieldName,
       value: value ? this.data.buttonValue : "",
     };
 

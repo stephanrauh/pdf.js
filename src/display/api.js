@@ -529,7 +529,8 @@ async function _fetchDocument(worker, source) {
 function getUrlProp(val, baseHref) {
   if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
     return null; // The 'url' is unused with `PDFDataRangeTransport`.
-  } else if (val instanceof URL) {
+  }
+  if (val instanceof URL) {
     return val.href;
   }
   try {
@@ -567,21 +568,21 @@ function getDataProp(val) {
     typeof Buffer !== "undefined" && // eslint-disable-line no-undef
     val instanceof Buffer // eslint-disable-line no-undef
   ) {
+    deprecated(
+      "Please provide binary data as `Uint8Array`, rather than `Buffer`."
+    );
     return new Uint8Array(val);
-  } else if (
-    val instanceof Uint8Array &&
-    val.byteLength === val.buffer.byteLength
-  ) {
+  }
+  if (val instanceof Uint8Array && val.byteLength === val.buffer.byteLength) {
     // Use the data as-is when it's already a Uint8Array that completely
     // "utilizes" its underlying ArrayBuffer, to prevent any possible
     // issues when transferring it to the worker-thread.
     return val;
-  } else if (typeof val === "string") {
+  }
+  if (typeof val === "string") {
     return stringToBytes(val);
-  } else if (
-    (typeof val === "object" && !isNaN(val?.length)) ||
-    isArrayBuffer(val)
-  ) {
+  }
+  if ((typeof val === "object" && !isNaN(val?.length)) || isArrayBuffer(val)) {
     return new Uint8Array(val);
   }
   throw new Error(
@@ -810,6 +811,15 @@ class PDFDocumentProxy {
   constructor(pdfInfo, transport) {
     this._pdfInfo = pdfInfo;
     this._transport = transport;
+
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+      // For testing purposes.
+      Object.defineProperty(this, "getXFADatasets", {
+        value: () => {
+          return this._transport.getXFADatasets();
+        },
+      });
+    }
   }
 
   /**
@@ -1310,8 +1320,6 @@ class PDFPageProxy {
     this.commonObjs = transport.commonObjs;
     this.objs = new PDFObjects();
 
-    this._bitmaps = new Set();
-
     this.cleanupAfterRender = false;
     this.pendingCleanup = false;
     this._intentStates = new Map();
@@ -1709,10 +1717,6 @@ class PDFPageProxy {
       }
     }
     this.objs.clear();
-    for (const bitmap of this._bitmaps) {
-      bitmap.close();
-    }
-    this._bitmaps.clear();
     this.pendingCleanup = false;
     return Promise.all(waitOn);
   }
@@ -1753,10 +1757,6 @@ class PDFPageProxy {
     if (resetStats && this._stats) {
       this._stats = new StatTimer();
     }
-    for (const bitmap of this._bitmaps) {
-      bitmap.close();
-    }
-    this._bitmaps.clear();
     this.pendingCleanup = false;
     return true;
   }
@@ -2393,6 +2393,15 @@ class WorkerTransport {
     this.downloadInfoCapability = createPromiseCapability();
 
     this.setupMessageHandler();
+
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+      // For testing purposes.
+      Object.defineProperty(this, "getXFADatasets", {
+        value: () => {
+          return this.messageHandler.sendWithPromise("GetXFADatasets", null);
+        },
+      });
+    }
   }
 
   #cacheSimpleMethod(name, data = null) {
@@ -2808,9 +2817,8 @@ class WorkerTransport {
           if (imageData) {
             let length;
             if (imageData.bitmap) {
-              const { bitmap, width, height } = imageData;
+              const { width, height } = imageData;
               length = width * height * 4;
-              pageProxy._bitmaps.add(bitmap);
             } else {
               length = imageData.data?.length || 0;
             }
@@ -3184,6 +3192,10 @@ class PDFObjects {
   }
 
   clear() {
+    for (const objId in this.#objs) {
+      const { data } = this.#objs[objId];
+      data?.bitmap?.close(); // Release any `ImageBitmap` data.
+    }
     this.#objs = Object.create(null);
   }
 }

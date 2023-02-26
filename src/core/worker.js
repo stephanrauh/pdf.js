@@ -872,6 +872,12 @@ class WorkerMessageHandler {
     });
     // #171 end of receive options from ngx-extended-pdf-viewer
 
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+      handler.on("GetXFADatasets", function (data) {
+        return pdfManager.ensureDoc("xfaDatasets");
+      });
+    }
+
     return workerHandlerName;
   }
 
