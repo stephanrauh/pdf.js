@@ -53,12 +53,17 @@ class TempImageFactory {
 
     // Since this is a temporary canvas, we need to fill it with a white
     // background ourselves. `_getPageDrawContext` uses CSS rules for this.
-    const ctx = tempCanvas.getContext("2d", { alpha: false });
+
+    // #1659 modified by ngx-extended-pdf-viewer
+    const options1 = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
+    const options2 = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true } : undefined;
+    const ctx = tempCanvas.getContext("2d", options1);
+    // #1659 end of modification by ngx-extended-pdf-viewer
     ctx.save();
     ctx.fillStyle = "rgb(255, 255, 255)";
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
-    return [tempCanvas, tempCanvas.getContext("2d")];
+    return [tempCanvas, tempCanvas.getContext("2d", options2)];
   }
 
   static destroyCanvas() {
@@ -227,7 +232,10 @@ class PDFThumbnailView {
     // Keep the no-thumbnail outline visible, i.e. `data-loaded === false`,
     // until rendering/image conversion is complete, to avoid display issues.
     const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { alpha: false });
+    // #1659 modified by ngx-extended-pdf-viewer
+    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
+    const ctx = canvas.getContext("2d", options);
+    // #1659 end of modification by ngx-extended-pdf-viewer
     const outputScale = new OutputScale();
 
     canvas.width = (upscaleFactor * this.canvasWidth * outputScale.sx) | 0;

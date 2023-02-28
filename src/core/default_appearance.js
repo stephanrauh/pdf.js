@@ -115,7 +115,10 @@ class FakeUnicodeFont {
     this.fontFamily = fontFamily;
 
     const canvas = new OffscreenCanvas(1, 1);
-    this.ctxMeasure = canvas.getContext("2d");
+    // #1659 modified by ngx-extended-pdf-viewer
+    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
+    this.ctxMeasure = canvas.getContext("2d", options);
+    // #1659 end of modification by ngx-extended-pdf-viewer
 
     if (!FakeUnicodeFont._fontNameId) {
       FakeUnicodeFont._fontNameId = 1;

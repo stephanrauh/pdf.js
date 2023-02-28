@@ -620,7 +620,10 @@ class InkEditor extends AnnotationEditor {
       .get("editor_ink_canvas_aria_label")
       .then(msg => this.canvas?.setAttribute("aria-label", msg));
     this.div.append(this.canvas);
-    this.ctx = this.canvas.getContext("2d");
+    // #1659 modified by ngx-extended-pdf-viewer
+    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true } : undefined;
+    this.ctx = this.canvas.getContext("2d", options);
+    // #1659 end of modification by ngx-extended-pdf-viewer
   }
 
   /**

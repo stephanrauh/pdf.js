@@ -350,7 +350,10 @@ class Toolbar {
 
     // The temporary canvas is used to measure text length in the DOM.
     const canvas = document.createElement("canvas");
-    const ctx = canvas.getContext("2d", { alpha: false });
+    // #1659 modified by ngx-extended-pdf-viewer
+    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
+    const ctx = canvas.getContext("2d", options);
+    // #1659 end of modification by ngx-extended-pdf-viewer
     ctx.font = `${style.fontSize} ${style.fontFamily}`;
 
     let maxWidth = 0;

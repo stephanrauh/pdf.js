@@ -1014,7 +1014,10 @@ class PDFPageView {
     canvasWrapper.append(canvas);
     this.canvas = canvas;
 
-    const ctx = canvas.getContext("2d", { alpha: false });
+    // #1659 modified by ngx-extended-pdf-viewer
+    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
+    const ctx = canvas.getContext("2d", options);
+    // #1659 end of modification by ngx-extended-pdf-viewer
     const outputScale = (this.outputScale = new OutputScale());
 
     if (this.useOnlyCssZoom) {

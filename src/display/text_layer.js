@@ -74,12 +74,15 @@ const ascentCache = new Map();
 
 function getCtx(size, isOffscreenCanvasSupported) {
   let ctx;
+  // #1659 modified by ngx-extended-pdf-viewer
+  const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
   if (isOffscreenCanvasSupported && FeatureTest.isOffscreenCanvasSupported) {
-    ctx = new OffscreenCanvas(size, size).getContext("2d", { alpha: false });
+    ctx = new OffscreenCanvas(size, size).getContext("2d", options);
+    // #1659 end of modification by ngx-extended-pdf-viewer
   } else {
     const canvas = document.createElement("canvas");
     canvas.width = canvas.height = size;
-    ctx = canvas.getContext("2d", { alpha: false });
+    ctx = canvas.getContext("2d", options); // #1659 modified by ngx-extended-pdf-viewer
   }
 
   return ctx;
