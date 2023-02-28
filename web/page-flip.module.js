@@ -113,7 +113,10 @@ class ImagePage extends Page {
         this.image.src = href;
     }
     draw(tempDensity) {
-        const ctx = this.render.getContext();
+        // #1659 modified by ngx-extended-pdf-viewer
+        const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
+        const ctx = canvas.getContext("2d", options);
+        // #1659 end of modification by ngx-extended-pdf-viewer
         const pagePos = this.render.convertToGlobal(this.state.position);
         const pageWidth = this.render.getRect().pageWidth;
         const pageHeight = this.render.getRect().height;
@@ -138,7 +141,10 @@ class ImagePage extends Page {
     }
     simpleDraw(orient) {
         const rect = this.render.getRect();
-        const ctx = this.render.getContext();
+        // #1659 modified by ngx-extended-pdf-viewer
+        const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
+        const ctx = canvas.getContext("2d", options);
+        // #1659 end of modification by ngx-extended-pdf-viewer
         const pageWidth = rect.pageWidth;
         const pageHeight = rect.height;
         const x = orient === 1 /* RIGHT */ ? rect.left + rect.pageWidth : rect.left;
@@ -1791,7 +1797,10 @@ class CanvasRender extends Render {
     constructor(app, setting, inCanvas) {
         super(app, setting);
         this.canvas = inCanvas;
-        this.ctx = inCanvas.getContext('2d');
+        // #1659 modified by ngx-extended-pdf-viewer
+        const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
+        const ctx = canvas.getContext("2d", options);
+        // #1659 end of modification by ngx-extended-pdf-viewer
     }
     getContext() {
         return this.ctx;
@@ -2436,7 +2445,7 @@ class HTMLRender extends Render {
                 this.leftPage.draw(this.flippingPage.getDrawingDensity());
             } else {
                 this.leftPage.getElement().style.display="none";
-            }                
+            }
         }
         else {
             this.leftPage.simpleDraw(0 /* LEFT */);
@@ -2458,7 +2467,7 @@ class HTMLRender extends Render {
                 this.rightPage.draw(this.flippingPage.getDrawingDensity());
             } else {
                 this.rightPage.getElement().style.display="none";
-            }                
+            }
         }
         else {
             this.rightPage.simpleDraw(1 /* RIGHT */);
@@ -2484,7 +2493,7 @@ class HTMLRender extends Render {
             this.lastAngle = this.flippingPage.getHardAngle();
         } else {
             this.lastAngle=-1234; // some non-existing value
-            
+
         }
         this.clear();
         this.drawLeftPage();
