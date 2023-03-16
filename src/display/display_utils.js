@@ -16,6 +16,7 @@
 import {
   BaseCanvasFactory,
   BaseCMapReaderFactory,
+  BaseFilterFactory,
   BaseStandardFontDataFactory,
   BaseSVGFactory,
 } from "./base_factory.js";
@@ -48,16 +49,20 @@ class PixelsPerInch {
  * an image without the need to apply them on the pixel arrays: the renderer
  * does the magic for us.
  */
-class FilterFactory {
+class DOMFilterFactory extends BaseFilterFactory {
   #_cache;
 
   #_defs;
+
+  #docId;
 
   #document;
 
   #id = 0;
 
-  constructor({ ownerDocument = globalThis.document } = {}) {
+  constructor({ docId, ownerDocument = globalThis.document } = {}) {
+    super();
+    this.#docId = docId;
     this.#document = ownerDocument;
   }
 
@@ -67,21 +72,29 @@ class FilterFactory {
 
   get #defs() {
     if (!this.#_defs) {
+      const div = this.#document.createElement("div");
+      const { style } = div;
+      style.visibility = "hidden";
+      style.contain = "strict";
+      style.width = style.height = 0;
+      style.position = "absolute";
+      style.top = style.left = 0;
+      style.zIndex = -1;
+
       const svg = this.#document.createElementNS(SVG_NS, "svg");
       svg.setAttribute("width", 0);
       svg.setAttribute("height", 0);
-      svg.style.visibility = "hidden";
-      svg.style.contain = "strict";
       this.#_defs = this.#document.createElementNS(SVG_NS, "defs");
+      div.append(svg);
       svg.append(this.#_defs);
-      this.#document.body.append(svg);
+      this.#document.body.append(div);
     }
     return this.#_defs;
   }
 
   addFilter(maps) {
     if (!maps) {
-      return "";
+      return "none";
     }
 
     // When a page is zoomed the page is re-drawn but the maps are likely
@@ -124,7 +137,7 @@ class FilterFactory {
     // We create a SVG filter: feComponentTransferElement
     //  https://www.w3.org/TR/SVG11/filters.html#feComponentTransferElement
 
-    const id = `transfer_map_${this.#id++}`;
+    const id = `g_${this.#docId}_transfer_map_${this.#id++}`;
     const url = `url(#${id})`;
     this.#cache.set(maps, url);
     this.#cache.set(key, url);
@@ -161,7 +174,7 @@ class FilterFactory {
 
   destroy() {
     if (this.#_defs) {
-      this.#_defs.parentNode.remove();
+      this.#_defs.parentNode.parentNode.remove();
       this.#_defs = null;
     }
     if (this.#_cache) {
@@ -428,7 +441,7 @@ class PageViewport {
    * converting PDF location into canvas pixel coordinates.
    * @param {number} x - The x-coordinate.
    * @param {number} y - The y-coordinate.
-   * @returns {Object} Object containing `x` and `y` properties of the
+   * @returns {Array} Array containing `x`- and `y`-coordinates of the
    *   point in the viewport coordinate space.
    * @see {@link convertToPdfPoint}
    * @see {@link convertToViewportRectangle}
@@ -455,7 +468,7 @@ class PageViewport {
    * for converting canvas pixel location into PDF one.
    * @param {number} x - The x-coordinate.
    * @param {number} y - The y-coordinate.
-   * @returns {Object} Object containing `x` and `y` properties of the
+   * @returns {Array} Array containing `x`- and `y`-coordinates of the
    *   point in the PDF coordinate space.
    * @see {@link convertToViewportPoint}
    */
@@ -840,9 +853,9 @@ export {
   deprecated,
   DOMCanvasFactory,
   DOMCMapReaderFactory,
+  DOMFilterFactory,
   DOMStandardFontDataFactory,
   DOMSVGFactory,
-  FilterFactory,
   getColorValues,
   getCurrentTransform,
   getCurrentTransformInverse,

@@ -40,7 +40,6 @@ import {
   PermissionFlag,
   shadow,
   UnexpectedResponseException,
-  UNSUPPORTED_FEATURES,
   Util,
   VerbosityLevel,
 } from "./shared/util.js";
@@ -52,7 +51,6 @@ import {
   version,
 } from "./display/api.js";
 import {
-  FilterFactory,
   getFilenameFromUrl,
   getPdfFilenameFromUrl,
   getXfaPageViewport,
@@ -92,7 +90,6 @@ export {
   createPromiseCapability,
   createValidAbsoluteUrl,
   FeatureTest,
-  FilterFactory,
   getDocument,
   getFilenameFromUrl,
   getPdfFilenameFromUrl,
@@ -116,7 +113,6 @@ export {
   shadow,
   SVGGraphics,
   UnexpectedResponseException,
-  UNSUPPORTED_FEATURES,
   updateTextLayer,
   Util,
   VerbosityLevel,

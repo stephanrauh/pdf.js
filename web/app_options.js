@@ -289,6 +289,7 @@ const defaultOptions = {
   workerSrc: {
     /** @type {string} */
     value:
+      // eslint-disable-next-line no-nested-ternary
       typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")
         ? "../src/worker_loader.js"
         : "./assets/pdf.worker.js",

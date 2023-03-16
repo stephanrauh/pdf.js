@@ -103,8 +103,17 @@ class ImageResizer {
   }
 
   static set MAX_AREA(area) {
-    this._hasMaxArea = true;
-    shadow(this, "MAX_AREA", area);
+    if (area >= 0) {
+      this._hasMaxArea = true;
+      shadow(this, "MAX_AREA", area);
+    }
+  }
+
+  static setMaxArea(area) {
+    if (!this._hasMaxArea) {
+      // Divide by 4 to have the value in pixels.
+      this.MAX_AREA = area >> 2;
+    }
   }
 
   static _areGoodDims(width, height) {
@@ -184,8 +193,13 @@ class ImageResizer {
     for (const step of steps) {
       const prevWidth = newWidth;
       const prevHeight = newHeight;
-      newWidth = Math.floor(newWidth / step);
-      newHeight = Math.floor(newHeight / step);
+
+      // See bug 1820511 (Windows specific bug).
+      // TODO: once the above bug is fixed we could revert to:
+      // newWidth = Math.floor(newWidth / 2);
+      newWidth = Math.floor(newWidth / step) - 1;
+      newHeight = Math.floor(newHeight / step) - 1;
+
       const canvas = new OffscreenCanvas(newWidth, newHeight);
       const ctx = canvas.getContext("2d");
       ctx.drawImage(
