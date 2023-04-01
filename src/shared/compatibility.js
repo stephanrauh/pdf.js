@@ -39,7 +39,7 @@ const isNodeJS = false;
   polyfillPath2D(globalThis);
 })();
 
-// Support: Node.js
+// Support: Node.js<18.0.0
 (function checkReadableStream() {
   if (globalThis.ReadableStream || !isNodeJS) {
     return;

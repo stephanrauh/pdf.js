@@ -325,7 +325,7 @@ class FontFaceObject {
       isEvalSupported = true,
       disableFontFace = false,
       ignoreErrors = false,
-      fontRegistry = null,
+      inspectFont = null,
     }
   ) {
     this.compiledGlyphs = Object.create(null);
@@ -336,7 +336,7 @@ class FontFaceObject {
     this.isEvalSupported = isEvalSupported !== false;
     this.disableFontFace = disableFontFace === true;
     this.ignoreErrors = ignoreErrors === true;
-    this.fontRegistry = fontRegistry;
+    this._inspectFont = inspectFont;
   }
 
   createNativeFontFace() {
@@ -360,7 +360,7 @@ class FontFaceObject {
       );
     }
 
-    this.fontRegistry?.registerFont(this);
+    this._inspectFont?.(this);
     return nativeFontFace;
   }
 
@@ -382,7 +382,7 @@ class FontFaceObject {
       rule = `@font-face {font-family:"${this.cssFontInfo.fontFamily}";${css}src:${url}}`;
     }
 
-    this.fontRegistry?.registerFont(this, url);
+    this._inspectFont?.(this, url);
     return rule;
   }
 

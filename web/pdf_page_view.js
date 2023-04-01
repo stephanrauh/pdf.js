@@ -609,14 +609,13 @@ class PDFPageView {
         isScalingRestricted = true;
       }
     }
-    const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
+    const onlyCssZoom =
+      this.useOnlyCssZoom || (this.hasRestrictedScaling && isScalingRestricted);
+    const postponeDrawing =
+      !onlyCssZoom && drawingDelay >= 0 && drawingDelay < 1000;
 
     if (this.canvas) {
-      if (
-        postponeDrawing ||
-        this.useOnlyCssZoom ||
-        (this.hasRestrictedScaling && isScalingRestricted)
-      ) {
+      if (postponeDrawing || onlyCssZoom) {
         if (
           postponeDrawing &&
           this.renderingState !== RenderingStates.FINISHED
@@ -761,10 +760,7 @@ class PDFPageView {
         scaleX = height / width;
         scaleY = width / height;
       }
-
-      if (absRotation !== 0) {
-        target.style.transform = `rotate(${relativeRotation}deg) scale(${scaleX}, ${scaleY})`;
-      }
+      target.style.transform = `rotate(${relativeRotation}deg) scale(${scaleX}, ${scaleY})`;
     }
 
     if (redrawAnnotationLayer && this.annotationLayer) {
@@ -1004,8 +1000,14 @@ class PDFPageView {
     // is complete when `!this.renderingQueue`, to prevent black flickering.
     canvas.hidden = true;
     let isCanvasHidden = true;
-    const showCanvas = function () {
-      if (isCanvasHidden) {
+    const hasHCM = !!(
+      this.pageColors?.background && this.pageColors?.foreground
+    );
+    const showCanvas = function (isLastShow) {
+      // In HCM, a final filter is applied on the canvas which means that
+      // before it's applied we've normal colors. Consequently, to avoid to have
+      // a final flash we just display it once all the drawing is done.
+      if (isCanvasHidden && (!hasHCM || isLastShow)) {
         canvas.hidden = false;
         isCanvasHidden = false;
       }
@@ -1081,22 +1083,6 @@ class PDFPageView {
     const transform = outputScale.scaled
       ? [outputScale.sx, 0, 0, outputScale.sy, 0, 0]
       : null;
-    // #916 modified by ngx-extended-pdf-viewer
-    let background = PDFViewerApplicationOptions.get("pdfBackgroundColor");
-    if (typeof background === "function") {
-      const backgroundColor = background({ pageNumber: this.id, pageLabel: this.pageLabel });
-      if (backgroundColor) {
-        background = backgroundColor;
-      }
-    }
-    let backgroundColorToReplace = background ? PDFViewerApplicationOptions.get("pdfBackgroundColorToReplace") : null;
-    if (typeof backgroundColorToReplace === "function") {
-      const colorToReplace = backgroundColorToReplace({ pageNumber: this.id, pageLabel: this.pageLabel });
-      if (colorToReplace) {
-        backgroundColorToReplace = colorToReplace;
-      }
-    }
-    // #916 end of modification by ngx-extended-pdf-viewer
 
     const renderContext = {
       canvasContext: ctx,
@@ -1104,14 +1090,12 @@ class PDFPageView {
       viewport,
       annotationMode: this.#annotationMode,
       optionalContentConfigPromise: this._optionalContentConfigPromise,
-      background,
-      backgroundColorToReplace,
       annotationCanvasMap: this._annotationCanvasMap,
       pageColors: this.pageColors,
     };
     const renderTask = this.pdfPage.render(renderContext);
     renderTask.onContinue = function (cont) {
-      showCanvas();
+      showCanvas(false);
       if (result.onRenderContinue) {
         result.onRenderContinue(cont);
       } else {
@@ -1121,7 +1105,7 @@ class PDFPageView {
 
     renderTask.promise.then(
       function () {
-        showCanvas();
+        showCanvas(true);
         renderCapability.resolve();
       },
       function (error) {
@@ -1129,7 +1113,7 @@ class PDFPageView {
         // a black canvas if rendering was cancelled before the `onContinue`-
         // callback had been invoked at least once.
         if (!(error instanceof RenderingCancelledException)) {
-          showCanvas();
+          showCanvas(true);
         }
         renderCapability.reject(error);
       }

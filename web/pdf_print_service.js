@@ -76,7 +76,6 @@ function renderPage(
       intent: "print",
       annotationMode: AnnotationMode.ENABLE_STORAGE,
       optionalContentConfigPromise,
-      background: PDFViewerApplicationOptions.get("pdfBackgroundColor"),
       printAnnotationStorage,
     };
     return pdfPage.render(renderContext).promise;

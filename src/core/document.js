@@ -511,13 +511,7 @@ class Page {
     });
   }
 
-  extractTextContent({
-    handler,
-    task,
-    includeMarkedContent,
-    sink,
-    combineTextItems,
-  }) {
+  extractTextContent({ handler, task, includeMarkedContent, sink }) {
     const contentStreamPromise = this.getContentStream();
     const resourcesPromise = this.loadResources([
       "ExtGState",
@@ -545,7 +539,6 @@ class Page {
         task,
         resources: this.resources,
         includeMarkedContent,
-        combineTextItems,
         sink,
         viewBox: this.view,
       });
@@ -1144,7 +1137,7 @@ class PDFDocument {
       }
       let fontFamily = descriptor.get("FontFamily");
       // For example, "Wingdings 3" is not a valid font name in the css specs.
-      fontFamily = fontFamily.replace(/[ ]+(\d)/g, "$1");
+      fontFamily = fontFamily.replaceAll(/[ ]+(\d)/g, "$1");
       const fontWeight = descriptor.get("FontWeight");
 
       // Angle is expressed in degrees counterclockwise in PDF
