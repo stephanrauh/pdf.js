@@ -40,6 +40,23 @@ class XfaLayer {
       }
       ancestor = ancestor.parentElement;
     }
+    let radioFieldValue;
+    if (element.attributes.type === "radio") {
+      // radio buttons are rendered a bit differently
+      // What we believed to be the field name is the value of the
+      // radio button if checked; the field name itself is a few
+      // steps higher up the DOM tree
+      radioFieldValue = fieldname;
+      ancestor = ancestor.parentElement;
+      while (ancestor) {
+        if (ancestor.getAttribute("xfaname")) {
+          fieldname = ancestor.getAttribute("xfaname");
+          break;
+        }
+        ancestor = ancestor.parentElement;
+      }
+      console.log(id + " " + fieldname + " " + radioFieldValue + " " + html);
+    }
     // #1585 end of modification by ngx-extended-pdf-viewer
     const storedData = storage.getValue(id, fieldname, { value: null });
     // end of modification by ngx-extended-pdf-viewer
@@ -56,10 +73,7 @@ class XfaLayer {
         });
         break;
       case "input":
-        if (
-          element.attributes.type === "radio" ||
-          element.attributes.type === "checkbox"
-        ) {
+        if (element.attributes.type === "radio" || element.attributes.type === "checkbox") {
           if (storedData.value === element.attributes.xfaOn) {
             html.setAttribute("checked", true);
           } else if (storedData.value === element.attributes.xfaOff) {
@@ -71,11 +85,23 @@ class XfaLayer {
             break;
           }
           html.addEventListener("change", event => {
-            storage.setValue(id, fieldname, { // #1585 end of modification by ngx-extended-pdf-viewer
-              value: event.target.checked
-                ? event.target.getAttribute("xfaOn")
-                : event.target.getAttribute("xfaOff"),
-            });
+            if (element.attributes.type === "radio") {
+              if (event.target.checked) {
+                storage.setValue(id, fieldname, { // #1585 end of modification by ngx-extended-pdf-viewer
+                  value: event.target.checked ? event.target.getAttribute("xfaOn") : event.target.getAttribute("xfaOff"),
+                  radioValue: radioFieldValue,
+                });
+              } else {
+                storage.setValue(id, fieldname, { // #1585 end of modification by ngx-extended-pdf-viewer
+                  value: event.target.checked ? event.target.getAttribute("xfaOn") : event.target.getAttribute("xfaOff"),
+                  emitMessage: false,
+                });
+              }
+            } else {
+              storage.setValue(id, fieldname, { // #1585 end of modification by ngx-extended-pdf-viewer
+                value: event.target.checked ? event.target.getAttribute("xfaOn") : event.target.getAttribute("xfaOff"),
+              });
+            }
           });
         } else {
           if (storedData.value !== null) {
