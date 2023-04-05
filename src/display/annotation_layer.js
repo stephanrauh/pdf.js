@@ -1164,7 +1164,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
               }
               value = value.slice(0, charLimit);
               target.value = elementData.userValue = value;
-              storage.setValue(id, this.data.fieldName, { value });
+              storage.setValue(id, this.data.fieldName, { value }); // #718 / #868 modified by ngx-extended-pdf-viewer
 
               this.linkService.eventBus?.dispatch("dispatcheventinsandbox", {
                 source: this,
@@ -1777,7 +1777,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
 
       selectElement.addEventListener("input", event => {
         const exportValue = getValue(/* isExport */ true);
-        storage.setValue(id, { value: exportValue });
+        storage.setValue(id, this.data.fieldName, { value: exportValue }); // #718 / #868 modified by ngx-extended-pdf-viewer
 
         event.preventDefault();
 
