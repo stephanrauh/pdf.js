@@ -31,15 +31,27 @@ import { XfaText } from "./xfa_text.js";
 class XfaLayer {
   static setupStorage(html, id, element, storage, intent) {
     // #1585 modified by ngx-extended-pdf-viewer
-    let fieldname = id;
+    let fieldname = "";
     let ancestor = html;
+    let parent = undefined;
     while (ancestor) {
       if (ancestor.getAttribute("xfaname")) {
-        fieldname = ancestor.getAttribute("xfaname");
-        break;
+        fieldname += ancestor.getAttribute("xfaname") + ":" + fieldname;
+        if (!parent) {
+          parent = ancestor;
+        }
       }
       ancestor = ancestor.parentElement;
     }
+    if (fieldname === "") {
+      console.log(
+        "Unexpected layout of the XFA document - there must be at least one xfaname attribute, otherwise ngx-extended-pdf-viewer won't work"
+      );
+    } else {
+      // remove the trailing colon
+      fieldname = fieldname.substring(0, fieldname.length - 1);
+    }
+
     let radioFieldValue;
     if (element.attributes.type === "radio") {
       // radio buttons are rendered a bit differently
@@ -47,13 +59,13 @@ class XfaLayer {
       // radio button if checked; the field name itself is a few
       // steps higher up the DOM tree
       radioFieldValue = fieldname;
-      ancestor = ancestor.parentElement;
-      while (ancestor) {
-        if (ancestor.getAttribute("xfaname")) {
+      ancestor = parent.parentElement;
+      while (parent) {
+        if (parent.getAttribute("xfaname")) {
           fieldname = ancestor.getAttribute("xfaname");
           break;
         }
-        ancestor = ancestor.parentElement;
+        parent = parent.parentElement;
       }
       console.log(id + " " + fieldname + " " + radioFieldValue + " " + html);
     }
@@ -159,6 +171,11 @@ class XfaLayer {
           // We don't need to add dataId in the html object but it can
           // be useful to know its value when writing printing tests:
           // in this case, don't skip dataId to have its value.
+          // #1718 modified by ngx-extended-pdf-viewer
+          // because it needs the dataId in the HTML code
+          // to be able to assign the field correctly
+          html.setAttribute(key, value);
+          // #1718 end of modification by ngx-extended-pdf-viewer
           break;
         case "id":
           html.setAttribute("data-element-id", value);
