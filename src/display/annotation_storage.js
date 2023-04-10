@@ -38,46 +38,16 @@ class AnnotationStorage {
   /**
    * Get the value for a given key if it exists, or return the default value.
    * @param {string} key
-   * @param {string} fieldName name of the input field
    * @param {Object} defaultValue
    * @returns {Object}
    */
-  // #718 modified by ngx-extended-pdf-viewer
-  getValue(key, fieldname, defaultValue, radioButtonField = undefined) {
-    let obj = this.#storage.get(key);
-    if (obj === undefined) {
-      if (window.getFormValue) {
-        window.assignFormIdAndFieldName(key, fieldname, radioButtonField);
-        // necessary because radio buttons don't have a reference to their field
-        const ngObj = window.getFormValue(fieldname);
-        if (ngObj !== undefined && ngObj.value !== undefined) {
-          if (radioButtonField) {
-            const value = { value: ngObj.value === radioButtonField };
-            obj = value;
-          } else {
-            obj = ngObj;
-          }
-          // ngx-extended-pdf-viewer #1054 consider values from
-          // window.getFormValues as default value
-          this.setValue(key, undefined, obj, undefined, true); // second parameter is undefined to prevent infinite loops
-        }
-        if (obj === undefined && defaultValue !== undefined && defaultValue.value !== undefined && defaultValue.value !== "") {
-          // send the pre-filled form value to Angular via (formDataChange)
-          if (radioButtonField) {
-            if (defaultValue.value) {
-              window.setFormValue(fieldname, radioButtonField);
-            }
-          } else {
-            window.setFormValue(fieldname, defaultValue.value);
-          }
-        }
-      }
-    }
-    // #718 end of modification by ngx-extended-pdf-viewer
-    if (obj === undefined) {
+  getValue(key, defaultValue) {
+    const value = this.#storage.get(key);
+    if (value === undefined) {
       return defaultValue;
     }
-    return Object.assign(defaultValue, obj);
+
+    return Object.assign(defaultValue, value);
   }
 
   /**
@@ -113,56 +83,24 @@ class AnnotationStorage {
   /**
    * Set the value for a given key
    * @param {string} key
-   * @param {string} fieldName name of the input field
    * @param {Object} value
    */
-  // #718, #1054 modified by ngx-extended-pdf-viewer
-  setValue(key, fieldname, value, radioButtonField = undefined, isDefaultValue = false) {
-    // #718 end of modification by ngx-extended-pdf-viewer
+  setValue(key, value) {
     const obj = this.#storage.get(key);
     let modified = false;
     if (obj !== undefined) {
       for (const [entry, val] of Object.entries(value)) {
-        if (
-          entry !== "radioValue" && // #718 modified by ngx-extended-pdf-viewer
-          entry !== "emitMessage" && // #718 modified by ngx-extended-pdf-viewer
-          obj[entry] !== val
-        ) {
+        if (obj[entry] !== val) {
           modified = true;
           obj[entry] = val;
         }
       }
     } else {
-      // #1054 modified by ngx-extended-pdf-viewer
-      if (!isDefaultValue) {
-        modified = true;
-      }
-      // #1054 end of modification by ngx-extended-pdf-viewer
+      modified = true;
       this.#storage.set(key, value);
     }
     if (modified) {
       this.#setModified();
-      // #718 modified by ngx-extended-pdf-viewer
-      if (fieldname?.constructor.name !== "FreeTextEditor") {
-        if (fieldname || radioButtonField) {
-          if (window.setFormValue) {
-            if (value.items) {
-              window.setFormValue(fieldname, value.items);
-            } else if (value.emitMessage === false) {
-              // ignore this field
-            } else if (value.radioValue) {
-              window.setFormValue(fieldname, value.radioValue);
-            } else if (value.exportValue) { // #1183 modified by ngx-extended-pdf-viewer
-              window.setFormValue(fieldname, value.exportValue);
-            } else {
-              for (const val of Object.values(value)) {
-                window.setFormValue(fieldname, val);
-              }
-            }
-          }
-        }
-      }
-      // #718 end of modification by ngx-extended-pdf-viewer
     }
 
     if (

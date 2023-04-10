@@ -30,48 +30,10 @@ import { XfaText } from "./xfa_text.js";
 
 class XfaLayer {
   static setupStorage(html, id, element, storage, intent) {
-    // #1585 modified by ngx-extended-pdf-viewer
-    let fieldname = "";
-    let ancestor = html;
-    let parent = undefined;
-    while (ancestor) {
-      if (ancestor.getAttribute("xfaname")) {
-        fieldname += ancestor.getAttribute("xfaname") + ":" + fieldname;
-        if (!parent) {
-          parent = ancestor;
-        }
-      }
-      ancestor = ancestor.parentElement;
-    }
-    if (fieldname === "") {
-      console.log(
-        "Unexpected layout of the XFA document - there must be at least one xfaname attribute, otherwise ngx-extended-pdf-viewer won't work"
-      );
-    } else {
-      // remove the trailing colon
-      fieldname = fieldname.substring(0, fieldname.length - 1);
-    }
-
-    let radioFieldValue;
-    if (element.attributes.type === "radio") {
-      // radio buttons are rendered a bit differently
-      // What we believed to be the field name is the value of the
-      // radio button if checked; the field name itself is a few
-      // steps higher up the DOM tree
-      radioFieldValue = fieldname;
-      ancestor = parent.parentElement;
-      while (parent) {
-        if (parent.getAttribute("xfaname")) {
-          fieldname = ancestor.getAttribute("xfaname");
-          break;
-        }
-        parent = parent.parentElement;
-      }
-      console.log(id + " " + fieldname + " " + radioFieldValue + " " + html);
-    }
-    // #1585 end of modification by ngx-extended-pdf-viewer
-    const storedData = storage.getValue(id, fieldname, { value: null });
-    // end of modification by ngx-extended-pdf-viewer
+    const angularData = window.getFormValueFromAngular(html);
+    const storedData = angularData.value ? angularData : storage.getValue(id, { value: null });
+    window.registerXFAField(html, storedData);
+    html.addEventListener("updateFromAngular", value => storage.setValue(id, { value: value.detail }));
     switch (element.name) {
       case "textarea":
         if (storedData.value !== null) {
@@ -80,12 +42,17 @@ class XfaLayer {
         if (intent === "print") {
           break;
         }
+
         html.addEventListener("input", event => {
-          storage.setValue(id, fieldname, { value: event.target.value }); // #1585 end of modification by ngx-extended-pdf-viewer
+          window.updateAngularFormValue(html, { value: event.target.value });
+          storage.setValue(id, { value: event.target.value });
         });
         break;
       case "input":
-        if (element.attributes.type === "radio" || element.attributes.type === "checkbox") {
+        if (
+          element.attributes.type === "radio" ||
+          element.attributes.type === "checkbox"
+        ) {
           if (storedData.value === element.attributes.xfaOn) {
             html.setAttribute("checked", true);
           } else if (storedData.value === element.attributes.xfaOff) {
@@ -97,23 +64,16 @@ class XfaLayer {
             break;
           }
           html.addEventListener("change", event => {
-            if (element.attributes.type === "radio") {
-              if (event.target.checked) {
-                storage.setValue(id, fieldname, { // #1585 end of modification by ngx-extended-pdf-viewer
-                  value: event.target.checked ? event.target.getAttribute("xfaOn") : event.target.getAttribute("xfaOff"),
-                  radioValue: radioFieldValue,
-                });
-              } else {
-                storage.setValue(id, fieldname, { // #1585 end of modification by ngx-extended-pdf-viewer
-                  value: event.target.checked ? event.target.getAttribute("xfaOn") : event.target.getAttribute("xfaOff"),
-                  emitMessage: false,
-                });
-              }
-            } else {
-              storage.setValue(id, fieldname, { // #1585 end of modification by ngx-extended-pdf-viewer
-                value: event.target.checked ? event.target.getAttribute("xfaOn") : event.target.getAttribute("xfaOff"),
-              });
-            }
+            window.updateAngularFormValue(html, {
+              value: event.target.checked
+                ? event.target.getAttribute("xfaOn")
+                : event.target.getAttribute("xfaOff"),
+            });
+            storage.setValue(id, {
+              value: event.target.checked
+                ? event.target.getAttribute("xfaOn")
+                : event.target.getAttribute("xfaOff"),
+            });
           });
         } else {
           if (storedData.value !== null) {
@@ -123,7 +83,8 @@ class XfaLayer {
             break;
           }
           html.addEventListener("input", event => {
-            storage.setValue(id, fieldname, { value: event.target.value }); // #1585 end of modification by ngx-extended-pdf-viewer
+            window.updateAngularFormValue(html, { value: event.target.value });
+            storage.setValue(id, { value: event.target.value });
           });
         }
         break;
@@ -141,7 +102,8 @@ class XfaLayer {
             options.selectedIndex === -1
               ? ""
               : options[options.selectedIndex].value;
-          storage.setValue(id, fieldname, { value }); // #1585 end of modification by ngx-extended-pdf-viewer
+          window.updateAngularFormValue(html, { value });
+          storage.setValue(id, { value });
         });
         break;
     }
@@ -171,11 +133,6 @@ class XfaLayer {
           // We don't need to add dataId in the html object but it can
           // be useful to know its value when writing printing tests:
           // in this case, don't skip dataId to have its value.
-          // #1718 modified by ngx-extended-pdf-viewer
-          // because it needs the dataId in the HTML code
-          // to be able to assign the field correctly
-          html.setAttribute(key, value);
-          // #1718 end of modification by ngx-extended-pdf-viewer
           break;
         case "id":
           html.setAttribute("data-element-id", value);
