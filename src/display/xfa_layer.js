@@ -30,10 +30,15 @@ import { XfaText } from "./xfa_text.js";
 
 class XfaLayer {
   static setupStorage(html, id, element, storage, intent) {
+    // #1737 modified by ngx-extended-pdf-viewer
     const angularData = window.getFormValueFromAngular(html);
+    if (angularData.value) {
+      storage.setValue(id, angularData);
+    }
     const storedData = angularData.value ? angularData : storage.getValue(id, { value: null });
     window.registerXFAField(html, storedData);
     html.addEventListener("updateFromAngular", value => storage.setValue(id, { value: value.detail }));
+    // #1737 end of modification by ngx-extended-pdf-viewer
     switch (element.name) {
       case "textarea":
         if (storedData.value !== null) {
@@ -42,9 +47,10 @@ class XfaLayer {
         if (intent === "print") {
           break;
         }
-
         html.addEventListener("input", event => {
+          // #1737 modified by ngx-extended-pdf-viewer
           window.updateAngularFormValue(html, { value: event.target.value });
+          // #1737 end of modification by ngx-extended-pdf-viewer
           storage.setValue(id, { value: event.target.value });
         });
         break;
@@ -55,7 +61,10 @@ class XfaLayer {
         ) {
           if (storedData.value === element.attributes.xfaOn) {
             html.setAttribute("checked", true);
-          } else if (storedData.value === element.attributes.xfaOff) {
+          // #1737 modified by ngx-extended-pdf-viewer
+          } else { // if (storedData.value === element.attributes.xfaOff) {
+            // #1737 end of modification by ngx-extended-pdf-viewer
+
             // The checked attribute may have been set when opening the file,
             // unset through the UI and we're here because of printing.
             html.removeAttribute("checked");
@@ -64,11 +73,13 @@ class XfaLayer {
             break;
           }
           html.addEventListener("change", event => {
+            // #1737 modified by ngx-extended-pdf-viewer
             window.updateAngularFormValue(html, {
               value: event.target.checked
                 ? event.target.getAttribute("xfaOn")
                 : event.target.getAttribute("xfaOff"),
             });
+            // #1737 end of modification by ngx-extended-pdf-viewer
             storage.setValue(id, {
               value: event.target.checked
                 ? event.target.getAttribute("xfaOn")
@@ -83,16 +94,25 @@ class XfaLayer {
             break;
           }
           html.addEventListener("input", event => {
+            // #1737 modified by ngx-extended-pdf-viewer
             window.updateAngularFormValue(html, { value: event.target.value });
+            // #1737 end of modification by ngx-extended-pdf-viewer
             storage.setValue(id, { value: event.target.value });
           });
         }
         break;
       case "select":
         if (storedData.value !== null) {
+          // #1737 modified by ngx-extended-pdf-viewer
+          element.attributes.value = storedData.value;
+          // #1737 end of modification by ngx-extended-pdf-viewer
           for (const option of element.children) {
             if (option.attributes.value === storedData.value) {
               option.attributes.selected = true;
+              // #1737 modified by ngx-extended-pdf-viewer
+            } else {
+              delete option.attributes.selected;
+              // #1737 end of modification by ngx-extended-pdf-viewer
             }
           }
         }
@@ -102,7 +122,9 @@ class XfaLayer {
             options.selectedIndex === -1
               ? ""
               : options[options.selectedIndex].value;
+          // #1737 modified by ngx-extended-pdf-viewer
           window.updateAngularFormValue(html, { value });
+          // #1737 end of modification by ngx-extended-pdf-viewer
           storage.setValue(id, { value });
         });
         break;
