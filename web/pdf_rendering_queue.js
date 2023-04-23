@@ -198,7 +198,6 @@ class PDFRenderingQueue {
           .finally(() => {
             this.renderHighestPriority();
           })
-          .then(() => console.log("Rendered page " + view.renderingId))
           .catch(reason => {
             if (reason instanceof RenderingCancelledException) {
               return;

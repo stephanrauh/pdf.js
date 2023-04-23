@@ -377,7 +377,7 @@ class PDFViewer {
     }
 
     // #716 modified by ngx-extended-pdf-viewer
-    const flip = Math.abs(this._currentPageNumber - val) < 2;
+    const flip = Math.abs(this._currentPageNumber - val) <= 2;
     // #716 end of modification
 
     // The intent can be to just reset a scroll position and/or scale.
@@ -524,6 +524,7 @@ class PDFViewer {
 
     const loader = () => this.adjacentPagesLoader(loader);
     this.eventBus._on("pagerendered", loader);
+    this.eventBus._on("thumbnailRendered", loader);
   }
 
   adjacentPagesLoader(self) {
@@ -552,6 +553,7 @@ class PDFViewer {
       }
     }
     this.eventBus._off("pagerendered", self);
+    this.eventBus._off("thumbnailRendered", self);
   }
   // #716 modified by ngx-extended-pdf-viewer
 
@@ -2110,9 +2112,11 @@ class PDFViewer {
    * @private
    */
   _getPageAdvance(currentPageNumber, previous = false) {
+    // #1695 modified by ngx-extended-pdf-viewer
     if (this.pageViewMode === "book") {
       return 2;
     }
+    // end of modification by ngx-extended-pdf-viewer
     switch (this._scrollMode) {
       case ScrollMode.WRAPPED: {
         const { views } = this._getVisiblePages(),

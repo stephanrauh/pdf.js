@@ -126,8 +126,12 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
   // producing the error. See also animationStarted.
 
   // #716 modified by ngx-extended-pdf-viewer
-  if (element.classList.contains("stf__item")) {
-    Window['ngxConsole'].log("don't scroll in book mode");
+  if (
+    element.classList.contains("stf__item") ||
+    element.parentElement?.classList.contains("stf__item") ||
+    element.parentElement?.parentElement?.classList.contains("stf__item")
+  ) {
+    // Window["ngxConsole"].log("don't scroll in book mode");
     return;
   }
   // #716 end of modification

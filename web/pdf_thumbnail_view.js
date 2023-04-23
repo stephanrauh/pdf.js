@@ -94,6 +94,7 @@ class PDFThumbnailView {
     renderingQueue,
     l10n,
     pageColors,
+    eventBus,   // #1696 modified by ngx-extended-pdf-viewer
   }) {
     this.id = id;
     this.renderingId = "thumbnail" + id;
@@ -108,6 +109,7 @@ class PDFThumbnailView {
 
     this.linkService = linkService;
     this.renderingQueue = renderingQueue;
+    this.eventBus = eventBus;   // #1696 modified by ngx-extended-pdf-viewer
 
     this.renderTask = null;
     this.renderingState = RenderingStates.INITIAL;
@@ -308,6 +310,7 @@ class PDFThumbnailView {
       if (error) {
         throw error;
       }
+      this.eventBus.dispatch("thumbnailRendered", this.id);   // #1696 modified by ngx-extended-pdf-viewer
     };
 
     // Render the thumbnail at a larger size and downsize the canvas (similar
