@@ -387,10 +387,8 @@ class PDFViewer {
     // #716 modified by ngx-extended-pdf-viewer
     if (this.pageFlip) {
       if (flip) {
-        Window["ngxConsole"].log("Flip");
         this.pageFlip.flip(val - 1);
       } else {
-        Window["ngxConsole"].log("turn to page");
         this.pageFlip.turnToPage(val - 1);
       }
     }
@@ -500,9 +498,10 @@ class PDFViewer {
   addPageToRenderQueue(pageIndex = 0) {
     if (pageIndex >= 0 && pageIndex <= this._pages.length - 1) {
       const pageView = this._pages[pageIndex];
-      const isLoading = pageView.div.querySelector(".loadingIcon");
+      const isLoading = pageView.renderingState === RenderingStates.INITIAL;
       if (isLoading) {
         this.#ensurePdfPageLoaded(pageView).then(() => {
+          // todo: this cancels any rendering that's already in progress
           this.renderingQueue.renderView(pageView);
         });
         return true;
@@ -513,71 +512,46 @@ class PDFViewer {
   // #950 end of modification by ngx-extended-pdf-viewer
 
   // #716 modified by ngx-extended-pdf-viewer
-  ensureAdjecentPagesAreLoaded() {
-    if (!window.adjacentPagesLoader) {
-      window.adjacentPagesLoader = evt => {
-        Window["ngxConsole"].log("rendered", evt);
-        let pageView = this._pages[Math.min(this._pages.length - 1, this.currentPageNumber)];
-        if (pageView) {
-          let isLoading = pageView.div.querySelector(".loadingIcon");
-          if (isLoading) {
-            Window["ngxConsole"].log("asking for the next page");
-            this.#ensurePdfPageLoaded(pageView).then(() => {
-              this.renderingQueue.renderView(pageView);
-            });
-          } else {
-            pageView = this._pages[Math.min(this._pages.length - 1, this.currentPageNumber + 1)];
-            isLoading = pageView.div.querySelector(".loadingIcon");
-            if (isLoading) {
-              Window["ngxConsole"].log("asking for the next + 1 page");
-              this.#ensurePdfPageLoaded(pageView).then(() => {
-                this.renderingQueue.renderView(pageView);
-              });
-            } else {
-              pageView = this._pages[Math.min(this._pages.length - 1, this.currentPageNumber + 2)];
-              isLoading = pageView.div.querySelector(".loadingIcon");
-              if (isLoading) {
-                Window["ngxConsole"].log("asking for the next + 2 page");
-                this.#ensurePdfPageLoaded(pageView).then(() => {
-                  this.renderingQueue.renderView(pageView);
-                });
-              } else {
-                pageView = this._pages[Math.min(this._pages.length - 1, this.currentPageNumber + 3)];
-                isLoading = pageView.div.querySelector(".loadingIcon");
-                if (isLoading) {
-                  Window["ngxConsole"].log("asking for the next + 3 page");
-                  this.#ensurePdfPageLoaded(pageView).then(() => {
-                    this.renderingQueue.renderView(pageView);
-                  });
-                } else {
-                  pageView = this._pages[Math.max(0, this.currentPageNumber - 1)];
-                  isLoading = pageView.div.querySelector(".loadingIcon");
-                  if (isLoading) {
-                    Window["ngxConsole"].log("asking for the current page");
-                    this.#ensurePdfPageLoaded(pageView).then(() => {
-                      this.renderingQueue.renderView(pageView);
-                    });
-                  } else {
-                    pageView = this._pages[Math.max(0, this.currentPageNumber - 2)];
-                    isLoading = pageView.div.querySelector(".loadingIcon");
-                    if (isLoading) {
-                      Window["ngxConsole"].log("asking for the previous page");
-                      this.#ensurePdfPageLoaded(pageView).then(() => {
-                        this.renderingQueue.renderView(pageView);
-                      });
-                    } else {
-                      Window["ngxConsole"].log("Finished preloading the pages");
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      };
-      this.eventBus._on("pagerendered", window.adjacentPagesLoader);
+  async ensureAdjecentPagesAreLoaded() {
+    const advances = [0, 1, -1, 2, -2];
+    for (const advance of advances) {
+      const pageIndex = this.currentPageNumber + advance;
+      if (pageIndex >= 0 && pageIndex < this._pages.length) {
+        const pageView = this._pages[pageIndex];
+        await this.#ensurePdfPageLoaded(pageView);
+      }
     }
-    window.adjacentPagesLoader();
+
+    const loader = () => this.adjacentPagesLoader(loader);
+    this.eventBus._on("pagerendered", loader);
+  }
+
+  adjacentPagesLoader(self) {
+    const advances = [0, 1, -1, 2, -2];
+    const isAlreadyRendering = this._pages.some(pageView => pageView.renderingState === RenderingStates.RUNNING);
+    if (isAlreadyRendering) {
+      // renderView() cancels any rendering in progress -
+      // let's wait until the page has rendered
+      return;
+    }
+    const pausedRendering = this._pages.find(pageView => pageView.renderingState === RenderingStates.PAUSED);
+    if (pausedRendering) {
+      this.renderingQueue.renderView(pausedRendering);
+      return;
+    }
+
+    for (const advance of advances) {
+      const pageIndex = this.currentPageNumber + advance;
+      if (pageIndex >= 0 && pageIndex < this._pages.length) {
+        const pageView = this._pages[pageIndex];
+        const needsToBeRendered = pageView.renderingState === RenderingStates.INITIAL;
+        if (needsToBeRendered) {
+          this.renderingQueue.renderView(pageView);
+          return;
+        }
+      }
+    }
+    this.eventBus._off("pagerendered", self);
   }
   // #716 modified by ngx-extended-pdf-viewer
 
@@ -2136,6 +2110,9 @@ class PDFViewer {
    * @private
    */
   _getPageAdvance(currentPageNumber, previous = false) {
+    if (this.pageViewMode === "book") {
+      return 2;
+    }
     switch (this._scrollMode) {
       case ScrollMode.WRAPPED: {
         const { views } = this._getVisiblePages(),
