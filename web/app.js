@@ -552,6 +552,7 @@ const PDFViewerApplication = {
         linkService: pdfLinkService,
         l10n: this.l10n,
         pageColors,
+        eventBus,   // #1696 modified by ngx-extended-pdf-viewer
       });
       pdfRenderingQueue.setThumbnailViewer(this.pdfThumbnailViewer);
     }

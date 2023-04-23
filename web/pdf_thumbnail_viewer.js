@@ -50,12 +50,15 @@ class PDFThumbnailViewer {
   /**
    * @param {PDFThumbnailViewerOptions} options
    */
-  constructor({ container, linkService, renderingQueue, l10n, pageColors }) {
+  // #1696 modified by ngx-extended-pdf-viewer
+  constructor({ container, linkService, renderingQueue, l10n, pageColors, eventBus }) {
     this.container = container;
     this.linkService = linkService;
     this.renderingQueue = renderingQueue;
     this.l10n = l10n;
     this.pageColors = pageColors || null;
+    this.eventBus = eventBus;
+    // #1696 end of modification by ngx-extended-pdf-viewer
 
     if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
       if (
@@ -221,6 +224,7 @@ class PDFThumbnailViewer {
             renderingQueue: this.renderingQueue,
             l10n: this.l10n,
             pageColors: this.pageColors,
+            eventBus: this.eventBus,   // #1696 modified by ngx-extended-pdf-viewer
           });
           this._thumbnails.push(thumbnail);
         }
