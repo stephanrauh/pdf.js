@@ -1383,7 +1383,7 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
     // #1737 modified by ngx-extended-pdf-viewer
     const angularData = window.getFormValueFromAngular(this.data.fieldName);
     let angularValue = undefined;
-    if (angularData) {
+    if (angularData.value) {
       angularValue = angularData.value === true || angularData.value === data.exportValue;
     }
     let value =
