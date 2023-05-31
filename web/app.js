@@ -2115,15 +2115,17 @@ const PDFViewerApplication = {
     window.removeEventListener("visibilitychange", webViewerVisibilityChange);
     window.removeEventListener("wheel", webViewerWheel, { passive: false });
     const mainContainer = document.getElementById("mainContainer");
-    mainContainer.removeEventListener("touchstart", webViewerTouchStart, {
-      passive: false,
-    });
-    mainContainer.removeEventListener("touchmove", webViewerTouchMove, {
-      passive: false,
-    });
-    mainContainer.removeEventListener("touchend", webViewerTouchEnd, {
-      passive: false,
-    });
+    if (mainContainer) {
+      mainContainer.removeEventListener("touchstart", webViewerTouchStart, {
+        passive: false,
+      });
+      mainContainer.removeEventListener("touchmove", webViewerTouchMove, {
+        passive: false,
+      });
+      mainContainer.removeEventListener("touchend", webViewerTouchEnd, {
+        passive: false,
+      });
+    }
     window.removeEventListener("click", webViewerClick);
     window.removeEventListener("keydown", webViewerKeyDown);
     window.removeEventListener("keyup", webViewerKeyUp);
