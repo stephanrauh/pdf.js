@@ -138,7 +138,7 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
 
   let parent = element.offsetParent;
   if (!parent) {
-    Window['ngxConsole'].error("offsetParent is not set -- cannot scroll");
+    globalThis.ngxConsole.error("offsetParent is not set -- cannot scroll");
     return;
   }
   let offsetY = element.offsetTop + element.clientTop;

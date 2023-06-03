@@ -477,7 +477,7 @@ exports.compressCmaps = function (src, dest, verify) {
     const srcPath = path.join(src, fn);
     const destPath = path.join(dest, fn + ".bcmap");
     const stats = compressCmap(srcPath, destPath, verify);
-    Window['ngxConsole'].log(
+    globalThis.ngxConsole.log(
       "Compressing " +
         fn +
         ": " +

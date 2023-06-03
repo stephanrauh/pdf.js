@@ -202,7 +202,7 @@ class PDFRenderingQueue {
             if (reason instanceof RenderingCancelledException) {
               return;
             }
-            Window['ngxConsole'].error(`renderView: "${reason}"`);
+            globalThis.ngxConsole.error(`renderView: "${reason}"`);
           });
         break;
     }

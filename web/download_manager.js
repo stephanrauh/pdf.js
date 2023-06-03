@@ -51,7 +51,7 @@ class DownloadManager {
 
   downloadUrl(url, filename) {
     if (!createValidAbsoluteUrl(url, "http://example.com")) {
-      Window['ngxConsole'].error(`downloadUrl - not a valid URL: ${url}`);
+      globalThis.ngxConsole.error(`downloadUrl - not a valid URL: ${url}`);
       return; // restricted/invalid URL
     }
     download(url + "#pdfjs.action=download", filename);
@@ -110,7 +110,7 @@ class DownloadManager {
         // #1657 end of modification by ngx-extended-pdf-viewer
         return true;
       } catch (ex) {
-        Window['ngxConsole'].error(`openOrDownloadData: ${ex}`);
+        globalThis.ngxConsole.error(`openOrDownloadData: ${ex}`);
         // Release the `blobUrl`, since opening it failed, and fallback to
         // downloading the PDF file.
         URL.revokeObjectURL(blobUrl);
