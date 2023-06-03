@@ -751,7 +751,7 @@ function loadScript(src, removeScriptElement = false) {
       resolve(evt);
     };
     script.onerror = function (error) {
-      Window['ngxConsole'].log(error);
+      globalThis.ngxConsole.log(error);
       reject(new Error(`Cannot load script at: ${script.src}`));
     };
     (document.head || document.documentElement).append(script);
@@ -760,7 +760,7 @@ function loadScript(src, removeScriptElement = false) {
 
 // Deprecated API function -- display regardless of the `verbosity` setting.
 function deprecated(details) {
-  Window['ngxConsole'].log("Deprecated API usage: " + details);
+  globalThis.ngxConsole.log("Deprecated API usage: " + details);
 }
 
 let pdfDateStringRegex;

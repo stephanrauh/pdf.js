@@ -35,7 +35,7 @@ function getDb() {
         resolve(db);
       };
       request.onerror = function () {
-        Window['ngxConsole'].warn("getDb: " + request.error);
+        globalThis.ngxConsole.warn("getDb: " + request.error);
         reject(request.error);
       };
     });

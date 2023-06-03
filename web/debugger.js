@@ -126,7 +126,7 @@ const FontInspector = (function FontInspectorClosure() {
       logIt.textContent = "Log";
       logIt.addEventListener("click", function (event) {
         event.preventDefault();
-        Window['ngxConsole'].log(fontObj);
+        globalThis.ngxConsole.log(fontObj);
       });
       const select = document.createElement("input");
       select.setAttribute("type", "checkbox");

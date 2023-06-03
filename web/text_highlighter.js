@@ -130,7 +130,7 @@ class TextHighlighter {
       }
 
       if (i === textContentItemsStr.length) {
-        Window['ngxConsole'].error("Could not find a matching mapping");
+        globalThis.ngxConsole.error("Could not find a matching mapping");
       }
 
       const match = {

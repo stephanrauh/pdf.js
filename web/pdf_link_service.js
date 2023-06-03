@@ -198,7 +198,7 @@ class PDFLinkService {
             this.#goToDestinationHelper(rawDest, namedDest, explicitDest);
           })
           .catch(() => {
-            Window['ngxConsole'].error(
+            globalThis.ngxConsole.error(
               `PDFLinkService.#goToDestinationHelper: "${destRef}" is not ` +
                 `a valid page reference, for dest="${rawDest}".`
             );
@@ -208,14 +208,14 @@ class PDFLinkService {
     } else if (Number.isInteger(destRef)) {
       pageNumber = destRef + 1;
     } else {
-      Window['ngxConsole'].error(
+      globalThis.ngxConsole.error(
         `PDFLinkService.#goToDestinationHelper: "${destRef}" is not ` +
           `a valid destination reference, for dest="${rawDest}".`
       );
       return;
     }
     if (!pageNumber || pageNumber < 1 || pageNumber > this.pagesCount) {
-      Window['ngxConsole'].error(
+      globalThis.ngxConsole.error(
         `PDFLinkService.#goToDestinationHelper: "${pageNumber}" is not ` +
           `a valid page number, for dest="${rawDest}".`
       );
@@ -254,7 +254,7 @@ class PDFLinkService {
       explicitDest = await dest;
     }
     if (!Array.isArray(explicitDest)) {
-      Window['ngxConsole'].error(
+      globalThis.ngxConsole.error(
         `PDFLinkService.goToDestination: "${explicitDest}" is not ` +
           `a valid destination array, for dest="${dest}".`
       );
@@ -282,7 +282,7 @@ class PDFLinkService {
         pageNumber <= this.pagesCount
       )
     ) {
-      Window['ngxConsole'].error(`PDFLinkService.goToPage: "${val}" is not a valid page.`);
+      globalThis.ngxConsole.error(`PDFLinkService.goToPage: "${val}" is not a valid page.`);
       return;
     }
 
@@ -407,7 +407,7 @@ class PDFLinkService {
             ];
           } else if (zoomArg === "FitR") {
             if (zoomArgs.length !== 5) {
-              Window['ngxConsole'].error(
+              globalThis.ngxConsole.error(
                 'PDFLinkService.setHash: Not enough parameters for "FitR".'
               );
             } else {
@@ -421,7 +421,7 @@ class PDFLinkService {
               ];
             }
           } else {
-            Window['ngxConsole'].error(
+            globalThis.ngxConsole.error(
               `PDFLinkService.setHash: "${zoomArg}" is not a valid zoom value.`
             );
           }
@@ -467,7 +467,7 @@ class PDFLinkService {
         this.goToDestination(dest);
         return;
       }
-      Window['ngxConsole'].error(
+      globalThis.ngxConsole.error(
         `PDFLinkService.setHash: "${unescape(
           hash
         )}" is not a valid destination.`

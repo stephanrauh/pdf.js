@@ -99,7 +99,7 @@ class PDFScriptingManager {
     try {
       this._scripting = this._createScripting();
     } catch (error) {
-      Window['ngxConsole'].error(`PDFScriptingManager.setDocument: "${error?.message}".`);
+      globalThis.ngxConsole.error(`PDFScriptingManager.setDocument: "${error?.message}".`);
 
       await this._destroyScripting();
       return;
@@ -167,7 +167,7 @@ class PDFScriptingManager {
 
       this._eventBus.dispatch("sandboxcreated", { source: this });
     } catch (error) {
-      Window['ngxConsole'].error(`PDFScriptingManager.setDocument: "${error?.message}".`);
+      globalThis.ngxConsole.error(`PDFScriptingManager.setDocument: "${error?.message}".`);
 
       await this._destroyScripting();
       return;
@@ -260,10 +260,10 @@ class PDFScriptingManager {
     if (!id) {
       switch (command) {
         case "clear":
-          Window['ngxConsole'].clear();
+          globalThis.ngxConsole.clear();
           break;
         case "error":
-          Window['ngxConsole'].error(value);
+          globalThis.ngxConsole.error(value);
           break;
         case "layout": {
           // NOTE: Always ignore the pageLayout in GeckoView since there's
@@ -288,7 +288,7 @@ class PDFScriptingManager {
           this._eventBus.dispatch("print", { source: this });
           break;
         case "println":
-          Window['ngxConsole'].log(value);
+          globalThis.ngxConsole.log(value);
           break;
         case "zoom":
           if (isInPresentationMode) {

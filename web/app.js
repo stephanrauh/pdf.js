@@ -286,7 +286,7 @@ const PDFViewerApplication = {
         return;
       }
       if (AppOptions._hasUserOptions()) {
-        Window['ngxConsole'].warn(
+        globalThis.ngxConsole.warn(
           "_initializeOptions: The Preferences may override manually set AppOptions; " +
             'please use the "disablePreferences"-option in order to prevent that.'
         );
@@ -295,7 +295,7 @@ const PDFViewerApplication = {
     try {
       AppOptions.setAll(await this.preferences.getAll());
     } catch (reason) {
-      Window['ngxConsole'].error(`_initializeOptions: "${reason?.message}".`);
+      globalThis.ngxConsole.error(`_initializeOptions: "${reason?.message}".`);
     }
 
     if (AppOptions.get("pdfBugEnabled")) {
@@ -441,7 +441,7 @@ const PDFViewerApplication = {
         }
       }
     } catch (reason) {
-      Window['ngxConsole'].error(`_forceCssTheme: "${reason?.message}".`);
+      globalThis.ngxConsole.error(`_forceCssTheme: "${reason?.message}".`);
     }
   },
 
@@ -1511,7 +1511,7 @@ const PDFViewerApplication = {
           // Don't warn/fallback for empty JavaScript actions.
           return false;
         }
-        Window['ngxConsole'].warn("Warning: JavaScript support is not enabled");
+        globalThis.ngxConsole.warn("Warning: JavaScript support is not enabled");
         return true;
       });
 
@@ -1547,7 +1547,7 @@ const PDFViewerApplication = {
     this._contentLength ??= contentLength; // See `getDownloadInfo`-call above.
 
     // Provides some basic debug information
-    console.log(
+    globalThis.ngxConsole.log(
       `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
         `${(info.Producer || "-").trim()} / ${(info.Creator || "-").trim()}] ` +
         `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer`
@@ -1582,9 +1582,9 @@ const PDFViewerApplication = {
       !pdfDocument.isPureXfa
     ) {
       if (pdfDocument.loadingParams.enableXfa) {
-        Window['ngxConsole'].warn("Warning: XFA Foreground documents are not supported");
+        globalThis.ngxConsole.warn("Warning: XFA Foreground documents are not supported");
       } else {
-        Window['ngxConsole'].warn("Warning: XFA support is not enabled");
+        globalThis.ngxConsole.warn("Warning: XFA support is not enabled");
       }
     } else if (
       (info.IsAcroFormPresent || info.IsXFAPresent) &&
@@ -2336,7 +2336,7 @@ function webViewerInitialized() {
   if (!PDFViewerApplication.supportsDocumentFonts) {
     AppOptions.set("disableFontFace", true);
     l10n.get("web_fonts_disabled").then(msg => {
-      Window['ngxConsole'].warn(msg);
+      globalThis.ngxConsole.warn(msg);
     });
   }
 
@@ -2444,7 +2444,7 @@ function webViewerPageMode({ mode }) {
       view = SidebarView.NONE;
       break;
     default:
-      Window['ngxConsole'].error('Invalid "pagemode" hash parameter: ' + mode);
+      globalThis.ngxConsole.error('Invalid "pagemode" hash parameter: ' + mode);
       return;
   }
   PDFViewerApplication.pdfSidebar?.switchView(view, /* forceOpen = */ true);
