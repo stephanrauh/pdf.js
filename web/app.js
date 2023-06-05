@@ -1133,6 +1133,49 @@ const PDFViewerApplication = {
     }
   },
 
+  // #1685 modified by ngx-extended-pdf-viewer
+  async _exportWithAnnotations() {
+    if (this._saveInProgress) {
+      throw new Error(`Already downloading`);
+    }
+    this._saveInProgress = true;
+    await this.pdfScriptingManager.dispatchWillSave();
+
+    try {
+      this._ensureDownloadComplete();
+
+      const data = await this.pdfDocument.saveDocument();
+      const blob = new Blob([data], { type: "application/pdf" });
+
+      return blob;
+    } catch (reason) {
+      throw new Error(`Error when saving the document: ${reason.message}`);
+    } finally {
+      await this.pdfScriptingManager.dispatchDidSave();
+      this._saveInProgress = false;
+    }
+  },
+
+  async _exportWithoutAnnotations() {
+    try {
+      this._ensureDownloadComplete();
+
+      const data = await this.pdfDocument.getData();
+      const blob = new Blob([data], { type: "application/pdf" });
+      return blob;
+    } catch (reason) {
+      throw new Error(`Error when saving the document: ${reason.message}`);
+    }
+  },
+
+  async export() {
+    if (this.pdfDocument?.annotationStorage.size > 0) {
+      return this._exportWithAnnotations();
+    }
+    return this._exportWithoutAnnotations();
+  },
+  // #1685 end of modification by ngx-extended-pdf-viewer
+
   /**
    * Report the error; used for errors affecting loading and/or parsing of
    * the entire PDF document.
