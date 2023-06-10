@@ -28,9 +28,9 @@ import {
   AnnotationEditorType,
   AnnotationEditorUIManager,
   AnnotationMode,
-  createPromiseCapability,
   PermissionFlag,
   PixelsPerInch,
+  PromiseCapability,
   version,
 } from "pdfjs-lib";
 import {
@@ -47,7 +47,7 @@ import {
   MAX_SCALE,
   MIN_SCALE,
   PresentationModeState,
-  RendererType,
+  removeNullCharacters,
   RenderingStates,
   SCROLLBAR_PADDING,
   scrollIntoView,
@@ -65,7 +65,6 @@ import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
 import { SimpleLinkService } from "./pdf_link_service.js";
 
 const DEFAULT_CACHE_SIZE = 10;
-const ENABLE_PERMISSIONS_CLASS = "enablePermissions";
 
 const PagesCountLimit = {
   FORCE_SCROLL_MODE_PAGE: 15000,
@@ -85,7 +84,7 @@ function isValidAnnotationEditorMode(mode) {
  * @property {HTMLDivElement} container - The container for the viewer element.
  * @property {HTMLDivElement} [viewer] - The viewer element.
  * @property {EventBus} eventBus - The application event bus.
- * @property {IPDFLinkService} linkService - The navigation/linking service.
+ * @property {IPDFLinkService} [linkService] - The navigation/linking service.
  * @property {IDownloadManager} [downloadManager] - The download manager
  *   component.
  * @property {PDFFindController} [findController] - The find controller
@@ -117,7 +116,7 @@ function isValidAnnotationEditorMode(mode) {
  * @property {number} [maxCanvasPixels] - The maximum supported canvas size in
  *   total pixels, i.e. width * height. Use -1 for no limit. The default value
  *   is 4096 * 4096 (16 mega-pixels).
- * @property {IL10n} l10n - Localization service.
+ * @property {IL10n} [l10n] - Localization service.
  * @property {boolean} [enablePermissions] - Enables PDF document permissions,
  *   when they exist. The default value is `false`.
  * @property {Object} [pageColors] - Overwrites background and foreground colors
@@ -207,7 +206,15 @@ class PDFViewer {
 
   #containerTopLeft = null;
 
+  #copyCallbackBound = null;
+
   #enablePermissions = false;
+
+  #getAllTextInProgress = false;
+
+  #hiddenCopyElement = null;
+
+  #interruptCopyCondition = false;
 
   #previousContainerHeight = 0;
 
@@ -218,6 +225,8 @@ class PDFViewer {
   #onVisibilityChange = null;
 
   #scaleTimeoutId = null;
+
+  #textLayerMode = TextLayerMode.ENABLE;
 
   /**
    * @param {PDFViewerOptions} options
@@ -237,10 +246,7 @@ class PDFViewer {
     this.pageViewMode = options.pageViewMode || "multiple";
     /** end of modification */
 
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || GENERIC")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
       if (this.container?.tagName !== "DIV" || this.viewer?.tagName !== "DIV") {
         throw new Error("Invalid `container` and/or `viewer` option.");
       }
@@ -259,19 +265,15 @@ class PDFViewer {
     this.downloadManager = options.downloadManager || null;
     this.findController = options.findController || null;
     this._scriptingManager = options.scriptingManager || null;
-    this.textLayerMode = options.textLayerMode ?? TextLayerMode.ENABLE;
+    this.#textLayerMode = options.textLayerMode ?? TextLayerMode.ENABLE;
     this.#annotationMode =
       options.annotationMode ?? AnnotationMode.ENABLE_FORMS;
     this.#annotationEditorMode =
       options.annotationEditorMode ?? AnnotationEditorType.NONE;
     this.imageResourcesPath = options.imageResourcesPath || "";
     this.enablePrintAutoRotate = options.enablePrintAutoRotate || false;
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || GENERIC")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
       this.removePageBorders = options.removePageBorders || false;
-      this.renderer = options.renderer || RendererType.CANVAS;
     }
     this.useOnlyCssZoom = options.useOnlyCssZoom || false;
     this.isOffscreenCanvasSupported =
@@ -334,14 +336,12 @@ class PDFViewer {
    * @type {boolean} - True if all {PDFPageView} objects are initialized.
    */
   get pageViewsReady() {
-    if (!this._pagesCapability.settled) {
-      return false;
-    }
     // Prevent printing errors when 'disableAutoFetch' is set, by ensuring
     // that *all* pages have in fact been completely loaded.
-    return this._pages.every(function (pageView) {
-      return pageView?.pdfPage;
-    });
+    return (
+      this._pagesCapability.settled &&
+      this._pages.every(pageView => pageView?.pdfPage)
+    );
   }
 
   /**
@@ -722,14 +722,17 @@ class PDFViewer {
     const params = {
       annotationEditorMode: this.#annotationEditorMode,
       annotationMode: this.#annotationMode,
-      textLayerMode: this.textLayerMode,
+      textLayerMode: this.#textLayerMode,
     };
     if (!permissions) {
       return params;
     }
 
-    if (!permissions.includes(PermissionFlag.COPY)) {
-      this.viewer.classList.add(ENABLE_PERMISSIONS_CLASS);
+    if (
+      !permissions.includes(PermissionFlag.COPY) &&
+      this.#textLayerMode === TextLayerMode.ENABLE
+    ) {
+      params.textLayerMode = TextLayerMode.ENABLE_PERMISSIONS;
     }
 
     if (!permissions.includes(PermissionFlag.MODIFY_CONTENTS)) {
@@ -788,6 +791,96 @@ class PDFViewer {
       this._onePageRenderedCapability.promise,
       visibilityChangePromise,
     ]);
+  }
+
+  async getAllText() {
+    const texts = [];
+    const buffer = [];
+    for (
+      let pageNum = 1, pagesCount = this.pdfDocument.numPages;
+      pageNum <= pagesCount;
+      ++pageNum
+    ) {
+      if (this.#interruptCopyCondition) {
+        return null;
+      }
+      buffer.length = 0;
+      const page = await this.pdfDocument.getPage(pageNum);
+      // By default getTextContent pass disableNormalization equals to false
+      // which is fine because we want a normalized string.
+      const { items } = await page.getTextContent();
+      for (const item of items) {
+        if (item.str) {
+          buffer.push(item.str);
+        }
+        if (item.hasEOL) {
+          buffer.push("\n");
+        }
+      }
+      texts.push(removeNullCharacters(buffer.join("")));
+    }
+
+    return texts.join("\n");
+  }
+
+  #copyCallback(textLayerMode, event) {
+    const selection = document.getSelection();
+    const { focusNode, anchorNode } = selection;
+    if (
+      anchorNode &&
+      focusNode &&
+      selection.containsNode(this.#hiddenCopyElement)
+    ) {
+      // About the condition above:
+      //  - having non-null anchorNode and focusNode are here to guaranty that
+      //    we have at least a kind of selection.
+      //  - this.#hiddenCopyElement is an invisible element which is impossible
+      //    to select manually (its display is none) but ctrl+A will select all
+      //    including this element so having it in the selection means that all
+      //    has been selected.
+
+      if (
+        this.#getAllTextInProgress ||
+        textLayerMode === TextLayerMode.ENABLE_PERMISSIONS
+      ) {
+        event.preventDefault();
+        event.stopPropagation();
+        return;
+      }
+      this.#getAllTextInProgress = true;
+
+      // TODO: if all the pages are rendered we don't need to wait for
+      // getAllText and we could just get text from the Selection object.
+
+      // Select all the document.
+      const savedCursor = this.container.style.cursor;
+      this.container.style.cursor = "wait";
+
+      const interruptCopy = ev =>
+        (this.#interruptCopyCondition = ev.key === "Escape");
+      window.addEventListener("keydown", interruptCopy);
+
+      this.getAllText()
+        .then(async text => {
+          if (text !== null) {
+            await navigator.clipboard.writeText(text);
+          }
+        })
+        .catch(reason => {
+          console.warn(
+            `Something goes wrong when extracting the text: ${reason.message}`
+          );
+        })
+        .finally(() => {
+          this.#getAllTextInProgress = false;
+          this.#interruptCopyCondition = false;
+          window.removeEventListener("keydown", interruptCopy);
+          this.container.style.cursor = savedCursor;
+        });
+
+      event.preventDefault();
+      event.stopPropagation();
+    }
   }
 
   /**
@@ -883,6 +976,13 @@ class PDFViewer {
         const { annotationEditorMode, annotationMode, textLayerMode } =
           this.#initializePermissions(permissions);
 
+        if (textLayerMode !== TextLayerMode.DISABLE) {
+          const element = (this.#hiddenCopyElement =
+            document.createElement("div"));
+          element.id = "hiddenCopyElement";
+          this.viewer.before(element);
+        }
+
         if (annotationEditorMode !== AnnotationEditorType.DISABLE) {
           const mode = annotationEditorMode;
 
@@ -926,11 +1026,6 @@ class PDFViewer {
             annotationMode,
             imageResourcesPath: this.imageResourcesPath,
             removePageBorders: this.removePageBorders, // #194
-            renderer:
-              typeof PDFJSDev === "undefined" ||
-              PDFJSDev.test("!PRODUCTION || GENERIC")
-                ? this.renderer
-                : null,
             useOnlyCssZoom: this.useOnlyCssZoom,
             isOffscreenCanvasSupported: this.isOffscreenCanvasSupported,
             maxCanvasPixels: this.maxCanvasPixels,
@@ -962,6 +1057,14 @@ class PDFViewer {
         this.#onePageRenderedOrForceFetch().then(async () => {
           this.findController?.setDocument(pdfDocument); // Enable searching.
           this._scriptingManager?.setDocument(pdfDocument); // Enable scripting.
+
+          if (this.#hiddenCopyElement) {
+            this.#copyCallbackBound = this.#copyCallback.bind(
+              this,
+              textLayerMode
+            );
+            document.addEventListener("copy", this.#copyCallbackBound);
+          }
 
           if (this.#annotationEditorUIManager) {
             // Ensure that the Editor buttons, in the toolbar, are updated.
@@ -1078,9 +1181,9 @@ class PDFViewer {
     this._location = null;
     this._pagesRotation = 0;
     this._optionalContentConfigPromise = null;
-    this._firstPageCapability = createPromiseCapability();
-    this._onePageRenderedCapability = createPromiseCapability();
-    this._pagesCapability = createPromiseCapability();
+    this._firstPageCapability = new PromiseCapability();
+    this._onePageRenderedCapability = new PromiseCapability();
+    this._pagesCapability = new PromiseCapability();
     this._scrollMode = ScrollMode.VERTICAL;
     this._previousScrollMode = ScrollMode.UNKNOWN;
     this._spreadMode = SpreadMode.NONE;
@@ -1112,8 +1215,14 @@ class PDFViewer {
     this._updateScrollMode();
 
     this.viewer.removeAttribute("lang");
-    // Reset all PDF document permissions.
-    this.viewer.classList.remove(ENABLE_PERMISSIONS_CLASS);
+
+    if (this.#hiddenCopyElement) {
+      document.removeEventListener("copy", this.#copyCallbackBound);
+      this.#copyCallbackBound = null;
+
+      this.#hiddenCopyElement.remove();
+      this.#hiddenCopyElement = null;
+    }
   }
 
   #ensurePageViewVisible() {
@@ -1910,21 +2019,27 @@ class PDFViewer {
    * @returns {Array} Array of objects with width/height/rotation fields.
    */
   getPagesOverview() {
+    let initialOrientation;
     return this._pages.map(pageView => {
       const viewport = pageView.pdfPage.getViewport({ scale: 1 });
-
-      if (!this.enablePrintAutoRotate || isPortraitOrientation(viewport)) {
+      const orientation = isPortraitOrientation(viewport);
+      if (initialOrientation === undefined) {
+        initialOrientation = orientation;
+      } else if (
+        this.enablePrintAutoRotate &&
+        orientation !== initialOrientation
+      ) {
+        // Rotate to fit the initial orientation.
         return {
-          width: viewport.width,
-          height: viewport.height,
-          rotation: viewport.rotation,
+          width: viewport.height,
+          height: viewport.width,
+          rotation: (viewport.rotation - 90) % 360,
         };
       }
-      // Landscape orientation.
       return {
-        width: viewport.height,
-        height: viewport.width,
-        rotation: (viewport.rotation - 90) % 360,
+        width: viewport.width,
+        height: viewport.height,
+        rotation: viewport.rotation,
       };
     });
   }
@@ -2323,7 +2438,14 @@ class PDFViewer {
     for (const entry of entries) {
       if (entry.target === this.container) {
         this.#updateContainerHeightCss(
-          Math.floor(entry.borderBoxSize[0].blockSize)
+          // Safari doesn't support `borderBoxSize` until version 15.4.
+          Math.floor(
+            typeof PDFJSDev !== "undefined" &&
+              !PDFJSDev.test("SKIP_BABEL") &&
+              !entry.borderBoxSize?.length
+              ? entry.contentRect.height
+              : entry.borderBoxSize[0].blockSize
+          )
         );
         this.#containerTopLeft = null;
         break;

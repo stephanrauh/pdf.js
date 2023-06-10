@@ -495,12 +495,8 @@ class Page {
         for (const { opList, separateForm, separateCanvas } of opLists) {
           pageOpList.addOpList(opList);
 
-          if (separateForm) {
-            form = separateForm;
-          }
-          if (separateCanvas) {
-            canvas = separateCanvas;
-          }
+          form ||= separateForm;
+          canvas ||= separateCanvas;
         }
         pageOpList.flush(
           /* lastChunk = */ true,
@@ -511,7 +507,13 @@ class Page {
     });
   }
 
-  extractTextContent({ handler, task, includeMarkedContent, sink }) {
+  extractTextContent({
+    handler,
+    task,
+    includeMarkedContent,
+    disableNormalization,
+    sink,
+  }) {
     const contentStreamPromise = this.getContentStream();
     const resourcesPromise = this.loadResources([
       "ExtGState",
@@ -539,6 +541,7 @@ class Page {
         task,
         resources: this.resources,
         includeMarkedContent,
+        disableNormalization,
         sink,
         viewBox: this.view,
       });
@@ -573,8 +576,8 @@ class Page {
       return [];
     }
 
-    const textContentPromises = [];
-    const annotationsData = [];
+    const annotationsData = [],
+      textContentPromises = [];
     let partialEvaluator;
 
     const intentAny = !!(intent & RenderingIntentFlag.ANY),
@@ -590,19 +593,18 @@ class Page {
       }
 
       if (annotation.hasTextContent && isVisible) {
-        if (!partialEvaluator) {
-          partialEvaluator = new PartialEvaluator({
-            xref: this.xref,
-            handler,
-            pageIndex: this.pageIndex,
-            idFactory: this._localIdFactory,
-            fontCache: this.fontCache,
-            builtInCMapCache: this.builtInCMapCache,
-            standardFontDataCache: this.standardFontDataCache,
-            globalImageCache: this.globalImageCache,
-            options: this.evaluatorOptions,
-          });
-        }
+        partialEvaluator ||= new PartialEvaluator({
+          xref: this.xref,
+          handler,
+          pageIndex: this.pageIndex,
+          idFactory: this._localIdFactory,
+          fontCache: this.fontCache,
+          builtInCMapCache: this.builtInCMapCache,
+          standardFontDataCache: this.standardFontDataCache,
+          globalImageCache: this.globalImageCache,
+          options: this.evaluatorOptions,
+        });
+
         textContentPromises.push(
           annotation
             .extractTextContent(partialEvaluator, task, this.view)
@@ -658,10 +660,7 @@ class Page {
               continue;
             }
             if (annotation instanceof PopupAnnotation) {
-              if (!popupAnnotations) {
-                popupAnnotations = [];
-              }
-              popupAnnotations.push(annotation);
+              (popupAnnotations ||= []).push(annotation);
               continue;
             }
             sortedAnnotations.push(annotation);
@@ -698,10 +697,7 @@ const EMPTY_FINGERPRINT =
   "\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00\x00";
 
 function find(stream, signature, limit = 1024, backwards = false) {
-  if (
-    typeof PDFJSDev === "undefined" ||
-    PDFJSDev.test("!PRODUCTION || TESTING")
-  ) {
+  if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
     assert(limit > 0, 'The "limit" must be a positive integer.');
   }
   const signatureLength = signature.length;
@@ -755,10 +751,7 @@ function find(stream, signature, limit = 1024, backwards = false) {
  */
 class PDFDocument {
   constructor(pdfManager, stream) {
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || TESTING")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         stream instanceof BaseStream,
         'PDFDocument: Invalid "stream" argument.'
@@ -1419,10 +1412,7 @@ class PDFDocument {
 
   async _getLinearizationPage(pageIndex) {
     const { catalog, linearization, xref } = this;
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || TESTING")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         linearization && linearization.pageFirst === pageIndex,
         "_getLinearizationPage - invalid pageIndex argument."

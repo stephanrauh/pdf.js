@@ -16,12 +16,12 @@
 import {
   AbortException,
   assert,
-  createPromiseCapability,
   getVerbosityLevel,
   info,
   InvalidPDFException,
   MissingPDFException,
   PasswordException,
+  PromiseCapability,
   setVerbosityLevel,
   stringToPDFString,
   UnexpectedResponseException,
@@ -38,9 +38,7 @@ import { Dict, Ref } from "./primitives.js";
 import { LocalPdfManager, NetworkPdfManager } from "./pdf_manager.js";
 import { clearGlobalCaches } from "./cleanup_helper.js";
 import { incrementalUpdate } from "./writer.js";
-// ngx-extended-pdf-viewer doesn't need node.js support
-// import { isNodeJS } from "../shared/is_node.js";
-// end of modification
+import { isNodeJS } from "../shared/is_node.js";
 import { MessageHandler } from "../shared/message_handler.js";
 import { PDFWorkerStream } from "./worker_stream.js";
 
@@ -73,7 +71,7 @@ class WorkerTask {
   constructor(name) {
     this.name = name;
     this.terminated = false;
-    this._capability = createPromiseCapability();
+    this._capability = new PromiseCapability();
   }
 
   get finished() {
@@ -161,7 +159,7 @@ class WorkerMessageHandler {
       // a non-translated/non-polyfilled build of the library, since that would
       // quickly fail anyway because of missing functionality.
       if (
-        typeof Path2D === "undefined" ||
+        (isNodeJS && typeof Path2D === "undefined") ||
         typeof ReadableStream === "undefined"
       ) {
         const partialMsg =
@@ -255,7 +253,7 @@ class WorkerMessageHandler {
         password,
         rangeChunkSize,
       };
-      const pdfManagerCapability = createPromiseCapability();
+      const pdfManagerCapability = new PromiseCapability();
       let newPdfManager;
 
       if (data) {
@@ -288,8 +286,7 @@ class WorkerMessageHandler {
           pdfManagerArgs.source = pdfStream;
           pdfManagerArgs.length = fullRequest.contentLength;
           // We don't need auto-fetch when streaming is enabled.
-          pdfManagerArgs.disableAutoFetch =
-            pdfManagerArgs.disableAutoFetch || fullRequest.isStreamingSupported;
+          pdfManagerArgs.disableAutoFetch ||= fullRequest.isStreamingSupported;
 
           newPdfManager = new NetworkPdfManager(pdfManagerArgs);
           // There may be a chance that `newPdfManager` is not initialized for
@@ -336,10 +333,7 @@ class WorkerMessageHandler {
               cancelXHRs = null;
               return;
             }
-            if (
-              typeof PDFJSDev === "undefined" ||
-              PDFJSDev.test("!PRODUCTION || TESTING")
-            ) {
+            if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
               assert(
                 value instanceof ArrayBuffer,
                 "readChunk (getPdfManager) - expected an ArrayBuffer."
@@ -691,7 +685,6 @@ class WorkerMessageHandler {
               });
             }
 
-            const lastXRefStreamPos = xref.lastXRefStreamPos;
             newXrefInfo = {
               rootRef: xref.trailer.getRaw("Root") || null,
               encryptRef: xref.trailer.getRaw("Encrypt") || null,
@@ -699,8 +692,7 @@ class WorkerMessageHandler {
               infoRef: xref.trailer.getRaw("Info") || null,
               info: infoObj,
               fileIds: xref.trailer.get("ID") || null,
-              startXRef:
-                lastXRefStreamPos === null ? startXRef : lastXRefStreamPos,
+              startXRef: xref.lastXRefStreamPos ?? startXRef,
               filename,
             };
           }
@@ -772,7 +764,7 @@ class WorkerMessageHandler {
     });
 
     handler.on("GetTextContent", function (data, sink) {
-      const { pageIndex, includeMarkedContent } = data;
+      const { pageIndex, includeMarkedContent, disableNormalization } = data;
 
       pdfManager.getPage(pageIndex).then(function (page) {
         const task = new WorkerTask("GetTextContent: page " + pageIndex);
@@ -787,6 +779,7 @@ class WorkerMessageHandler {
             task,
             sink,
             includeMarkedContent,
+            disableNormalization,
           })
           .then(
             function () {

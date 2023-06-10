@@ -805,10 +805,7 @@ class Annotation {
    * @param {Dict} borderStyle - The border style dictionary
    */
   setBorderStyle(borderStyle) {
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || TESTING")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(this.rectangle, "setRectangle must have been called previously.");
     }
 
@@ -1070,8 +1067,7 @@ class Annotation {
    */
   reset() {
     if (
-      (typeof PDFJSDev === "undefined" ||
-        PDFJSDev.test("!PRODUCTION || TESTING")) &&
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
       this.appearance &&
       !this._streams.includes(this.appearance)
     ) {
@@ -1169,10 +1165,7 @@ class AnnotationBorderStyle {
    * @param {Array} rect - The annotation `Rect` entry.
    */
   setWidth(width, rect = [0, 0, 0, 0]) {
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || TESTING")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         Array.isArray(rect) && rect.length === 4,
         "A valid `rect` parameter must be provided."
@@ -1571,11 +1564,10 @@ class WidgetAnnotation extends Annotation {
 
     this.setDefaultAppearance(params);
 
-    data.hasAppearance =
-      (this._needAppearances &&
-        data.fieldValue !== undefined &&
-        data.fieldValue !== null) ||
-      data.hasAppearance;
+    data.hasAppearance ||=
+      this._needAppearances &&
+      data.fieldValue !== undefined &&
+      data.fieldValue !== null;
 
     const fieldType = getInheritableProperty({ dict, key: "FT" });
     data.fieldType = fieldType instanceof Name ? fieldType.name : null;
@@ -1726,7 +1718,8 @@ class WidgetAnnotation extends Annotation {
     if (
       renderForms &&
       !(this instanceof SignatureWidgetAnnotation) &&
-      !this.data.noHTML
+      !this.data.noHTML &&
+      !this.data.hasOwnCanvas
     ) {
       return {
         opList: new OperatorList(),
@@ -1838,7 +1831,7 @@ class WidgetAnnotation extends Annotation {
       if (!this._hasValueFromXFA && rotation === undefined) {
         return null;
       }
-      value = value || this.data.fieldValue;
+      value ||= this.data.fieldValue;
     }
 
     // Value can be an array (with choice list and multiple selections)
@@ -2404,10 +2397,7 @@ class WidgetAnnotation extends Annotation {
    * @private
    */
   _getSaveFieldResources(xref) {
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || TESTING")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         this.data.defaultAppearanceData,
         "Expected `_defaultAppearanceData` to have been set."
@@ -2459,6 +2449,7 @@ class TextWidgetAnnotation extends WidgetAnnotation {
   constructor(params) {
     super(params);
 
+    this.data.hasOwnCanvas = this.data.readOnly && !this.data.noHTML;
     this._hasText = true;
 
     const dict = params.dict;
@@ -3505,7 +3496,7 @@ class LinkAnnotation extends Annotation {
     }
 
     // The color entry for a link annotation is the color of the border.
-    this.data.borderColor = this.data.borderColor || this.data.color;
+    this.data.borderColor ||= this.data.color;
 
     Catalog.parseDestDictionary({
       destDict: params.dict,

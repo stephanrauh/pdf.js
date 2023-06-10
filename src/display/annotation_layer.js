@@ -451,7 +451,7 @@ class AnnotationElement {
   _createPopup(trigger, data) {
     let container = this.container;
     if (this.quadrilaterals) {
-      trigger = trigger || this.quadrilaterals;
+      trigger ||= this.quadrilaterals;
       container = this.quadrilaterals[0];
     }
 
@@ -489,10 +489,7 @@ class AnnotationElement {
    * @returns {Array<HTMLElement>} An array of section elements.
    */
   _renderQuadrilaterals(className) {
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || TESTING")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(this.quadrilaterals, "Missing quadrilaterals during rendering");
     }
 
@@ -901,6 +898,15 @@ class WidgetAnnotationElement extends AnnotationElement {
     return this.container;
   }
 
+  showElementAndHideCanvas(element) {
+    if (this.data.hasOwnCanvas) {
+      if (element.previousSibling?.nodeName === "CANVAS") {
+        element.previousSibling.hidden = true;
+      }
+      element.hidden = false;
+    }
+  }
+
   _getKeyModifier(event) {
     const { isWin, isMac } = FeatureTest.platform;
     return (isWin && event.ctrlKey) || (isMac && event.metaKey);
@@ -1082,6 +1088,9 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
           element.style.overflowX = "hidden";
         }
       }
+      if (this.data.hasOwnCanvas) {
+        element.hidden = true;
+      }
       GetElementsByNameSet.add(element);
       element.setAttribute("data-element-id", id);
 
@@ -1138,6 +1147,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
         });
 
         element.addEventListener("updatefromsandbox", jsEvent => {
+          this.showElementAndHideCanvas(jsEvent.target);
           const actions = {
             value(event) {
               elementData.userValue = event.detail.value ?? "";

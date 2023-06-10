@@ -36,10 +36,17 @@ window.PDFViewerApplicationConstants = AppConstants;
 window.PDFViewerApplicationOptions = AppOptions;
 
 function getViewerConfiguration() {
+  const mainContainer = document.getElementById("viewerContainer");
   return {
     appContainer: document.body,
-    mainContainer: document.getElementById("viewerContainer"),
+    mainContainer,
     viewerContainer: document.getElementById("viewer"),
+    toolbar: {
+      mainContainer,
+      container: document.getElementById("floatingToolbar"),
+      download: document.getElementById("download"),
+      openInApp: document.getElementById("openInApp"),
+    },
 
     passwordOverlay: {
       dialog: document.getElementById("passwordDialog"),
@@ -58,7 +65,7 @@ function getViewerConfiguration() {
 function webViewerLoad() {
   const config = getViewerConfiguration();
 
-  if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
+  if (typeof PDFJSDev === "undefined") {
     window.isGECKOVIEW = true;
   }
   PDFViewerApplication.run(config);

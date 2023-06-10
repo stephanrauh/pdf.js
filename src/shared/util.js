@@ -405,10 +405,7 @@ function assert(cond, msg) {
 
 // Checks if URLs use one of the allowed protocols, e.g. to avoid XSS.
 function _isValidProtocol(url) {
-  if (!url) {
-    return false;
-  }
-  switch (url.protocol) {
+  switch (url?.protocol) {
     case "http:":
     case "https:":
     case "ftp:":
@@ -440,7 +437,7 @@ function createValidAbsoluteUrl(url, baseUrl = null, options = null) {
         const dots = url.match(/\./g);
         // Avoid accidentally matching a *relative* URL pointing to a file named
         // e.g. "www.pdf" or similar.
-        if (dots && dots.length >= 2) {
+        if (dots?.length >= 2) {
           url = `http://${url}`;
         }
       }
@@ -465,10 +462,7 @@ function createValidAbsoluteUrl(url, baseUrl = null, options = null) {
 }
 
 function shadow(obj, prop, value, nonSerializable = false) {
-  if (
-    typeof PDFJSDev === "undefined" ||
-    PDFJSDev.test("!PRODUCTION || TESTING")
-  ) {
+  if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
     assert(
       prop in obj,
       `shadow: Property "${prop && prop.toString()}" not found in object.`
@@ -553,11 +547,7 @@ class AbortException extends BaseException {
 }
 
 function bytesToString(bytes) {
-  if (
-    typeof bytes !== "object" ||
-    bytes === null ||
-    bytes.length === undefined
-  ) {
+  if (typeof bytes !== "object" || bytes?.length === undefined) {
     unreachable("Invalid argument for bytesToString");
   }
   const length = bytes.length;
@@ -587,10 +577,7 @@ function stringToBytes(str) {
 }
 
 function string32(value) {
-  if (
-    typeof PDFJSDev === "undefined" ||
-    PDFJSDev.test("!PRODUCTION || TESTING")
-  ) {
+  if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
     assert(
       typeof value === "number" && Math.abs(value) < 2 ** 32,
       `string32: Unexpected input "${value}".`
@@ -973,7 +960,7 @@ function utf8StringToString(str) {
 }
 
 function isArrayBuffer(v) {
-  return typeof v === "object" && v !== null && v.byteLength !== undefined;
+  return typeof v === "object" && v?.byteLength !== undefined;
 }
 
 function isArrayEqual(arr1, arr2) {
@@ -1001,42 +988,60 @@ function getModificationDate(date = new Date()) {
   return buffer.join("");
 }
 
-/**
- * Promise Capability object.
- *
- * @typedef {Object} PromiseCapability
- * @property {Promise<any>} promise - A Promise object.
- * @property {boolean} settled - If the Promise has been fulfilled/rejected.
- * @property {function} resolve - Fulfills the Promise.
- * @property {function} reject - Rejects the Promise.
- */
+class PromiseCapability {
+  #settled = false;
 
-/**
- * Creates a promise capability object.
- * @alias createPromiseCapability
- *
- * @returns {PromiseCapability}
- */
-function createPromiseCapability() {
-  const capability = Object.create(null);
-  let isSettled = false;
+  constructor() {
+    /**
+     * @type {Promise<any>} The Promise object.
+     */
+    this.promise = new Promise((resolve, reject) => {
+      /**
+       * @type {function} Fulfills the Promise.
+       */
+      this.resolve = data => {
+        this.#settled = true;
+        resolve(data);
+      };
 
-  Object.defineProperty(capability, "settled", {
-    get() {
-      return isSettled;
-    },
+      /**
+       * @type {function} Rejects the Promise.
+       */
+      this.reject = reason => {
+        if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+          assert(reason instanceof Error, 'Expected valid "reason" argument.');
+        }
+        this.#settled = true;
+        reject(reason);
+      };
+    });
+  }
+
+  /**
+   * @type {boolean} If the Promise has been fulfilled/rejected.
+   */
+  get settled() {
+    return this.#settled;
+  }
+}
+
+let NormalizeRegex = null;
+let NormalizationMap = null;
+function normalizeUnicode(str) {
+  if (!NormalizeRegex) {
+    // In order to generate the following regex:
+    //  - create a PDF containing all the chars in the range 0000-FFFF with
+    //    a NFKC which is different of the char.
+    //  - copy and paste all those chars and get the ones where NFKC is
+    //    required.
+    // It appears that most the chars here contain some ligatures.
+    NormalizeRegex =
+      /([\u00a0\u00b5\u037e\u0eb3\u2000-\u200a\u202f\u2126\ufb00-\ufb04\ufb06\ufb20-\ufb36\ufb38-\ufb3c\ufb3e\ufb40-\ufb41\ufb43-\ufb44\ufb46-\ufba1\ufba4-\ufba9\ufbae-\ufbb1\ufbd3-\ufbdc\ufbde-\ufbe7\ufbea-\ufbf8\ufbfc-\ufbfd\ufc00-\ufc5d\ufc64-\ufcf1\ufcf5-\ufd3d\ufd88\ufdf4\ufdfa-\ufdfb\ufe71\ufe77\ufe79\ufe7b\ufe7d]+)|(\ufb05+)/gu;
+    NormalizationMap = new Map([["ﬅ", "ſt"]]);
+  }
+  return str.replaceAll(NormalizeRegex, (_, p1, p2) => {
+    return p1 ? p1.normalize("NFKC") : NormalizationMap.get(p2);
   });
-  capability.promise = new Promise(function (resolve, reject) {
-    capability.resolve = function (data) {
-      isSettled = true;
-      resolve(data);
-    };
-    capability.reject = function (reason) {
-      isSettled = true;
-      reject(reason);
-    };
-  });
-  return capability;
 }
 
 export {
@@ -1059,7 +1064,6 @@ export {
   BASELINE_FACTOR,
   bytesToString,
   CMapCompressionType,
-  createPromiseCapability,
   createValidAbsoluteUrl,
   DocumentActionEventType,
   FeatureTest,
@@ -1077,6 +1081,7 @@ export {
   LINE_FACTOR,
   MAX_IMAGE_SIZE_TO_CACHE,
   MissingPDFException,
+  normalizeUnicode,
   objectFromMap,
   objectSize,
   OPS,
@@ -1084,6 +1089,7 @@ export {
   PasswordException,
   PasswordResponses,
   PermissionFlag,
+  PromiseCapability,
   RenderingIntentFlag,
   setVerbosityLevel,
   shadow,

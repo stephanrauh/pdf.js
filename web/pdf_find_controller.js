@@ -17,11 +17,11 @@
 /** @typedef {import("./event_utils").EventBus} EventBus */
 /** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
 // eslint-disable-next-line no-unused-vars
-import { createPromiseCapability } from "pdfjs-lib";
 import { deburr } from "../external/lodash.deburr/index.js"; // #177
 import { getCharacterType } from "./pdf_find_utils.js";
 import { Levenshtein } from "../external/fast-levenshtein/levenshtein.js";
 import { scrollIntoView } from "./ui_utils.js";
+import { PromiseCapability } from "pdfjs-lib";
 
 const FindState = {
   FOUND: 0,
@@ -303,7 +303,7 @@ class PDFFindController {
     clearTimeout(this._findTimeout);
     this._findTimeout = null;
 
-    this._firstPageCapability = createPromiseCapability();
+    this._firstPageCapability = new PromiseCapability();
   }
 
   /**
@@ -746,7 +746,7 @@ class PDFFindController {
 
     let promise = Promise.resolve();
     for (let i = 0, ii = this._linkService.pagesCount; i < ii; i++) {
-      const extractTextCapability = createPromiseCapability();
+      const extractTextCapability = new PromiseCapability();
       this._extractTextPromises[i] = extractTextCapability.promise;
 
       promise = promise.then(() => {

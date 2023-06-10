@@ -21,7 +21,6 @@ import {
   AbortException,
   AnnotationMode,
   assert,
-  createPromiseCapability,
   getVerbosityLevel,
   info,
   InvalidPDFException,
@@ -29,6 +28,7 @@ import {
   MAX_IMAGE_SIZE_TO_CACHE,
   MissingPDFException,
   PasswordException,
+  PromiseCapability,
   RenderingIntentFlag,
   setVerbosityLevel,
   shadow,
@@ -96,7 +96,7 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC") && isNodeJS) {
 }
 
 let createPDFNetworkStream;
-if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
+if (typeof PDFJSDev === "undefined") {
   const streamsPromise = Promise.all([
     import("./network.js"),
     import("./fetch_stream.js"),
@@ -617,7 +617,7 @@ class PDFDocumentLoadingTask {
   static #docId = 0;
 
   constructor() {
-    this._capability = createPromiseCapability();
+    this._capability = new PromiseCapability();
     this._transport = null;
     this._worker = null;
 
@@ -704,7 +704,7 @@ class PDFDataRangeTransport {
     this._progressListeners = [];
     this._progressiveReadListeners = [];
     this._progressiveDoneListeners = [];
-    this._readyCapability = createPromiseCapability();
+    this._readyCapability = new PromiseCapability();
   }
 
   /**
@@ -1151,6 +1151,8 @@ class PDFDocumentProxy {
  * @typedef {Object} getTextContentParameters
  * @property {boolean} [includeMarkedContent] - When true include marked
  *   content items in the items array of TextContent. The default is `false`.
+ * @property {boolean} [disableNormalization] - When true the text is *not*
+ *   normalized in the worker-thread. The default is `false`.
  */
 
 /**
@@ -1487,7 +1489,7 @@ class PDFPageProxy {
     // If there's no displayReadyCapability yet, then the operatorList
     // was never requested before. Make the request and create the promise.
     if (!intentState.displayReadyCapability) {
-      intentState.displayReadyCapability = createPromiseCapability();
+      intentState.displayReadyCapability = new PromiseCapability();
       intentState.operatorList = {
         fnArray: [],
         argsArray: [],
@@ -1605,7 +1607,7 @@ class PDFPageProxy {
     if (!intentState.opListReadCapability) {
       opListTask = Object.create(null);
       opListTask.operatorListChanged = operatorListChanged;
-      intentState.opListReadCapability = createPromiseCapability();
+      intentState.opListReadCapability = new PromiseCapability();
       (intentState.renderTasks ||= new Set()).add(opListTask);
       intentState.operatorList = {
         fnArray: [],
@@ -1627,7 +1629,10 @@ class PDFPageProxy {
    * @param {getTextContentParameters} params - getTextContent parameters.
    * @returns {ReadableStream} Stream for reading text content chunks.
    */
-  streamTextContent({ includeMarkedContent = false } = {}) {
+  streamTextContent({
+    includeMarkedContent = false,
+    disableNormalization = false,
+  } = {}) {
     const TEXT_CONTENT_CHUNK_SIZE = 100;
 
     return this._transport.messageHandler.sendWithStream(
@@ -1635,6 +1640,7 @@ class PDFPageProxy {
       {
         pageIndex: this._pageIndex,
         includeMarkedContent: includeMarkedContent === true,
+        disableNormalization: disableNormalization === true,
       },
       {
         highWaterMark: TEXT_CONTENT_CHUNK_SIZE,
@@ -1822,10 +1828,7 @@ class PDFPageProxy {
    * @private
    */
   _pumpOperatorList({ renderingIntent, cacheKey, annotationStorageMap }) {
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || TESTING")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         Number.isInteger(renderingIntent) && renderingIntent > 0,
         '_pumpOperatorList: Expected valid "renderingIntent" argument.'
@@ -1892,10 +1895,7 @@ class PDFPageProxy {
    * @private
    */
   _abortOperatorList({ intentState, reason, force = false }) {
-    if (
-      typeof PDFJSDev === "undefined" ||
-      PDFJSDev.test("!PRODUCTION || TESTING")
-    ) {
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
         reason instanceof Error,
         '_abortOperatorList: Expected valid "reason" argument.'
@@ -1972,7 +1972,14 @@ class LoopbackPort {
 
   postMessage(obj, transfer) {
     const event = {
-      data: structuredClone(obj, transfer ? { transfer } : null),
+      data: structuredClone(
+        obj,
+        (typeof PDFJSDev === "undefined" ||
+          PDFJSDev.test("SKIP_BABEL || TESTING")) &&
+          transfer
+          ? { transfer }
+          : null
+      ),
     };
 
     this.#deferred.then(() => {
@@ -2072,7 +2079,7 @@ class PDFWorker {
     this.destroyed = false;
     this.verbosity = verbosity;
 
-    this._readyCapability = createPromiseCapability();
+    this._readyCapability = new PromiseCapability();
     this._port = null;
     this._webWorker = null;
     this._messageHandler = null;
@@ -2151,14 +2158,13 @@ class PDFWorker {
           workerSrc = PDFWorkerUtil.createCDNWrapper(new URL(workerSrc, window.location).href);
         }
 
-        // Some versions of FF can't create a worker on localhost, see:
-        // https://bugzilla.mozilla.org/show_bug.cgi?id=683280
         const worker =
-          (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) &&
-          !workerSrc.endsWith("/build/pdf.worker.js") &&
-          !workerSrc.endsWith("/src/worker_loader.js")
+          typeof PDFJSDev === "undefined" &&
+          !workerSrc.endsWith("/build/pdf.worker.js")
+			// modified by ngx-extended-pdf-viewer #1512
             ? new Worker(this.#generateTrustedURL(workerSrc), { type: "module" })
             : new Worker(this.#generateTrustedURL(workerSrc));
+        // end of modification by ngx-extended-pdf-viewer #1512
         const messageHandler = new MessageHandler("main", "worker", worker);
         const terminateEarly = () => {
           worker.removeEventListener("error", onWorkerError);
@@ -2345,7 +2351,7 @@ class PDFWorker {
         // The worker was already loaded using e.g. a `<script>` tag.
         return mainWorkerMessageHandler;
       }
-      if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
+      if (typeof PDFJSDev === "undefined") {
         const worker = await import("pdfjs/pdf.worker.js");
         return worker.WorkerMessageHandler;
       }
@@ -2412,7 +2418,7 @@ class WorkerTransport {
     this._networkStream = networkStream;
     this._fullReader = null;
     this._lastProgress = null;
-    this.downloadInfoCapability = createPromiseCapability();
+    this.downloadInfoCapability = new PromiseCapability();
 
     this.setupMessageHandler();
 
@@ -2511,7 +2517,7 @@ class WorkerTransport {
     }
 
     this.destroyed = true;
-    this.destroyCapability = createPromiseCapability();
+    this.destroyCapability = new PromiseCapability();
 
     if (this._passwordCapability) {
       this._passwordCapability.reject(
@@ -2605,7 +2611,7 @@ class WorkerTransport {
     });
 
     messageHandler.on("ReaderHeadersReady", data => {
-      const headersCapability = createPromiseCapability();
+      const headersCapability = new PromiseCapability();
       const fullReader = this._fullReader;
       fullReader.headersReady.then(() => {
         // If stream or range are disabled, it's our only way to report
@@ -2720,7 +2726,7 @@ class WorkerTransport {
     });
 
     messageHandler.on("PasswordRequest", exception => {
-      this._passwordCapability = createPromiseCapability();
+      this._passwordCapability = new PromiseCapability();
 
       if (loadingTask.onPassword) {
         const updatePassword = password => {
@@ -3141,7 +3147,7 @@ class PDFObjects {
       return obj;
     }
     return (this.#objs[objId] = {
-      capability: createPromiseCapability(),
+      capability: new PromiseCapability(),
       data: null,
     });
   }
@@ -3300,7 +3306,7 @@ class InternalRenderTask {
     this.graphicsReady = false;
     this._useRequestAnimationFrame = useRequestAnimationFrame === true && typeof window !== "undefined";
     this.cancelled = false;
-    this.capability = createPromiseCapability();
+    this.capability = new PromiseCapability();
     this.task = new RenderTask(this);
     // caching this-bound methods
     this._cancelBound = this.cancel.bind(this);
@@ -3346,7 +3352,8 @@ class InternalRenderTask {
       this.canvasFactory,
       this.filterFactory,
       { optionalContentConfig },
-      this.annotationCanvasMap
+      this.annotationCanvasMap,
+      this.pageColors
     );
     this.gfx.beginDrawing({
       transform,
@@ -3362,7 +3369,7 @@ class InternalRenderTask {
   cancel(error = null, extraDelay = 0) {
     this.running = false;
     this.cancelled = true;
-    this.gfx?.endDrawing(this.pageColors);
+    this.gfx?.endDrawing();
 
     if (this._canvas) {
       InternalRenderTask.#canvasInUse.delete(this._canvas);
@@ -3379,9 +3386,7 @@ class InternalRenderTask {
 
   operatorListChanged() {
     if (!this.graphicsReady) {
-      if (!this.graphicsReadyCallback) {
-        this.graphicsReadyCallback = this._continueBound;
-      }
+      this.graphicsReadyCallback ||= this._continueBound;
       return;
     }
     this.stepper?.updateOperatorList(this.operatorList);
