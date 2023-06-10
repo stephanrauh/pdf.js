@@ -491,7 +491,7 @@ class AnnotationEditorUIManager {
       this.#annotationStorage &&
       !this.#annotationStorage.has(editor.id)
     ) {
-      this.#annotationStorage.setValue(editor.id, null, editor);
+      this.#annotationStorage.setValue(editor.id, editor);
     }
   }
 
