@@ -546,6 +546,13 @@ class CFFParser {
         stackSize++;
       } else if (value === 19 || value === 20) {
         state.hints += stackSize >> 1;
+        if (state.hints === 0) {
+          // Not a valid value (see bug 1529502): just remove it.
+          data.copyWithin(j - 1, j, -1);
+          j -= 1;
+          length -= 1;
+          continue;
+        }
         // skipping right amount of hints flag data
         j += (state.hints + 7) >> 3;
         stackSize %= 2;
@@ -1428,7 +1435,7 @@ class CFFCompiler {
     }
 
     const xuid = cff.topDict.getByName("XUID");
-    if (xuid && xuid.length > 16) {
+    if (xuid?.length > 16) {
       // Length of XUID array must not be greater than 16 (issue #12399).
       cff.topDict.removeByName("XUID");
     }

@@ -79,8 +79,8 @@ const ENV_TARGETS = [
   "last 2 versions",
   "Chrome >= 88",
   "Firefox ESR",
-  "Safari >= 14.1",
-  "Node >= 16",
+  "Safari >= 15.4",
+  "Node >= 18",
   "> 1%",
   "not IE > 0",
   "not dead",
@@ -192,8 +192,6 @@ function createWebpackConfig(
     DEFAULT_PREFERENCES: defaultPreferencesDir
       ? getDefaultPreferences(defaultPreferencesDir)
       : {},
-    DIALOG_POLYFILL_CSS:
-      defines.GENERIC && !defines.SKIP_BABEL ? getDialogPolyfillCSS() : "",
   });
   const licenseHeaderLibre = fs
     .readFileSync("./src/license_header_libre.js")
@@ -234,7 +232,6 @@ function createWebpackConfig(
     pdfjs: "src",
     "pdfjs-web": "web",
     "pdfjs-lib": "web/pdfjs",
-    "pdfjs-fitCurve": "src/display/editor/fit_curve",
   };
   const viewerAlias = {
     "web-annotation_editor_params": "web/annotation_editor_params.js",
@@ -247,7 +244,6 @@ function createWebpackConfig(
     "web-pdf_outline_viewer": "web/pdf_outline_viewer.js",
     "web-pdf_presentation_mode": "web/pdf_presentation_mode.js",
     "web-pdf_sidebar": "web/pdf_sidebar.js",
-    "web-pdf_sidebar_resizer": "web/pdf_sidebar_resizer.js",
     "web-pdf_thumbnail_viewer": "web/pdf_thumbnail_viewer.js",
     "web-print_service": "",
     "web-secondary_toolbar": "web/secondary_toolbar.js",
@@ -575,26 +571,6 @@ function createImageDecodersBundle(defines) {
     .pipe(replaceJSRootName(imageDecodersAMDName, "pdfjsImageDecoders"));
 }
 
-function createFitCurveBundle(defines) {
-  const fitCurveOutputName = "fit_curve.js";
-
-  const fitCurveFileConfig = createWebpackConfig(
-    defines,
-    {
-      filename: fitCurveOutputName,
-      library: {
-        type: "module",
-      },
-    },
-    {
-      disableVersionInfo: true,
-    }
-  );
-  return gulp
-    .src("src/display/editor/fit_curve.js")
-    .pipe(webpack2Stream(fitCurveFileConfig));
-}
-
 function createCMapBundle() {
   return gulp.src(["external/bcmaps/*.bcmap", "external/bcmaps/LICENSE"], {
     base: "external/bcmaps",
@@ -820,12 +796,6 @@ function getDefaultPreferences(dir) {
     "web/app_options.js");
 
   return AppOptions.getAll(OptionKind.PREFERENCE);
-}
-
-function getDialogPolyfillCSS() {
-  return fs
-    .readFileSync("node_modules/dialog-polyfill/dist/dialog-polyfill.css")
-    .toString();
 }
 
 gulp.task("locale", function () {
@@ -1567,7 +1537,6 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     defines: bundleDefines,
     map: {
       "pdfjs-lib": "../pdf",
-      "pdfjs-fitCurve": "./fit_curve",
     },
   };
   const licenseHeaderLibre = fs
@@ -1592,8 +1561,6 @@ function buildLib(defines, dir) {
     DEFAULT_PREFERENCES: getDefaultPreferences(
       defines.SKIP_BABEL ? "lib/" : "lib-legacy/"
     ),
-    DIALOG_POLYFILL_CSS:
-      defines.GENERIC && !defines.SKIP_BABEL ? getDialogPolyfillCSS() : "",
   });
 
   const inputStream = merge([
@@ -1708,90 +1675,54 @@ function setTestEnv(done) {
   done();
 }
 
-gulp.task("dev-fitCurve", function createDevFitCurve() {
-  console.log();
-  console.log("### Building development fitCurve");
-
-  const defines = builder.merge(DEFINES, { GENERIC: true, TESTING: true });
-  const fitCurveDir = BUILD_DIR + "dev-fitCurve/";
-
-  rimraf.sync(fitCurveDir);
-
-  return createFitCurveBundle(defines).pipe(gulp.dest(fitCurveDir));
-});
-
 gulp.task(
   "test",
-  gulp.series(
-    setTestEnv,
-    "generic",
-    "components",
-    "dev-fitCurve",
-    function runTest() {
-      return streamqueue(
-        { objectMode: true },
-        createTestSource("unit"),
-        createTestSource("browser"),
-        createTestSource("integration")
-      );
-    }
-  )
+  gulp.series(setTestEnv, "generic", "components", function runTest() {
+    return streamqueue(
+      { objectMode: true },
+      createTestSource("unit"),
+      createTestSource("browser"),
+      createTestSource("integration")
+    );
+  })
 );
 
 gulp.task(
   "bottest",
-  gulp.series(
-    setTestEnv,
-    "generic",
-    "components",
-    "dev-fitCurve",
-    function runBotTest() {
-      return streamqueue(
-        { objectMode: true },
-        createTestSource("unit", { bot: true }),
-        createTestSource("font", { bot: true }),
-        createTestSource("browser", { bot: true }),
-        createTestSource("integration")
-      );
-    }
-  )
+  gulp.series(setTestEnv, "generic", "components", function runBotTest() {
+    return streamqueue(
+      { objectMode: true },
+      createTestSource("unit", { bot: true }),
+      createTestSource("font", { bot: true }),
+      createTestSource("browser", { bot: true }),
+      createTestSource("integration")
+    );
+  })
 );
 
 gulp.task(
   "xfatest",
-  gulp.series(
-    setTestEnv,
-    "generic",
-    "components",
-    "dev-fitCurve",
-    function runXfaTest() {
-      return streamqueue(
-        { objectMode: true },
-        createTestSource("unit"),
-        createTestSource("browser", { xfaOnly: true }),
-        createTestSource("integration")
-      );
-    }
-  )
+  gulp.series(setTestEnv, "generic", "components", function runXfaTest() {
+    return streamqueue(
+      { objectMode: true },
+      createTestSource("unit"),
+      createTestSource("browser", { xfaOnly: true }),
+      createTestSource("integration")
+    );
+  })
 );
 
 gulp.task(
   "botxfatest",
-  gulp.series(
-    setTestEnv,
-    "generic",
-    "components",
-    "dev-fitCurve",
-    function runBotXfaTest() {
-      return streamqueue(
-        { objectMode: true },
-        createTestSource("unit", { bot: true }),
-        createTestSource("font", { bot: true }),
-        createTestSource("browser", { bot: true, xfaOnly: true }),
-        createTestSource("integration")
-      );
-    }
-  )
+  gulp.series(setTestEnv, "generic", "components", function runBotXfaTest() {
+    return streamqueue(
+      { objectMode: true },
+      createTestSource("unit", { bot: true }),
+      createTestSource("font", { bot: true }),
+      createTestSource("browser", { bot: true, xfaOnly: true }),
+      createTestSource("integration")
+    );
+  })
 );
 
 gulp.task(
@@ -1818,7 +1749,7 @@ gulp.task(
 
 gulp.task(
   "unittest",
-  gulp.series(setTestEnv, "generic", "dev-fitCurve", function runUnitTest() {
+  gulp.series(setTestEnv, "generic", function runUnitTest() {
     return createTestSource("unit");
   })
 );
@@ -2046,13 +1977,6 @@ gulp.task(
 gulp.task(
   "server",
   gulp.parallel(
-    function watchDevFitCurve() {
-      gulp.watch(
-        ["src/display/editor/*"],
-        { ignoreInitial: false },
-        gulp.series("dev-fitCurve")
-      );
-    },
     function watchDevSandbox() {
       gulp.watch(
         [
@@ -2172,10 +2096,7 @@ function packageJson() {
     license: DIST_LICENSE,
     optionalDependencies: {
       canvas: "^2.11.2",
-    },
-    dependencies: {
       "path2d-polyfill": "^2.0.1",
-      "web-streams-polyfill": "^3.2.1",
     },
     browser: {
       canvas: false,
@@ -2191,7 +2112,7 @@ function packageJson() {
       url: DIST_REPO_URL,
     },
     engines: {
-      node: ">=16",
+      node: ">=18",
     },
   };
 

@@ -584,20 +584,6 @@ class PDFLinkService {
     return this.#pagesRefCache.get(refStr) || null;
   }
 
-  /**
-   * @param {number} pageNumber
-   */
-  isPageVisible(pageNumber) {
-    return this.pdfViewer.isPageVisible(pageNumber);
-  }
-
-  /**
-   * @param {number} pageNumber
-   */
-  isPageCached(pageNumber) {
-    return this.pdfViewer.isPageCached(pageNumber);
-  }
-
   static #isValidExplicitDestination(dest) {
     if (!Array.isArray(dest)) {
       return false;
@@ -759,20 +745,6 @@ class SimpleLinkService {
    * @param {Object} pageRef - reference to the page.
    */
   cachePageRef(pageNum, pageRef) {}
-
-  /**
-   * @param {number} pageNumber
-   */
-  isPageVisible(pageNumber) {
-    return true;
-  }
-
-  /**
-   * @param {number} pageNumber
-   */
-  isPageCached(pageNumber) {
-    return true;
-  }
 }
 
 export { LinkTarget, PDFLinkService, SimpleLinkService };

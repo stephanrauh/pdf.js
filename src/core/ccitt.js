@@ -477,11 +477,7 @@ class CCITTFaxDecoder {
     this.byteAlign = options.EncodedByteAlign || false;
     this.columns = options.Columns || 1728;
     this.rows = options.Rows || 0;
-    let eoblock = options.EndOfBlock;
-    if (eoblock === null || eoblock === undefined) {
-      eoblock = true;
-    }
-    this.eoblock = eoblock;
+    this.eoblock = options.EndOfBlock ?? true;
     this.black = options.BlackIs1 || false;
 
     this.codingLine = new Uint32Array(this.columns + 1);
@@ -942,7 +938,7 @@ class CCITTFaxDecoder {
     if (this.eoblock) {
       code = this._lookBits(7);
       p = twoDimTable[code];
-      if (p && p[0] > 0) {
+      if (p?.[0] > 0) {
         this._eatBits(p[0]);
         return p[1];
       }

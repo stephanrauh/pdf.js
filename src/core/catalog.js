@@ -81,6 +81,7 @@ class Catalog {
     this.pageKidsCountCache = new RefSetCache();
     this.pageIndexCache = new RefSetCache();
     this.nonBlendModesSet = new RefSet();
+    this.systemFontCache = new Map();
   }
 
   get version() {
@@ -161,10 +162,10 @@ class Catalog {
 
     let metadata = null;
     try {
-      const suppressEncryption = !(
-        this.xref.encrypt && this.xref.encrypt.encryptMetadata
+      const stream = this.xref.fetch(
+        streamRef,
+        /* suppressEncryption = */ !this.xref.encrypt?.encryptMetadata
       );
-      const stream = this.xref.fetch(streamRef, suppressEncryption);
 
       if (stream instanceof BaseStream && stream.dict instanceof Dict) {
         const type = stream.dict.get("Type");
@@ -615,7 +616,7 @@ class Catalog {
    */
   _readDests() {
     const obj = this._catDict.get("Names");
-    if (obj && obj.has("Dests")) {
+    if (obj?.has("Dests")) {
       return new NameTree(obj.getRaw("Dests"), this.xref);
     } else if (this._catDict.has("Dests")) {
       // Simple destination dictionary.
@@ -1062,6 +1063,7 @@ class Catalog {
     this.fontCache.clear();
     this.builtInCMapCache.clear();
     this.standardFontDataCache.clear();
+    this.systemFontCache.clear();
   }
 
   async getPageDict(pageIndex) {

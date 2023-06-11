@@ -39,17 +39,7 @@ const isNodeJS = false;
   polyfillPath2D(globalThis);
 })();
 
-// Support: Node.js<18.0.0
-(function checkReadableStream() {
-  if (globalThis.ReadableStream || !isNodeJS) {
-    return;
-  }
-  globalThis.ReadableStream = __non_webpack_require__(
-    "web-streams-polyfill/dist/ponyfill.js"
-  ).ReadableStream;
-})();
-
-// Support: Firefox<90, Chrome<92, Safari<15.4, Node.js<16.6.0
+// Support: Chrome<92
 (function checkArrayAt() {
   if (Array.prototype.at) {
     return;
@@ -57,7 +47,7 @@ const isNodeJS = false;
   require("core-js/es/array/at.js");
 })();
 
-// Support: Firefox<90, Chrome<92, Safari<15.4, Node.js<16.6.0
+// Support: Chrome<92
 (function checkTypedArrayAt() {
   if (Uint8Array.prototype.at) {
     return;
@@ -65,13 +55,8 @@ const isNodeJS = false;
   require("core-js/es/typed-array/at.js");
 })();
 
-// Support: Firefox<94, Chrome<98, Safari<15.4, Node.js<17.0.0
+// Support: Chrome<98
 (function checkStructuredClone() {
-  if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("IMAGE_DECODERS")) {
-    // The current image decoders are synchronous, hence `structuredClone`
-    // shouldn't need to be polyfilled for the IMAGE_DECODERS build target.
-    return;
-  }
   if (globalThis.structuredClone) {
     return;
   }

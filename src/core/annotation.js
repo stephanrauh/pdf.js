@@ -281,7 +281,7 @@ class AnnotationFactory {
             baseFont.set("Encoding", Name.get("WinAnsiEncoding"));
             const buffer = [];
             baseFontRef = xref.getNewTemporaryRef();
-            writeObject(baseFontRef, baseFont, buffer, null);
+            await writeObject(baseFontRef, baseFont, buffer, null);
             dependencies.push({ ref: baseFontRef, data: buffer.join("") });
           }
           promises.push(
@@ -568,10 +568,9 @@ class Annotation {
    * @param {AnnotationStorage} [annotationStorage] - Storage for annotation
    */
   mustBeViewed(annotationStorage) {
-    const storageEntry =
-      annotationStorage && annotationStorage.get(this.data.id);
-    if (storageEntry && storageEntry.hidden !== undefined) {
-      return !storageEntry.hidden;
+    const hidden = annotationStorage?.get(this.data.id)?.hidden;
+    if (hidden !== undefined) {
+      return !hidden;
     }
     return this.viewable && !this._hasFlag(this.flags, AnnotationFlag.HIDDEN);
   }
@@ -586,10 +585,9 @@ class Annotation {
    * @param {AnnotationStorage} [annotationStorage] - Storage for annotation
    */
   mustBePrinted(annotationStorage) {
-    const storageEntry =
-      annotationStorage && annotationStorage.get(this.data.id);
-    if (storageEntry && storageEntry.print !== undefined) {
-      return storageEntry.print;
+    const print = annotationStorage?.get(this.data.id)?.print;
+    if (print !== undefined) {
+      return print;
     }
     return this.printable;
   }
@@ -1487,7 +1485,7 @@ class MarkupAnnotation extends Annotation {
       const transform = xref.encrypt
         ? xref.encrypt.createCipherTransform(apRef.num, apRef.gen)
         : null;
-      writeObject(apRef, ap, buffer, transform);
+      await writeObject(apRef, ap, buffer, transform);
       dependencies.push({ ref: apRef, data: buffer.join("") });
     } else {
       annotationDict = this.createNewDict(annotation, xref, {});
@@ -1497,7 +1495,7 @@ class MarkupAnnotation extends Annotation {
     const transform = xref.encrypt
       ? xref.encrypt.createCipherTransform(annotationRef.num, annotationRef.gen)
       : null;
-    writeObject(annotationRef, annotationDict, buffer, transform);
+    await writeObject(annotationRef, annotationDict, buffer, transform);
 
     return { ref: annotationRef, data: buffer.join("") };
   }
@@ -1574,8 +1572,7 @@ class WidgetAnnotation extends Annotation {
 
     const localResources = getInheritableProperty({ dict, key: "DR" });
     const acroFormResources = params.acroForm.get("DR");
-    const appearanceResources =
-      this.appearance && this.appearance.dict.get("Resources");
+    const appearanceResources = this.appearance?.dict.get("Resources");
 
     this._fieldResources = {
       localResources,
@@ -1650,10 +1647,7 @@ class WidgetAnnotation extends Annotation {
   }
 
   getRotationMatrix(annotationStorage) {
-    const storageEntry = annotationStorage
-      ? annotationStorage.get(this.data.id)
-      : undefined;
-    let rotation = storageEntry && storageEntry.rotation;
+    let rotation = annotationStorage?.get(this.data.id)?.rotation;
     if (rotation === undefined) {
       rotation = this.rotation;
     }
@@ -1669,10 +1663,7 @@ class WidgetAnnotation extends Annotation {
   }
 
   getBorderAndBackgroundAppearances(annotationStorage) {
-    const storageEntry = annotationStorage
-      ? annotationStorage.get(this.data.id)
-      : undefined;
-    let rotation = storageEntry && storageEntry.rotation;
+    let rotation = annotationStorage?.get(this.data.id)?.rotation;
     if (rotation === undefined) {
       rotation = this.rotation;
     }
@@ -1822,11 +1813,9 @@ class WidgetAnnotation extends Annotation {
   amendSavedDict(annotationStorage, dict) {}
 
   async save(evaluator, task, annotationStorage) {
-    const storageEntry = annotationStorage
-      ? annotationStorage.get(this.data.id)
-      : undefined;
-    let value = storageEntry && storageEntry.value;
-    let rotation = storageEntry && storageEntry.rotation;
+    const storageEntry = annotationStorage?.get(this.data.id);
+    let value = storageEntry?.value,
+      rotation = storageEntry?.rotation;
     if (value === this.data.fieldValue || value === undefined) {
       if (!this._hasValueFromXFA && rotation === undefined) {
         return null;
@@ -1868,7 +1857,7 @@ class WidgetAnnotation extends Annotation {
     }
 
     let needAppearances = false;
-    if (appearance && appearance.needAppearances) {
+    if (appearance?.needAppearances) {
       needAppearances = true;
       appearance = null;
     }
@@ -1945,7 +1934,7 @@ class WidgetAnnotation extends Annotation {
         appearanceDict.set("Matrix", rotationMatrix);
       }
 
-      writeObject(newRef, appearanceStream, buffer, newTransform);
+      await writeObject(newRef, appearanceStream, buffer, newTransform);
 
       changes.push(
         // data for the new AP
@@ -1960,7 +1949,7 @@ class WidgetAnnotation extends Annotation {
     }
 
     dict.set("M", `D:${getModificationDate()}`);
-    writeObject(this.ref, dict, buffer, originalTransform);
+    await writeObject(this.ref, dict, buffer, originalTransform);
 
     changes[0].data = buffer.join("");
 
@@ -1972,10 +1961,7 @@ class WidgetAnnotation extends Annotation {
     if (isPassword) {
       return null;
     }
-    const storageEntry = annotationStorage
-      ? annotationStorage.get(this.data.id)
-      : undefined;
-
+    const storageEntry = annotationStorage?.get(this.data.id);
     let value, rotation;
     if (storageEntry) {
       value = storageEntry.formattedValue || storageEntry.value;
@@ -2016,7 +2002,7 @@ class WidgetAnnotation extends Annotation {
       const option = this.data.options.find(
         ({ exportValue }) => value === exportValue
       );
-      value = (option && option.displayValue) || value;
+      value = option?.displayValue || value;
     }
 
     if (value === "") {
@@ -2406,9 +2392,7 @@ class WidgetAnnotation extends Annotation {
     const { localResources, appearanceResources, acroFormResources } =
       this._fieldResources;
 
-    const fontName =
-      this.data.defaultAppearanceData &&
-      this.data.defaultAppearanceData.fontName;
+    const fontName = this.data.defaultAppearanceData?.fontName;
     if (!fontName) {
       return localResources || Dict.empty;
     }
@@ -2482,6 +2466,10 @@ class TextWidgetAnnotation extends WidgetAnnotation {
       !this.hasFieldFlag(AnnotationFieldFlag.FILESELECT) &&
       this.data.maxLen !== 0;
     this.data.doNotScroll = this.hasFieldFlag(AnnotationFieldFlag.DONOTSCROLL);
+  }
+
+  get hasTextContent() {
+    return !!this.appearance;
   }
 
   _getCombAppearance(
@@ -2786,8 +2774,8 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
       return null;
     }
     const storageEntry = annotationStorage.get(this.data.id);
-    let rotation = storageEntry && storageEntry.rotation;
-    let value = storageEntry && storageEntry.value;
+    let rotation = storageEntry?.rotation,
+      value = storageEntry?.value;
 
     if (rotation === undefined) {
       if (value === undefined) {
@@ -2837,7 +2825,7 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
     }
 
     const buffer = [`${this.ref.num} ${this.ref.gen} obj\n`];
-    writeDict(dict, buffer, originalTransform);
+    await writeDict(dict, buffer, originalTransform);
     buffer.push("\nendobj\n");
 
     return [{ ref: this.ref, data: buffer.join(""), xfa }];
@@ -2848,8 +2836,8 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
       return null;
     }
     const storageEntry = annotationStorage.get(this.data.id);
-    let rotation = storageEntry && storageEntry.rotation;
-    let value = storageEntry && storageEntry.value;
+    let rotation = storageEntry?.rotation,
+      value = storageEntry?.value;
 
     if (rotation === undefined) {
       if (value === undefined) {
@@ -2896,7 +2884,7 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
         }
         parent.set("V", name);
         parentBuffer = [`${this.parent.num} ${this.parent.gen} obj\n`];
-        writeDict(parent, parentBuffer, parentTransform);
+        await writeDict(parent, parentBuffer, parentTransform);
         parentBuffer.push("\nendobj\n");
       } else if (this.parent instanceof Dict) {
         this.parent.set("V", name);
@@ -2920,7 +2908,7 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
     }
 
     const buffer = [`${this.ref.num} ${this.ref.gen} obj\n`];
-    writeDict(dict, buffer, originalTransform);
+    await writeDict(dict, buffer, originalTransform);
     buffer.push("\nendobj\n");
 
     const newRefs = [{ ref: this.ref, data: buffer.join(""), xfa }];
@@ -3262,10 +3250,7 @@ class ChoiceWidgetAnnotation extends WidgetAnnotation {
     if (!this.hasIndices) {
       return;
     }
-    const storageEntry = annotationStorage
-      ? annotationStorage.get(this.data.id)
-      : undefined;
-    let values = storageEntry && storageEntry.value;
+    let values = annotationStorage?.get(this.data.id)?.value;
     if (!Array.isArray(values)) {
       values = [values];
     }
@@ -3286,10 +3271,7 @@ class ChoiceWidgetAnnotation extends WidgetAnnotation {
     }
 
     let exportedValue, rotation;
-    const storageEntry = annotationStorage
-      ? annotationStorage.get(this.data.id)
-      : undefined;
-
+    const storageEntry = annotationStorage?.get(this.data.id);
     if (storageEntry) {
       rotation = storageEntry.rotation;
       exportedValue = storageEntry.value;
@@ -4199,10 +4181,9 @@ class HighlightAnnotation extends MarkupAnnotation {
 
     const quadPoints = (this.data.quadPoints = getQuadPoints(dict, null));
     if (quadPoints) {
-      const resources =
-        this.appearance && this.appearance.dict.get("Resources");
+      const resources = this.appearance?.dict.get("Resources");
 
-      if (!this.appearance || !(resources && resources.has("ExtGState"))) {
+      if (!this.appearance || !resources?.has("ExtGState")) {
         if (this.appearance) {
           // Workaround for cases where there's no /ExtGState-entry directly
           // available, e.g. when the appearance stream contains a /XObject of
@@ -4253,15 +4234,16 @@ class UnderlineAnnotation extends MarkupAnnotation {
           : [0, 0, 0];
         const strokeAlpha = dict.get("CA");
 
+        // The values 0.571 and 1.3 below corresponds to what Acrobat is doing.
         this._setDefaultAppearance({
           xref,
-          extra: "[] 0 d 1 w",
+          extra: "[] 0 d 0.571 w",
           strokeColor,
           strokeAlpha,
           pointsCallback: (buffer, points) => {
             buffer.push(
-              `${points[2].x} ${points[2].y} m`,
-              `${points[3].x} ${points[3].y} l`,
+              `${points[2].x} ${points[2].y + 1.3} m`,
+              `${points[3].x} ${points[3].y + 1.3} l`,
               "S"
             );
             return [points[0].x, points[1].x, points[3].y, points[1].y];

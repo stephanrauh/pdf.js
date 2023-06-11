@@ -1057,9 +1057,11 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
       //       from parsing the elements correctly for the reference tests.
       // #1737 modified by ngx-extended-pdf-viewer
       const angularData = window.getFormValueFromAngular(this.data.fieldName);
-      const storedData = angularData.value ? angularData : storage.getValue(id, { value: this.data.fieldValue });
+      const storedData = angularData.value ? angularData : storage.getValue(id, {
+        value: this.data.fieldValue
+      });
       // #1737 end of modification by ngx-extended-pdf-viewer
-      let textContent = storedData.formattedValue || storedData.value || "";
+      let textContent = storedData.value || "";
       const maxLen = storage.getValue(id, {
         charLimit: this.data.maxLen,
       }).charLimit;
@@ -1067,23 +1069,29 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
         textContent = textContent.slice(0, maxLen);
       }
 
+      let fieldFormattedValues =
+        storedData.formattedValue || this.data.textContent?.join("\n") || null;
+      if (fieldFormattedValues && this.data.comb) {
+        fieldFormattedValues = fieldFormattedValues.replaceAll(/\s+/g, "");
+      }
+
       const elementData = {
         userValue: textContent,
-        formattedValue: null,
+        formattedValue: fieldFormattedValues,
         lastCommittedValue: null,
         commitKey: 1,
       };
 
       if (this.data.multiLine) {
         element = document.createElement("textarea");
-        element.textContent = textContent;
+        element.textContent = fieldFormattedValues ?? textContent;
         if (this.data.doNotScroll) {
           element.style.overflowY = "hidden";
         }
       } else {
         element = document.createElement("input");
         element.type = "text";
-        element.setAttribute("value", textContent);
+        element.setAttribute("value", fieldFormattedValues ?? textContent);
         if (this.data.doNotScroll) {
           element.style.overflowX = "hidden";
         }
@@ -1115,6 +1123,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
           event.target.value,
           "value"
         );
+        elementData.formattedValue = null;
       });
 
       element.addEventListener("resetform", event => {

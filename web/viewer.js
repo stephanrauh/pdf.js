@@ -122,6 +122,7 @@ function getViewerConfiguration() {
       outerContainer: document.getElementById("outerContainer"),
       sidebarContainer: document.getElementById("sidebarContainer"),
       toggleButton: document.getElementById("sidebarToggle"),
+      resizer: document.getElementById("sidebarResizer"),
       // Buttons
       thumbnailButton: document.getElementById("viewThumbnail"),
       outlineButton: document.getElementById("viewOutline"),
@@ -137,10 +138,6 @@ function getViewerConfiguration() {
         "outlineOptionsContainer"
       ),
       currentOutlineItemButton: document.getElementById("currentOutlineItem"),
-    },
-    sidebarResizer: {
-      outerContainer: document.getElementById("outerContainer"),
-      resizer: document.getElementById("sidebarResizer"),
     },
     findBar: {
       bar: document.getElementById("findbar"),

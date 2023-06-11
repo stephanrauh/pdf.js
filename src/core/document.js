@@ -74,6 +74,7 @@ class Page {
     builtInCMapCache,
     standardFontDataCache,
     globalImageCache,
+    systemFontCache,
     nonBlendModesSet,
     xfaFactory,
   }) {
@@ -86,6 +87,7 @@ class Page {
     this.builtInCMapCache = builtInCMapCache;
     this.standardFontDataCache = standardFontDataCache;
     this.globalImageCache = globalImageCache;
+    this.systemFontCache = systemFontCache;
     this.nonBlendModesSet = nonBlendModesSet;
     this.evaluatorOptions = pdfManager.evaluatorOptions;
     this.resourcesPromise = null;
@@ -100,7 +102,7 @@ class Page {
       }
 
       static getPageObjId() {
-        return `page${ref.toString()}`;
+        return `p${ref.toString()}`;
       }
     };
   }
@@ -270,6 +272,7 @@ class Page {
       builtInCMapCache: this.builtInCMapCache,
       standardFontDataCache: this.standardFontDataCache,
       globalImageCache: this.globalImageCache,
+      systemFontCache: this.systemFontCache,
       options: this.evaluatorOptions,
     });
 
@@ -297,7 +300,7 @@ class Page {
       );
     }
 
-    writeObject(this.ref, pageDict, buffer, transform);
+    await writeObject(this.ref, pageDict, buffer, transform);
     if (savedDict) {
       pageDict.set("Annots", savedDict);
     }
@@ -321,6 +324,7 @@ class Page {
       builtInCMapCache: this.builtInCMapCache,
       standardFontDataCache: this.standardFontDataCache,
       globalImageCache: this.globalImageCache,
+      systemFontCache: this.systemFontCache,
       options: this.evaluatorOptions,
     });
 
@@ -390,6 +394,7 @@ class Page {
       builtInCMapCache: this.builtInCMapCache,
       standardFontDataCache: this.standardFontDataCache,
       globalImageCache: this.globalImageCache,
+      systemFontCache: this.systemFontCache,
       options: this.evaluatorOptions,
     });
 
@@ -533,6 +538,7 @@ class Page {
         builtInCMapCache: this.builtInCMapCache,
         standardFontDataCache: this.standardFontDataCache,
         globalImageCache: this.globalImageCache,
+        systemFontCache: this.systemFontCache,
         options: this.evaluatorOptions,
       });
 
@@ -602,12 +608,18 @@ class Page {
           builtInCMapCache: this.builtInCMapCache,
           standardFontDataCache: this.standardFontDataCache,
           globalImageCache: this.globalImageCache,
+          systemFontCache: this.systemFontCache,
           options: this.evaluatorOptions,
         });
 
         textContentPromises.push(
           annotation
-            .extractTextContent(partialEvaluator, task, this.view)
+            .extractTextContent(partialEvaluator, task, [
+              -Infinity,
+              -Infinity,
+              Infinity,
+              Infinity,
+            ])
             .catch(function (reason) {
               warn(
                 `getAnnotationsData - ignoring textContent during "${task.name}" task: "${reason}".`
@@ -1414,7 +1426,7 @@ class PDFDocument {
     const { catalog, linearization, xref } = this;
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       assert(
-        linearization && linearization.pageFirst === pageIndex,
+        linearization?.pageFirst === pageIndex,
         "_getLinearizationPage - invalid pageIndex argument."
       );
     }
@@ -1459,7 +1471,7 @@ class PDFDocument {
     let promise;
     if (xfaFactory) {
       promise = Promise.resolve([Dict.empty, null]);
-    } else if (linearization && linearization.pageFirst === pageIndex) {
+    } else if (linearization?.pageFirst === pageIndex) {
       promise = this._getLinearizationPage(pageIndex);
     } else {
       promise = catalog.getPageDict(pageIndex);
@@ -1476,6 +1488,7 @@ class PDFDocument {
         builtInCMapCache: catalog.builtInCMapCache,
         standardFontDataCache: catalog.standardFontDataCache,
         globalImageCache: catalog.globalImageCache,
+        systemFontCache: catalog.systemFontCache,
         nonBlendModesSet: catalog.nonBlendModesSet,
         xfaFactory,
       });
@@ -1574,6 +1587,7 @@ class PDFDocument {
               builtInCMapCache: catalog.builtInCMapCache,
               standardFontDataCache: catalog.standardFontDataCache,
               globalImageCache: catalog.globalImageCache,
+              systemFontCache: catalog.systemFontCache,
               nonBlendModesSet: catalog.nonBlendModesSet,
               xfaFactory: null,
             })
@@ -1621,7 +1635,7 @@ class PDFDocument {
         this._localIdFactory,
         /* collectFields */ true
       )
-        .then(annotation => annotation && annotation.getFieldObject())
+        .then(annotation => annotation?.getFieldObject())
         .catch(function (reason) {
           warn(`_collectFieldObjects: "${reason}".`);
           return null;
@@ -1693,7 +1707,7 @@ class PDFDocument {
 
   get calculationOrderIds() {
     const acroForm = this.catalog.acroForm;
-    if (!acroForm || !acroForm.has("CO")) {
+    if (!acroForm?.has("CO")) {
       return shadow(this, "calculationOrderIds", null);
     }
 

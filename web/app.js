@@ -71,7 +71,6 @@ import { PDFPresentationMode } from "web-pdf_presentation_mode";
 import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
 import { PDFScriptingManager } from "./pdf_scripting_manager.js";
 import { PDFSidebar } from "web-pdf_sidebar";
-import { PDFSidebarResizer } from "web-pdf_sidebar_resizer";
 import { PDFThumbnailViewer } from "web-pdf_thumbnail_viewer";
 import { PDFViewer } from "./pdf_viewer.js";
 import { SecondaryToolbar } from "web-secondary_toolbar";
@@ -152,6 +151,10 @@ class DefaultExternalServices {
   static get canvasMaxAreaInBytes() {
     return shadow(this, "canvasMaxAreaInBytes", -1);
   }
+
+  static getNimbusExperimentData() {
+    return shadow(this, "getNimbusExperimentData", Promise.resolve(null));
+  }
 }
 
 const PDFViewerApplication = {
@@ -177,8 +180,6 @@ const PDFViewerApplication = {
   pdfHistory: null,
   /** @type {PDFSidebar} */
   pdfSidebar: null,
-  /** @type {PDFSidebarResizer} */
-  pdfSidebarResizer: null,
   /** @type {PDFOutlineViewer} */
   pdfOutlineViewer: null,
   /** @type {PDFAttachmentViewer} */
@@ -230,11 +231,20 @@ const PDFViewerApplication = {
   _printAnnotationStoragePromise: null,
   _touchInfo: null,
   _isCtrlKeyDown: false,
+  _nimbusDataPromise: null,
 
   // Called once when the document is loaded.
   async initialize(appConfig) {
     this.preferences = this.externalServices.createPreferences();
     this.appConfig = appConfig;
+
+    if (
+      typeof PDFJSDev === "undefined"
+        ? window.isGECKOVIEW
+        : PDFJSDev.test("GECKOVIEW")
+    ) {
+      this._nimbusDataPromise = this.externalServices.getNimbusExperimentData();
+    }
 
     await this._initializeOptions();
     this._forceCssTheme();
@@ -442,7 +452,7 @@ const PDFViewerApplication = {
    * @private
    */
   async _initializeViewerComponents() {
-    const { appConfig, externalServices } = this;
+    const { appConfig, externalServices, l10n } = this;
 
     const eventBus = externalServices.isInAutomation
       ? new AutomationEventBus()
@@ -502,7 +512,7 @@ const PDFViewerApplication = {
           }
         : null;
 
-    this.pdfViewer = new PDFViewer({
+    const pdfViewer = new PDFViewer({
       container,
       viewer,
       eventBus,
@@ -512,7 +522,7 @@ const PDFViewerApplication = {
       findController,
       scriptingManager:
         AppOptions.get("enableScripting") && pdfScriptingManager,
-      l10n: this.l10n,
+      l10n,
       textLayerMode: AppOptions.get("textLayerMode"),
       annotationMode: AppOptions.get("annotationMode"),
       annotationEditorMode,
@@ -528,18 +538,20 @@ const PDFViewerApplication = {
       enablePermissions: AppOptions.get("enablePermissions"),
       pageColors,
     });
-    pdfRenderingQueue.setViewer(this.pdfViewer);
-    pdfLinkService.setViewer(this.pdfViewer);
-    pdfScriptingManager.setViewer(this.pdfViewer);
+    this.pdfViewer = pdfViewer;
+
+    pdfRenderingQueue.setViewer(pdfViewer);
+    pdfLinkService.setViewer(pdfViewer);
+    pdfScriptingManager.setViewer(pdfViewer);
 
     if (appConfig.sidebar?.thumbnailView) {
       this.pdfThumbnailViewer = new PDFThumbnailViewer({
         container: appConfig.sidebar.thumbnailView,
+        eventBus,
         renderingQueue: pdfRenderingQueue,
         linkService: pdfLinkService,
-        l10n: this.l10n,
+        l10n,
         pageColors,
-        eventBus,   // #1696 modified by ngx-extended-pdf-viewer
       });
       pdfRenderingQueue.setThumbnailViewer(this.pdfThumbnailViewer);
     }
@@ -555,7 +567,7 @@ const PDFViewerApplication = {
     }
 
     if (!this.supportsIntegratedFind && appConfig.findBar) {
-      this.findBar = new PDFFindBar(appConfig.findBar, eventBus, this.l10n);
+      this.findBar = new PDFFindBar(appConfig.findBar, eventBus, l10n);
     }
 
     if (appConfig.annotationEditorParams) {
@@ -576,10 +588,8 @@ const PDFViewerApplication = {
         appConfig.documentProperties,
         this.overlayManager,
         eventBus,
-        this.l10n,
-        /* fileNameLookup = */ () => {
-          return this._docFilename;
-        }
+        l10n,
+        /* fileNameLookup = */ () => this._docFilename
       );
     }
 
@@ -600,10 +610,16 @@ const PDFViewerApplication = {
           : PDFJSDev.test("GECKOVIEW")
       ) {
         if (AppOptions.get("enableFloatingToolbar")) {
-          this.toolbar = new Toolbar(appConfig.toolbar, eventBus, this.l10n);
+          this.toolbar = new Toolbar(
+            appConfig.toolbar,
+            eventBus,
+            l10n,
+            await this._nimbusDataPromise,
+            externalServices
+          );
         }
       } else {
-        this.toolbar = new Toolbar(appConfig.toolbar, eventBus, this.l10n);
+        this.toolbar = new Toolbar(appConfig.toolbar, eventBus, l10n);
       }
     }
 
@@ -611,7 +627,7 @@ const PDFViewerApplication = {
       this.secondaryToolbar = new SecondaryToolbar(
         appConfig.secondaryToolbar,
         eventBus,
-        this.externalServices
+        externalServices
       );
     }
 
@@ -621,7 +637,7 @@ const PDFViewerApplication = {
     ) {
       this.pdfPresentationMode = new PDFPresentationMode({
         container,
-        pdfViewer: this.pdfViewer,
+        pdfViewer,
         eventBus,
       });
     }
@@ -633,7 +649,7 @@ const PDFViewerApplication = {
         prompt = new PasswordPrompt(
           appConfig.passwordOverlay,
           this.overlayManager,
-          this.l10n,
+          l10n,
           this.isViewerEmbedded
         );
       }
@@ -662,25 +678,30 @@ const PDFViewerApplication = {
       this.pdfLayerViewer = new PDFLayerViewer({
         container: appConfig.sidebar.layersView,
         eventBus,
-        l10n: this.l10n,
+        l10n,
       });
     }
 
     if (appConfig.sidebar) {
       this.pdfSidebar = new PDFSidebar({
         elements: appConfig.sidebar,
-        pdfViewer: this.pdfViewer,
-        pdfThumbnailViewer: this.pdfThumbnailViewer,
         eventBus,
-        l10n: this.l10n,
+        l10n,
       });
       this.pdfSidebar.onToggled = this.forceRendering.bind(this);
-
-      this.pdfSidebarResizer = new PDFSidebarResizer(
-        appConfig.sidebarResizer,
-        eventBus,
-        this.l10n
-      );
+      this.pdfSidebar.onUpdateThumbnails = () => {
+        // Use the rendered pages to set the corresponding thumbnail images.
+        for (const pageView of pdfViewer.getCachedPageViews()) {
+          if (pageView.renderingState === RenderingStates.FINISHED) {
+            this.pdfThumbnailViewer
+              .getThumbnail(pageView.id - 1)
+              ?.setImage(pageView);
+          }
+        }
+        this.pdfThumbnailViewer.scrollThumbnailIntoView(
+          pdfViewer.currentPageNumber
+        );
+      };
     }
   },
 
@@ -2447,8 +2468,8 @@ function webViewerPageRendered({ pageNumber, error }) {
     const thumbnailView = PDFViewerApplication.pdfThumbnailViewer?.getThumbnail(
       /* index = */ pageNumber - 1
     );
-    if (pageView && thumbnailView) {
-      thumbnailView.setImage(pageView);
+    if (pageView) {
+      thumbnailView?.setImage(pageView);
     }
   }
 
