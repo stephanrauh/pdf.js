@@ -69,7 +69,7 @@ class PDFThumbnailViewer {
         )
       ) {
         if (this.pageColors.background || this.pageColors.foreground) {
-          Window["ngxConsole"].warn(
+          globalThis.ngxConsole.warn(
             "PDFThumbnailViewer: Ignoring `pageColors`-option, since the browser doesn't support the values used."
           );
         }
@@ -109,7 +109,7 @@ class PDFThumbnailViewer {
     const thumbnailView = this._thumbnails[pageNumber - 1];
 
     if (!thumbnailView) {
-      Window["ngxConsole"].error('scrollThumbnailIntoView: Invalid "pageNumber" parameter.');
+      globalThis.ngxConsole.error('scrollThumbnailIntoView: Invalid "pageNumber" parameter.');
       return;
     }
 
@@ -238,7 +238,7 @@ class PDFThumbnailViewer {
         thumbnailView.div.classList.add(THUMBNAIL_SELECTED_CLASS);
       })
       .catch(reason => {
-        Window["ngxConsole"].error("Unable to initialize thumbnail viewer", reason);
+        globalThis.ngxConsole.error("Unable to initialize thumbnail viewer", reason);
       });
   }
 
@@ -264,7 +264,7 @@ class PDFThumbnailViewer {
       !(Array.isArray(labels) && this.pdfDocument.numPages === labels.length)
     ) {
       this._pageLabels = null;
-      Window["ngxConsole"].error("PDFThumbnailViewer_setPageLabels: Invalid page labels.");
+      globalThis.ngxConsole.error("PDFThumbnailViewer_setPageLabels: Invalid page labels.");
     } else {
       this._pageLabels = labels;
     }
@@ -289,7 +289,7 @@ class PDFThumbnailViewer {
       }
       return pdfPage;
     } catch (reason) {
-      Window["ngxConsole"].error("Unable to get page for thumb view", reason);
+      globalThis.ngxConsole.error("Unable to get page for thumb view", reason);
       return null; // Page error -- there is nothing that can be done.
     }
   }

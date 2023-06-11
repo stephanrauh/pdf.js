@@ -147,9 +147,8 @@ PDFPrintService.prototype = {
       );
     }, this);
     if (!hasEqualPageSizes) {
-      Window["ngxConsole"].warn(
-        "Not all pages have the same size. The printed " +
-          "result may be incorrect!"
+      globalThis.ngxConsole.warn(
+        "Not all pages have the same size. The printed result may be incorrect!"
       );
     }
 
@@ -326,7 +325,7 @@ window.printPDF = function printPdf() {
     return;
   }
   if (activeService) {
-    Window["ngxConsole"].warn("Ignored window.printPDF() because of a pending print job.");
+    globalThis.ngxConsole.warn("Ignored window.printPDF() because of a pending print job.");
     return;
   }
   ensureOverlay().then(function () {
@@ -339,7 +338,7 @@ window.printPDF = function printPdf() {
     dispatchEvent("beforeprint");
   } finally {
     if (!activeService) {
-      Window["ngxConsole"].error("Expected print service to be initialized.");
+      globalThis.ngxConsole.error("Expected print service to be initialized.");
       ensureOverlay().then(function () {
         if (overlayManager.active === dialog) {
           overlayManager.close(dialog);
