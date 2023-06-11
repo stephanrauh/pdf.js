@@ -1128,7 +1128,7 @@ const PDFViewerApplication = {
     } catch (reason) {
       // When the PDF document isn't ready, or the PDF file is still
       // downloading, simply fallback to a "regular" download.
-      Window["ngxConsole"].error(`Error when saving the document: ${reason.message}`);
+      globalThis.ngxConsole.error(`Error when saving the document: ${reason.message}`);
       await this.download(options);
     } finally {
       await this.pdfScriptingManager.dispatchDidSave();

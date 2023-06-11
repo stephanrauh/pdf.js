@@ -126,7 +126,7 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
     element.parentElement?.classList.contains("stf__item") ||
     element.parentElement?.parentElement?.classList.contains("stf__item")
   ) {
-    // Window["ngxConsole"].log("don't scroll in book mode");
+    // globalThis.ngxConsole.log("don't scroll in book mode");
     return;
   }
   // #716 end of modification

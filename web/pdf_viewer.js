@@ -400,7 +400,7 @@ class PDFViewer {
 
     // The intent can be to just reset a scroll position and/or scale.
     if (!this._setCurrentPageNumber(val, /* resetCurrentPageView = */ true)) {
-      Window["ngxConsole"].error(`currentPageNumber: "${val}" is not a valid page.`);
+      globalThis.ngxConsole.error(`currentPageNumber: "${val}" is not a valid page.`);
     }
     // #716 modified by ngx-extended-pdf-viewer
     if (this.pageFlip) {
@@ -599,7 +599,7 @@ class PDFViewer {
     }
     // The intent can be to just reset a scroll position and/or scale.
     if (!this._setCurrentPageNumber(page, /* resetCurrentPageView = */ true)) {
-      Window["ngxConsole"].error(`currentPageLabel: "${val}" is not a valid page.`);
+      globalThis.ngxConsole.error(`currentPageLabel: "${val}" is not a valid page.`);
     }
   }
 
@@ -1157,7 +1157,7 @@ class PDFViewer {
         }
       })
       .catch(reason => {
-        Window["ngxConsole"].error("Unable to initialize viewer", reason);
+        globalThis.ngxConsole.error("Unable to initialize viewer", reason);
 
         this._pagesCapability.reject(reason);
       });
@@ -1176,7 +1176,7 @@ class PDFViewer {
       !(Array.isArray(labels) && this.pdfDocument.numPages === labels.length)
     ) {
       this._pageLabels = null;
-      Window["ngxConsole"].error(`setPageLabels: Invalid page labels.`);
+      globalThis.ngxConsole.error(`setPageLabels: Invalid page labels.`);
     } else {
       this._pageLabels = labels;
     }
@@ -1559,7 +1559,7 @@ class PDFViewer {
           scale = Math.min(MAX_AUTO_SCALE, horizontalScale);
           break;
         default:
-          Window["ngxConsole"].error(`#setScale: "${value}" is an unknown zoom value.`);
+          globalThis.ngxConsole.error(`#setScale: "${value}" is an unknown zoom value.`);
           return;
       }
       options.preset = true;
