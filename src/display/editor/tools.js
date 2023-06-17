@@ -194,6 +194,14 @@ class CommandManager {
   destroy() {
     this.#commands = null;
   }
+
+  // #1783 modified by ngx-extended-pdf-viewer
+  reset() {
+    this.#commands = [];
+    this.#position = -1;
+    this.#locked = false;
+  }
+  // #1783 end of modification by ngx-extended-pdf-viewer
 }
 
 /**
@@ -561,14 +569,23 @@ class AnnotationEditorUIManager {
    */
   paste(event) {
     event.preventDefault();
+    // #1783 modified by ngx-extended-pdf-viewer
+    const data = event.clipboardData.getData("application/pdfjs");
+    this.addSerializedEditor(data);
+  }
 
-    let data = event.clipboardData.getData("application/pdfjs");
+  addSerializedEditor(data, activateEditorIfNecessary = false) {
+    // #1783 end of modification by ngx-extended-pdf-viewer
     if (!data) {
       return;
     }
 
     try {
-      data = JSON.parse(data);
+      // #1783 modified by ngx-extended-pdf-viewer
+      if (typeof data === "string") {
+        data = JSON.parse(data);
+      }
+      // #1783 end of modification by ngx-extended-pdf-viewer
     } catch (ex) {
       warn(`paste: "${ex.message}".`);
       return;
@@ -578,6 +595,12 @@ class AnnotationEditorUIManager {
       return;
     }
 
+    // #1783 modified by ngx-extended-pdf-viewer
+    const previousMode = this.#mode;
+    if (activateEditorIfNecessary && previousMode === AnnotationEditorType.NONE) {
+      this.updateMode(AnnotationEditorType.FREETEXT);
+    }
+    // #1783 end of modification by ngx-extended-pdf-viewer
     this.unselectAll();
     const layer = this.#allLayers.get(this.#currentPageIndex);
 
@@ -606,6 +629,11 @@ class AnnotationEditorUIManager {
     } catch (ex) {
       warn(`paste: "${ex.message}".`);
     }
+    // #1783 modified by ngx-extended-pdf-viewer
+    if (activateEditorIfNecessary && previousMode !== this.#mode) {
+      this.updateMode(previousMode);
+    }
+    // #1783 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -1092,6 +1120,26 @@ class AnnotationEditorUIManager {
   getMode() {
     return this.#mode;
   }
+
+  // #1783 modified by ngx-extended-pdf-viewer
+  removeEditors(filterFunction = () => true) {
+    let hasChanged = false;
+    this.#allEditors.forEach(editor => {
+      if (filterFunction(editor.serialize())) {
+        editor.remove();
+        hasChanged = true;
+      }
+    });
+    if (hasChanged) {
+      this.#dispatchUpdateStates({
+        hasSomethingToUndo: false,
+        hasSomethingToRedo: false,
+        isEmpty: this.#isEmpty(),
+      });
+      this.#commandManager.reset();
+    }
+  }
+  // #1783 end of modification by ngx-extended-pdf-viewer
 }
 
 export {
