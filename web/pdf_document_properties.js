@@ -69,6 +69,7 @@ class PDFDocumentProperties {
     this.overlayManager = overlayManager;
     this.l10n = l10n;
     this._fileNameLookup = fileNameLookup;
+    this.eventBus = eventBus; // #1773 modified by ngx-extended-pdf-vieweer
 
     this.#reset();
     // Bind the event listener for the Close button.
@@ -97,6 +98,7 @@ class PDFDocumentProperties {
       this.overlayManager.open(this.dialog),
       this._dataAvailableCapability.promise,
     ]);
+    this.eventBus.dispatch("propertiesdialogopen", this); // #1773 modified by ngx-extended-pdf-vieweer
     const currentPageNumber = this._currentPageNumber;
     const pagesRotation = this._pagesRotation;
 
@@ -175,6 +177,7 @@ class PDFDocumentProperties {
    */
   async close() {
     this.overlayManager.close(this.dialog);
+    this.eventBus.dispatch("propertiesdialogclose", this); // #1773 modified by ngx-extended-pdf-vieweer
   }
 
   /**

@@ -221,6 +221,7 @@ class PDFFindBar {
     this.findField.select();
     this.findField.focus();
     this.dispatchEvent(""); // #206
+    this.eventBus.dispatch("findbaropen", { source: this }); // #1773 modified by ngx-extended-pdf-vieweer
 
     this.#adjustWidth();
   }
