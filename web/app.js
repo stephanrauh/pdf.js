@@ -1612,11 +1612,14 @@ const PDFViewerApplication = {
     this._contentLength ??= contentLength; // See `getDownloadInfo`-call above.
 
     // Provides some basic debug information
-    globalThis.ngxConsole.log(
-      `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
-        `${(info.Producer || "-").trim()} / ${(info.Creator || "-").trim()}] ` +
-        `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer`
-    );
+    const options = globalThis.PDFViewerApplicationOptions;
+    if (!options || options.get("verbosity") > 0) {
+      globalThis.ngxConsole.log(
+        `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
+          `${(info.Producer || "-").trim()} / ${(info.Creator || "-").trim()}] ` +
+          `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer`
+      );
+    }
     let pdfTitle = info.Title;
 
     const metadataTitle = metadata?.get("dc:title");
