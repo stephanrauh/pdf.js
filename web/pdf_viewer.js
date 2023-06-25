@@ -2418,6 +2418,20 @@ class PDFViewer {
     this.#annotationEditorUIManager.removeEditors(filter);
   }
   // #1783 end of modification by ngx-extended-pdf-viewer
+
+  // #1415 modified by ngx-extended-pdf-viewer
+  destroyBookMode() {
+    if (this.pageFlip) {
+      this.pageFlip.destroy();
+      this.pageFlip = null;
+    }
+  }
+
+  stopRendering() {
+    // this.renderingQueue._stop();
+    this._cancelRendering();
+  }
+  // #1415 end of modification by ngx-extended-pdf-viewer
 }
 
 export { PagesCountLimit, PDFPageViewBuffer, PDFViewer };
