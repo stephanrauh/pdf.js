@@ -2665,7 +2665,9 @@ class PageFlip extends EventObject {
      */
     destroy() {
         this.ui.destroy();
-        this.block.remove();
+        // #1415 modified by ngx-extended-pdf-viewer
+        // this.block.remove(); // this would remove the viewer div
+        // #1415 end of modification by ngx-extended-pdf-viewer
     }
     /**
      * Update the render area. Re-show current page.
