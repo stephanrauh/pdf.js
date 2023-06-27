@@ -1613,7 +1613,7 @@ const PDFViewerApplication = {
 
     // Provides some basic debug information
     // #1793 modified by ngx-extended-pdf-vieweer
-    const options = globalThis.PDFViewerApplicationOptions; 
+    const options = window.PDFViewerApplicationOptions;
     if (!options || options.get("verbosity") > 0) {
       globalThis.ngxConsole.log(
         `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
@@ -1621,7 +1621,7 @@ const PDFViewerApplication = {
           `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer`
       );
     }
-     // #1793 end of modification by ngx-extended-pdf-vieweer
+     // #1793 end of modification by ngx-extended-pdf-viewer
     let pdfTitle = info.Title;
 
     const metadataTitle = metadata?.get("dc:title");
