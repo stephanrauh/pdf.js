@@ -887,6 +887,11 @@ const PDFViewerApplication = {
    * @private
    */
   _hideViewBookmark() {
+    // #1799 modified by ngx-extended-pdf-viewer
+    if (!this.appConfig) {
+      return;
+    }
+    // #1799 end of modification by ngx-extended-pdf-viewer
     const { secondaryToolbar } = this.appConfig;
     // URL does not reflect proper document location - hiding some buttons.
     secondaryToolbar?.viewBookmarkButton.classList.add("hidden");
@@ -2086,15 +2091,17 @@ const PDFViewerApplication = {
     window.addEventListener("visibilitychange", webViewerVisibilityChange);
     window.addEventListener("wheel", webViewerWheel, { passive: false });
     const mainContainer = document.getElementById("mainContainer");
-    mainContainer.addEventListener("touchstart", webViewerTouchStart, {
+    // #1799 modified by ngx-extended-pdf-viewer (added the ? operator)
+    mainContainer?.addEventListener("touchstart", webViewerTouchStart, {
       passive: false,
     });
-    mainContainer.addEventListener("touchmove", webViewerTouchMove, {
+    mainContainer?.addEventListener("touchmove", webViewerTouchMove, {
       passive: false,
     });
-    mainContainer.addEventListener("touchend", webViewerTouchEnd, {
+    mainContainer?.addEventListener("touchend", webViewerTouchEnd, {
       passive: false,
     });
+    // #1799 end of modification by ngx-extended-pdf-viewer
     window.addEventListener("click", webViewerClick);
     window.addEventListener("keydown", webViewerKeyDown);
     window.addEventListener("keyup", webViewerKeyUp);
