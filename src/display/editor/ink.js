@@ -538,7 +538,11 @@ class InkEditor extends AnnotationEditor {
     this.setInForeground();
 
     if (event.type !== "mouse") {
-      this.div.focus();
+      // #1802 modified by ngx-extended-pdf-viewer
+      this.div.focus({
+        preventScroll: true /* See issue #15744 */,
+      });
+      // #1802 end of modification
     }
 
     event.stopPropagation();
