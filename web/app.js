@@ -959,7 +959,12 @@ const PDFViewerApplication = {
    * @returns {Promise} - Promise that is resolved when the document is opened.
    */
   async open(args) {
+    // #1203 modified by ngx-extended-pdf-viewer
     window.adjacentPagesLoader = undefined;
+    // #1203 end of modification by ngx-extended-pdf-viewer
+    // #1665 modified by ngx-extended-pdf-viewer
+    this.pdfViewer?.destroyBookMode();
+    // #1665 end of modification by ngx-extended-pdf-viewer
     window.ngxZone.runOutsideAngular(async () => {
 
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
