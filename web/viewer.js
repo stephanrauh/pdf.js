@@ -143,18 +143,10 @@ function getViewerConfiguration() {
       bar: document.getElementById("findbar"),
       toggleButton: document.getElementById("viewFind"),
       findField: document.getElementById("findInput"),
-      findFieldMultiline: document.getElementById("findInputMultiline"), // #201
       highlightAllCheckbox: document.getElementById("findHighlightAll"),
-      findCurrentPageCheckbox: document.getElementById("findCurrentPage"), // #832
-      findPageRangeField: document.getElementById("findRange"), // #832
       caseSensitiveCheckbox: document.getElementById("findMatchCase"),
       matchDiacriticsCheckbox: document.getElementById("findMatchDiacritics"),
       entireWordCheckbox: document.getElementById("findEntireWord"),
-      findMultipleSearchTextsCheckbox: document.getElementById(
-        "findMultipleSearchTexts"
-      ), // #201
-      ignoreAccentsCheckbox: document.getElementById("findIgnoreAccents"), // #177
-      fuzzyCheckbox: document.getElementById("findFuzzy"), // #304
       findMsg: document.getElementById("findMsg"),
       findResultsCount: document.getElementById("findResultsCount"),
       findPreviousButton: document.getElementById("findPrevious"),

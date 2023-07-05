@@ -105,8 +105,7 @@ class TextHighlighter {
 
   _convertMatches(
     matches,
-    matchesLength,
-    matchesColor // #201
+    matchesLength
   ) {
     // Early exit if there is nothing to convert.
     if (!matches) {
@@ -134,7 +133,6 @@ class TextHighlighter {
       }
 
       const match = {
-        color: matchesColor ? matchesColor[m] : 0, // #201
         begin: {
           divIdx: i,
           offset: matchIdx - iIndex,
@@ -234,8 +232,7 @@ class TextHighlighter {
 
       const end = match.end;
       const isSelected = isSelectedPage && i === selectedMatchIdx;
-      const colorNumber = match.color % 5; // only 5 colors have CSS rules
-      const highlightSuffix = (isSelected ? " selected" : "") + " color" + colorNumber; // #201
+      const highlightSuffix = isSelected ? " selected" : "";
       let selectedLeft = 0;
 
       // Match inside new div.
@@ -313,9 +310,8 @@ class TextHighlighter {
     // used for the textLayer.
     const pageMatches = findController.pageMatches[pageIdx] || null;
     const pageMatchesLength = findController.pageMatchesLength[pageIdx] || null;
-    const pageMatchesColor = findController.pageMatchesColor[pageIdx] || null; // #201
 
-    this.matches = this._convertMatches(pageMatches, pageMatchesLength, pageMatchesColor); // #201
+    this.matches = this._convertMatches(pageMatches, pageMatchesLength);
     this._renderMatches(this.matches);
   }
 }

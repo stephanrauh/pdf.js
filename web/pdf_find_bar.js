@@ -41,10 +41,6 @@ class PDFFindBar {
     this.findResultsCount = options.findResultsCount;
     this.findPreviousButton = options.findPreviousButton;
     this.findNextButton = options.findNextButton;
-    this.findFieldMultiline = options.findFieldMultiline || null; // #201
-    this.multipleSearchTexts = options.findMultipleSearchTextsCheckbox || null; // #201
-    this.ignoreAccents = options.ignoreAccentsCheckbox || null; // #177
-    this.fuzzySearch = options.fuzzyCheckbox || null; // #304
 
     this.eventBus = eventBus;
     this.l10n = l10n;
@@ -52,11 +48,6 @@ class PDFFindBar {
     // Add event listeners to the DOM elements.
     this.toggleButton.addEventListener("click", () => {
       this.toggle();
-    });
-
-    this.findFieldMultiline.addEventListener("input", () => {
-      // #201
-      this.dispatchEvent("");
     });
 
     this.findField.addEventListener("input", () => {
@@ -96,27 +87,6 @@ class PDFFindBar {
       this.dispatchEvent("entirewordchange");
     });
 
-    this.multipleSearchTexts.addEventListener("click", () => {
-      // #201
-      this.dispatchEvent("multiplesearchtextschange"); // #201
-    }); // #201
-
-    this.ignoreAccents.addEventListener("click", () => {
-      // #177
-      this.dispatchEvent("ignoreAccentsChange"); // #177
-    }); // #177
-
-    this.fuzzySearch.addEventListener("click", () => { // #304
-      this.dispatchEvent("fuzzySearchChange"); // #304
-    }); // #304
-
-    this.currentPage.addEventListener("click", () => { // #802
-      this.dispatchEvent("currentPageChange"); // #802
-    }); // #802
-
-    this.pageRange.addEventListener("input", () => { // #802
-      this.dispatchEvent("pageRangeChange"); // #802
-    }); // #802
     this.matchDiacritics?.addEventListener("click", () => {
       this.dispatchEvent("diacriticmatchingchange");
     });
@@ -132,19 +102,12 @@ class PDFFindBar {
     this.eventBus.dispatch("find", {
       source: this,
       type,
-      query: this.findFieldMultiline.classList.contains("hidden")
-        ? this.findField.value
-        : this.findFieldMultiline.value + "\n", // #201
-      phraseSearch: !this.multipleSearchTexts.checked, // #201
+      query: this.findField.value,
       caseSensitive: this.caseSensitive.checked,
       entireWord: this.entireWord.checked,
-      ignoreAccents: this.ignoreAccents.checked, // #177
-      fuzzySearch: this.fuzzySearch.checked, // #304
       highlightAll: this.highlightAll.checked,
-      currentPage: this.currentPage.checked, // #832
-      pageRange: this.pageRange.value, // #832
       findPrevious: findPrev,
-      matchDiacritics: this.matchDiacritics?.checked, // #1181
+      matchDiacritics: this.matchDiacritics.checked,
     });
   }
 
@@ -167,8 +130,6 @@ class PDFFindBar {
         break;
     }
     this.findField.setAttribute("data-status", status);
-    this.findFieldMultiline.classList.toggle("notFound", status === "notFound"); // #201
-    this.findFieldMultiline.setAttribute("data-status", status); // #201
     this.findField.setAttribute("aria-invalid", state === FindState.NOT_FOUND);
 
     findMsg.then(msg => {

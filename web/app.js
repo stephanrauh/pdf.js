@@ -2770,8 +2770,6 @@ function webViewerFindFromUrlHash(evt) {
     query: evt.query,
     caseSensitive: false,
     entireWord: false,
-    ignoreAccents: false, // #177
-    fuzzySearch: false, // #304
     highlightAll: true,
     findPrevious: false,
     matchDiacritics: true,
