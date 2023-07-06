@@ -77,7 +77,7 @@ const config = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
 
 const ENV_TARGETS = [
   "last 2 versions",
-  "Chrome >= 88",
+  "Chrome >= 92",
   "Firefox ESR",
   "Safari >= 15.4",
   "Node >= 18",
@@ -185,10 +185,7 @@ function createWebpackConfig(
   const bundleDefines = builder.merge(defines, {
     BUNDLE_VERSION: versionInfo.version,
     BUNDLE_BUILD: versionInfo.commit,
-    TESTING:
-      defines.TESTING !== undefined
-        ? defines.TESTING
-        : process.env.TESTING === "true",
+    TESTING: defines.TESTING ?? process.env.TESTING === "true",
     DEFAULT_PREFERENCES: defaultPreferencesDir
       ? getDefaultPreferences(defaultPreferencesDir)
       : {},
@@ -327,33 +324,40 @@ function checkChromePreferencesFile(chromePrefsPath, webPrefs) {
   const chromePrefsKeys = Object.keys(chromePrefs.properties).filter(key => {
     const description = chromePrefs.properties[key].description;
     // Deprecated keys are allowed in the managed preferences file.
-    // The code maintained is responsible for adding migration logic to
+    // The code maintainer is responsible for adding migration logic to
     // extensions/chromium/options/migration.js and web/chromecom.js .
     return !description || !description.startsWith("DEPRECATED.");
   });
-  chromePrefsKeys.sort();
-
-  const webPrefsKeys = Object.keys(webPrefs);
-  webPrefsKeys.sort();
-
-  if (webPrefsKeys.length !== chromePrefsKeys.length) {
-    console.log("Warning: Pref objects doesn't have the same length.");
-    return false;
-  }
 
   let ret = true;
-  for (let i = 0, ii = webPrefsKeys.length; i < ii; i++) {
-    const value = webPrefsKeys[i];
-    if (chromePrefsKeys[i] !== value) {
+  // Verify that every entry in webPrefs is also in preferences_schema.json.
+  for (const [key, value] of Object.entries(webPrefs)) {
+    if (!chromePrefsKeys.includes(key)) {
+      // Note: this would also reject keys that are present but marked as
+      // DEPRECATED. A key should not be marked as DEPRECATED if it is still
+      // listed in webPrefs.
       ret = false;
       console.log(
-        `Warning: not the same keys: ${chromePrefsKeys[i]} !== ${value}`
+        `Warning: ${chromePrefsPath} does not contain an entry for pref: ${key}`
       );
-    } else if (chromePrefs.properties[value].default !== webPrefs[value]) {
+    } else if (chromePrefs.properties[key].default !== value) {
       ret = false;
       console.log(
-        `Warning: not the same values (for "${value}"): ` +
-          `${chromePrefs.properties[value].default} !== ${webPrefs[value]}`
+        `Warning: not the same values (for "${key}"): ` +
+          `${chromePrefs.properties[key].default} !== ${value}`
+      );
+    }
+  }
+
+  // Verify that preferences_schema.json does not contain entries that are not
+  // in webPrefs (app_options.js).
+  for (const key of chromePrefsKeys) {
+    if (!(key in webPrefs)) {
+      ret = false;
+      console.log(
+        `Warning: ${chromePrefsPath} contains an unrecognized pref: ${key}. ` +
+          `Remove it, or prepend "DEPRECATED. " and add migration logic to ` +
+          `extensions/chromium/options/migration.js and web/chromecom.js.`
       );
     }
   }
@@ -595,7 +599,7 @@ function checkFile(filePath) {
   try {
     const stat = fs.lstatSync(filePath);
     return stat.isFile();
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -604,7 +608,7 @@ function checkDir(dirPath) {
   try {
     const stat = fs.lstatSync(dirPath);
     return stat.isDirectory();
-  } catch (e) {
+  } catch {
     return false;
   }
 }
@@ -770,10 +774,7 @@ function buildDefaultPreferences(defines, dir) {
     SKIP_BABEL: false,
     BUNDLE_VERSION: 0, // Dummy version
     BUNDLE_BUILD: 0, // Dummy build
-    TESTING:
-      defines.TESTING !== undefined
-        ? defines.TESTING
-        : process.env.TESTING === "true",
+    TESTING: defines.TESTING ?? process.env.TESTING === "true",
   });
 
   const inputStream = merge([
@@ -1554,10 +1555,7 @@ function buildLib(defines, dir) {
   const bundleDefines = builder.merge(defines, {
     BUNDLE_VERSION: versionInfo.version,
     BUNDLE_BUILD: versionInfo.commit,
-    TESTING:
-      defines.TESTING !== undefined
-        ? defines.TESTING
-        : process.env.TESTING === "true",
+    TESTING: defines.TESTING ?? process.env.TESTING === "true",
     DEFAULT_PREFERENCES: getDefaultPreferences(
       defines.SKIP_BABEL ? "lib/" : "lib-legacy/"
     ),
@@ -1573,7 +1571,12 @@ function buildLib(defines, dir) {
       { base: "src/" }
     ),
     gulp.src(
-      ["examples/node/domstubs.js", "web/*.js", "!web/{pdfjs,viewer}.js"],
+      [
+        "examples/node/domstubs.js",
+        "external/webL10n/l10n.js",
+        "web/*.js",
+        "!web/{pdfjs,viewer}.js",
+      ],
       { base: "." }
     ),
     gulp.src("test/unit/*.js", { base: "." }),
@@ -2378,5 +2381,9 @@ gulp.task("externaltest", function (done) {
 
 gulp.task(
   "ci-test",
-  gulp.series(gulp.parallel("lint", "externaltest", "unittestcli"), "typestest")
+  gulp.series(
+    gulp.parallel("lint", "externaltest", "unittestcli"),
+    "lint-chromium",
+    "typestest"
+  )
 );

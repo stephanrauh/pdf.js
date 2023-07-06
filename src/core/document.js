@@ -13,8 +13,8 @@
  * limitations under the License.
  */
 
-import { AnnotationFactory, PopupAnnotation } from "./annotation.js";
 import {
+  AnnotationEditorPrefix,
   assert,
   FormatError,
   info,
@@ -30,6 +30,7 @@ import {
   Util,
   warn,
 } from "../shared/util.js";
+import { AnnotationFactory, PopupAnnotation } from "./annotation.js";
 import {
   collectActions,
   getInheritableProperty,
@@ -41,7 +42,7 @@ import {
   XRefEntryException,
   XRefParseException,
 } from "./core_utils.js";
-import { Dict, isName, Name, Ref } from "./primitives.js";
+import { Dict, isName, isRefsEqual, Name, Ref, RefSet } from "./primitives.js";
 import { getXfaFontDict, getXfaFontName } from "./xfa_fonts.js";
 import { BaseStream } from "./base_stream.js";
 import { calculateMD5 } from "./crypto.js";
@@ -258,7 +259,26 @@ class Page {
     );
   }
 
-  async saveNewAnnotations(handler, task, annotations) {
+  #replaceIdByRef(annotations, deletedAnnotations, existingAnnotations) {
+    for (const annotation of annotations) {
+      if (annotation.id) {
+        const ref = Ref.fromString(annotation.id);
+        if (!ref) {
+          warn(`A non-linked annotation cannot be modified: ${annotation.id}`);
+          continue;
+        }
+        if (annotation.deleted) {
+          deletedAnnotations.put(ref);
+          continue;
+        }
+        existingAnnotations?.put(ref);
+        annotation.ref = ref;
+        delete annotation.id;
+      }
+    }
+  }
+
+  async saveNewAnnotations(handler, task, annotations, imagePromises) {
     if (this.xfaFactory) {
       throw new Error("XFA: Cannot save new annotations.");
     }
@@ -276,16 +296,26 @@ class Page {
       options: this.evaluatorOptions,
     });
 
+    const deletedAnnotations = new RefSet();
+    const existingAnnotations = new RefSet();
+    this.#replaceIdByRef(annotations, deletedAnnotations, existingAnnotations);
+
     const pageDict = this.pageDict;
-    const annotationsArray = this.annotations.slice();
+    const annotationsArray = this.annotations.filter(
+      a => !(a instanceof Ref && deletedAnnotations.has(a))
+    );
     const newData = await AnnotationFactory.saveNewAnnotations(
       partialEvaluator,
       task,
-      annotations
+      annotations,
+      imagePromises
     );
 
     for (const { ref } of newData.annotations) {
-      annotationsArray.push(ref);
+      // Don't add an existing annotation ref to the annotations array.
+      if (ref instanceof Ref && !existingAnnotations.has(ref)) {
+        annotationsArray.push(ref);
+      }
     }
 
     const savedDict = pageDict.get("Annots");
@@ -401,15 +431,56 @@ class Page {
     const newAnnotationsByPage = !this.xfaFactory
       ? getNewAnnotationsMap(annotationStorage)
       : null;
+    let deletedAnnotations = null;
 
     let newAnnotationsPromise = Promise.resolve(null);
     if (newAnnotationsByPage) {
+      let imagePromises;
       const newAnnotations = newAnnotationsByPage.get(this.pageIndex);
       if (newAnnotations) {
+        // An annotation can contain a reference to a bitmap, but this bitmap
+        // is defined in another annotation. So we need to find this annotation
+        // and generate the bitmap.
+        const missingBitmaps = new Set();
+        for (const { bitmapId, bitmap } of newAnnotations) {
+          if (bitmapId && !bitmap && !missingBitmaps.has(bitmapId)) {
+            missingBitmaps.add(bitmapId);
+          }
+        }
+
+        const { isOffscreenCanvasSupported } = this.evaluatorOptions;
+        if (missingBitmaps.size > 0) {
+          const annotationWithBitmaps = [];
+          for (const [key, annotation] of annotationStorage) {
+            if (!key.startsWith(AnnotationEditorPrefix)) {
+              continue;
+            }
+            if (annotation.bitmap && missingBitmaps.has(annotation.bitmapId)) {
+              annotationWithBitmaps.push(annotation);
+            }
+          }
+          // The array annotationWithBitmaps cannot be empty: the check above
+          // makes sure to have at least one annotation containing the bitmap.
+          imagePromises = AnnotationFactory.generateImages(
+            annotationWithBitmaps,
+            this.xref,
+            isOffscreenCanvasSupported
+          );
+        } else {
+          imagePromises = AnnotationFactory.generateImages(
+            newAnnotations,
+            this.xref,
+            isOffscreenCanvasSupported
+          );
+        }
+
+        deletedAnnotations = new RefSet();
+        this.#replaceIdByRef(newAnnotations, deletedAnnotations, null);
         newAnnotationsPromise = AnnotationFactory.printNewAnnotations(
           partialEvaluator,
           task,
-          newAnnotations
+          newAnnotations,
+          imagePromises
         );
       }
     }
@@ -446,6 +517,25 @@ class Page {
       newAnnotationsPromise,
     ]).then(function ([pageOpList, annotations, newAnnotations]) {
       if (newAnnotations) {
+        // Some annotations can already exist (if it has the refToReplace
+        // property). In this case, we replace the old annotation by the new
+        // one.
+        annotations = annotations.filter(
+          a => !(a.ref && deletedAnnotations.has(a.ref))
+        );
+        for (let i = 0, ii = newAnnotations.length; i < ii; i++) {
+          const newAnnotation = newAnnotations[i];
+          if (newAnnotation.refToReplace) {
+            const j = annotations.findIndex(
+              a => a.ref && isRefsEqual(a.ref, newAnnotation.refToReplace)
+            );
+            if (j >= 0) {
+              annotations.splice(j, 1, newAnnotation);
+              newAnnotations.splice(i--, 1);
+              ii--;
+            }
+          }
+        }
         annotations = annotations.concat(newAnnotations);
       }
       if (
@@ -1012,7 +1102,7 @@ class PDFDocument {
         const str = stringToUTF8String(stream.getString());
         const data = { [key]: str };
         return shadow(this, "xfaDatasets", new DatasetReader(data));
-      } catch (_) {
+      } catch {
         warn("XFA - Invalid utf-8 string.");
         break;
       }
@@ -1032,7 +1122,7 @@ class PDFDocument {
       }
       try {
         data[key] = stringToUTF8String(stream.getString());
-      } catch (_) {
+      } catch {
         warn("XFA - Invalid utf-8 string.");
         return null;
       }
@@ -1622,6 +1712,11 @@ class PDFDocument {
       } else {
         name = `${name}.${partName}`;
       }
+    }
+
+    if (!field.has("Kids") && /\[\d+\]$/.test(name)) {
+      // We've a terminal node: strip the index.
+      name = name.substring(0, name.lastIndexOf("["));
     }
 
     if (!promises.has(name)) {

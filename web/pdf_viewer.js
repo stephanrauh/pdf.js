@@ -288,25 +288,11 @@ class PDFViewer {
     this.#enablePermissions = options.enablePermissions || false;
     this.pageColors = options.pageColors || null;
 
-    if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
-      if (
-        this.pageColors &&
-        !(
-          CSS.supports("color", this.pageColors.background) &&
-          CSS.supports("color", this.pageColors.foreground)
-        )
-      ) {
-        if (this.pageColors.background || this.pageColors.foreground) {
-          console.warn(
-            "PDFViewer: Ignoring `pageColors`-option, since the browser doesn't support the values used."
-          );
-        }
-        this.pageColors = null;
-      }
-    }
-
     this.defaultRenderingQueue = !options.renderingQueue;
-    if (this.defaultRenderingQueue) {
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+      this.defaultRenderingQueue
+    ) {
       // Custom rendering queue is not specified, using default one
       this.renderingQueue = new PDFRenderingQueue();
       this.renderingQueue.setViewer(this);
@@ -1030,6 +1016,20 @@ class PDFViewer {
         // Ensure that the various layers always get the correct initial size,
         // see issue 15795.
         this.viewer.style.setProperty("--scale-factor", viewport.scale);
+        if (
+          this.pageColors?.foreground === "CanvasText" ||
+          this.pageColors?.background === "Canvas"
+        ) {
+          this.viewer.style.setProperty(
+            "--hcm-highligh-filter",
+            pdfDocument.filterFactory.addHighlightHCMFilter(
+              "CanvasText",
+              "Canvas",
+              "HighlightText",
+              "Highlight"
+            )
+          );
+        }
 
         for (let pageNum = 1; pageNum <= pagesCount; ++pageNum) {
           const pageView = new PDFPageView({
@@ -2076,6 +2076,15 @@ class PDFViewer {
    *   The constants from {ScrollMode} should be used.
    */
   set scrollMode(mode) {
+    if (
+      typeof PDFJSDev === "undefined"
+        ? window.isGECKOVIEW
+        : PDFJSDev.test("GECKOVIEW")
+    ) {
+      // NOTE: Always ignore the pageLayout in GeckoView since there's
+      // no UI available to change Scroll/Spread modes for the user.
+      return;
+    }
     if (this._scrollMode === mode) {
       return; // The Scroll mode didn't change.
     }
@@ -2137,6 +2146,15 @@ class PDFViewer {
    *   The constants from {SpreadMode} should be used.
    */
   set spreadMode(mode) {
+    if (
+      typeof PDFJSDev === "undefined"
+        ? window.isGECKOVIEW
+        : PDFJSDev.test("GECKOVIEW")
+    ) {
+      // NOTE: Always ignore the pageLayout in GeckoView since there's
+      // no UI available to change Scroll/Spread modes for the user.
+      return;
+    }
     if (this._spreadMode === mode) {
       return; // The Spread mode didn't change.
     }

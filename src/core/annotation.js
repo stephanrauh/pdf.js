@@ -23,6 +23,7 @@ import {
   AnnotationType,
   assert,
   BASELINE_FACTOR,
+  FeatureTest,
   getModificationDate,
   info,
   IDENTITY_MATRIX,
@@ -49,18 +50,20 @@ import {
   createDefaultAppearance,
   FakeUnicodeFont,
   getPdfColor,
+  parseAppearanceStream,
   parseDefaultAppearance,
 } from "./default_appearance.js";
 import { Dict, isName, Name, Ref, RefSet } from "./primitives.js";
+import { Stream, StringStream } from "./stream.js";
 import { writeDict, writeObject } from "./writer.js";
 import { BaseStream } from "./base_stream.js";
 import { bidi } from "./bidi.js";
 import { Catalog } from "./catalog.js";
 import { ColorSpace } from "./colorspace.js";
 import { FileSpec } from "./file_spec.js";
+import { JpegStream } from "./jpeg_stream.js";
 import { ObjectLoader } from "./object_loader.js";
 import { OperatorList } from "./operator_list.js";
-import { StringStream } from "./stream.js";
 import { XFAFactory } from "./xfa/factory.js";
 
 class AnnotationFactory {
@@ -264,13 +267,36 @@ class AnnotationFactory {
     }
   }
 
-  static async saveNewAnnotations(evaluator, task, annotations) {
+  static generateImages(annotations, xref, isOffscreenCanvasSupported) {
+    if (!isOffscreenCanvasSupported) {
+      warn(
+        "generateImages: OffscreenCanvas is not supported, cannot save or print some annotations with images."
+      );
+      return null;
+    }
+    let imagePromises;
+    for (const { bitmapId, bitmap } of annotations) {
+      if (!bitmap) {
+        continue;
+      }
+      imagePromises ||= new Map();
+      imagePromises.set(bitmapId, StampAnnotation.createImage(bitmap, xref));
+    }
+
+    return imagePromises;
+  }
+
+  static async saveNewAnnotations(evaluator, task, annotations, imagePromises) {
     const xref = evaluator.xref;
     let baseFontRef;
     const dependencies = [];
     const promises = [];
+    const { isOffscreenCanvasSupported } = evaluator.options;
 
     for (const annotation of annotations) {
+      if (annotation.deleted) {
+        continue;
+      }
       switch (annotation.annotationType) {
         case AnnotationEditorType.FREETEXT:
           if (!baseFontRef) {
@@ -297,6 +323,36 @@ class AnnotationFactory {
           promises.push(
             InkAnnotation.createNewAnnotation(xref, annotation, dependencies)
           );
+          break;
+        case AnnotationEditorType.STAMP:
+          if (!isOffscreenCanvasSupported) {
+            break;
+          }
+          const image = await imagePromises.get(annotation.bitmapId);
+          if (image.imageStream) {
+            const { imageStream, smaskStream } = image;
+            const buffer = [];
+            if (smaskStream) {
+              const smaskRef = xref.getNewTemporaryRef();
+              await writeObject(smaskRef, smaskStream, buffer, null);
+              dependencies.push({ ref: smaskRef, data: buffer.join("") });
+              imageStream.dict.set("SMask", smaskRef);
+              buffer.length = 0;
+            }
+            const imageRef = (image.imageRef = xref.getNewTemporaryRef());
+            await writeObject(imageRef, imageStream, buffer, null);
+            dependencies.push({ ref: imageRef, data: buffer.join("") });
+            image.imageStream = image.smaskStream = null;
+          }
+          promises.push(
+            StampAnnotation.createNewAnnotation(
+              xref,
+              annotation,
+              dependencies,
+              image
+            )
+          );
+          break;
       }
     }
 
@@ -306,7 +362,12 @@ class AnnotationFactory {
     };
   }
 
-  static async printNewAnnotations(evaluator, task, annotations) {
+  static async printNewAnnotations(
+    evaluator,
+    task,
+    annotations,
+    imagePromises
+  ) {
     if (!annotations) {
       return null;
     }
@@ -315,6 +376,9 @@ class AnnotationFactory {
     const { isOffscreenCanvasSupported } = evaluator.options;
     const promises = [];
     for (const annotation of annotations) {
+      if (annotation.deleted) {
+        continue;
+      }
       switch (annotation.annotationType) {
         case AnnotationEditorType.FREETEXT:
           promises.push(
@@ -330,6 +394,23 @@ class AnnotationFactory {
             InkAnnotation.createNewPrintAnnotation(xref, annotation, {
               isOffscreenCanvasSupported,
             })
+          );
+          break;
+        case AnnotationEditorType.STAMP:
+          if (!isOffscreenCanvasSupported) {
+            break;
+          }
+          const image = await imagePromises.get(annotation.bitmapId);
+          if (image.imageStream) {
+            const { imageStream, smaskStream } = image;
+            if (smaskStream) {
+              imageStream.dict.set("SMask", smaskStream);
+            }
+            image.imageRef = new JpegStream(imageStream, imageStream.length);
+            image.imageStream = image.smaskStream = null;
+          }
+          promises.push(
+            StampAnnotation.createNewPrintAnnotation(xref, annotation, image)
           );
           break;
       }
@@ -473,6 +554,7 @@ class Annotation {
     const MK = dict.get("MK");
     this.setBorderAndBackgroundColors(MK);
     this.setRotation(MK);
+    this.ref = params.ref instanceof Ref ? params.ref : null;
 
     this._streams = [];
     if (this.appearance) {
@@ -999,6 +1081,9 @@ class Annotation {
 
       enqueue(chunk, size) {
         for (const item of chunk.items) {
+          if (item.str === undefined) {
+            continue;
+          }
           buffer.push(item.str);
           if (item.hasEOL) {
             text.push(buffer.join(""));
@@ -1022,7 +1107,7 @@ class Annotation {
       text.push(buffer.join(""));
     }
 
-    if (text.length > 0) {
+    if (text.length > 1 || text[0]) {
       this.data.textContent = text;
     }
   }
@@ -1318,6 +1403,7 @@ class MarkupAnnotation extends Annotation {
       this.data.replyType =
         rt instanceof Name ? rt.name : AnnotationReplyType.REPLY;
     }
+    let popupRef = null;
 
     if (this.data.replyType === AnnotationReplyType.GROUP) {
       // Subordinate annotations in a group should inherit
@@ -1344,7 +1430,7 @@ class MarkupAnnotation extends Annotation {
         this.data.modificationDate = this.modificationDate;
       }
 
-      this.data.hasPopup = parent.has("Popup");
+      popupRef = parent.getRaw("Popup");
 
       if (!parent.has("C")) {
         // Fall back to the default background color.
@@ -1359,13 +1445,15 @@ class MarkupAnnotation extends Annotation {
       this.setCreationDate(dict.get("CreationDate"));
       this.data.creationDate = this.creationDate;
 
-      this.data.hasPopup = dict.has("Popup");
+      popupRef = dict.getRaw("Popup");
 
       if (!dict.has("C")) {
         // Fall back to the default background color.
         this.data.color = null;
       }
     }
+
+    this.data.popupRef = popupRef instanceof Ref ? popupRef.toString() : null;
 
     if (dict.has("RC")) {
       this.data.richText = XFAFactory.getRichTextAsHtml(dict.get("RC"));
@@ -1474,7 +1562,7 @@ class MarkupAnnotation extends Annotation {
   }
 
   static async createNewAnnotation(xref, annotation, dependencies, params) {
-    const annotationRef = xref.getNewTemporaryRef();
+    const annotationRef = annotation.ref || xref.getNewTemporaryRef();
     const ap = await this.createNewAppearanceStream(annotation, xref, params);
     const buffer = [];
     let annotationDict;
@@ -1504,11 +1592,17 @@ class MarkupAnnotation extends Annotation {
     const ap = await this.createNewAppearanceStream(annotation, xref, params);
     const annotationDict = this.createNewDict(annotation, xref, { ap });
 
-    return new this.prototype.constructor({
+    const newAnnotation = new this.prototype.constructor({
       dict: annotationDict,
       xref,
       isOffscreenCanvasSupported: params.isOffscreenCanvasSupported,
     });
+
+    if (annotation.ref) {
+      newAnnotation.ref = newAnnotation.refToReplace = annotation.ref;
+    }
+
+    return newAnnotation;
   }
 }
 
@@ -1518,13 +1612,23 @@ class WidgetAnnotation extends Annotation {
 
     const { dict, xref } = params;
     const data = this.data;
-    this.ref = params.ref;
     this._needAppearances = params.needAppearances;
 
     data.annotationType = AnnotationType.WIDGET;
     if (data.fieldName === undefined) {
       data.fieldName = this._constructFieldName(dict);
     }
+    if (
+      data.fieldName &&
+      /\[\d+\]$/.test(data.fieldName) &&
+      !dict.has("Kids")
+    ) {
+      data.baseFieldName = data.fieldName.substring(
+        0,
+        data.fieldName.lastIndexOf("[")
+      );
+    }
+
     if (data.actions === undefined) {
       data.actions = collectActions(xref, dict, AnnotationActionEventType);
     }
@@ -3357,15 +3461,15 @@ class ChoiceWidgetAnnotation extends WidgetAnnotation {
     const vPadding = (lineHeight - fontSize) / 2;
     const numberOfVisibleLines = Math.floor(totalHeight / lineHeight);
 
-    let firstIndex;
-    if (valueIndices.length === 1) {
-      const valuePosition = valueIndices[0];
-      const indexInPage = valuePosition % numberOfVisibleLines;
-      firstIndex = valuePosition - indexInPage;
-    } else {
-      // If nothing is selected (valueIndice.length === 0), we render
-      // from the first element.
-      firstIndex = valueIndices.length ? valueIndices[0] : 0;
+    let firstIndex = 0;
+    if (valueIndices.length > 0) {
+      const minIndex = Math.min(...valueIndices);
+      const maxIndex = Math.max(...valueIndices);
+
+      firstIndex = Math.max(0, maxIndex - numberOfVisibleLines + 1);
+      if (firstIndex > minIndex) {
+        firstIndex = minIndex;
+      }
     }
     const end = Math.min(firstIndex + numberOfVisibleLines + 1, lineCount);
 
@@ -3495,6 +3599,12 @@ class PopupAnnotation extends Annotation {
 
     const { dict } = params;
     this.data.annotationType = AnnotationType.POPUP;
+    if (
+      this.data.rect[0] === this.data.rect[2] ||
+      this.data.rect[1] === this.data.rect[3]
+    ) {
+      this.data.rect = null;
+    }
 
     let parentItem = dict.get("Parent");
     if (!parentItem) {
@@ -3502,17 +3612,11 @@ class PopupAnnotation extends Annotation {
       return;
     }
 
-    const parentSubtype = parentItem.get("Subtype");
-    this.data.parentType =
-      parentSubtype instanceof Name ? parentSubtype.name : null;
-    const rawParent = dict.getRaw("Parent");
-    this.data.parentId = rawParent instanceof Ref ? rawParent.toString() : null;
-
     const parentRect = parentItem.getArray("Rect");
     if (Array.isArray(parentRect) && parentRect.length === 4) {
       this.data.parentRect = Util.normalizeRect(parentRect);
     } else {
-      this.data.parentRect = [0, 0, 0, 0];
+      this.data.parentRect = null;
     }
 
     const rt = parentItem.get("RT");
@@ -3556,6 +3660,8 @@ class PopupAnnotation extends Annotation {
     if (parentItem.has("RC")) {
       this.data.richText = XFAFactory.getRichTextAsHtml(parentItem.get("RC"));
     }
+
+    this.data.open = !!dict.get("Open");
   }
 }
 
@@ -3563,25 +3669,30 @@ class FreeTextAnnotation extends MarkupAnnotation {
   constructor(params) {
     super(params);
 
-    this.data.hasOwnCanvas = this.data.noRotate;
+    this.data.hasOwnCanvas = true;
 
     const { xref } = params;
     this.data.annotationType = AnnotationType.FREETEXT;
     this.setDefaultAppearance(params);
-    if (!this.appearance && this._isOffscreenCanvasSupported) {
+    if (this.appearance) {
+      const { fontColor, fontSize } = parseAppearanceStream(this.appearance);
+      this.data.defaultAppearanceData.fontColor = fontColor;
+      this.data.defaultAppearanceData.fontSize = fontSize || 10;
+    } else if (this._isOffscreenCanvasSupported) {
       const strokeAlpha = params.dict.get("CA");
       const fakeUnicodeFont = new FakeUnicodeFont(xref, "sans-serif");
-      const fontData = this.data.defaultAppearanceData;
+      this.data.defaultAppearanceData.fontSize ||= 10;
+      const { fontColor, fontSize } = this.data.defaultAppearanceData;
       this.appearance = fakeUnicodeFont.createAppearance(
         this._contents.str,
         this.rectangle,
         this.rotation,
-        fontData.fontSize || 10,
-        fontData.fontColor,
+        fontSize,
+        fontColor,
         strokeAlpha
       );
       this._streams.push(this.appearance, FakeUnicodeFont.toUnicodeStream);
-    } else if (!this._isOffscreenCanvasSupported) {
+    } else {
       warn(
         "FreeTextAnnotation: OffscreenCanvas is not supported, annotation may not render correctly."
       );
@@ -4079,7 +4190,7 @@ class InkAnnotation extends MarkupAnnotation {
   }
 
   static createNewDict(annotation, xref, { apRef, ap }) {
-    const { paths, rect, rotation } = annotation;
+    const { color, opacity, paths, rect, rotation, thickness } = annotation;
     const ink = new Dict(xref);
     ink.set("Type", Name.get("Annot"));
     ink.set("Subtype", Name.get("Ink"));
@@ -4090,8 +4201,21 @@ class InkAnnotation extends MarkupAnnotation {
       paths.map(p => p.points)
     );
     ink.set("F", 4);
-    ink.set("Border", [0, 0, 0]);
     ink.set("Rotate", rotation);
+
+    // Line thickness.
+    const bs = new Dict(xref);
+    ink.set("BS", bs);
+    bs.set("W", thickness);
+
+    // Color.
+    ink.set(
+      "C",
+      Array.from(color, c => c / 255)
+    );
+
+    // Opacity.
+    ink.set("CA", opacity);
 
     const n = new Dict(xref);
     ink.set("AP", n);
@@ -4106,14 +4230,7 @@ class InkAnnotation extends MarkupAnnotation {
   }
 
   static async createNewAppearanceStream(annotation, xref, params) {
-    const { color, rect, rotation, paths, thickness, opacity } = annotation;
-    const [x1, y1, x2, y2] = rect;
-    let w = x2 - x1;
-    let h = y2 - y1;
-
-    if (rotation % 180 !== 0) {
-      [w, h] = [h, w];
-    }
+    const { color, rect, paths, thickness, opacity } = annotation;
 
     const appearanceBuffer = [
       `${thickness} w 1 J 1 j`,
@@ -4146,13 +4263,8 @@ class InkAnnotation extends MarkupAnnotation {
     appearanceStreamDict.set("FormType", 1);
     appearanceStreamDict.set("Subtype", Name.get("Form"));
     appearanceStreamDict.set("Type", Name.get("XObject"));
-    appearanceStreamDict.set("BBox", [0, 0, w, h]);
+    appearanceStreamDict.set("BBox", rect);
     appearanceStreamDict.set("Length", appearance.length);
-
-    if (rotation) {
-      const matrix = getRotationMatrix(rotation, w, h);
-      appearanceStreamDict.set("Matrix", matrix);
-    }
 
     if (opacity !== 1) {
       const resources = new Dict(xref);
@@ -4213,7 +4325,7 @@ class HighlightAnnotation extends MarkupAnnotation {
         });
       }
     } else {
-      this.data.hasPopup = false;
+      this.data.popupRef = null;
     }
   }
 }
@@ -4251,7 +4363,7 @@ class UnderlineAnnotation extends MarkupAnnotation {
         });
       }
     } else {
-      this.data.hasPopup = false;
+      this.data.popupRef = null;
     }
   }
 }
@@ -4295,7 +4407,7 @@ class SquigglyAnnotation extends MarkupAnnotation {
         });
       }
     } else {
-      this.data.hasPopup = false;
+      this.data.popupRef = null;
     }
   }
 }
@@ -4334,7 +4446,7 @@ class StrikeOutAnnotation extends MarkupAnnotation {
         });
       }
     } else {
-      this.data.hasPopup = false;
+      this.data.popupRef = null;
     }
   }
 }
@@ -4345,6 +4457,143 @@ class StampAnnotation extends MarkupAnnotation {
 
     this.data.annotationType = AnnotationType.STAMP;
     this.data.hasOwnCanvas = this.data.noRotate;
+  }
+
+  static async createImage(bitmap, xref) {
+    // TODO: when printing, we could have a specific internal colorspace
+    // (e.g. something like DeviceRGBA) in order avoid any conversion (i.e. no
+    // jpeg, no rgba to rgb conversion, etc...)
+
+    const { width, height } = bitmap;
+    const canvas = new OffscreenCanvas(width, height);
+    const ctx = canvas.getContext("2d", { alpha: true });
+
+    // Draw the image and get the data in order to extract the transparency.
+    ctx.drawImage(bitmap, 0, 0);
+    const data = ctx.getImageData(0, 0, width, height).data;
+    const buf32 = new Uint32Array(data.buffer);
+    const hasAlpha = buf32.some(
+      FeatureTest.isLittleEndian
+        ? x => x >>> 24 !== 0xff
+        : x => (x & 0xff) !== 0xff
+    );
+
+    if (hasAlpha) {
+      // Redraw the image on a white background in order to remove the thin gray
+      // line which can appear when exporting to jpeg.
+      ctx.fillStyle = "white";
+      ctx.fillRect(0, 0, width, height);
+      ctx.drawImage(bitmap, 0, 0);
+    }
+
+    const jpegBufferPromise = canvas
+      .convertToBlob({ type: "image/jpeg", quality: 1 })
+      .then(blob => {
+        return blob.arrayBuffer();
+      });
+
+    const xobjectName = Name.get("XObject");
+    const imageName = Name.get("Image");
+    const image = new Dict(xref);
+    image.set("Type", xobjectName);
+    image.set("Subtype", imageName);
+    image.set("BitsPerComponent", 8);
+    image.set("ColorSpace", Name.get("DeviceRGB"));
+    image.set("Filter", Name.get("DCTDecode"));
+    image.set("BBox", [0, 0, width, height]);
+    image.set("Width", width);
+    image.set("Height", height);
+
+    let smaskStream = null;
+    if (hasAlpha) {
+      const alphaBuffer = new Uint8Array(buf32.length);
+      if (FeatureTest.isLittleEndian) {
+        for (let i = 0, ii = buf32.length; i < ii; i++) {
+          alphaBuffer[i] = buf32[i] >>> 24;
+        }
+      } else {
+        for (let i = 0, ii = buf32.length; i < ii; i++) {
+          alphaBuffer[i] = buf32[i] & 0xff;
+        }
+      }
+
+      const smask = new Dict(xref);
+      smask.set("Type", xobjectName);
+      smask.set("Subtype", imageName);
+      smask.set("BitsPerComponent", 8);
+      smask.set("ColorSpace", Name.get("DeviceGray"));
+      smask.set("Width", width);
+      smask.set("Height", height);
+
+      smaskStream = new Stream(alphaBuffer, 0, 0, smask);
+    }
+    const imageStream = new Stream(await jpegBufferPromise, 0, 0, image);
+
+    return {
+      imageStream,
+      smaskStream,
+      width,
+      height,
+    };
+  }
+
+  static createNewDict(annotation, xref, { apRef, ap }) {
+    const { rect, rotation, user } = annotation;
+    const stamp = new Dict(xref);
+    stamp.set("Type", Name.get("Annot"));
+    stamp.set("Subtype", Name.get("Stamp"));
+    stamp.set("CreationDate", `D:${getModificationDate()}`);
+    stamp.set("Rect", rect);
+    stamp.set("F", 4);
+    stamp.set("Border", [0, 0, 0]);
+    stamp.set("Rotate", rotation);
+
+    if (user) {
+      stamp.set(
+        "T",
+        isAscii(user) ? user : stringToUTF16String(user, /* bigEndian = */ true)
+      );
+    }
+
+    if (apRef || ap) {
+      const n = new Dict(xref);
+      stamp.set("AP", n);
+
+      if (apRef) {
+        n.set("N", apRef);
+      } else {
+        n.set("N", ap);
+      }
+    }
+
+    return stamp;
+  }
+
+  static async createNewAppearanceStream(annotation, xref, params) {
+    const { rotation } = annotation;
+    const { imageRef, width, height } = params;
+    const resources = new Dict(xref);
+    const xobject = new Dict(xref);
+    resources.set("XObject", xobject);
+    xobject.set("Im0", imageRef);
+    const appearance = `q ${width} 0 0 ${height} 0 0 cm /Im0 Do Q`;
+
+    const appearanceStreamDict = new Dict(xref);
+    appearanceStreamDict.set("FormType", 1);
+    appearanceStreamDict.set("Subtype", Name.get("Form"));
+    appearanceStreamDict.set("Type", Name.get("XObject"));
+    appearanceStreamDict.set("BBox", [0, 0, width, height]);
+    appearanceStreamDict.set("Resources", resources);
+
+    if (rotation) {
+      const matrix = getRotationMatrix(rotation, width, height);
+      appearanceStreamDict.set("Matrix", matrix);
+    }
+
+    const ap = new StringStream(appearance);
+    ap.dict = appearanceStreamDict;
+
+    return ap;
   }
 }
 

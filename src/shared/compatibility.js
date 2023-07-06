@@ -39,22 +39,6 @@ const isNodeJS = false;
   polyfillPath2D(globalThis);
 })();
 
-// Support: Chrome<92
-(function checkArrayAt() {
-  if (Array.prototype.at) {
-    return;
-  }
-  require("core-js/es/array/at.js");
-})();
-
-// Support: Chrome<92
-(function checkTypedArrayAt() {
-  if (Uint8Array.prototype.at) {
-    return;
-  }
-  require("core-js/es/typed-array/at.js");
-})();
-
 // Support: Chrome<98
 (function checkStructuredClone() {
   if (globalThis.structuredClone) {

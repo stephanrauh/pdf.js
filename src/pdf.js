@@ -32,6 +32,7 @@ import {
   CMapCompressionType,
   createValidAbsoluteUrl,
   FeatureTest,
+  ImageKind,
   InvalidPDFException,
   MissingPDFException,
   normalizeUnicode,
@@ -68,7 +69,6 @@ import { AnnotationEditorLayer } from "./display/editor/annotation_editor_layer.
 import { AnnotationEditorUIManager } from "./display/editor/tools.js";
 import { AnnotationLayer } from "./display/annotation_layer.js";
 import { GlobalWorkerOptions } from "./display/worker_options.js";
-import { SVGGraphics } from "./display/svg.js";
 import { XfaLayer } from "./display/xfa_layer.js";
 
 /* eslint-disable-next-line no-unused-vars */
@@ -77,6 +77,11 @@ const pdfjsVersion =
 /* eslint-disable-next-line no-unused-vars */
 const pdfjsBuild =
   typeof PDFJSDev !== "undefined" ? PDFJSDev.eval("BUNDLE_BUILD") : void 0;
+
+const SVGGraphics =
+  typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC")
+    ? require("./display/svg.js").SVGGraphics
+    : null;
 
 export {
   AbortException,
@@ -95,6 +100,7 @@ export {
   getPdfFilenameFromUrl,
   getXfaPageViewport,
   GlobalWorkerOptions,
+  ImageKind,
   InvalidPDFException,
   isDataScheme,
   isPdfFile,

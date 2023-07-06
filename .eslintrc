@@ -32,7 +32,15 @@
 
   "rules": {
     // Plugins
+    "import/export": "error",
+    "import/exports-last": "error",
     "import/extensions": ["error", "always", { "ignorePackages": true, }],
+    "import/first": "error",
+    "import/named": "error",
+    "import/no-cycle": "error",
+    "import/no-empty-named-blocks": "error",
+    "import/no-mutable-exports": "error",
+    "import/no-self-import": "error",
     "import/no-unresolved": ["error", {
       "ignore": ["pdfjs", "pdfjs-lib", "pdfjs-web", "web"]
     }],
@@ -64,6 +72,7 @@
     "unicorn/prefer-logical-operator-over-ternary": "error",
     "unicorn/prefer-modern-dom-apis": "error",
     "unicorn/prefer-negative-index": "error",
+    "unicorn/prefer-optional-catch-binding": "error",
     "unicorn/prefer-regexp-test": "error",
     "unicorn/prefer-string-replace-all": "error",
     "unicorn/prefer-string-starts-ends-with": "error",
