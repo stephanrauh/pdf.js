@@ -470,7 +470,13 @@ class PDFFindController {
     this.#state = state;
     if (type !== "highlightallchange") {
       this.#updateUIState(FindState.PENDING);
+    } else {  // #1181 modified by ngx-extended-pdf-viewer
+      const hasMatches = this._pageMatches.some(matches => matches.length > 0);
+      const emptyQuery = !this.state?.query;
+      const reportAsFound = emptyQuery || hasMatches;
+      this.#updateUIState(reportAsFound ? FindState.FOUND : FindState.NOT_FOUND);
     }
+    // #1181 end of modification by ngx-extended-pdf-viewer
 
     this._firstPageCapability.promise.then(() => {
       // If the document was closed before searching began, or if the search
