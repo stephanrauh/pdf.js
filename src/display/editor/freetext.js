@@ -92,6 +92,7 @@ class FreeTextEditor extends AnnotationEditor {
     this.#fontSize = params.fontSize || FreeTextEditor._defaultFontSize;
   }
 
+  /** @inheritdoc */
   static initialize(l10n) {
     this._l10nPromise = new Map(
       ["free_text2_default_content", "editor_free_text2_aria_label"].map(
@@ -116,6 +117,7 @@ class FreeTextEditor extends AnnotationEditor {
     );
   }
 
+  /** @inheritdoc */
   static updateDefaultParams(type, value) {
     switch (type) {
       case AnnotationEditorParamsType.FREETEXT_SIZE:
@@ -139,6 +141,7 @@ class FreeTextEditor extends AnnotationEditor {
     }
   }
 
+  /** @inheritdoc */
   static get defaultPropertiesToUpdate() {
     return [
       [
@@ -152,6 +155,7 @@ class FreeTextEditor extends AnnotationEditor {
     ];
   }
 
+  /** @inheritdoc */
   get propertiesToUpdate() {
     return [
       [AnnotationEditorParamsType.FREETEXT_SIZE, this.#fontSize],
@@ -303,8 +307,10 @@ class FreeTextEditor extends AnnotationEditor {
   /** @inheritdoc */
   remove() {
     this.isEditing = false;
-    this.parent.setEditingState(true);
-    this.parent.div.classList.add("freeTextEditing");
+    if (this.parent) {
+      this.parent.setEditingState(true);
+      this.parent.div.classList.add("freeTextEditing");
+    }
     super.remove();
   }
 
@@ -342,8 +348,15 @@ class FreeTextEditor extends AnnotationEditor {
       div.style.display = savedDisplay;
     }
 
-    this.width = rect.width / parentWidth;
-    this.height = rect.height / parentHeight;
+    // The dimensions are relative to the rotation of the page, hence we need to
+    // take that into account (see issue #16636).
+    if (this.rotation % 180 === this.parentRotation % 180) {
+      this.width = rect.width / parentWidth;
+      this.height = rect.height / parentHeight;
+    } else {
+      this.width = rect.height / parentWidth;
+      this.height = rect.width / parentHeight;
+    }
   }
 
   /**
@@ -390,13 +403,18 @@ class FreeTextEditor extends AnnotationEditor {
     return this.isInEditMode();
   }
 
+  /** @inheritdoc */
+  enterInEditMode() {
+    this.enableEditMode();
+    this.editorDiv.focus();
+  }
+
   /**
    * ondblclick callback.
    * @param {MouseEvent} event
    */
   dblclick(event) {
-    this.enableEditMode();
-    this.editorDiv.focus();
+    this.enterInEditMode();
   }
 
   /**
@@ -405,8 +423,7 @@ class FreeTextEditor extends AnnotationEditor {
    */
   keydown(event) {
     if (event.target === this.div && event.key === "Enter") {
-      this.enableEditMode();
-      this.editorDiv.focus();
+      this.enterInEditMode();
     }
   }
 

@@ -149,8 +149,7 @@ class AnnotationFactory {
       needAppearances:
         !collectFields && acroFormDict.get("NeedAppearances") === true,
       pageIndex,
-      isOffscreenCanvasSupported:
-        pdfManager.evaluatorOptions.isOffscreenCanvasSupported,
+      evaluatorOptions: pdfManager.evaluatorOptions,
     };
 
     switch (subtype) {
@@ -349,7 +348,7 @@ class AnnotationFactory {
               xref,
               annotation,
               dependencies,
-              image
+              { image }
             )
           );
           break;
@@ -372,8 +371,7 @@ class AnnotationFactory {
       return null;
     }
 
-    const xref = evaluator.xref;
-    const { isOffscreenCanvasSupported } = evaluator.options;
+    const { options, xref } = evaluator;
     const promises = [];
     for (const annotation of annotations) {
       if (annotation.deleted) {
@@ -385,19 +383,19 @@ class AnnotationFactory {
             FreeTextAnnotation.createNewPrintAnnotation(xref, annotation, {
               evaluator,
               task,
-              isOffscreenCanvasSupported,
+              evaluatorOptions: options,
             })
           );
           break;
         case AnnotationEditorType.INK:
           promises.push(
             InkAnnotation.createNewPrintAnnotation(xref, annotation, {
-              isOffscreenCanvasSupported,
+              evaluatorOptions: options,
             })
           );
           break;
         case AnnotationEditorType.STAMP:
-          if (!isOffscreenCanvasSupported) {
+          if (!options.isOffscreenCanvasSupported) {
             break;
           }
           const image = await imagePromises.get(annotation.bitmapId);
@@ -410,7 +408,10 @@ class AnnotationFactory {
             image.imageStream = image.smaskStream = null;
           }
           promises.push(
-            StampAnnotation.createNewPrintAnnotation(xref, annotation, image)
+            StampAnnotation.createNewPrintAnnotation(xref, annotation, {
+              image,
+              evaluatorOptions: options,
+            })
           );
           break;
       }
@@ -608,7 +609,8 @@ class Annotation {
       this.data.pageIndex = params.pageIndex;
     }
 
-    this._isOffscreenCanvasSupported = params.isOffscreenCanvasSupported;
+    this._isOffscreenCanvasSupported =
+      params.evaluatorOptions.isOffscreenCanvasSupported;
     this._fallbackFontDict = null;
     this._needAppearances = false;
   }
@@ -1595,7 +1597,7 @@ class MarkupAnnotation extends Annotation {
     const newAnnotation = new this.prototype.constructor({
       dict: annotationDict,
       xref,
-      isOffscreenCanvasSupported: params.isOffscreenCanvasSupported,
+      evaluatorOptions: params.evaluatorOptions,
     });
 
     if (annotation.ref) {
@@ -3671,11 +3673,15 @@ class FreeTextAnnotation extends MarkupAnnotation {
 
     this.data.hasOwnCanvas = true;
 
-    const { xref } = params;
+    const { evaluatorOptions, xref } = params;
     this.data.annotationType = AnnotationType.FREETEXT;
     this.setDefaultAppearance(params);
     if (this.appearance) {
-      const { fontColor, fontSize } = parseAppearanceStream(this.appearance);
+      const { fontColor, fontSize } = parseAppearanceStream(
+        this.appearance,
+        evaluatorOptions,
+        xref
+      );
       this.data.defaultAppearanceData.fontColor = fontColor;
       this.data.defaultAppearanceData.fontSize = fontSize || 10;
     } else if (this._isOffscreenCanvasSupported) {
@@ -3766,7 +3772,7 @@ class FreeTextAnnotation extends MarkupAnnotation {
       evaluator,
       task,
       {
-        fontName: "Helvetica",
+        fontName: "Helv",
         fontSize,
       },
       resources
@@ -3806,26 +3812,52 @@ class FreeTextAnnotation extends MarkupAnnotation {
     }
     let vscale = 1;
     const lineHeight = LINE_FACTOR * fontSize;
-    const lineDescent = LINE_DESCENT_FACTOR * fontSize;
+    const lineAscent = (LINE_FACTOR - LINE_DESCENT_FACTOR) * fontSize;
     const totalHeight = lineHeight * lines.length;
     if (totalHeight > h) {
       vscale = h / totalHeight;
     }
     const fscale = Math.min(hscale, vscale);
     const newFontSize = fontSize * fscale;
+    let firstPoint, clipBox, matrix;
+    switch (rotation) {
+      case 0:
+        matrix = [1, 0, 0, 1];
+        clipBox = [rect[0], rect[1], w, h];
+        firstPoint = [rect[0], rect[3] - lineAscent];
+        break;
+      case 90:
+        matrix = [0, 1, -1, 0];
+        clipBox = [rect[1], -rect[2], w, h];
+        firstPoint = [rect[1], -rect[0] - lineAscent];
+        break;
+      case 180:
+        matrix = [-1, 0, 0, -1];
+        clipBox = [-rect[2], -rect[3], w, h];
+        firstPoint = [-rect[2], -rect[1] - lineAscent];
+        break;
+      case 270:
+        matrix = [0, -1, 1, 0];
+        clipBox = [-rect[3], rect[0], w, h];
+        firstPoint = [-rect[3], rect[2] - lineAscent];
+        break;
+    }
+
     const buffer = [
       "q",
-      `0 0 ${numberToString(w)} ${numberToString(h)} re W n`,
+      `${matrix.join(" ")} 0 0 cm`,
+      `${clipBox.join(" ")} re W n`,
       `BT`,
-      `1 0 0 1 0 ${numberToString(h + lineDescent)} Tm 0 Tc ${getPdfColor(
-        color,
-        /* isFill */ true
-      )}`,
-      `/Helv ${numberToString(newFontSize)} Tf`,
+      `${getPdfColor(color, /* isFill */ true)}`,
+      `0 Tc /Helv ${numberToString(newFontSize)} Tf`,
     ];
 
+    buffer.push(
+      `${firstPoint.join(" ")} Td (${escapeString(encodedLines[0])}) Tj`
+    );
     const vShift = numberToString(lineHeight);
-    for (const line of encodedLines) {
+    for (let i = 1, ii = encodedLines.length; i < ii; i++) {
+      const line = encodedLines[i];
       buffer.push(`0 -${vShift} Td (${escapeString(line)}) Tj`);
     }
     buffer.push("ET", "Q");
@@ -3835,13 +3867,9 @@ class FreeTextAnnotation extends MarkupAnnotation {
     appearanceStreamDict.set("FormType", 1);
     appearanceStreamDict.set("Subtype", Name.get("Form"));
     appearanceStreamDict.set("Type", Name.get("XObject"));
-    appearanceStreamDict.set("BBox", [0, 0, w, h]);
+    appearanceStreamDict.set("BBox", rect);
     appearanceStreamDict.set("Resources", resources);
-
-    if (rotation) {
-      const matrix = getRotationMatrix(rotation, w, h);
-      appearanceStreamDict.set("Matrix", matrix);
-    }
+    appearanceStreamDict.set("Matrix", [1, 0, 0, 1, -rect[0], -rect[1]]);
 
     const ap = new StringStream(appearance);
     ap.dict = appearanceStreamDict;
@@ -4571,7 +4599,7 @@ class StampAnnotation extends MarkupAnnotation {
 
   static async createNewAppearanceStream(annotation, xref, params) {
     const { rotation } = annotation;
-    const { imageRef, width, height } = params;
+    const { imageRef, width, height } = params.image;
     const resources = new Dict(xref);
     const xobject = new Dict(xref);
     resources.set("XObject", xobject);

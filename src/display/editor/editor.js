@@ -21,6 +21,11 @@
 import { bindEvents, ColorManager } from "./tools.js";
 import { FeatureTest, shadow, unreachable } from "../../shared/util.js";
 
+// The dimensions of the resizer is 15x15:
+// https://searchfox.org/mozilla-central/rev/1ce190047b9556c3c10ab4de70a0e61d893e2954/toolkit/content/minimal-xul.css#136-137
+// so each dimension must be greater than RESIZER_SIZE.
+const RESIZER_SIZE = 16;
+
 /**
  * @typedef {Object} AnnotationEditorParameters
  * @property {AnnotationEditorUIManager} uiManager - the global manager
@@ -34,6 +39,8 @@ import { FeatureTest, shadow, unreachable } from "../../shared/util.js";
  * Base class for editors.
  */
 class AnnotationEditor {
+  #keepAspectRatio = false;
+
   #boundFocusin = this.focusin.bind(this);
 
   #boundFocusout = this.focusout.bind(this);
@@ -105,6 +112,35 @@ class AnnotationEditor {
     fakeEditor.annotationElementId = editor.annotationElementId;
     fakeEditor.deleted = true;
     fakeEditor._uiManager.addToAnnotationStorage(fakeEditor);
+  }
+
+  /**
+   * Initialize the l10n stuff for this type of editor.
+   * @param {Object} _l10n
+   */
+  static initialize(_l10n) {}
+
+  /**
+   * Update the default parameters for this type of editor.
+   * @param {number} _type
+   * @param {*} _value
+   */
+  static updateDefaultParams(_type, _value) {}
+
+  /**
+   * Get the default properties to set in the UI for this type of editor.
+   * @returns {Array}
+   */
+  static get defaultPropertiesToUpdate() {
+    return [];
+  }
+
+  /**
+   * Get the properties to update in the UI for this editor.
+   * @returns {Array}
+   */
+  get propertiesToUpdate() {
+    return [];
   }
 
   /**
@@ -282,14 +318,16 @@ class AnnotationEditor {
   setDims(width, height) {
     const [parentWidth, parentHeight] = this.parentDimensions;
     this.div.style.width = `${(100 * width) / parentWidth}%`;
-    this.div.style.height = `${(100 * height) / parentHeight}%`;
+    if (!this.#keepAspectRatio) {
+      this.div.style.height = `${(100 * height) / parentHeight}%`;
+    }
   }
 
   fixDims() {
     const { style } = this.div;
     const { height, width } = style;
     const widthPercent = width.endsWith("%");
-    const heightPercent = height.endsWith("%");
+    const heightPercent = !this.#keepAspectRatio && height.endsWith("%");
     if (widthPercent && heightPercent) {
       return;
     }
@@ -298,7 +336,7 @@ class AnnotationEditor {
     if (!widthPercent) {
       style.width = `${(100 * parseFloat(width)) / parentWidth}%`;
     }
-    if (!heightPercent) {
+    if (!this.#keepAspectRatio && !heightPercent) {
       style.height = `${(100 * parseFloat(height)) / parentHeight}%`;
     }
   }
@@ -494,8 +532,9 @@ class AnnotationEditor {
    *
    * To implement in subclasses.
    * @param {boolean} isForCopying
+   * @param {Object} [context]
    */
-  serialize(_isForCopying = false) {
+  serialize(_isForCopying = false, _context = null) {
     unreachable("An editor must be serializable");
   }
 
@@ -542,7 +581,11 @@ class AnnotationEditor {
       // undo/redo so we must commit it before.
       this.commit();
     }
-    this.parent.remove(this);
+    if (this.parent) {
+      this.parent.remove(this);
+    } else {
+      this._uiManager.removeEditor(this);
+    }
   }
 
   /**
@@ -579,12 +622,9 @@ class AnnotationEditor {
   enableEditing() {}
 
   /**
-   * Get some properties to update in the UI.
-   * @returns {Object}
+   * The editor is about to be edited.
    */
-  get propertiesToUpdate() {
-    return {};
-  }
+  enterInEditMode() {}
 
   /**
    * Get the div which really contains the displayed content.
@@ -607,12 +647,39 @@ class AnnotationEditor {
    */
   set isEditing(value) {
     this.#isEditing = value;
+    if (!this.parent) {
+      return;
+    }
     if (value) {
       this.parent.setSelected(this);
       this.parent.setActiveEditor(this);
     } else {
       this.parent.setActiveEditor(null);
     }
+  }
+
+  /**
+   * Set the aspect ratio to use when resizing.
+   * @param {number} width
+   * @param {number} height
+   */
+  setAspectRatio(width, height) {
+    this.#keepAspectRatio = true;
+    const aspectRatio = width / height;
+    const { style } = this.div;
+    style.aspectRatio = aspectRatio;
+    style.height = "auto";
+    if (aspectRatio >= 1) {
+      style.minHeight = `${RESIZER_SIZE}px`;
+      style.minWidth = `${Math.round(aspectRatio * RESIZER_SIZE)}px`;
+    } else {
+      style.minWidth = `${RESIZER_SIZE}px`;
+      style.minHeight = `${Math.round(RESIZER_SIZE / aspectRatio)}px`;
+    }
+  }
+
+  static get MIN_SIZE() {
+    return RESIZER_SIZE;
   }
 }
 

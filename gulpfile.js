@@ -1123,7 +1123,7 @@ async function parseMinified(dir) {
   console.log();
   console.log("### Minifying js files");
 
-  const Terser = require("terser");
+  const { minify } = await import("terser");
   const options = {
     compress: {
       // V8 chokes on very long sequences, work around that.
@@ -1135,23 +1135,23 @@ async function parseMinified(dir) {
 
   fs.writeFileSync(
     dir + "/web/pdf.viewer.js",
-    (await Terser.minify(viewerFiles, options)).code
+    (await minify(viewerFiles, options)).code
   );
   fs.writeFileSync(
     dir + "/build/pdf.min.js",
-    (await Terser.minify(pdfFile, options)).code
+    (await minify(pdfFile, options)).code
   );
   fs.writeFileSync(
     dir + "/build/pdf.worker.min.js",
-    (await Terser.minify(pdfWorkerFile, options)).code
+    (await minify(pdfWorkerFile, options)).code
   );
   fs.writeFileSync(
     dir + "/build/pdf.sandbox.min.js",
-    (await Terser.minify(pdfSandboxFile, options)).code
+    (await minify(pdfSandboxFile, options)).code
   );
   fs.writeFileSync(
     dir + "image_decoders/pdf.image_decoders.min.js",
-    (await Terser.minify(pdfImageDecodersFile, options)).code
+    (await minify(pdfImageDecodersFile, options)).code
   );
 
   console.log();
@@ -1566,7 +1566,7 @@ function buildLib(defines, dir) {
       [
         "src/{core,display,shared}/**/*.js",
         "!src/shared/{cffStandardStrings,fonts_utils}.js",
-        "src/{pdf,pdf.worker}.js",
+        "src/{pdf,pdf.image_decoders,pdf.worker}.js",
       ],
       { base: "src/" }
     ),
@@ -1887,7 +1887,7 @@ gulp.task("lint", function (done) {
   const esLintOptions = [
     "node_modules/eslint/bin/eslint",
     "--ext",
-    ".js,.jsm,.json",
+    ".js,.jsm,.mjs,.json",
     ".",
     "--report-unused-disable-directives",
   ];
@@ -2011,8 +2011,8 @@ gulp.task("clean", function (done) {
   rimraf(BUILD_DIR, done);
 });
 
-gulp.task("importl10n", function (done) {
-  const locales = require("./external/importL10n/locales.js");
+gulp.task("importl10n", async function () {
+  const { downloadL10n } = await import("./external/importL10n/locales.mjs");
 
   console.log();
   console.log("### Importing translations from mozilla-central");
@@ -2020,7 +2020,7 @@ gulp.task("importl10n", function (done) {
   if (!fs.existsSync(L10N_DIR)) {
     fs.mkdirSync(L10N_DIR);
   }
-  locales.downloadL10n(L10N_DIR, done);
+  await downloadL10n(L10N_DIR);
 });
 
 function ghPagesPrepare() {

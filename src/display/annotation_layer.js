@@ -601,6 +601,20 @@ class AnnotationElement {
       triggers.classList.add("highlightArea");
     }
   }
+
+  _editOnDoubleClick() {
+    const {
+      annotationEditorType: mode,
+      data: { id: editId },
+    } = this;
+    this.container.addEventListener("dblclick", () => {
+      this.linkService.eventBus?.dispatch("switchannotationeditormode", {
+        source: this,
+        mode,
+        editId,
+      });
+    });
+  }
 }
 
 class LinkAnnotationElement extends AnnotationElement {
@@ -2265,7 +2279,7 @@ class PopupElement {
    */
   #hide() {
     this.#container.classList.remove("focused");
-    if (this.#pinned) {
+    if (this.#pinned || !this.isVisible) {
       return;
     }
     this.#container.hidden = true;
@@ -2325,6 +2339,9 @@ class FreeTextAnnotationElement extends AnnotationElement {
     if (!this.data.popupRef) {
       this._createPopup();
     }
+
+    this._editOnDoubleClick();
+
     return this.container;
   }
 }
@@ -3119,4 +3136,9 @@ class AnnotationLayer {
   }
 }
 
-export { AnnotationLayer, FreeTextAnnotationElement, InkAnnotationElement };
+export {
+  AnnotationLayer,
+  FreeTextAnnotationElement,
+  InkAnnotationElement,
+  StampAnnotationElement,
+};

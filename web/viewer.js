@@ -89,6 +89,7 @@ function getViewerConfiguration() {
       ),
       editorInkButton: document.getElementById("editorInk"),
       editorInkParamsToolbar: document.getElementById("editorInkParamsToolbar"),
+      editorStampButton: document.getElementById("editorStamp"),
       download: document.getElementById("download"),
     },
     secondaryToolbar: {
