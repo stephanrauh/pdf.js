@@ -620,7 +620,8 @@ const PDFViewerApplication = {
 
     if (
       this.supportsFullscreen &&
-      appConfig.secondaryToolbar?.presentationModeButton
+      (appConfig.toolbar?.presentationModeButton || // #1807 modified by ngx-extended-pdf-viewer
+      appConfig.secondaryToolbar?.presentationModeButton)
     ) {
       this.pdfPresentationMode = new PDFPresentationMode({
         container,
