@@ -641,7 +641,8 @@ const PDFViewerApplication = {
 
     if (
       this.supportsFullscreen &&
-      appConfig.secondaryToolbar?.presentationModeButton
+      (appConfig.toolbar?.presentationModeButton || // #1807 modified by ngx-extended-pdf-viewer
+      appConfig.secondaryToolbar?.presentationModeButton)
     ) {
       this.pdfPresentationMode = new PDFPresentationMode({
         container,
@@ -781,6 +782,7 @@ const PDFViewerApplication = {
     }
 
     if (!this.supportsFullscreen) {
+      appConfig.toolbar.presentationModeButton.classList.add("hidden"); // #1807 modified by ngx-extended-pdf-viewer
       appConfig.secondaryToolbar?.presentationModeButton.classList.add(
         "hidden"
       );

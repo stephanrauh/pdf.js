@@ -42,6 +42,10 @@ const PAGE_NUMBER_LOADING_INDICATOR = "visiblePageIsLoading";
  * @property {HTMLButtonElement} zoomOut - Button to zoom out the pages.
  * @property {HTMLButtonElement} viewFind - Button to open find bar.
  * @property {HTMLButtonElement} openFile - Button to open a new document.
+ * // #1807 modified by ngx-extended-pdf-viewer
+ * @property {HTMLButtonElement} presentationModeButton - Button to switch to
+ *   presentation mode.
+ * // #1807 end of modication by ngx-extended-pdf-viewer
  * @property {HTMLButtonElement} editorFreeTextButton - Button to switch to
  *   FreeText editing.
  * @property {HTMLButtonElement} download - Button to download the document.
@@ -65,6 +69,12 @@ class Toolbar {
       { element: options.zoomIn, eventName: "zoomin" },
       { element: options.zoomOut, eventName: "zoomout" },
       { element: options.print, eventName: "print" },
+      // #1807 modified by ngx-extended-pdf-viewer
+      {
+        element: options.presentationModeButton,
+        eventName: "presentationmode",
+      },
+      // #1807 end of modication by ngx-extended-pdf-viewer
       { element: options.download, eventName: "download" },
       {
         element: options.editorFreeTextButton,
