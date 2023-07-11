@@ -1833,15 +1833,20 @@ class PDFViewer {
         break;
       }
     }
-    this._setCurrentPageNumber(
-      stillFullyVisible ? currentId : visiblePages[0].id
-    );
+    // #1808 modified by ngx-extended-pdf-viewer
+    // stop the infinite loop in presentation mode with [(page)]
+    if (this.scrollMode !== ScrollMode.PAGE) {
+      this._setCurrentPageNumber(
+        stillFullyVisible ? currentId : visiblePages[0].id
+      );
 
-    this._updateLocation(visible.first);
-    this.eventBus.dispatch("updateviewarea", {
-      source: this,
-      location: this._location,
-    });
+      this._updateLocation(visible.first);
+      this.eventBus.dispatch("updateviewarea", {
+        source: this,
+        location: this._location,
+      });
+    }
+    // #1808 end of modification by ngx-extended-pdf-viewer
     // #859 modified by ngx-extended-pdf-viewer
     this.hidePagesDependingOnpageViewMode();
     // #859 end of modification
