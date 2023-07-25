@@ -13,8 +13,11 @@
  * limitations under the License.
  */
 
+import {
+  AnnotationEditorParamsType,
+  AnnotationEditorType,
+} from "../../shared/util.js";
 import { AnnotationEditor } from "./editor.js";
-import { AnnotationEditorType } from "../../shared/util.js";
 import { PixelsPerInch } from "../display_utils.js";
 import { StampAnnotationElement } from "../annotation_layer.js";
 
@@ -124,6 +127,11 @@ class StampEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
+  get resizeType() {
+    return AnnotationEditorParamsType.STAMP_DIMS;
+  }
+
+  /** @inheritdoc */
   remove() {
     if (this.#bitmapId) {
       this.#bitmap = null;
@@ -171,6 +179,11 @@ class StampEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
+  get isResizable() {
+    return true;
+  }
+
+  /** @inheritdoc */
   render() {
     if (this.div) {
       return this.div;
@@ -194,7 +207,6 @@ class StampEditor extends AnnotationEditor {
     if (this.width) {
       // This editor was created in using copy (ctrl+c).
       const [parentWidth, parentHeight] = this.parentDimensions;
-      this.setAspectRatio(this.width * parentWidth, this.height * parentHeight);
       this.setAt(
         baseX * parentWidth,
         baseY * parentHeight,
@@ -233,8 +245,6 @@ class StampEditor extends AnnotationEditor {
       (height * parentHeight) / pageHeight
     );
 
-    this.setAspectRatio(width, height);
-
     const canvas = (this.#canvas = document.createElement("canvas"));
     div.append(canvas);
     this.#drawBitmap(width, height);
@@ -251,16 +261,10 @@ class StampEditor extends AnnotationEditor {
    */
   #setDimensions(width, height) {
     const [parentWidth, parentHeight] = this.parentDimensions;
-    if (
-      Math.abs(width - this.width * parentWidth) < 1 &&
-      Math.abs(height - this.height * parentHeight) < 1
-    ) {
-      return;
-    }
-
     this.width = width / parentWidth;
     this.height = height / parentHeight;
     this.setDims(width, height);
+    this.fixAndSetPosition();
     if (this.#resizeTimeoutId !== null) {
       clearTimeout(this.#resizeTimeoutId);
     }

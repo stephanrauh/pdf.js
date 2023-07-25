@@ -79,6 +79,7 @@ class InkEditor extends AnnotationEditor {
     this.translationX = this.translationY = 0;
     this.x = 0;
     this.y = 0;
+    this._willKeepAspectRatio = true;
   }
 
   /** @inheritdoc */
@@ -154,6 +155,11 @@ class InkEditor extends AnnotationEditor {
         Math.round(100 * (this.opacity ?? InkEditor._defaultOpacity)),
       ],
     ];
+  }
+
+  /** @inheritdoc */
+  get resizeType() {
+    return AnnotationEditorParamsType.INK_DIMS;
   }
 
   /**
@@ -619,6 +625,7 @@ class InkEditor extends AnnotationEditor {
     this.div.classList.add("disabled");
 
     this.#fitToContent(/* firstTime = */ true);
+    this.makeResizable();
 
     this.parent.addInkEditorIfNeeded(/* isCommitting = */ true);
 
@@ -762,6 +769,11 @@ class InkEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
+  get isResizable() {
+    return !this.isEmpty() && this.#disableEditing;
+  }
+
+  /** @inheritdoc */
   render() {
     if (this.div) {
       return this.div;
@@ -845,6 +857,7 @@ class InkEditor extends AnnotationEditor {
     const [parentWidth, parentHeight] = this.parentDimensions;
     this.width = width / parentWidth;
     this.height = height / parentHeight;
+    this.fixAndSetPosition();
 
     if (this.#disableEditing) {
       this.#setScaleFactor(width, height);

@@ -110,25 +110,20 @@ class ImageManager {
         // Unfortunately, createImageBitmap doesn't work with SVG images.
         // (see https://bugzilla.mozilla.org/1841972).
         const fileReader = new FileReader();
-        const dataUrlPromise = new Promise(resolve => {
-          fileReader.onload = () => {
-            data.svgUrl = fileReader.result;
-            resolve();
-          };
-        });
-        fileReader.readAsDataURL(image);
-        const url = URL.createObjectURL(image);
-        image = new Image();
-        const imagePromise = new Promise(resolve => {
-          image.onload = () => {
-            URL.revokeObjectURL(url);
-            data.bitmap = image;
+        const imageElement = new Image();
+        const imagePromise = new Promise((resolve, reject) => {
+          imageElement.onload = () => {
+            data.bitmap = imageElement;
             data.isSvg = true;
             resolve();
           };
+          fileReader.onload = () => {
+            imageElement.src = data.svgUrl = fileReader.result;
+          };
+          imageElement.onerror = fileReader.onerror = reject;
         });
-        image.src = url;
-        await Promise.all([imagePromise, dataUrlPromise]);
+        fileReader.readAsDataURL(image);
+        await imagePromise;
       } else {
         data.bitmap = await createImageBitmap(image);
       }
@@ -283,6 +278,12 @@ class CommandManager {
     }
 
     this.#commands.push(save);
+  }
+
+  stopUndoAccumulation() {
+    if (this.#position !== -1) {
+      this.#commands[this.#position].type = NaN;
+    }
   }
 
   /**
@@ -568,7 +569,15 @@ class AnnotationEditorUIManager {
         ],
         [["ctrl+z", "mac+meta+z"], AnnotationEditorUIManager.prototype.undo],
         [
-          ["ctrl+y", "ctrl+shift+Z", "mac+meta+shift+Z"],
+          // On mac, depending of the OS version, the event.key is either "z" or
+          // "Z" when the user presses "meta+shift+z".
+          [
+            "ctrl+y",
+            "ctrl+shift+z",
+            "mac+meta+shift+z",
+            "ctrl+shift+Z",
+            "mac+meta+shift+Z",
+          ],
           AnnotationEditorUIManager.prototype.redo,
         ],
         [
@@ -583,6 +592,7 @@ class AnnotationEditorUIManager {
             "Delete",
             "ctrl+Delete",
             "shift+Delete",
+            "mac+Delete",
           ],
           AnnotationEditorUIManager.prototype.delete,
         ],
@@ -686,11 +696,13 @@ class AnnotationEditorUIManager {
   #addKeyboardManager() {
     // The keyboard events are caught at the container level in order to be able
     // to execute some callbacks even if the current page doesn't have focus.
-    this.#container.addEventListener("keydown", this.#boundKeydown);
+    window.addEventListener("keydown", this.#boundKeydown, { capture: true });
   }
 
   #removeKeyboardManager() {
-    this.#container.removeEventListener("keydown", this.#boundKeydown);
+    window.removeEventListener("keydown", this.#boundKeydown, {
+      capture: true,
+    });
   }
 
   #addCopyPasteListeners() {
@@ -1190,6 +1202,10 @@ class AnnotationEditorUIManager {
 
   get hasSelection() {
     return this.#selectedEditors.size !== 0;
+  }
+
+  stopUndoAccumulation() {
+    this.#commandManager.stopUndoAccumulation();
   }
 
   /**

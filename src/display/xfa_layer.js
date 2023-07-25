@@ -103,16 +103,12 @@ class XfaLayer {
         break;
       case "select":
         if (storedData.value !== null) {
-          // #1737 modified by ngx-extended-pdf-viewer
-          element.attributes.value = storedData.value;
-          // #1737 end of modification by ngx-extended-pdf-viewer
+          html.setAttribute("value", storedData.value);
           for (const option of element.children) {
             if (option.attributes.value === storedData.value) {
               option.attributes.selected = true;
-              // #1737 modified by ngx-extended-pdf-viewer
-            } else {
+            } else if (option.attributes.hasOwnProperty("selected")) {
               delete option.attributes.selected;
-              // #1737 end of modification by ngx-extended-pdf-viewer
             }
           }
         }

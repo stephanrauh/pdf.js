@@ -21,11 +21,6 @@
 import { bindEvents, ColorManager } from "./tools.js";
 import { FeatureTest, shadow, unreachable } from "../../shared/util.js";
 
-// The dimensions of the resizer is 15x15:
-// https://searchfox.org/mozilla-central/rev/1ce190047b9556c3c10ab4de70a0e61d893e2954/toolkit/content/minimal-xul.css#136-137
-// so each dimension must be greater than RESIZER_SIZE.
-const RESIZER_SIZE = 16;
-
 /**
  * @typedef {Object} AnnotationEditorParameters
  * @property {AnnotationEditorUIManager} uiManager - the global manager
@@ -40,6 +35,10 @@ const RESIZER_SIZE = 16;
  */
 class AnnotationEditor {
   #keepAspectRatio = false;
+
+  #resizersDiv = null;
+
+  #resizePosition = null;
 
   #boundFocusin = this.focusin.bind(this);
 
@@ -75,6 +74,7 @@ class AnnotationEditor {
     this.div = null;
     this._uiManager = parameters.uiManager;
     this.annotationElementId = null;
+    this._willKeepAspectRatio = false;
 
     const {
       rotation,
@@ -258,8 +258,7 @@ class AnnotationEditor {
     this.x = (x + tx) / width;
     this.y = (y + ty) / height;
 
-    this.div.style.left = `${100 * this.x}%`;
-    this.div.style.top = `${100 * this.y}%`;
+    this.fixAndSetPosition();
   }
 
   /**
@@ -274,8 +273,41 @@ class AnnotationEditor {
     this.x += x / width;
     this.y += y / height;
 
-    this.div.style.left = `${100 * this.x}%`;
-    this.div.style.top = `${100 * this.y}%`;
+    this.fixAndSetPosition();
+  }
+
+  fixAndSetPosition() {
+    const [pageWidth, pageHeight] = this.pageDimensions;
+    let { x, y, width, height } = this;
+    width *= pageWidth;
+    height *= pageHeight;
+    x *= pageWidth;
+    y *= pageHeight;
+
+    switch (this.rotation) {
+      case 0:
+        x = Math.max(0, Math.min(pageWidth - width, x));
+        y = Math.max(0, Math.min(pageHeight - height, y));
+        break;
+      case 90:
+        x = Math.max(0, Math.min(pageWidth - height, x));
+        y = Math.min(pageHeight, Math.max(width, y));
+        break;
+      case 180:
+        x = Math.min(pageWidth, Math.max(width, x));
+        y = Math.min(pageHeight, Math.max(height, y));
+        break;
+      case 270:
+        x = Math.min(pageWidth, Math.max(height, x));
+        y = Math.max(0, Math.min(pageHeight - width, y));
+        break;
+    }
+
+    this.x = x / pageWidth;
+    this.y = y / pageHeight;
+
+    this.div.style.left = `${(100 * this.x).toFixed(2)}%`;
+    this.div.style.top = `${(100 * this.y).toFixed(2)}%`;
   }
 
   /**
@@ -291,6 +323,24 @@ class AnnotationEditor {
         return [-x, -y];
       case 270:
         return [-y, x];
+      default:
+        return [x, y];
+    }
+  }
+
+  /**
+   * Convert a page translation into a screen one.
+   * @param {number} x
+   * @param {number} y
+   */
+  pageTranslationToScreen(x, y) {
+    switch (this.parentRotation) {
+      case 90:
+        return [-y, x];
+      case 180:
+        return [-x, -y];
+      case 270:
+        return [y, -x];
       default:
         return [x, y];
     }
@@ -317,9 +367,9 @@ class AnnotationEditor {
    */
   setDims(width, height) {
     const [parentWidth, parentHeight] = this.parentDimensions;
-    this.div.style.width = `${(100 * width) / parentWidth}%`;
+    this.div.style.width = `${((100 * width) / parentWidth).toFixed(2)}%`;
     if (!this.#keepAspectRatio) {
-      this.div.style.height = `${(100 * height) / parentHeight}%`;
+      this.div.style.height = `${((100 * height) / parentHeight).toFixed(2)}%`;
     }
   }
 
@@ -334,10 +384,12 @@ class AnnotationEditor {
 
     const [parentWidth, parentHeight] = this.parentDimensions;
     if (!widthPercent) {
-      style.width = `${(100 * parseFloat(width)) / parentWidth}%`;
+      style.width = `${((100 * parseFloat(width)) / parentWidth).toFixed(2)}%`;
     }
     if (!this.#keepAspectRatio && !heightPercent) {
-      style.height = `${(100 * parseFloat(height)) / parentHeight}%`;
+      style.height = `${((100 * parseFloat(height)) / parentHeight).toFixed(
+        2
+      )}%`;
     }
   }
 
@@ -347,6 +399,274 @@ class AnnotationEditor {
    */
   getInitialTranslation() {
     return [0, 0];
+  }
+
+  #createResizers() {
+    if (this.#resizersDiv) {
+      return;
+    }
+    this.#resizersDiv = document.createElement("div");
+    this.#resizersDiv.classList.add("resizers");
+    const classes = ["topLeft", "topRight", "bottomRight", "bottomLeft"];
+    if (!this._willKeepAspectRatio) {
+      classes.push("topMiddle", "middleRight", "bottomMiddle", "middleLeft");
+    }
+    for (const name of classes) {
+      const div = document.createElement("div");
+      this.#resizersDiv.append(div);
+      div.classList.add("resizer", name);
+      div.addEventListener(
+        "pointerdown",
+        this.#resizerPointerdown.bind(this, name)
+      );
+    }
+    this.div.prepend(this.#resizersDiv);
+  }
+
+  #resizerPointerdown(name, event) {
+    event.preventDefault();
+    this.#resizePosition = [event.clientX, event.clientY];
+    const boundResizerPointermove = this.#resizerPointermove.bind(this, name);
+    const savedDraggable = this.div.draggable;
+    this.div.draggable = false;
+    const resizingClassName = `resizing${name
+      .charAt(0)
+      .toUpperCase()}${name.slice(1)}`;
+    this.parent.div.classList.add(resizingClassName);
+    const pointerMoveOptions = { passive: true, capture: true };
+    window.addEventListener(
+      "pointermove",
+      boundResizerPointermove,
+      pointerMoveOptions
+    );
+    const pointerUpCallback = () => {
+      // Stop the undo accumulation in order to have an undo action for each
+      // resize session.
+      this._uiManager.stopUndoAccumulation();
+      this.div.draggable = savedDraggable;
+      this.parent.div.classList.remove(resizingClassName);
+      window.removeEventListener(
+        "pointermove",
+        boundResizerPointermove,
+        pointerMoveOptions
+      );
+    };
+    window.addEventListener("pointerup", pointerUpCallback, {
+      once: true,
+    });
+  }
+
+  #resizerPointermove(name, event) {
+    const { clientX, clientY } = event;
+    const deltaX = clientX - this.#resizePosition[0];
+    const deltaY = clientY - this.#resizePosition[1];
+    this.#resizePosition[0] = clientX;
+    this.#resizePosition[1] = clientY;
+    const [parentWidth, parentHeight] = this.parentDimensions;
+    const savedX = this.x;
+    const savedY = this.y;
+    const savedWidth = this.width;
+    const savedHeight = this.height;
+    const minWidth = AnnotationEditor.MIN_SIZE / parentWidth;
+    const minHeight = AnnotationEditor.MIN_SIZE / parentHeight;
+    let cmd;
+
+    // 10000 because we multiply by 100 and use toFixed(2) in fixAndSetPosition.
+    // Without rounding, the positions of the corners other than the top left
+    // one can be slightly wrong.
+    const round = x => Math.round(x * 10000) / 10000;
+    const updatePosition = (width, height) => {
+      // We must take the parent dimensions as they are when undo/redo.
+      const [pWidth, pHeight] = this.parentDimensions;
+      this.setDims(pWidth * width, pHeight * height);
+      this.fixAndSetPosition();
+    };
+    const undo = () => {
+      this.width = savedWidth;
+      this.height = savedHeight;
+      this.x = savedX;
+      this.y = savedY;
+      updatePosition(savedWidth, savedHeight);
+    };
+
+    switch (name) {
+      case "topLeft": {
+        if (Math.sign(deltaX) * Math.sign(deltaY) < 0) {
+          return;
+        }
+        const dist = Math.hypot(deltaX, deltaY);
+        const oldDiag = Math.hypot(
+          savedWidth * parentWidth,
+          savedHeight * parentHeight
+        );
+        const brX = round(savedX + savedWidth);
+        const brY = round(savedY + savedHeight);
+        const ratio = Math.max(
+          Math.min(
+            1 - Math.sign(deltaX) * (dist / oldDiag),
+            // Avoid the editor to be larger than the page.
+            1 / savedWidth,
+            1 / savedHeight
+          ),
+          // Avoid the editor to be smaller than the minimum size.
+          minWidth / savedWidth,
+          minHeight / savedHeight
+        );
+        const newWidth = round(savedWidth * ratio);
+        const newHeight = round(savedHeight * ratio);
+        const newX = brX - newWidth;
+        const newY = brY - newHeight;
+        cmd = () => {
+          this.width = newWidth;
+          this.height = newHeight;
+          this.x = newX;
+          this.y = newY;
+          updatePosition(newWidth, newHeight);
+        };
+        break;
+      }
+      case "topMiddle": {
+        const bmY = round(this.y + savedHeight);
+        const newHeight = round(
+          Math.max(minHeight, Math.min(1, savedHeight - deltaY / parentHeight))
+        );
+        const newY = bmY - newHeight;
+        cmd = () => {
+          this.height = newHeight;
+          this.y = newY;
+          updatePosition(savedWidth, newHeight);
+        };
+        break;
+      }
+      case "topRight": {
+        if (Math.sign(deltaX) * Math.sign(deltaY) > 0) {
+          return;
+        }
+        const dist = Math.hypot(deltaX, deltaY);
+        const oldDiag = Math.hypot(
+          this.width * parentWidth,
+          this.height * parentHeight
+        );
+        const blY = round(savedY + this.height);
+        const ratio = Math.max(
+          Math.min(
+            1 + Math.sign(deltaX) * (dist / oldDiag),
+            1 / savedWidth,
+            1 / savedHeight
+          ),
+          minWidth / savedWidth,
+          minHeight / savedHeight
+        );
+        const newWidth = round(savedWidth * ratio);
+        const newHeight = round(savedHeight * ratio);
+        const newY = blY - newHeight;
+        cmd = () => {
+          this.width = newWidth;
+          this.height = newHeight;
+          this.y = newY;
+          updatePosition(newWidth, newHeight);
+        };
+        break;
+      }
+      case "middleRight": {
+        const newWidth = round(
+          Math.max(minWidth, Math.min(1, savedWidth + deltaX / parentWidth))
+        );
+        cmd = () => {
+          this.width = newWidth;
+          updatePosition(newWidth, savedHeight);
+        };
+        break;
+      }
+      case "bottomRight": {
+        if (Math.sign(deltaX) * Math.sign(deltaY) < 0) {
+          return;
+        }
+        const dist = Math.hypot(deltaX, deltaY);
+        const oldDiag = Math.hypot(
+          this.width * parentWidth,
+          this.height * parentHeight
+        );
+        const ratio = Math.max(
+          Math.min(
+            1 + Math.sign(deltaX) * (dist / oldDiag),
+            1 / savedWidth,
+            1 / savedHeight
+          ),
+          minWidth / savedWidth,
+          minHeight / savedHeight
+        );
+        const newWidth = round(savedWidth * ratio);
+        const newHeight = round(savedHeight * ratio);
+        cmd = () => {
+          this.width = newWidth;
+          this.height = newHeight;
+          updatePosition(newWidth, newHeight);
+        };
+        break;
+      }
+      case "bottomMiddle": {
+        const newHeight = round(
+          Math.max(minHeight, Math.min(1, savedHeight + deltaY / parentHeight))
+        );
+        cmd = () => {
+          this.height = newHeight;
+          updatePosition(savedWidth, newHeight);
+        };
+        break;
+      }
+      case "bottomLeft": {
+        if (Math.sign(deltaX) * Math.sign(deltaY) > 0) {
+          return;
+        }
+        const dist = Math.hypot(deltaX, deltaY);
+        const oldDiag = Math.hypot(
+          this.width * parentWidth,
+          this.height * parentHeight
+        );
+        const trX = round(savedX + this.width);
+        const ratio = Math.max(
+          Math.min(
+            1 - Math.sign(deltaX) * (dist / oldDiag),
+            1 / savedWidth,
+            1 / savedHeight
+          ),
+          minWidth / savedWidth,
+          minHeight / savedHeight
+        );
+        const newWidth = round(savedWidth * ratio);
+        const newHeight = round(savedHeight * ratio);
+        const newX = trX - newWidth;
+        cmd = () => {
+          this.width = newWidth;
+          this.height = newHeight;
+          this.x = newX;
+          updatePosition(newWidth, newHeight);
+        };
+        break;
+      }
+      case "middleLeft": {
+        const mrX = round(savedX + savedWidth);
+        const newWidth = round(
+          Math.max(minWidth, Math.min(1, savedWidth - deltaX / parentWidth))
+        );
+        const newX = mrX - newWidth;
+        cmd = () => {
+          this.width = newWidth;
+          this.x = newX;
+          updatePosition(newWidth, savedHeight);
+        };
+        break;
+      }
+    }
+    this.addCommands({
+      cmd,
+      undo,
+      mustExec: true,
+      type: this.resizeType,
+      overwriteIfSameType: true,
+      keepUndo: true,
+    });
   }
 
   /**
@@ -364,6 +684,17 @@ class AnnotationEditor {
 
     this.div.addEventListener("focusin", this.#boundFocusin);
     this.div.addEventListener("focusout", this.#boundFocusout);
+
+    const [parentWidth, parentHeight] = this.parentDimensions;
+    if (this.parentRotation % 180 !== 0) {
+      this.div.style.maxWidth = `${((100 * parentHeight) / parentWidth).toFixed(
+        2
+      )}%`;
+      this.div.style.maxHeight = `${(
+        (100 * parentWidth) /
+        parentHeight
+      ).toFixed(2)}%`;
+    }
 
     const [tx, ty] = this.getInitialTranslation();
     this.translate(tx, ty);
@@ -398,6 +729,9 @@ class AnnotationEditor {
     this.#hasBeenSelected = true;
   }
 
+  /**
+   * Convert the current rect into a page one.
+   */
   getRect(tx, ty) {
     const scale = this.parentScale;
     const [pageWidth, pageHeight] = this.pageDimensions;
@@ -589,9 +923,34 @@ class AnnotationEditor {
   }
 
   /**
+   * @returns {number} the type to use in the undo/redo stack when resizing.
+   */
+  get resizeType() {
+    return -1;
+  }
+
+  /**
+   * @returns {boolean} true if this editor can be resized.
+   */
+  get isResizable() {
+    return false;
+  }
+
+  /**
+   * Add the resizers to this editor.
+   */
+  makeResizable() {
+    if (this.isResizable) {
+      this.#createResizers();
+      this.#resizersDiv.classList.remove("hidden");
+    }
+  }
+
+  /**
    * Select this editor.
    */
   select() {
+    this.makeResizable();
     this.div?.classList.add("selectedEditor");
   }
 
@@ -599,6 +958,7 @@ class AnnotationEditor {
    * Unselect this editor.
    */
   unselect() {
+    this.#resizersDiv?.classList.add("hidden");
     this.div?.classList.remove("selectedEditor");
   }
 
@@ -669,17 +1029,10 @@ class AnnotationEditor {
     const { style } = this.div;
     style.aspectRatio = aspectRatio;
     style.height = "auto";
-    if (aspectRatio >= 1) {
-      style.minHeight = `${RESIZER_SIZE}px`;
-      style.minWidth = `${Math.round(aspectRatio * RESIZER_SIZE)}px`;
-    } else {
-      style.minWidth = `${RESIZER_SIZE}px`;
-      style.minHeight = `${Math.round(RESIZER_SIZE / aspectRatio)}px`;
-    }
   }
 
   static get MIN_SIZE() {
-    return RESIZER_SIZE;
+    return 16;
   }
 }
 

@@ -19,6 +19,7 @@ import {
   getVerbosityLevel,
   info,
   InvalidPDFException,
+  isNodeJS,
   MissingPDFException,
   PasswordException,
   PromiseCapability,
@@ -39,7 +40,6 @@ import { LocalPdfManager, NetworkPdfManager } from "./pdf_manager.js";
 import { AnnotationFactory } from "./annotation.js";
 import { clearGlobalCaches } from "./cleanup_helper.js";
 import { incrementalUpdate } from "./writer.js";
-import { isNodeJS } from "../shared/is_node.js";
 import { MessageHandler } from "../shared/message_handler.js";
 import { PDFWorkerStream } from "./worker_stream.js";
 
@@ -569,6 +569,7 @@ class WorkerMessageHandler {
           pdfManager.ensureCatalog("acroForm"),
           pdfManager.ensureCatalog("acroFormRef"),
           pdfManager.ensureDoc("startXRef"),
+          pdfManager.ensureDoc("linearization"),
         ];
 
         const newAnnotationsByPage = !isPureXfa
@@ -620,6 +621,7 @@ class WorkerMessageHandler {
           acroForm,
           acroFormRef,
           startXRef,
+          linearization,
           ...refs
         ]) {
           let newRefs = [];
@@ -681,28 +683,28 @@ class WorkerMessageHandler {
               infoRef: xref.trailer.getRaw("Info") || null,
               info: infoObj,
               fileIds: xref.trailer.get("ID") || null,
-              startXRef: xref.lastXRefStreamPos ?? startXRef,
+              startXRef: linearization
+                ? startXRef
+                : xref.lastXRefStreamPos ?? startXRef,
               filename,
             };
           }
 
-          try {
-            return incrementalUpdate({
-              originalData: stream.bytes,
-              xrefInfo: newXrefInfo,
-              newRefs,
-              xref,
-              hasXfa: !!xfa,
-              xfaDatasetsRef,
-              hasXfaDatasetsEntry,
-              needAppearances,
-              acroFormRef,
-              acroForm,
-              xfaData,
-            });
-          } finally {
+          return incrementalUpdate({
+            originalData: stream.bytes,
+            xrefInfo: newXrefInfo,
+            newRefs,
+            xref,
+            hasXfa: !!xfa,
+            xfaDatasetsRef,
+            hasXfaDatasetsEntry,
+            needAppearances,
+            acroFormRef,
+            acroForm,
+            xfaData,
+          }).finally(() => {
             xref.resetNewTemporaryRef();
-          }
+          });
         });
       }
     );

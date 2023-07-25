@@ -554,7 +554,7 @@ class Annotation {
 
     const MK = dict.get("MK");
     this.setBorderAndBackgroundColors(MK);
-    this.setRotation(MK);
+    this.setRotation(MK, dict);
     this.ref = params.ref instanceof Ref ? params.ref : null;
 
     this._streams = [];
@@ -846,18 +846,21 @@ class Annotation {
     }
   }
 
-  setRotation(mk) {
+  setRotation(mk, dict) {
     this.rotation = 0;
+    let angle;
     if (mk instanceof Dict) {
-      let angle = mk.get("R") || 0;
-      if (Number.isInteger(angle) && angle !== 0) {
-        angle %= 360;
-        if (angle < 0) {
-          angle += 360;
-        }
-        if (angle % 90 === 0) {
-          this.rotation = angle;
-        }
+      angle = mk.get("R") || 0;
+    } else {
+      angle = dict.get("Rotate") || 0;
+    }
+    if (Number.isInteger(angle) && angle !== 0) {
+      angle %= 360;
+      if (angle < 0) {
+        angle += 360;
+      }
+      if (angle % 90 === 0) {
+        this.rotation = angle;
       }
     }
   }
@@ -1077,6 +1080,7 @@ class Annotation {
 
     const text = [];
     const buffer = [];
+    let firstPosition = null;
     const sink = {
       desiredSize: Math.Infinity,
       ready: true,
@@ -1086,6 +1090,7 @@ class Annotation {
           if (item.str === undefined) {
             continue;
           }
+          firstPosition ||= item.transform.slice(-2);
           buffer.push(item.str);
           if (item.hasEOL) {
             text.push(buffer.join(""));
@@ -1110,6 +1115,17 @@ class Annotation {
     }
 
     if (text.length > 1 || text[0]) {
+      const appearanceDict = this.appearance.dict;
+      const bbox = appearanceDict.getArray("BBox") || [0, 0, 1, 1];
+      const matrix = appearanceDict.getArray("Matrix") || [1, 0, 0, 1, 0, 0];
+      const rect = this.data.rect;
+      const transform = getTransformMatrix(rect, bbox, matrix);
+      transform[4] -= rect[0];
+      transform[5] -= rect[1];
+      firstPosition = Util.applyTransform(firstPosition, transform);
+      firstPosition = Util.applyTransform(firstPosition, matrix);
+
+      this.data.textPosition = firstPosition;
       this.data.textContent = text;
     }
   }
@@ -1859,6 +1875,10 @@ class WidgetAnnotation extends Annotation {
       return { opList, separateForm: false, separateCanvas: false };
     }
 
+    const isUsingOwnCanvas = !!(
+      this.data.hasOwnCanvas && intent & RenderingIntentFlag.DISPLAY
+    );
+
     const matrix = [1, 0, 0, 1, 0, 0];
     const bbox = [
       0,
@@ -1884,7 +1904,7 @@ class WidgetAnnotation extends Annotation {
       this.data.rect,
       transform,
       this.getRotationMatrix(annotationStorage),
-      /* isUsingOwnCanvas = */ false,
+      isUsingOwnCanvas,
     ]);
 
     const stream = new StringStream(content);
@@ -1899,7 +1919,7 @@ class WidgetAnnotation extends Annotation {
     if (optionalContent !== undefined) {
       opList.addOp(OPS.endMarkedContent, []);
     }
-    return { opList, separateForm: false, separateCanvas: false };
+    return { opList, separateForm: false, separateCanvas: isUsingOwnCanvas };
   }
 
   _getMKDict(rotation) {
@@ -2575,7 +2595,7 @@ class TextWidgetAnnotation extends WidgetAnnotation {
   }
 
   get hasTextContent() {
-    return !!this.appearance;
+    return !!this.appearance && !this._needAppearances;
   }
 
   _getCombAppearance(
@@ -2701,24 +2721,22 @@ class TextWidgetAnnotation extends WidgetAnnotation {
           lastSpacePosInStringEnd = end;
           lastSpacePos = i;
         }
-      } else {
-        if (currentWidth + glyphWidth > width) {
-          // We must break to the last white position (if available)
-          if (lastSpacePosInStringStart !== -1) {
-            chunks.push(line.substring(startChunk, lastSpacePosInStringEnd));
-            startChunk = lastSpacePosInStringEnd;
-            i = lastSpacePos + 1;
-            lastSpacePosInStringStart = -1;
-            currentWidth = 0;
-          } else {
-            // Just break in the middle of the word
-            chunks.push(line.substring(startChunk, start));
-            startChunk = start;
-            currentWidth = glyphWidth;
-          }
+      } else if (currentWidth + glyphWidth > width) {
+        // We must break to the last white position (if available)
+        if (lastSpacePosInStringStart !== -1) {
+          chunks.push(line.substring(startChunk, lastSpacePosInStringEnd));
+          startChunk = lastSpacePosInStringEnd;
+          i = lastSpacePos + 1;
+          lastSpacePosInStringStart = -1;
+          currentWidth = 0;
         } else {
-          currentWidth += glyphWidth;
+          // Just break in the middle of the word
+          chunks.push(line.substring(startChunk, start));
+          startChunk = start;
+          currentWidth = glyphWidth;
         }
+      } else {
+        currentWidth += glyphWidth;
       }
     }
 

@@ -197,7 +197,7 @@ const defaultOptions = {
   useOnlyCssZoom: {
     /** @type {boolean} */
     value: false,
-    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+    kind: OptionKind.VIEWER,
   },
   viewerCssTheme: {
     /** @type {number} */

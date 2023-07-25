@@ -19,6 +19,7 @@ import {
   IDENTITY_MATRIX,
   ImageKind,
   info,
+  isNodeJS,
   OPS,
   shadow,
   TextRenderingMode,
@@ -37,7 +38,6 @@ import {
   TilingPattern,
 } from "./pattern_helper.js";
 import { convertBlackAndWhiteToRGBA } from "../shared/image_utils.js";
-import { isNodeJS } from "../shared/is_node.js";
 
 // <canvas> contexts store most of the state we need natively.
 // However, PDF needs a bit more state, which we store here.
@@ -790,7 +790,10 @@ function resetCtxToDefault(ctx) {
     (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
     !isNodeJS
   ) {
-    ctx.filter = "none";
+    const { filter } = ctx;
+    if (filter !== "none" && filter !== "") {
+      ctx.filter = "none";
+    }
   }
 }
 
@@ -2961,7 +2964,10 @@ class CanvasGraphics {
       // It must be applied to the image before rescaling else some artifacts
       // could appear.
       // The final restore will reset it to its value.
-      ctx.filter = "none";
+      const { filter } = ctx;
+      if (filter !== "none" && filter !== "") {
+        ctx.filter = "none";
+      }
     }
 
     // scale the image to the unit square

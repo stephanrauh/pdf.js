@@ -1,8 +1,6 @@
-"use strict";
-
-const fs = require("fs"),
-  path = require("path"),
-  vm = require("vm");
+import fs from "fs";
+import path from "path";
+import vm from "vm";
 
 const AllWhitespaceRegexp = /^\s+$/g;
 
@@ -200,21 +198,19 @@ function preprocess(inFilename, outFilename, defines) {
           }
           break;
       }
-    } else {
-      if (state === STATE_NONE) {
-        writeLine(line);
-      } else if (
-        (state === STATE_IF_TRUE || state === STATE_ELSE_TRUE) &&
-        !stack.includes(STATE_IF_FALSE) &&
-        !stack.includes(STATE_ELSE_FALSE)
-      ) {
-        writeLine(
-          line
-            .replaceAll(/^\/\/|^<!--/g, "  ")
-            .replaceAll(/(^\s*)\/\*/g, "$1  ")
-            .replaceAll(/\*\/$|-->$/g, "")
-        );
-      }
+    } else if (state === STATE_NONE) {
+      writeLine(line);
+    } else if (
+      (state === STATE_IF_TRUE || state === STATE_ELSE_TRUE) &&
+      !stack.includes(STATE_IF_FALSE) &&
+      !stack.includes(STATE_ELSE_FALSE)
+    ) {
+      writeLine(
+        line
+          .replaceAll(/^\/\/|^<!--/g, "  ")
+          .replaceAll(/(^\s*)\/\*/g, "$1  ")
+          .replaceAll(/\*\/$|-->$/g, "")
+      );
     }
   }
   if (state !== STATE_NONE || stack.length !== 0) {
@@ -226,7 +222,6 @@ function preprocess(inFilename, outFilename, defines) {
     fs.writeFileSync(outFilename, out.join("\n"));
   }
 }
-exports.preprocess = preprocess;
 
 /**
  * Merge two defines arrays. Values in the second param will override values in
@@ -242,4 +237,5 @@ function merge(defaults, defines) {
   }
   return ret;
 }
-exports.merge = merge;
+
+export { merge, preprocess };

@@ -46,7 +46,6 @@ import {
   isPdfFile,
   loadScript,
   MissingPDFException,
-  OPS,
   PDFWorker,
   PromiseCapability,
   shadow,
@@ -380,7 +379,7 @@ const PDFViewerApplication = {
       const enabled = params.get("pdfbug").split(",");
       try {
         await loadPDFBug(this);
-        this._PDFBug.init({ OPS }, mainContainer, enabled);
+        this._PDFBug.init(mainContainer, enabled);
       } catch (ex) {
         console.error(`_parseHashParams: "${ex.message}".`);
       }
@@ -503,6 +502,9 @@ const PDFViewerApplication = {
     const container = appConfig.mainContainer,
       viewer = appConfig.viewerContainer;
     const annotationEditorMode = AppOptions.get("annotationEditorMode");
+    const isOffscreenCanvasSupported =
+      AppOptions.get("isOffscreenCanvasSupported") &&
+      FeatureTest.isOffscreenCanvasSupported;
     const pageColors =
       AppOptions.get("forcePageColors") ||
       window.matchMedia("(forced-colors: active)").matches
@@ -530,7 +532,7 @@ const PDFViewerApplication = {
       removePageBorders: AppOptions.get("removePageBorders"), // #194
       enablePrintAutoRotate: AppOptions.get("enablePrintAutoRotate"),
       useOnlyCssZoom: AppOptions.get("useOnlyCssZoom"),
-      isOffscreenCanvasSupported: AppOptions.get("isOffscreenCanvasSupported"),
+      isOffscreenCanvasSupported,
       maxCanvasPixels: AppOptions.get("maxCanvasPixels"),
       /** #495 modified by ngx-extended-pdf-viewer */
       pageViewMode: AppOptions.get("pageViewMode"),
@@ -572,14 +574,8 @@ const PDFViewerApplication = {
 
     if (appConfig.annotationEditorParams) {
       if (annotationEditorMode !== AnnotationEditorType.DISABLE) {
-        const editorStampButton = appConfig.toolbar?.editorStampButton;
-        if (
-          editorStampButton &&
-          AppOptions.get("enableStampEditor") &&
-          AppOptions.get("isOffscreenCanvasSupported") &&
-          FeatureTest.isOffscreenCanvasSupported
-        ) {
-          editorStampButton.hidden = false;
+        if (AppOptions.get("enableStampEditor") && isOffscreenCanvasSupported) {
+          appConfig.toolbar?.editorStampButton?.classList.remove("hidden");
         }
 
         this.annotationEditorParams = new AnnotationEditorParams(

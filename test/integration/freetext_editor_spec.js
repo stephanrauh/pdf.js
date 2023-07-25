@@ -25,6 +25,8 @@ const {
   waitForStorageEntries,
 } = require("./test_utils.js");
 
+const PNG = require("pngjs").PNG;
+
 const copyPaste = async page => {
   let promise = waitForEvent(page, "copy");
   await page.keyboard.down("Control");
@@ -141,9 +143,13 @@ describe("FreeText Editor", () => {
           await page.keyboard.press("a");
           await page.keyboard.up("Control");
 
+          await page.waitForTimeout(10);
+
           await page.keyboard.down("Control");
           await page.keyboard.press("Backspace");
           await page.keyboard.up("Control");
+
+          await page.waitForTimeout(10);
 
           for (const n of [0, 1, 2]) {
             const hasEditor = await page.evaluate(sel => {
@@ -180,11 +186,16 @@ describe("FreeText Editor", () => {
           editorRect.x,
           editorRect.y + 2 * editorRect.height
         );
+
+        await page.waitForTimeout(10);
+
         // And select it again.
         await page.mouse.click(
           editorRect.x + editorRect.width / 2,
           editorRect.y + editorRect.height / 2
         );
+
+        await page.waitForTimeout(10);
 
         await waitForSelectedEditor(page, getEditorSelector(3));
         await copyPaste(page);
@@ -215,9 +226,12 @@ describe("FreeText Editor", () => {
           await page.waitForTimeout(10);
         }
 
-        let length = await page.evaluate(sel => {
-          return document.querySelectorAll(sel).length;
-        }, `${getEditorSelector(5)}, ${getEditorSelector(6)}`);
+        let length = await page.evaluate(
+          sel => {
+            return document.querySelectorAll(sel).length;
+          },
+          `${getEditorSelector(5)}, ${getEditorSelector(6)}`
+        );
         expect(length).withContext(`In ${browserName}`).toEqual(2);
 
         for (let i = 0; i < 2; i++) {
@@ -227,9 +241,12 @@ describe("FreeText Editor", () => {
           await page.waitForTimeout(10);
         }
 
-        length = await page.evaluate(sel => {
-          return document.querySelectorAll(sel).length;
-        }, `${getEditorSelector(5)}, ${getEditorSelector(6)}`);
+        length = await page.evaluate(
+          sel => {
+            return document.querySelectorAll(sel).length;
+          },
+          `${getEditorSelector(5)}, ${getEditorSelector(6)}`
+        );
         expect(length).withContext(`In ${browserName}`).toEqual(0);
       }
     });
@@ -292,9 +309,13 @@ describe("FreeText Editor", () => {
           await page.keyboard.press("a");
           await page.keyboard.up("Control");
 
+          await page.waitForTimeout(10);
+
           await page.keyboard.down("Control");
           await page.keyboard.press("Backspace");
           await page.keyboard.up("Control");
+
+          await page.waitForTimeout(10);
 
           const data = "Hello PDF.js World !!";
           await page.mouse.click(rect.x + 100, rect.y + 100);
@@ -330,6 +351,7 @@ describe("FreeText Editor", () => {
 
           // Escape.
           await page.keyboard.press("Escape");
+          await page.waitForTimeout(10);
 
           expect(await getSelectedEditors(page))
             .withContext(`In ${browserName}`)
@@ -377,6 +399,7 @@ describe("FreeText Editor", () => {
             editorRect.x,
             editorRect.y + 2 * editorRect.height
           );
+          await page.waitForTimeout(10);
 
           if (i < 4) {
             // And select it again.
@@ -385,6 +408,7 @@ describe("FreeText Editor", () => {
               editorRect.y + editorRect.height / 2,
               { clickCount: 2 }
             );
+            await page.waitForTimeout(10);
           }
         }
 
@@ -460,6 +484,7 @@ describe("FreeText Editor", () => {
           editorRect.x,
           editorRect.y + 2 * editorRect.height
         );
+        await page.waitForTimeout(10);
 
         text = await page.$eval(`${getEditorSelector(9)} .internal`, el => {
           return el.innerText;
@@ -525,6 +550,7 @@ describe("FreeText Editor", () => {
         await page.keyboard.down("Control");
         await page.keyboard.press("a");
         await page.keyboard.up("Control");
+        await page.waitForTimeout(10);
 
         expect(await getSelectedEditors(page))
           .withContext(`In ${browserName}`)
@@ -532,6 +558,7 @@ describe("FreeText Editor", () => {
 
         await page.keyboard.down("Control");
         await page.mouse.click(editorCenters[1].x, editorCenters[1].y);
+        await page.waitForTimeout(10);
 
         expect(await getSelectedEditors(page))
           .withContext(`In ${browserName}`)
@@ -545,6 +572,7 @@ describe("FreeText Editor", () => {
 
         await page.mouse.click(editorCenters[1].x, editorCenters[1].y);
         await page.keyboard.up("Control");
+        await page.waitForTimeout(10);
 
         expect(await getSelectedEditors(page))
           .withContext(`In ${browserName}`)
@@ -579,10 +607,12 @@ describe("FreeText Editor", () => {
 
         // Delete 1 and 3.
         await page.keyboard.press("Backspace");
+        await page.waitForTimeout(10);
 
         await page.keyboard.down("Control");
         await page.keyboard.press("a");
         await page.keyboard.up("Control");
+        await page.waitForTimeout(10);
 
         expect(await getSelectedEditors(page))
           .withContext(`In ${browserName}`)
@@ -607,11 +637,13 @@ describe("FreeText Editor", () => {
           .toEqual([8]);
         // Dismiss it.
         await page.keyboard.press("Escape");
+        await page.waitForTimeout(10);
 
         // Select all.
         await page.keyboard.down("Control");
         await page.keyboard.press("a");
         await page.keyboard.up("Control");
+        await page.waitForTimeout(10);
 
         // Check that all the editors are correctly selected (and the focus
         // didn't move to the body when the empty editor was removed).
@@ -1227,6 +1259,7 @@ describe("FreeText Editor", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           await page.keyboard.press("r");
+          await page.waitForTimeout(10);
           await page.click("#editorFreeText");
 
           const rect = await page.$eval(".annotationEditorLayer", el => {
@@ -1375,6 +1408,374 @@ describe("FreeText Editor", () => {
           expect(await serialize())
             .withContext(`In ${browserName}`)
             .toEqual([]);
+        })
+      );
+    });
+  });
+
+  describe("FreeText (open existing)", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "issue16633.pdf",
+        ".annotationEditorLayer",
+        100
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must open an existing annotation and check that the position are good", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorFreeText");
+
+          await page.evaluate(() => {
+            document.getElementById("editorFreeTextParamsToolbar").remove();
+          });
+
+          const toBinary = buf => {
+            for (let i = 0; i < buf.length; i += 4) {
+              const gray =
+                (0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]) /
+                255;
+              buf[i] = buf[i + 1] = buf[i + 2] = gray <= 0.5 ? 0 : 255;
+            }
+          };
+
+          // We want to detect the first non-white pixel in the image.
+          // But we can have some antialiasing...
+          // The idea to just try to detect the beginning of the vertical bar
+          // of the "H" letter.
+          // Hence we just take the first non-white pixel in the image which is
+          // the most repeated one.
+          const getFirstPixel = (buf, width, height) => {
+            toBinary(buf);
+            const firsts = [];
+            const stats = {};
+            // Get the position of the first pixels.
+            // The position of char depends on a lot of different parameters,
+            // hence it's possible to not have a pixel where we expect to have
+            // it. So we just collect the positions of the first black pixel and
+            // take the first one where its abscissa is the most frequent.
+            for (let i = height - 1; i >= 0; i--) {
+              for (let j = 0; j < width; j++) {
+                const idx = (width * i + j) << 2;
+                if (buf[idx] === 0) {
+                  firsts.push([j, i]);
+                  stats[j] = (stats[j] || 0) + 1;
+                  break;
+                }
+              }
+            }
+
+            let maxValue = -Infinity;
+            let maxJ = 0;
+            for (const [j, count] of Object.entries(stats)) {
+              if (count > maxValue) {
+                maxValue = count;
+                maxJ = j;
+              }
+            }
+            maxJ = parseInt(maxJ, 10);
+            for (const [j, i] of firsts) {
+              if (j === maxJ) {
+                return [j, i];
+              }
+            }
+            return null;
+          };
+
+          for (const n of [0, 1, 2, 3, 4]) {
+            const rect = await page.$eval(getEditorSelector(n), el => {
+              // With Chrome something is wrong when serializing a DomRect,
+              // hence we extract the values and just return them.
+              const { x, y, width, height } = el.getBoundingClientRect();
+              return { x, y, width, height };
+            });
+            const editorPng = await page.screenshot({
+              clip: rect,
+              type: "png",
+            });
+            const editorImage = PNG.sync.read(editorPng);
+            const editorFirstPix = getFirstPixel(
+              editorImage.data,
+              editorImage.width,
+              editorImage.height
+            );
+
+            await page.evaluate(N => {
+              const editor = document.getElementById(
+                `pdfjs_internal_editor_${N}`
+              );
+              const annotationId = editor.getAttribute("annotation-id");
+              const annotation = document.querySelector(
+                `[data-annotation-id="${annotationId}"]`
+              );
+              editor.hidden = true;
+              annotation.hidden = false;
+            }, n);
+            await page.waitForTimeout(10);
+            const annotationPng = await page.screenshot({
+              clip: rect,
+              type: "png",
+            });
+            const annotationImage = PNG.sync.read(annotationPng);
+            const annotationFirstPix = getFirstPixel(
+              annotationImage.data,
+              annotationImage.width,
+              annotationImage.height
+            );
+
+            expect(
+              Math.abs(editorFirstPix[0] - annotationFirstPix[0]) <= 3 &&
+                Math.abs(editorFirstPix[1] - annotationFirstPix[1]) <= 3
+            )
+              .withContext(
+                `In ${browserName}, first pix coords in editor: ${editorFirstPix} and in annotation: ${annotationFirstPix}`
+              )
+              .toEqual(true);
+          }
+        })
+      );
+    });
+  });
+
+  describe("FreeText (open existing and rotated)", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "rotated_freetexts.pdf",
+        ".annotationEditorLayer",
+        100
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must open an existing rotated annotation and check that the position are good", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorFreeText");
+
+          await page.evaluate(() => {
+            document.getElementById("editorFreeTextParamsToolbar").remove();
+          });
+
+          const toBinary = buf => {
+            for (let i = 0; i < buf.length; i += 4) {
+              const gray =
+                (0.2126 * buf[i] + 0.7152 * buf[i + 1] + 0.0722 * buf[i + 2]) /
+                255;
+              buf[i] = buf[i + 1] = buf[i + 2] = gray >= 0.5 ? 255 : 0;
+            }
+          };
+
+          const getFirstPixel = (buf, width, height, start) => {
+            toBinary(buf);
+            const firsts = [];
+            const stats = {};
+            switch (start) {
+              case "TL":
+                for (let j = 0; j < width; j++) {
+                  for (let i = 0; i < height; i++) {
+                    const idx = (width * i + j) << 2;
+                    if (buf[idx] === 0) {
+                      firsts.push([j, i]);
+                      stats[j] = (stats[j] || 0) + 1;
+                      break;
+                    }
+                  }
+                }
+                break;
+              case "TR":
+                for (let i = 0; i < height; i++) {
+                  for (let j = width - 1; j >= 0; j--) {
+                    const idx = (width * i + j) << 2;
+                    if (buf[idx] === 0) {
+                      firsts.push([j, i]);
+                      stats[j] = (stats[j] || 0) + 1;
+                      break;
+                    }
+                  }
+                }
+                break;
+              case "BR":
+                for (let j = width - 1; j >= 0; j--) {
+                  for (let i = height - 1; i >= 0; i--) {
+                    const idx = (width * i + j) << 2;
+                    if (buf[idx] === 0) {
+                      firsts.push([j, i]);
+                      stats[j] = (stats[j] || 0) + 1;
+                      break;
+                    }
+                  }
+                }
+                break;
+              case "BL":
+                for (let i = height - 1; i >= 0; i--) {
+                  for (let j = 0; j < width; j++) {
+                    const idx = (width * i + j) << 2;
+                    if (buf[idx] === 0) {
+                      firsts.push([j, i]);
+                      stats[j] = (stats[j] || 0) + 1;
+                      break;
+                    }
+                  }
+                }
+                break;
+            }
+
+            let maxValue = -Infinity;
+            let maxJ = 0;
+            for (const [j, count] of Object.entries(stats)) {
+              if (count > maxValue) {
+                maxValue = count;
+                maxJ = j;
+              }
+            }
+            maxJ = parseInt(maxJ, 10);
+            for (const [j, i] of firsts) {
+              if (j === maxJ) {
+                return [j, i];
+              }
+            }
+            return null;
+          };
+
+          for (const [n, start] of [
+            [0, "BL"],
+            [1, "BR"],
+            [2, "TR"],
+            [3, "TL"],
+          ]) {
+            const rect = await page.$eval(getEditorSelector(n), el => {
+              // With Chrome something is wrong when serializing a DomRect,
+              // hence we extract the values and just return them.
+              const { x, y, width, height } = el.getBoundingClientRect();
+              return { x, y, width, height };
+            });
+            const editorPng = await page.screenshot({
+              clip: rect,
+              type: "png",
+            });
+            const editorImage = PNG.sync.read(editorPng);
+            const editorFirstPix = getFirstPixel(
+              editorImage.data,
+              editorImage.width,
+              editorImage.height,
+              start
+            );
+
+            await page.evaluate(N => {
+              const editor = document.getElementById(
+                `pdfjs_internal_editor_${N}`
+              );
+              const annotationId = editor.getAttribute("annotation-id");
+              const annotation = document.querySelector(
+                `[data-annotation-id="${annotationId}"]`
+              );
+              editor.hidden = true;
+              annotation.hidden = false;
+            }, n);
+            await page.waitForTimeout(10);
+            const annotationPng = await page.screenshot({
+              clip: rect,
+              type: "png",
+            });
+            const annotationImage = PNG.sync.read(annotationPng);
+            const annotationFirstPix = getFirstPixel(
+              annotationImage.data,
+              annotationImage.width,
+              annotationImage.height,
+              start
+            );
+
+            expect(
+              Math.abs(editorFirstPix[0] - annotationFirstPix[0]) <= 3 &&
+                Math.abs(editorFirstPix[1] - annotationFirstPix[1]) <= 3
+            )
+              .withContext(
+                `In ${browserName}, first pix coords in editor: ${editorFirstPix} and in annotation: ${annotationFirstPix}`
+              )
+              .toEqual(true);
+          }
+        })
+      );
+    });
+  });
+
+  describe("Keyboard shortcuts when the editor layer isn't focused", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the shortcuts are working correctly", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorFreeText");
+
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const data = "Hello PDF.js World !!";
+          await page.mouse.click(rect.x + 100, rect.y + 100);
+          await page.type(`${getEditorSelector(0)} .internal`, data);
+
+          const editorRect = await page.$eval(getEditorSelector(0), el => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return {
+              x,
+              y,
+              width,
+              height,
+            };
+          });
+
+          // Commit.
+          await page.mouse.click(
+            editorRect.x,
+            editorRect.y + 2 * editorRect.height
+          );
+          await page.waitForTimeout(10);
+
+          await page.focus("#editorFreeTextColor");
+
+          await page.keyboard.down("Control");
+          await page.keyboard.press("z");
+          await page.keyboard.up("Control");
+          await page.waitForTimeout(10);
+
+          let hasEditor = await page.evaluate(sel => {
+            return !!document.querySelector(sel);
+          }, getEditorSelector(0));
+
+          expect(hasEditor).withContext(`In ${browserName}`).toEqual(false);
+
+          await page.keyboard.down("Control");
+          await page.keyboard.press("y");
+          await page.keyboard.up("Control");
+          await page.waitForTimeout(10);
+
+          hasEditor = await page.evaluate(sel => {
+            return !!document.querySelector(sel);
+          }, getEditorSelector(0));
+
+          expect(hasEditor).withContext(`In ${browserName}`).toEqual(true);
         })
       );
     });
