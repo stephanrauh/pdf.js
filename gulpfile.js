@@ -76,14 +76,18 @@ const CONFIG_FILE = "pdfjs.config";
 const config = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
 
 const ENV_TARGETS = [
-  "last 2 versions",
-  "Chrome >= 92",
+  "last 20 ChromeAndroid versions",
+  "last 5 Safari versions",
+  "last 3 iOS versions",
+  "last 10 Firefox versions",
+  "last 10 FirefoxAndroid versions",
+  "last 5 Edge versions",
   "Firefox ESR",
-  "Safari >= 15.4",
-  "Node >= 18",
-  "> 1%",
-  "not IE > 0",
   "not dead",
+  "> 10% in DE",
+  "iOS >= 13",
+  "Android >= 9",
+  "Chrome >= 66",
 ];
 
 // Default Autoprefixer config used for generic, components, minified-pre
