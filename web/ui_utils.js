@@ -170,9 +170,27 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
       offsetX += spot.left;
       parent.scrollLeft = offsetX;
     }
+  // #1823 modified by ngx-extended-pdf-viewer
+  } else if (isDivInViewport(element)) {
+    return; // no need to scroll
+  // #1823 end of modification by ngx-extended-pdf-viewer
   }
   parent.scrollTop = offsetY;
 }
+
+// #1823 modified by ngx-extended-pdf-viewer
+function isDivInViewport(element) {
+  const rect = element.getBoundingClientRect();
+
+  // Check if the element is within the viewport's boundaries.
+  return (
+    rect.top >= 0 &&
+    rect.left >= 0 &&
+    rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
+    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+  );
+}
+// #1823 end of modification by ngx-extended-pdf-viewer
 
 /**
  * Helper function to start monitoring the scroll event and converting them into
