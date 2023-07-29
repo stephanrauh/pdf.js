@@ -792,11 +792,10 @@ class Annotation {
    * @param {Array} rectangle - The rectangle array with exactly four entries
    */
   setRectangle(rectangle) {
-    if (Array.isArray(rectangle) && rectangle.length === 4) {
-      this.rectangle = Util.normalizeRect(rectangle);
-    } else {
-      this.rectangle = [0, 0, 0, 0];
-    }
+    this.rectangle =
+      Array.isArray(rectangle) && rectangle.length === 4
+        ? Util.normalizeRect(rectangle)
+        : [0, 0, 0, 0];
   }
 
   /**
@@ -848,12 +847,7 @@ class Annotation {
 
   setRotation(mk, dict) {
     this.rotation = 0;
-    let angle;
-    if (mk instanceof Dict) {
-      angle = mk.get("R") || 0;
-    } else {
-      angle = dict.get("Rotate") || 0;
-    }
+    let angle = mk instanceof Dict ? mk.get("R") || 0 : dict.get("Rotate") || 0;
     if (Number.isInteger(angle) && angle !== 0) {
       angle %= 360;
       if (angle < 0) {
@@ -2838,11 +2832,9 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
     if (value === null || value === undefined) {
       // There is no default appearance so use the one derived
       // from the field value.
-      if (this.data.checkBox) {
-        value = this.data.fieldValue === this.data.exportValue;
-      } else {
-        value = this.data.fieldValue === this.data.buttonValue;
-      }
+      value = this.data.checkBox
+        ? this.data.fieldValue === this.data.exportValue
+        : this.data.fieldValue === this.data.buttonValue;
     }
 
     const appearance = value
@@ -3633,11 +3625,10 @@ class PopupAnnotation extends Annotation {
     }
 
     const parentRect = parentItem.getArray("Rect");
-    if (Array.isArray(parentRect) && parentRect.length === 4) {
-      this.data.parentRect = Util.normalizeRect(parentRect);
-    } else {
-      this.data.parentRect = null;
-    }
+    this.data.parentRect =
+      Array.isArray(parentRect) && parentRect.length === 4
+        ? Util.normalizeRect(parentRect)
+        : null;
 
     const rt = parentItem.get("RT");
     if (isName(rt, AnnotationReplyType.GROUP)) {

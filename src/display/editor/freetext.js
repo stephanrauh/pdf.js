@@ -24,7 +24,11 @@ import {
   shadow,
   Util,
 } from "../../shared/util.js";
-import { bindEvents, KeyboardManager } from "./tools.js";
+import {
+  AnnotationEditorUIManager,
+  bindEvents,
+  KeyboardManager,
+} from "./tools.js";
 import { AnnotationEditor } from "./editor.js";
 import { FreeTextAnnotationElement } from "../annotation_layer.js";
 
@@ -61,6 +65,13 @@ class FreeTextEditor extends AnnotationEditor {
   static _defaultFontSize = 10;
 
   static get _keyboardManager() {
+    const proto = FreeTextEditor.prototype;
+
+    const arrowChecker = self => self.isEmpty();
+
+    const small = AnnotationEditorUIManager.TRANSLATE_SMALL;
+    const big = AnnotationEditorUIManager.TRANSLATE_BIG;
+
     return shadow(
       this,
       "_keyboardManager",
@@ -70,12 +81,52 @@ class FreeTextEditor extends AnnotationEditor {
           // The event must bubble in order to be caught by the viewer.
           // See bug 1831574.
           ["ctrl+s", "mac+meta+s", "ctrl+p", "mac+meta+p"],
-          FreeTextEditor.prototype.commitOrRemove,
+          proto.commitOrRemove,
           { bubbles: true },
         ],
         [
           ["ctrl+Enter", "mac+meta+Enter", "Escape", "mac+Escape"],
-          FreeTextEditor.prototype.commitOrRemove,
+          proto.commitOrRemove,
+        ],
+        [
+          ["ArrowLeft", "mac+ArrowLeft"],
+          proto._translateEmpty,
+          { args: [-small, 0], checker: arrowChecker },
+        ],
+        [
+          ["ctrl+ArrowLeft", "mac+shift+ArrowLeft"],
+          proto._translateEmpty,
+          { args: [-big, 0], checker: arrowChecker },
+        ],
+        [
+          ["ArrowRight", "mac+ArrowRight"],
+          proto._translateEmpty,
+          { args: [small, 0], checker: arrowChecker },
+        ],
+        [
+          ["ctrl+ArrowRight", "mac+shift+ArrowRight"],
+          proto._translateEmpty,
+          { args: [big, 0], checker: arrowChecker },
+        ],
+        [
+          ["ArrowUp", "mac+ArrowUp"],
+          proto._translateEmpty,
+          { args: [0, -small], checker: arrowChecker },
+        ],
+        [
+          ["ctrl+ArrowUp", "mac+shift+ArrowUp"],
+          proto._translateEmpty,
+          { args: [0, -big], checker: arrowChecker },
+        ],
+        [
+          ["ArrowDown", "mac+ArrowDown"],
+          proto._translateEmpty,
+          { args: [0, small], checker: arrowChecker },
+        ],
+        [
+          ["ctrl+ArrowDown", "mac+shift+ArrowDown"],
+          proto._translateEmpty,
+          { args: [0, big], checker: arrowChecker },
         ],
       ])
     );
@@ -207,6 +258,15 @@ class FreeTextEditor extends AnnotationEditor {
       overwriteIfSameType: true,
       keepUndo: true,
     });
+  }
+
+  /**
+   * Helper to translate the editor with the keyboard when it's empty.
+   * @param {number} x in page units.
+   * @param {number} y in page units.
+   */
+  _translateEmpty(x, y) {
+    this._uiManager.translateSelectedEditors(x, y, /* noCommit = */ true);
   }
 
   /** @inheritdoc */

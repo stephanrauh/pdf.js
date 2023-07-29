@@ -569,11 +569,13 @@ class AnnotationEditorUIManager {
 
   #container = null;
 
-  static #TRANSLATE_SMALL = 1; // page units.
+  static TRANSLATE_SMALL = 1; // page units.
 
-  static #TRANSLATE_BIG = 10; // page units.
+  static TRANSLATE_BIG = 10; // page units.
 
   static get _keyboardManager() {
+    const proto = AnnotationEditorUIManager.prototype;
+
     const arrowChecker = self => {
       // If the focused element is an input, we don't want to handle the arrow.
       // For example, sliders can be controlled with the arrow keys.
@@ -584,17 +586,16 @@ class AnnotationEditorUIManager {
         self.hasSomethingToControl()
       );
     };
-    const small = this.#TRANSLATE_SMALL;
-    const big = this.#TRANSLATE_BIG;
+
+    const small = this.TRANSLATE_SMALL;
+    const big = this.TRANSLATE_BIG;
+
     return shadow(
       this,
       "_keyboardManager",
       new KeyboardManager([
-        [
-          ["ctrl+a", "mac+meta+a"],
-          AnnotationEditorUIManager.prototype.selectAll,
-        ],
-        [["ctrl+z", "mac+meta+z"], AnnotationEditorUIManager.prototype.undo],
+        [["ctrl+a", "mac+meta+a"], proto.selectAll],
+        [["ctrl+z", "mac+meta+z"], proto.undo],
         [
           // On mac, depending of the OS version, the event.key is either "z" or
           // "Z" when the user presses "meta+shift+z".
@@ -605,7 +606,7 @@ class AnnotationEditorUIManager {
             "ctrl+shift+Z",
             "mac+meta+shift+Z",
           ],
-          AnnotationEditorUIManager.prototype.redo,
+          proto.redo,
         ],
         [
           [
@@ -621,50 +622,47 @@ class AnnotationEditorUIManager {
             "shift+Delete",
             "mac+Delete",
           ],
-          AnnotationEditorUIManager.prototype.delete,
+          proto.delete,
         ],
-        [
-          ["Escape", "mac+Escape"],
-          AnnotationEditorUIManager.prototype.unselectAll,
-        ],
+        [["Escape", "mac+Escape"], proto.unselectAll],
         [
           ["ArrowLeft", "mac+ArrowLeft"],
-          AnnotationEditorUIManager.prototype.translateSelectedEditors,
+          proto.translateSelectedEditors,
           { args: [-small, 0], checker: arrowChecker },
         ],
         [
           ["ctrl+ArrowLeft", "mac+shift+ArrowLeft"],
-          AnnotationEditorUIManager.prototype.translateSelectedEditors,
+          proto.translateSelectedEditors,
           { args: [-big, 0], checker: arrowChecker },
         ],
         [
           ["ArrowRight", "mac+ArrowRight"],
-          AnnotationEditorUIManager.prototype.translateSelectedEditors,
+          proto.translateSelectedEditors,
           { args: [small, 0], checker: arrowChecker },
         ],
         [
           ["ctrl+ArrowRight", "mac+shift+ArrowRight"],
-          AnnotationEditorUIManager.prototype.translateSelectedEditors,
+          proto.translateSelectedEditors,
           { args: [big, 0], checker: arrowChecker },
         ],
         [
           ["ArrowUp", "mac+ArrowUp"],
-          AnnotationEditorUIManager.prototype.translateSelectedEditors,
+          proto.translateSelectedEditors,
           { args: [0, -small], checker: arrowChecker },
         ],
         [
           ["ctrl+ArrowUp", "mac+shift+ArrowUp"],
-          AnnotationEditorUIManager.prototype.translateSelectedEditors,
+          proto.translateSelectedEditors,
           { args: [0, -big], checker: arrowChecker },
         ],
         [
           ["ArrowDown", "mac+ArrowDown"],
-          AnnotationEditorUIManager.prototype.translateSelectedEditors,
+          proto.translateSelectedEditors,
           { args: [0, small], checker: arrowChecker },
         ],
         [
           ["ctrl+ArrowDown", "mac+shift+ArrowDown"],
-          AnnotationEditorUIManager.prototype.translateSelectedEditors,
+          proto.translateSelectedEditors,
           { args: [0, big], checker: arrowChecker },
         ],
       ])
@@ -862,7 +860,7 @@ class AnnotationEditorUIManager {
     }
     // #1783 end of modification by ngx-extended-pdf-viewer
     this.unselectAll();
-    const layer = this.#allLayers.get(this.#currentPageIndex);
+    const layer = this.currentLayer;
 
     try {
       const newEditors = [];
@@ -1407,8 +1405,10 @@ class AnnotationEditorUIManager {
     });
   }
 
-  translateSelectedEditors(x, y) {
-    this.commitOrRemove();
+  translateSelectedEditors(x, y, noCommit = false) {
+    if (!noCommit) {
+      this.commitOrRemove();
+    }
     if (!this.hasSelection) {
       return;
     }
