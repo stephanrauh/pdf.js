@@ -78,7 +78,7 @@ class PasswordPrompt {
       this.input.focus();
       // end of modification by ngx-extended-pdf-viewer
     } catch (ex) {
-      this.#activeCapability = null;
+      this.#activeCapability.resolve();
       throw ex;
     }
 
