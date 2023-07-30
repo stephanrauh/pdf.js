@@ -52,6 +52,7 @@ import {
   UnexpectedResponseException,
   version,
 } from "pdfjs-lib";
+import { ngxExtendedPdfViewerVersion } from "./ngx-extended-pdf-viewer-version";
 import { AppOptions, OptionKind } from "./app_options.js";
 import { AutomationEventBus, EventBus } from "./event_utils.js";
 import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
@@ -1733,7 +1734,7 @@ const PDFViewerApplication = {
       globalThis.ngxConsole.log(
         `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
           `${(info.Producer || "-").trim()} / ${(info.Creator || "-").trim()}] ` +
-          `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer`
+          `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer ${ngxExtendedPdfViewerVersion}`
       );
     }
      // #1793 end of modification by ngx-extended-pdf-viewer
