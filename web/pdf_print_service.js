@@ -188,7 +188,6 @@ class PDFPrintService {
     ensureOverlay().then(function () {
       if (overlayManager.active === dialog) {
         overlayManager.close(dialog);
-        overlayManager.unregister(dialog); // #104
       }
     });
     overlayPromise = undefined; // #104
