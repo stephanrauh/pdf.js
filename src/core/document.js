@@ -556,7 +556,8 @@ class Page {
       for (const annotation of annotations) {
         if (
           intentAny ||
-          (intentDisplay && annotation.mustBeViewed(annotationStorage)) ||
+          (intentDisplay &&
+            annotation.mustBeViewed(annotationStorage, renderForms)) ||
           (intentPrint && annotation.mustBePrinted(annotationStorage))
         ) {
           opListPromises.push(
@@ -1710,7 +1711,7 @@ class PDFDocument {
       name = name === "" ? partName : `${name}.${partName}`;
     }
 
-    if (!field.has("Kids") && /\[\d+\]$/.test(name)) {
+    if (!field.has("Kids") && field.has("T") && /\[\d+\]$/.test(name)) {
       // We've a terminal node: strip the index.
       name = name.substring(0, name.lastIndexOf("["));
     }

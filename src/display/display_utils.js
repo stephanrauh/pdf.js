@@ -22,6 +22,7 @@ import {
 } from "./base_factory.js";
 import {
   BaseException,
+  FeatureTest,
   shadow,
   stringToBytes,
   Util,
@@ -1010,15 +1011,12 @@ function setLayerDimensions(
   if (viewport instanceof PageViewport) {
     const { pageWidth, pageHeight } = viewport.rawDims;
     const { style } = div;
+    const useRound = FeatureTest.isCSSRoundSupported;
 
-    // TODO: Investigate if it could be interesting to use the css round
-    // function (https://developer.mozilla.org/en-US/docs/Web/CSS/round):
-    // const widthStr =
-    //   `round(down, var(--scale-factor) * ${pageWidth}px, 1px)`;
-    // const heightStr =
-    //   `round(down, var(--scale-factor) * ${pageHeight}px, 1px)`;
-    const widthStr = `calc(var(--scale-factor) * ${pageWidth}px)`;
-    const heightStr = `calc(var(--scale-factor) * ${pageHeight}px)`;
+    const w = `var(--scale-factor) * ${pageWidth}px`,
+      h = `var(--scale-factor) * ${pageHeight}px`;
+    const widthStr = useRound ? `round(${w}, 1px)` : `calc(${w})`,
+      heightStr = useRound ? `round(${h}, 1px)` : `calc(${h})`;
 
     if (!mustFlip || viewport.rotation % 180 === 0) {
       style.width = widthStr;

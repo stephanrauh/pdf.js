@@ -999,6 +999,7 @@ class PDFViewer {
           } else if (isValidAnnotationEditorMode(mode)) {
             this.#annotationEditorUIManager = new AnnotationEditorUIManager(
               this.container,
+              this.viewer,
               this.eventBus,
               pdfDocument,
               this.pageColors

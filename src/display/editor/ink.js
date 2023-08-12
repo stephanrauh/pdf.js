@@ -226,6 +226,9 @@ class InkEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   rebuild() {
+    if (!this.parent) {
+      return;
+    }
     super.rebuild();
     if (this.div === null) {
       return;
@@ -294,7 +297,7 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.enableEditMode();
-    this.div.draggable = false;
+    this._isDraggable = false;
     this.canvas.addEventListener("pointerdown", this.#boundCanvasPointerdown);
   }
 
@@ -305,7 +308,7 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.disableEditMode();
-    this.div.draggable = !this.isEmpty();
+    this._isDraggable = !this.isEmpty();
     this.div.classList.remove("editing");
 
     this.canvas.removeEventListener(
@@ -316,7 +319,7 @@ class InkEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   onceAdded() {
-    this.div.draggable = !this.isEmpty();
+    this._isDraggable = !this.isEmpty();
   }
 
   /** @inheritdoc */
@@ -626,7 +629,7 @@ class InkEditor extends AnnotationEditor {
 
     // When commiting, the position of this editor is changed, hence we must
     // move it to the right position in the DOM.
-    this.parent.moveEditorInDOM(this);
+    this.moveInDOM();
     this.div.focus({
       preventScroll: true /* See issue #15744 */,
     });
@@ -634,6 +637,9 @@ class InkEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   focusin(event) {
+    if (!this._focusEventsAllowed) {
+      return;
+    }
     super.focusin(event);
     this.enableEditMode();
   }

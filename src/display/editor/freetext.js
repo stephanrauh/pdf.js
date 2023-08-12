@@ -281,6 +281,9 @@ class FreeTextEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   rebuild() {
+    if (!this.parent) {
+      return;
+    }
     super.rebuild();
     if (this.div === null) {
       return;
@@ -304,7 +307,7 @@ class FreeTextEditor extends AnnotationEditor {
     super.enableEditMode();
     this.overlayDiv.classList.remove("enabled");
     this.editorDiv.contentEditable = true;
-    this.div.draggable = false;
+    this._isDraggable = false;
     this.div.removeAttribute("aria-activedescendant");
     this.editorDiv.addEventListener("keydown", this.#boundEditorDivKeydown);
     this.editorDiv.addEventListener("focus", this.#boundEditorDivFocus);
@@ -323,7 +326,7 @@ class FreeTextEditor extends AnnotationEditor {
     this.overlayDiv.classList.add("enabled");
     this.editorDiv.contentEditable = false;
     this.div.setAttribute("aria-activedescendant", this.#editorDivId);
-    this.div.draggable = true;
+    this._isDraggable = true;
     this.editorDiv.removeEventListener("keydown", this.#boundEditorDivKeydown);
     this.editorDiv.removeEventListener("focus", this.#boundEditorDivFocus);
     this.editorDiv.removeEventListener("blur", this.#boundEditorDivBlur);
@@ -342,6 +345,9 @@ class FreeTextEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   focusin(event) {
+    if (!this._focusEventsAllowed) {
+      return;
+    }
     super.focusin(event);
     if (event.target !== this.editorDiv) {
       this.editorDiv.focus();
@@ -357,6 +363,10 @@ class FreeTextEditor extends AnnotationEditor {
     }
     this.enableEditMode();
     this.editorDiv.focus();
+    if (this._initialOptions?.isCentered) {
+      this.center();
+    }
+    this._initialOptions = null;
   }
 
   /** @inheritdoc */
@@ -444,7 +454,7 @@ class FreeTextEditor extends AnnotationEditor {
         return;
       }
       this.#setContent();
-      this.rebuild();
+      this._uiManager.rebuild(this);
       this.#setEditorDimensions();
     };
     this.addCommands({
@@ -485,6 +495,8 @@ class FreeTextEditor extends AnnotationEditor {
   keydown(event) {
     if (event.target === this.div && event.key === "Enter") {
       this.enterInEditMode();
+      // Avoid to add an unwanted new line.
+      event.preventDefault();
     }
   }
 
@@ -614,10 +626,10 @@ class FreeTextEditor extends AnnotationEditor {
       }
 
       this.#setContent();
-      this.div.draggable = true;
+      this._isDraggable = true;
       this.editorDiv.contentEditable = false;
     } else {
-      this.div.draggable = false;
+      this._isDraggable = false;
       this.editorDiv.contentEditable = true;
     }
 
