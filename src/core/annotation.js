@@ -25,7 +25,6 @@ import {
   BASELINE_FACTOR,
   FeatureTest,
   getModificationDate,
-  info,
   IDENTITY_MATRIX,
   info,
   LINE_DESCENT_FACTOR,
