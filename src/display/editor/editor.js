@@ -58,6 +58,8 @@ class AnnotationEditor {
 
   #zIndex = AnnotationEditor._zIndex++;
 
+  doNotMove = false; // #1825 modified by ngx-extended-pdf-viewer
+
   static _colorManager = new ColorManager();
 
   static _zIndex = 1;

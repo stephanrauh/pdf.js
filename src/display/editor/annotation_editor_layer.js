@@ -738,6 +738,12 @@ class AnnotationEditorLayer {
     const { pageWidth, pageHeight } = this.viewport.rawDims;
     return [pageWidth, pageHeight];
   }
+
+  // #1825 modified by ngx-extended-pdf-viewer
+  setCleaningUp(isCleaningUp) {
+    this.#isCleaningUp = isCleaningUp;
+  }
+  // #1825 end of modification by ngx-extended-pdf-viewer
 }
 
 export { AnnotationEditorLayer };

@@ -942,7 +942,7 @@ class AnnotationEditorUIManager {
   }
 
   // #1783 end of modification by ngx-extended-pdf-viewer (extract a method)
-  addSerializedEditor(data, activateEditorIfNecessary = false) {
+  addSerializedEditor(data, activateEditorIfNecessary = false, doNotMove = false) {
     if (!data) {
       return;
     }
@@ -978,6 +978,7 @@ class AnnotationEditorUIManager {
         if (!deserializedEditor) {
           return;
         }
+        deserializedEditor.doNotMove = doNotMove;
         newEditors.push(deserializedEditor);
       }
 
@@ -1738,12 +1739,14 @@ class AnnotationEditorUIManager {
   // #1783 modified by ngx-extended-pdf-viewer
   removeEditors(filterFunction = () => true) {
     let hasChanged = false;
+    this.#allLayers.forEach(layer => layer.setCleaningUp(true));
     this.#allEditors.forEach(editor => {
       if (filterFunction(editor.serialize())) {
         editor.remove();
         hasChanged = true;
       }
     });
+    this.#allLayers.forEach(layer => layer.setCleaningUp(false));
     if (hasChanged) {
       this.#dispatchUpdateStates({
         hasSomethingToUndo: false,
