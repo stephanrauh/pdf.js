@@ -261,6 +261,11 @@ class AnnotationEditor {
   setAt(x, y, tx, ty) {
     const [width, height] = this.parentDimensions;
     [tx, ty] = this.screenToPageTranslation(tx, ty);
+    // #1825 modified by ngx-extended-pdf-viewer
+    if (this.doNotMove) {
+      [tx, ty] = [0, 0];
+    }
+    // #1825 end of modification
 
     this.x = (x + tx) / width;
     this.y = (y + ty) / height;
