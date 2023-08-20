@@ -2198,7 +2198,10 @@ const PDFViewerApplication = {
     };
 
     window.addEventListener("visibilitychange", webViewerVisibilityChange);
-    window.addEventListener("wheel", webViewerWheel, { passive: false });
+    // #1830 modified by ngx-extended-pdf-viewer
+    const viewerContainer  = document.getElementById("viewerContainer");
+    viewerContainer?.addEventListener("wheel", webViewerWheel, { passive: false });
+    // #1830 end of modification by ngx-extended-pdf-viewer
     const mainContainer = document.getElementById("mainContainer");
     // #1799 modified by ngx-extended-pdf-viewer (added the ? operator)
     mainContainer?.addEventListener("touchstart", webViewerTouchStart, {
