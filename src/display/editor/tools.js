@@ -942,7 +942,7 @@ class AnnotationEditorUIManager {
   }
 
   // #1783 end of modification by ngx-extended-pdf-viewer (extract a method)
-  addSerializedEditor(data, activateEditorIfNecessary = false, doNotMove = false) {
+  addSerializedEditor(data, activateEditorIfNecessary = false, doNotMove = false, ignorePageNumber=true) {
     if (!data) {
       return;
     }
@@ -969,11 +969,15 @@ class AnnotationEditorUIManager {
     }
     // #1783 end of modification by ngx-extended-pdf-viewer
     this.unselectAll();
-    const layer = this.currentLayer;
 
+    // #1783 modified by ngx-extended-pdf-viewer
     try {
       const newEditors = [];
       for (const editor of data) {
+        const pageNumberMissing = editor.pageIndex === undefined;
+        const useCurrentPage = ignorePageNumber || pageNumberMissing;
+        const layer = useCurrentPage ? this.currentLayer : this.getLayer(editor.pageIndex);
+        // #1783 end of modification by ngx-extended-pdf-viewer
         const deserializedEditor = layer.deserialize(editor);
         if (!deserializedEditor) {
           return;
