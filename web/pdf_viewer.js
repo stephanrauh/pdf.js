@@ -2531,7 +2531,7 @@ class PDFViewer {
       data = [data];
     }
 
-    this.#annotationEditorUIManager.addSerializedEditor(data, true, true);
+    this.#annotationEditorUIManager.addSerializedEditor(data, true, true, false);
   }
 
   removeEditorAnnotations(filter = () => true) {
