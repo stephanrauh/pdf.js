@@ -855,6 +855,9 @@ class Annotation {
    * @param {Array} lineEndings - The line endings array.
    */
   setLineEndings(lineEndings) {
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+      throw new Error("Not implemented: setLineEndings");
+    }
     this.lineEndings = ["None", "None"]; // The default values.
 
     if (Array.isArray(lineEndings) && lineEndings.length === 2) {
@@ -1667,17 +1670,6 @@ class WidgetAnnotation extends Annotation {
     data.annotationType = AnnotationType.WIDGET;
     if (data.fieldName === undefined) {
       data.fieldName = this._constructFieldName(dict);
-    }
-    if (
-      data.fieldName &&
-      /\[\d+\]$/.test(data.fieldName) &&
-      !dict.has("Kids") &&
-      dict.has("T")
-    ) {
-      data.baseFieldName = data.fieldName.substring(
-        0,
-        data.fieldName.lastIndexOf("[")
-      );
     }
 
     if (data.actions === undefined) {
@@ -3223,6 +3215,9 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
       this._streams.push(this.uncheckedAppearance);
     }
     this._fallbackFontDict = this.fallbackFontDict;
+    if (this.data.defaultFieldValue === null) {
+      this.data.defaultFieldValue = "Off";
+    }
   }
 
   _processRadioButton(params) {
@@ -3271,6 +3266,9 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
       this._streams.push(this.uncheckedAppearance);
     }
     this._fallbackFontDict = this.fallbackFontDict;
+    if (this.data.defaultFieldValue === null) {
+      this.data.defaultFieldValue = "Off";
+    }
   }
 
   _processPushButton(params) {
@@ -3959,8 +3957,10 @@ class LineAnnotation extends MarkupAnnotation {
     const lineCoordinates = dict.getArray("L");
     this.data.lineCoordinates = Util.normalizeRect(lineCoordinates);
 
-    this.setLineEndings(dict.getArray("LE"));
-    this.data.lineEndings = this.lineEndings;
+    if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
+      this.setLineEndings(dict.getArray("LE"));
+      this.data.lineEndings = this.lineEndings;
+    }
 
     if (!this.appearance) {
       // The default stroke color is black.
@@ -4134,7 +4134,10 @@ class PolylineAnnotation extends MarkupAnnotation {
     this.data.hasOwnCanvas = this.data.noRotate;
     this.data.vertices = [];
 
-    if (!(this instanceof PolygonAnnotation)) {
+    if (
+      (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
+      !(this instanceof PolygonAnnotation)
+    ) {
       // Only meaningful for polyline annotations.
       this.setLineEndings(dict.getArray("LE"));
       this.data.lineEndings = this.lineEndings;

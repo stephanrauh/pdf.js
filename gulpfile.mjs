@@ -206,13 +206,9 @@ function createWebpackConfig(
     !disableSourceMaps;
   const skipBabel = bundleDefines.SKIP_BABEL;
 
-  // `core-js` (see https://github.com/zloirock/core-js/issues/514), and
-  // `src/core/{glyphlist,unicode}.js` (Babel is too slow for those when
-  // source-maps are enabled) should be excluded from processing.
+  // `core-js`, see https://github.com/zloirock/core-js/issues/514,
+  // should be excluded from processing.
   const babelExcludes = ["node_modules[\\\\\\/]core-js"];
-  if (enableSourceMaps) {
-    babelExcludes.push("src[\\\\\\/]core[\\\\\\/](glyphlist|unicode)");
-  }
   const babelExcludeRegExp = new RegExp(`(${babelExcludes.join("|")})`);
 
   const babelPresets = skipBabel
@@ -220,7 +216,7 @@ function createWebpackConfig(
     : [
         [
           "@babel/preset-env",
-          { corejs: "3.32.0", shippedProposals: true, useBuiltIns: "usage" },
+          { corejs: "3.32.1", shippedProposals: true, useBuiltIns: "usage" },
         ],
       ];
   const babelPlugins = ["@babel/plugin-transform-modules-commonjs"];
@@ -1601,8 +1597,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     };
   }
   function preprocess(content) {
-    const skipBabel =
-      bundleDefines.SKIP_BABEL || /\/\*\s*no-babel-preset\s*\*\//.test(content);
+    const skipBabel = bundleDefines.SKIP_BABEL;
     content = preprocessPDFJSCode(ctx, content);
     content = babel.transform(content, {
       sourceType: "module",
