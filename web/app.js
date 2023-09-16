@@ -2667,8 +2667,8 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
       url: URL.createObjectURL(file),
       originalUrl: file.name,
     });
-    if (window["setNgxExtendedPdfViewerSource"]) {
-      window["setNgxExtendedPdfViewerSource"](file.name ? file.name : URL.createObjectURL(file));
+    if (globalThis.setNgxExtendedPdfViewerSource) {
+      globalThis.setNgxExtendedPdfViewerSource(file.name ?? URL.createObjectURL(file));
     }
   };
 
