@@ -2440,6 +2440,8 @@ async function loadFakeWorker() {
 }
 
 async function loadPDFBug(self) {
+  // #1864 modified by ngx-extended-pdf-viewer
+  /*
   const { debuggerScriptPath } = self.appConfig;
   const { PDFBug } =
     typeof PDFJSDev === "undefined"
@@ -2447,6 +2449,8 @@ async function loadPDFBug(self) {
       : await __non_webpack_import__(debuggerScriptPath); // eslint-disable-line no-undef
 
   self._PDFBug = PDFBug;
+  */
+ // #1864 end of modification by ngx-extended-pdf-viewer
 }
 
 function reportPageStatsPDFBug({ pageNumber }) {
