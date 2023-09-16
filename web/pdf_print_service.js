@@ -190,7 +190,6 @@ class PDFPrintService {
         overlayManager.close(dialog);
       }
     });
-    overlayPromise = undefined; // #104
   }
 
   renderPages() {
