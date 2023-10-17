@@ -178,7 +178,10 @@ class AnnotationLayerBuilder {
     if (!this.div) {
       return;
     }
-    this.div.hidden = true;
+    // #1887 modified by ngx-extended-pdf-viewer
+    if (!document.querySelector("[data-pdfjsprinting=true]")) {
+      this.div.hidden = true;
+    }
   }
 
   #updatePresentationModeState(state) {
