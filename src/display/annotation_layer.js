@@ -1049,11 +1049,17 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
       // NOTE: We cannot set the values using `element.value` below, since it
       //       prevents the AnnotationLayer rasterizer in `test/driver.js`
       //       from parsing the elements correctly for the reference tests.
-      // #1737 modified by ngx-extended-pdf-viewer
+      // #1737 + #1887 modified by ngx-extended-pdf-viewer
       const angularData = window.getFormValueFromAngular(this.data.fieldName);
-      const storedData = angularData.value ? angularData : storage.getValue(id, { value: this.data.fieldValue });
-      // #1737 end of modification by ngx-extended-pdf-viewer
-      let textContent = storedData.formattedValue || storedData.value || "";
+      const formData = storage.getValue(id, {
+        value: this.data.fieldValue
+      });
+      const storedData = angularData.value ? angularData : formData;
+      if (angularData !== formData) {
+        storage.setValue(id, { value: angularData.value });
+      }
+      // #1737 + #1887 end of modification by ngx-extended-pdf-viewer
+      let textContent = storedData.value || "";
       const maxLen = storage.getValue(id, {
         charLimit: this.data.maxLen,
       }).charLimit;
@@ -1380,8 +1386,11 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
     const data = this.data;
     const id = data.id;
 
-    // #1737 modified by ngx-extended-pdf-viewer
+    // #1737, #1887 modified by ngx-extended-pdf-viewer
     const angularData = window.getFormValueFromAngular(this.data.fieldName);
+    const formValue = storage.getValue(id, {
+      value: data.exportValue === data.fieldValue,
+    }).value;
     let angularValue = undefined;
     if (angularData.value) {
       angularValue = angularData.value === true || angularData.value === data.exportValue;
@@ -1389,16 +1398,15 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
     let value =
       angularValue !== undefined
         ? angularValue
-        : storage.getValue(id, {
-            value: data.exportValue === data.fieldValue,
-        }).value;
-    // #1737 end of modification by ngx-extended-pdf-viewer
-    if (typeof value === "string") {
+        : formValue;
+    // #1737, #1887 end of modification by ngx-extended-pdf-viewer
+    let updateAngularValueNecessary = false;
+    if (typeof value === "string" || angularData !== formValue) {
       // The value has been changed through js and set in annotationStorage.
       value = value !== "Off";
       storage.setValue(id, { value });
       // #1737 modified by ngx-extended-pdf-viewer
-      window.updateAngularFormValue(id, { value });
+      updateAngularValueNecessary = true;
       // #1737 end of modification by ngx-extended-pdf-viewer
     }
 
@@ -1444,7 +1452,12 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
     // #1737 modified by ngx-extended-pdf-viewer
     window.registerAcroformField(id, element, value ? data.exportValue : false);
     element.addEventListener("updateFromAngular", newvalue => storage.setValue(id, { value: newvalue.detail }));
-    // #1737 end of modification by ngx-extended-pdf-viewer
+    // #1887 end of modification by ngx-extended-pdf-viewer
+    if (updateAngularValueNecessary) {
+      window.updateAngularFormValue(id, { value });
+    }
+    // #1887 end of modification by ngx-extended-pdf-viewer
+
     if (this.enableScripting && this.hasJSActions) {
       element.addEventListener("updatefromsandbox", jsEvent => {
         const actions = {
@@ -1493,22 +1506,22 @@ class RadioButtonWidgetAnnotationElement extends WidgetAnnotationElement {
     const storage = this.annotationStorage;
     const data = this.data;
     const id = data.id;
-    // #1737 modified by ngx-extended-pdf-viewer
+    // #1737, #1887 modified by ngx-extended-pdf-viewer
     const angularData = window.getFormValueFromAngular(this.data.fieldName);
-
+    const formValue = storage.getValue(id, {
+      value: data.fieldValue === data.buttonValue,
+    }).value;
     let value =
       angularData.value ??
-      storage.getValue(id, {
-        value: data.fieldValue === data.buttonValue,
-      }).value;
-    if (typeof value === "string") {
+      formValue;
+    if (typeof value === "string" || angularData !== formValue) {
       // The value has been changed through js and set in annotationStorage.
       value = value === data.buttonValue; // TODO: this line in pdf.js seems to be buggy
       storage.setValue(id, { value });
     } else if (value) {
       window.updateAngularFormValue(id, { value: data.buttonValue });
     }
-    // #1737 end of modification by ngx-extended-pdf-viewer
+    // #1737, #1887 end of modification by ngx-extended-pdf-viewer
 
     const element = document.createElement("input");
     GetElementsByNameSet.add(element);
@@ -1633,15 +1646,19 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
     const storage = this.annotationStorage;
     const id = this.data.id;
 
-    // #1737 modified by ngx-extended-pdf-viewer
+    // #1737, #1887 modified by ngx-extended-pdf-viewer
     const angularData = window.getFormValueFromAngular(this.data.fieldName);
 
+    const formData = storage.getValue(id, {
+      value: this.data.fieldValue,
+    });
     const storedData = angularData.value
       ? angularData
-      : storage.getValue(id, {
-          value: this.data.fieldValue,
-        });
-    // #1737 end of modification by ngx-extended-pdf-viewer
+      : formData;
+    if (angularData !== formData) {
+      storage.setValue(id, { value: angularData.value });
+    }
+    // #1737, #1887 end of modification by ngx-extended-pdf-viewer
 
     const selectElement = document.createElement("select");
     GetElementsByNameSet.add(selectElement);
