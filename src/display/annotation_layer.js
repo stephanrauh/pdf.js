@@ -1401,7 +1401,7 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
         : formValue;
     // #1737, #1887 end of modification by ngx-extended-pdf-viewer
     let updateAngularValueNecessary = false;
-    if (typeof value === "string" || angularData !== formValue) {
+    if (typeof value === "string" || (!!angularData?.value && angularData?.value !== formValue)) {
       // The value has been changed through js and set in annotationStorage.
       value = value !== "Off";
       storage.setValue(id, { value });
