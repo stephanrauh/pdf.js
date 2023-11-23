@@ -1526,13 +1526,17 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
         : formValue;
     // #1737, #1887 end of modification by ngx-extended-pdf-viewer
     let updateAngularValueNecessary = false;
-    if (typeof value === "string" || (!!angularData?.value && angularData?.value !== formValue)) {
+    if (typeof value === "string") {
       // The value has been changed through js and set in annotationStorage.
-      value = value !== "Off";
+      value = value === data.exportValue;
       storage.setValue(id, { value });
       // #1737 modified by ngx-extended-pdf-viewer
       updateAngularValueNecessary = true;
       // #1737 end of modification by ngx-extended-pdf-viewer
+    } else if (angularData?.value !== undefined && angularData.value !== formValue) {
+      // The value has been changed by Angular
+      value = angularData.value === data.exportValue;
+      storage.setValue(id, { value });
     }
 
     this.container.classList.add("buttonWidgetAnnotation", "checkBox");
