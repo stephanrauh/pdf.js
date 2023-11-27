@@ -25,12 +25,15 @@ import { SimpleDOMNode, SimpleXMLParser } from "./xml_parser.js";
 import { BaseStream } from "./base_stream.js";
 import { calculateMD5 } from "./crypto.js";
 
-async function writeObject(ref, obj, buffer, transform) {
+async function writeObject(ref, obj, buffer, { encrypt = null }) {
+  const transform = encrypt?.createCipherTransform(ref.num, ref.gen);
   buffer.push(`${ref.num} ${ref.gen} obj\n`);
   if (obj instanceof Dict) {
     await writeDict(obj, buffer, transform);
   } else if (obj instanceof BaseStream) {
     await writeStream(obj, buffer, transform);
+  } else if (Array.isArray(obj)) {
+    await writeArray(obj, buffer, transform);
   }
   buffer.push("\nendobj\n");
 }
@@ -101,7 +104,7 @@ async function writeStream(stream, buffer, transform) {
     }
   }
 
-  if (transform !== null) {
+  if (transform) {
     string = transform.encryptString(string);
   }
 
@@ -132,7 +135,7 @@ async function writeValue(value, buffer, transform) {
   } else if (Array.isArray(value)) {
     await writeArray(value, buffer, transform);
   } else if (typeof value === "string") {
-    if (transform !== null) {
+    if (transform) {
       value = transform.encryptString(value);
     }
     buffer.push(`(${escapeString(value)})`);
@@ -232,11 +235,7 @@ async function updateAcroform({
     return;
   }
 
-  // Clone the acroForm.
-  const dict = new Dict(xref);
-  for (const key of acroForm.getKeys()) {
-    dict.set(key, acroForm.getRaw(key));
-  }
+  const dict = acroForm.clone();
 
   if (hasXfa && !hasXfaDatasetsEntry) {
     // We've a XFA array which doesn't contain a datasets entry.
@@ -253,14 +252,8 @@ async function updateAcroform({
     dict.set("NeedAppearances", true);
   }
 
-  const encrypt = xref.encrypt;
-  let transform = null;
-  if (encrypt) {
-    transform = encrypt.createCipherTransform(acroFormRef.num, acroFormRef.gen);
-  }
-
   const buffer = [];
-  await writeObject(acroFormRef, dict, buffer, transform);
+  await writeObject(acroFormRef, dict, buffer, xref);
 
   newRefs.push({ ref: acroFormRef, data: buffer.join("") });
 }

@@ -236,7 +236,7 @@ function watchScroll(viewAreaElement, callback) {
 
 /**
  * Helper function to parse query string (e.g. ?param1=value&param2=...).
- * @param {string}
+ * @param {string} query
  * @returns {Map}
  */
 function parseQueryString(query) {
@@ -502,7 +502,7 @@ function backtrackBeforeAllVisibleElements(index, views, top) {
  * rendering canvas. Earlier and later refer to index in `views`, not page
  * layout.)
  *
- * @param {GetVisibleElementsParameters}
+ * @param {GetVisibleElementsParameters} params
  * @returns {Object} `{ first, last, views: [{ id, x, y, view, percent }] }`
  */
 function getVisibleElements({
@@ -643,13 +643,6 @@ function getVisibleElements({
     });
   }
   return { first, last, views: visible, ids };
-}
-
-/**
- * Event handler to suppress context menu.
- */
-function noContextMenuHandler(evt) {
-  evt.preventDefault();
 }
 
 function normalizeWheelEventDirection(evt) {
@@ -834,7 +827,7 @@ function getActiveOrFocusedElement() {
 
 /**
  * Converts API PageLayout values to the format used by `BaseViewer`.
- * @param {string} mode - The API PageLayout value.
+ * @param {string} layout - The API PageLayout value.
  * @returns {Object}
  */
 function apiPageLayoutToViewerModes(layout) {
@@ -924,7 +917,6 @@ export {
   MAX_AUTO_SCALE,
   MAX_SCALE,
   MIN_SCALE,
-  noContextMenuHandler,
   normalizeWheelEventDelta,
   normalizeWheelEventDirection,
   OutputScale,

@@ -23,6 +23,10 @@
 /** @typedef {import("./interfaces").IDownloadManager} IDownloadManager */
 /** @typedef {import("./interfaces").IL10n} IL10n */
 /** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
+// eslint-disable-next-line max-len
+/** @typedef {import("./pdf_find_controller").PDFFindController} PDFFindController */
+// eslint-disable-next-line max-len
+/** @typedef {import("./pdf_scripting_manager").PDFScriptingManager} PDFScriptingManager */
 
 import {
   AnnotationEditorType,
@@ -196,6 +200,8 @@ class PDFPageViewBuffer {
 class PDFViewer {
   #buffer = null;
 
+  #altTextManager = null;
+
   #annotationEditorMode = AnnotationEditorType.NONE;
 
   #annotationEditorUIManager = null;
@@ -262,6 +268,7 @@ class PDFViewer {
     this.linkService = options.linkService || new SimpleLinkService();
     this.downloadManager = options.downloadManager || null;
     this.findController = options.findController || null;
+    this.#altTextManager = options.altTextManager || null;
 
     if (this.findController) {
       this.findController.onIsPageVisible = pageNumber =>
@@ -1000,6 +1007,7 @@ class PDFViewer {
             this.#annotationEditorUIManager = new AnnotationEditorUIManager(
               this.container,
               this.viewer,
+              this.#altTextManager,
               this.eventBus,
               pdfDocument,
               this.pageColors

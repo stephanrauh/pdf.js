@@ -1176,7 +1176,7 @@ describe("FreeText Editor", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           await page.click("[data-annotation-id='26R']", { clickCount: 2 });
-          await page.waitForTimeout(10);
+          await page.waitForSelector(`${getEditorSelector(0)}-editor`);
 
           const [focusedId, editable] = await page.evaluate(() => {
             const el = document.activeElement;
@@ -2254,12 +2254,12 @@ describe("FreeText Editor", () => {
               return { x, y };
             });
             const oldPos = allPositions[i];
-            expect(Math.round(pos.x))
+            expect(Math.round(pos.x - oldPos.x))
               .withContext(`In ${browserName}`)
-              .toEqual(Math.round(oldPos.x + 39));
-            expect(Math.round(pos.y))
+              .toEqual(39);
+            expect(Math.round(pos.y - oldPos.y))
               .withContext(`In ${browserName}`)
-              .toEqual(Math.round(oldPos.y + 74));
+              .toEqual(74);
           }
         })
       );
@@ -2340,6 +2340,140 @@ describe("FreeText Editor", () => {
           expect(editingEvents.length)
             .withContext(`In ${browserName}`)
             .toEqual(0);
+        })
+      );
+    });
+  });
+
+  describe("FreeText on several pages", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that first annotation is selected without errors", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorFreeText");
+
+          const page1Selector = `.page[data-page-number = "1"] > .annotationEditorLayer`;
+          let rect = await page.$eval(page1Selector, el => {
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+          await page.mouse.click(rect.x + 10, rect.y + 10);
+          await page.waitForTimeout(10);
+          await page.type(`${getEditorSelector(0)} .internal`, "Hello");
+
+          // Commit.
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(10);
+
+          // Go to the last page.
+          await page.keyboard.press("End");
+          await page.waitForTimeout(10);
+
+          const page14Selector = `.page[data-page-number = "14"] > .annotationEditorLayer`;
+          await page.waitForSelector(page14Selector, {
+            visible: true,
+            timeout: 0,
+          });
+          await page.waitForTimeout(10);
+
+          rect = await page.$eval(page14Selector, el => {
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+          await page.mouse.click(rect.x + 10, rect.y + 10);
+          await page.waitForTimeout(10);
+          await page.type(`${getEditorSelector(0)} .internal`, "World");
+
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(10);
+
+          for (let i = 0; i <= 13; i++) {
+            await page.keyboard.press("P");
+            await page.waitForTimeout(10);
+          }
+
+          await page.waitForSelector(getEditorSelector(0), {
+            visible: true,
+            timeout: 0,
+          });
+          await page.waitForTimeout(10);
+
+          rect = await page.$eval(getEditorSelector(0), el => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return {
+              x,
+              y,
+              width,
+              height,
+            };
+          });
+          await page.mouse.click(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2
+          );
+
+          const content = await page.$eval(getEditorSelector(0), el =>
+            el.innerText.trimEnd()
+          );
+          expect(content).withContext(`In ${browserName}`).toEqual("Hello");
+        })
+      );
+    });
+  });
+
+  describe("FreeText accessibility", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("bug1823296.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the parent structTree id is correct", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorFreeText");
+
+          const parentId = "p3R_mc8";
+          const rect = await page.evaluate(id => {
+            const parent = document.getElementById(id);
+            let span = null;
+            for (const child of parent.childNodes) {
+              if (child.innerText === "000.[5]") {
+                span = child;
+                break;
+              }
+            }
+            const { x, y, width, height } = span.getBoundingClientRect();
+            return { x, y, width, height };
+          }, parentId);
+          await page.mouse.click(
+            rect.x + rect.width + 5,
+            rect.y + rect.height / 2
+          );
+          await page.waitForTimeout(10);
+          await page.type(`${getEditorSelector(0)} .internal`, "Hello Wolrd");
+
+          // Commit.
+          await page.keyboard.press("Escape");
+          await page.waitForTimeout(10);
+
+          await waitForStorageEntries(page, 1);
+
+          const id = await getFirstSerialized(page, x => x.structTreeParentId);
+          expect(id).withContext(`In ${browserName}`).toEqual(parentId);
         })
       );
     });

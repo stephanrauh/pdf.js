@@ -31,8 +31,6 @@ import {
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-const AnnotationPrefix = "pdfjs_internal_id_";
-
 class PixelsPerInch {
   static CSS = 96.0;
 
@@ -812,6 +810,13 @@ function generateTrustedURL(sourcePath) {
 // end of modification by ngx-extended-pdf-viewer #1512
 
 /**
+ * Event handler to suppress context menu.
+ */
+function noContextMenu(e) {
+  e.preventDefault();
+}
+
+/**
  * @param {string} src
  * @param {boolean} [removeScriptElement]
  * @returns {Promise<void>}
@@ -1033,7 +1038,6 @@ function setLayerDimensions(
 }
 
 export {
-  AnnotationPrefix,
   deprecated,
   DOMCanvasFactory,
   DOMCMapReaderFactory,
@@ -1051,6 +1055,7 @@ export {
   isPdfFile,
   isValidFetchUrl,
   loadScript,
+  noContextMenu,
   PageViewport,
   PDFDateString,
   PixelsPerInch,
