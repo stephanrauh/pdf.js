@@ -121,7 +121,11 @@
   height: 100%;
 }
 
-.annotationEditorLayer.freeTextEditing {
+.annotationEditorLayer.disabled {
+  pointer-events: none;
+}
+
+.annotationEditorLayer.freetextEditing {
   cursor: var(--editorFreeText-editing-cursor);
 }
 
@@ -169,6 +173,7 @@
       position: absolute;
       inset: 0;
       border: var(--focus-outline-around);
+      pointer-events: none;
     }
   }
 
@@ -461,6 +466,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  padding-inline: 4px;
   width: auto;
   height: 24px;
   min-width: 88px;
@@ -478,6 +484,10 @@
   position: absolute;
   inset-block-end: 8px;
   inset-inline-start: 8px;
+
+  &:disabled {
+    pointer-events: none;
+  }
 
   &:dir(ltr) {
     transform-origin: 0 100%;
@@ -618,9 +628,6 @@
   --button-save-hover-bg-color: var(--button-save-bg-color);
   --button-save-hover-fg-color: var(--button-save-fg-color);
   --button-save-hover-border-color: var(--button-save-hover-bg-color);
-  --button-save-disabled-bg-color: var(--button-save-bg-color);
-  --button-save-disabled-fg-color: var(--button-save-fg-color);
-  --button-save-disabled-opacity: 0.4;
 
   @media (prefers-color-scheme: dark) {
     --dialog-bg-color: #1c1b22;
@@ -670,9 +677,6 @@
     --button-save-fg-color: ButtonFace;
     --button-save-hover-bg-color: AccentColor;
     --button-save-hover-fg-color: AccentColorText;
-    --button-save-disabled-bg-color: GrayText;
-    --button-save-disabled-fg-color: Canvas;
-    --button-save-disabled-opacity: 1;
   }
 
   font: message-box;
@@ -851,13 +855,6 @@
             color: var(--button-save-hover-fg-color);
             background-color: var(--button-save-hover-bg-color);
             border-color: var(--button-save-hover-border-color);
-          }
-
-          &:disabled {
-            color: var(--button-save-disabled-fg-color);
-            background-color: var(--button-save-disabled-bg-color);
-            opacity: var(--button-save-disabled-opacity);
-            pointer-events: none;
           }
         }
       }

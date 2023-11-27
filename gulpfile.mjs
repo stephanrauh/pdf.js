@@ -27,6 +27,7 @@ import { mkdirp } from "mkdirp";
 import path from "path";
 import postcss from "gulp-postcss";
 import postcssDirPseudoClass from "postcss-dir-pseudo-class";
+import postcssDiscardComments from "postcss-discard-comments";
 import postcssNesting from "postcss-nesting";
 import { preprocessPDFJSCode } from "./external/builder/preprocessor2.mjs";
 import rename from "gulp-rename";
@@ -245,7 +246,6 @@ function createWebpackConfig(
     "display-network": "src/display/stubs.js",
     "display-node_stream": "src/display/stubs.js",
     "display-node_utils": "src/display/stubs.js",
-    "display-svg": "src/display/stubs.js",
   };
   const viewerAlias = {
     "web-alt_text_manager": "web/alt_text_manager.js",
@@ -279,7 +279,6 @@ function createWebpackConfig(
     libraryAlias["display-network"] = "src/display/network.js";
     libraryAlias["display-node_stream"] = "src/display/node_stream.js";
     libraryAlias["display-node_utils"] = "src/display/node_utils.js";
-    libraryAlias["display-svg"] = "src/display/svg.js";
 
     viewerAlias["web-com"] = "web/genericcom.js";
     viewerAlias["web-print_service"] = "web/pdf_print_service.js";
@@ -939,15 +938,24 @@ gulp.task("cmaps", async function () {
 function preprocessCSS(source, defines) {
   const outName = getTempFile("~preprocess", ".css");
   builder.preprocess(source, outName, defines);
-  let out = fs.readFileSync(outName).toString();
+  const out = fs.readFileSync(outName).toString();
   fs.unlinkSync(outName);
-
-  // Strip out all license headers in the middle.
-  const reg = /\n\/\* Copyright(.|\n)*?Mozilla Foundation(.|\n)*?\*\//g;
-  out = out.replaceAll(reg, "");
 
   const i = source.lastIndexOf("/");
   return createStringSource(source.substr(i + 1), out);
+}
+
+function discardCommentsCSS() {
+  let copyrightNum = 0;
+
+  function remove(comment) {
+    // Remove all comments, except the *first* license header.
+    if (comment.startsWith("Copyright") && copyrightNum++ === 0) {
+      return false;
+    }
+    return true;
+  }
+  return postcssDiscardComments({ remove });
 }
 
 function preprocessHTML(source, defines) {
@@ -987,6 +995,7 @@ function buildGeneric(defines, dir) {
       .pipe(
         postcss([
           postcssDirPseudoClass(),
+          discardCommentsCSS(),
           postcssNesting(),
           autoprefixer(AUTOPREFIXER_CONFIG),
         ])
@@ -1065,6 +1074,7 @@ function buildComponents(defines, dir) {
   const COMPONENTS_IMAGES = [
     "web/images/annotation-*.svg",
     "web/images/loading-icon.gif",
+    "web/images/altText_*.svg",
   ];
 
   return merge([
@@ -1074,6 +1084,7 @@ function buildComponents(defines, dir) {
       .pipe(
         postcss([
           postcssDirPseudoClass(),
+          discardCommentsCSS(),
           postcssNesting(),
           autoprefixer(AUTOPREFIXER_CONFIG),
         ])
@@ -1170,6 +1181,7 @@ function buildMinified(defines, dir) {
       .pipe(
         postcss([
           postcssDirPseudoClass(),
+          discardCommentsCSS(),
           postcssNesting(),
           autoprefixer(AUTOPREFIXER_CONFIG),
         ])
@@ -1422,12 +1434,22 @@ gulp.task(
         ),
 
         preprocessCSS("web/viewer.css", defines)
-          .pipe(postcss([autoprefixer(MOZCENTRAL_AUTOPREFIXER_CONFIG)]))
+          .pipe(
+            postcss([
+              discardCommentsCSS(),
+              autoprefixer(MOZCENTRAL_AUTOPREFIXER_CONFIG),
+            ])
+          )
           .pipe(replaceMozcentralCSS())
           .pipe(gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")),
 
         preprocessCSS("web/viewer-geckoview.css", gvDefines)
-          .pipe(postcss([autoprefixer(MOZCENTRAL_AUTOPREFIXER_CONFIG)]))
+          .pipe(
+            postcss([
+              discardCommentsCSS(),
+              autoprefixer(MOZCENTRAL_AUTOPREFIXER_CONFIG),
+            ])
+          )
           .pipe(replaceMozcentralCSS())
           .pipe(gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")),
 
@@ -1520,6 +1542,7 @@ gulp.task(
           .pipe(
             postcss([
               postcssDirPseudoClass(),
+              discardCommentsCSS(),
               postcssNesting(),
               autoprefixer(AUTOPREFIXER_CONFIG),
             ])
@@ -1623,7 +1646,6 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       "display-network": "./network",
       "display-node_stream": "./node_stream",
       "display-node_utils": "./node_utils",
-      "display-svg": "./svg",
     },
   };
   const licenseHeaderLibre = fs
@@ -1656,12 +1678,7 @@ function buildLib(defines, dir) {
       { base: "src/" }
     ),
     gulp.src(
-      [
-        "examples/node/domstubs.js",
-        "external/webL10n/l10n.js",
-        "web/*.js",
-        "!web/{pdfjs,viewer}.js",
-      ],
+      ["external/webL10n/l10n.js", "web/*.js", "!web/{pdfjs,viewer}.js"],
       { base: "." }
     ),
     gulp.src("test/unit/*.js", { base: "." }),
@@ -2203,7 +2220,6 @@ function packageJson() {
       http: false,
       https: false,
       url: false,
-      zlib: false,
     },
     format: "amd", // to not allow system.js to choose 'cjs'
     repository: {

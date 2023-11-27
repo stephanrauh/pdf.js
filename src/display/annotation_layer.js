@@ -60,7 +60,7 @@ function getRectDims(rect) {
  * @property {Object} data
  * @property {HTMLDivElement} layer
  * @property {IPDFLinkService} linkService
- * @property {IDownloadManager} downloadManager
+ * @property {IDownloadManager} [downloadManager]
  * @property {AnnotationStorage} [annotationStorage]
  * @property {string} [imageResourcesPath] - Path for image resources, mainly
  *   for annotation icons. Include trailing slash.
@@ -1168,6 +1168,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
   constructor(parameters) {
     const isRenderable =
       parameters.renderForms ||
+      parameters.data.hasOwnCanvas ||
       (!parameters.data.hasAppearance && !!parameters.data.fieldValue);
     super(parameters, { isRenderable });
   }
@@ -1530,6 +1531,10 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
       element.textContent = this.data.fieldValue;
       element.style.verticalAlign = "middle";
       element.style.display = "table-cell";
+
+      if (this.data.hasOwnCanvas) {
+        element.hidden = true;
+      }
     }
 
     this._setTextStyle(element);

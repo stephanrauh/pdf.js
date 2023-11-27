@@ -73,7 +73,6 @@ import { PDFDataTransportStream } from "./transport_stream.js";
 import { PDFFetchStream } from "display-fetch_stream";
 import { PDFNetworkStream } from "display-network";
 import { PDFNodeStream } from "display-node_stream";
-import { SVGGraphics } from "display-svg";
 import { XfaText } from "./xfa_text.js";
 
 const DEFAULT_RANGE_CHUNK_SIZE = 65536; // 2^16 = 65536
@@ -799,26 +798,6 @@ class PDFDocumentProxy {
     this._pdfInfo = pdfInfo;
     this._transport = transport;
 
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-      Object.defineProperty(this, "getJavaScript", {
-        value: () => {
-          deprecated(
-            "`PDFDocumentProxy.getJavaScript`, " +
-              "please use `PDFDocumentProxy.getJSActions` instead."
-          );
-          return this.getJSActions().then(js => {
-            if (!js) {
-              return js;
-            }
-            const jsArr = [];
-            for (const name in js) {
-              jsArr.push(...js[name]);
-            }
-            return jsArr;
-          });
-        },
-      });
-    }
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       // For testing purposes.
       Object.defineProperty(this, "getXFADatasets", {
@@ -3503,6 +3482,5 @@ export {
   PDFWorker,
   PDFWorkerUtil,
   RenderTask,
-  SVGGraphics,
   version,
 };

@@ -45,6 +45,8 @@ class AnnotationEditor {
 
   #altTextTooltipTimeout = null;
 
+  #altTextWasFromKeyBoard = false;
+
   #keepAspectRatio = false;
 
   #resizersDiv = null;
@@ -58,6 +60,8 @@ class AnnotationEditor {
   #isEditing = false;
 
   #isInEditMode = false;
+
+  #moveInDOMTimeout = null;
 
   _initialOptions = Object.create(null);
 
@@ -627,10 +631,13 @@ class AnnotationEditor {
       return;
     }
 
+    this.#toggleAltTextButton(false);
+
     const boundResizerPointermove = this.#resizerPointermove.bind(this, name);
     const savedDraggable = this._isDraggable;
     this._isDraggable = false;
     const pointerMoveOptions = { passive: true, capture: true };
+    this.parent.togglePointerEvents(false);
     window.addEventListener(
       "pointermove",
       boundResizerPointermove,
@@ -646,6 +653,8 @@ class AnnotationEditor {
       window.getComputedStyle(event.target).cursor;
 
     const pointerUpCallback = () => {
+      this.parent.togglePointerEvents(true);
+      this.#toggleAltTextButton(true);
       this._isDraggable = savedDraggable;
       window.removeEventListener("pointerup", pointerUpCallback);
       window.removeEventListener("blur", pointerUpCallback);
@@ -840,18 +849,17 @@ class AnnotationEditor {
     altText.tabIndex = "0";
     altText.addEventListener("contextmenu", noContextMenu);
     altText.addEventListener("pointerdown", event => event.stopPropagation());
-    altText.addEventListener(
-      "click",
-      event => {
-        event.preventDefault();
-        this._uiManager.editAltText(this);
-      },
-      { capture: true }
-    );
+
+    const onClick = event => {
+      this.#altTextButton.hidden = true;
+      event.preventDefault();
+      this._uiManager.editAltText(this);
+    };
+    altText.addEventListener("click", onClick, { capture: true });
     altText.addEventListener("keydown", event => {
       if (event.target === altText && event.key === "Enter") {
-        event.preventDefault();
-        this._uiManager.editAltText(this);
+        this.#altTextWasFromKeyBoard = true;
+        onClick(event);
       }
     });
     this.#setAltTextButtonState();
@@ -877,12 +885,13 @@ class AnnotationEditor {
       this.#altTextTooltip?.remove();
       return;
     }
+    button.classList.add("done");
+
     AnnotationEditor._l10nPromise
       .get("editor_alt_text_edit_button_label")
       .then(msg => {
         button.setAttribute("aria-label", msg);
       });
-
     let tooltip = this.#altTextTooltip;
     if (!tooltip) {
       this.#altTextTooltip = tooltip = document.createElement("span");
@@ -909,12 +918,13 @@ class AnnotationEditor {
         }, DELAY_TO_SHOW_TOOLTIP);
       });
       button.addEventListener("mouseleave", () => {
-        clearTimeout(this.#altTextTooltipTimeout);
-        this.#altTextTooltipTimeout = null;
+        if (this.#altTextTooltipTimeout) {
+          clearTimeout(this.#altTextTooltipTimeout);
+          this.#altTextTooltipTimeout = null;
+        }
         this.#altTextTooltip?.classList.remove("show");
       });
     }
-    button.classList.add("done");
     tooltip.innerText = this.#altTextDecorative
       ? await AnnotationEditor._l10nPromise.get(
           "editor_alt_text_decorative_tooltip"
@@ -924,6 +934,29 @@ class AnnotationEditor {
     if (!tooltip.parentNode) {
       button.append(tooltip);
     }
+
+    const element = this.getImageForAltText();
+    element?.setAttribute("aria-describedby", tooltip.id);
+  }
+
+  #toggleAltTextButton(enabled = false) {
+    if (!this.#altTextButton) {
+      return;
+    }
+    if (!enabled && this.#altTextTooltipTimeout) {
+      clearTimeout(this.#altTextTooltipTimeout);
+      this.#altTextTooltipTimeout = null;
+    }
+    this.#altTextButton.disabled = !enabled;
+  }
+
+  altTextFinish() {
+    if (!this.#altTextButton) {
+      return;
+    }
+    this.#altTextButton.hidden = false;
+    this.#altTextButton.focus({ focusVisible: this.#altTextWasFromKeyBoard });
+    this.#altTextWasFromKeyBoard = false;
   }
 
   getClientDimensions() {
@@ -937,6 +970,9 @@ class AnnotationEditor {
     };
   }
 
+  /**
+   * Set the alt text data.
+   */
   set altTextData({ altText, decorative }) {
     if (this.#altText === altText && this.#altTextDecorative === decorative) {
       return;
@@ -948,7 +984,7 @@ class AnnotationEditor {
 
   /**
    * Render this editor in a div.
-   * @returns {HTMLDivElement}
+   * @returns {HTMLDivElement | null}
    */
   render() {
     this.div = document.createElement("div");
@@ -1053,7 +1089,16 @@ class AnnotationEditor {
   }
 
   moveInDOM() {
-    this.parent?.moveEditorInDOM(this);
+    // Moving the editor in the DOM can be expensive, so we wait a bit before.
+    // It's important to not block the UI (for example when changing the font
+    // size in a FreeText).
+    if (this.#moveInDOMTimeout) {
+      clearTimeout(this.#moveInDOMTimeout);
+    }
+    this.#moveInDOMTimeout = setTimeout(() => {
+      this.#moveInDOMTimeout = null;
+      this.parent?.moveEditorInDOM(this);
+    }, 0);
   }
 
   _setParentAndPosition(parent, x, y) {
@@ -1199,8 +1244,9 @@ class AnnotationEditor {
    * new annotation to add to the pdf document.
    *
    * To implement in subclasses.
-   * @param {boolean} isForCopying
-   * @param {Object} [context]
+   * @param {boolean} [isForCopying]
+   * @param {Object | null} [context]
+   * @returns {Object | null}
    */
   serialize(isForCopying = false, context = null) {
     unreachable("An editor must be serializable");
@@ -1213,7 +1259,7 @@ class AnnotationEditor {
    * @param {Object} data
    * @param {AnnotationEditorLayer} parent
    * @param {AnnotationEditorUIManager} uiManager
-   * @returns {AnnotationEditor}
+   * @returns {AnnotationEditor | null}
    */
   static deserialize(data, parent, uiManager) {
     const editor = new this.prototype.constructor({
@@ -1260,6 +1306,10 @@ class AnnotationEditor {
     this.#altTextButton?.remove();
     this.#altTextButton = null;
     this.#altTextTooltip = null;
+    if (this.#moveInDOMTimeout) {
+      clearTimeout(this.#moveInDOMTimeout);
+      this.#moveInDOMTimeout = null;
+    }
   }
 
   /**
@@ -1333,7 +1383,15 @@ class AnnotationEditor {
   enterInEditMode() {}
 
   /**
+   * @returns {HTMLElement | null} the element requiring an alt text.
+   */
+  getImageForAltText() {
+    return null;
+  }
+
+  /**
    * Get the div which really contains the displayed content.
+   * @returns {HTMLDivElement | undefined}
    */
   get contentDiv() {
     return this.div;

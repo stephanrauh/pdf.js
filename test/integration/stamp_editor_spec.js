@@ -16,11 +16,48 @@
 const {
   closePages,
   getEditorDimensions,
+  getEditorSelector,
   loadAndWait,
   serializeBitmapDimensions,
   waitForAnnotationEditorLayer,
+  waitForStorageEntries,
+  waitForSelectedEditor,
 } = require("./test_utils.js");
 const path = require("path");
+const fs = require("fs");
+
+const selectAll = async page => {
+  await page.keyboard.down("Control");
+  await page.keyboard.press("a");
+  await page.keyboard.up("Control");
+  await page.waitForFunction(
+    () => !document.querySelector(".stampEditor:not(.selectedEditor)")
+  );
+};
+
+const clearAll = async page => {
+  await selectAll(page);
+  await page.keyboard.down("Control");
+  await page.keyboard.press("Backspace");
+  await page.keyboard.up("Control");
+  await waitForStorageEntries(page, 0);
+};
+
+const waitForImage = async (page, selector) => {
+  await page.waitForSelector(`${selector} canvas`);
+  await page.waitForFunction(
+    sel => {
+      const canvas = document.querySelector(sel);
+      const data = canvas
+        .getContext("2d")
+        .getImageData(0, 0, canvas.width, canvas.height);
+      return data.data.some(x => x !== 0);
+    },
+    {},
+    `${selector} canvas`
+  );
+  await page.waitForSelector(`${selector} .altText`);
+};
 
 describe("Stamp Editor", () => {
   describe("Basic operations", () => {
@@ -49,8 +86,7 @@ describe("Stamp Editor", () => {
           await input.uploadFile(
             `${path.join(__dirname, "../images/firefox_logo.png")}`
           );
-
-          await page.waitForTimeout(300);
+          await waitForImage(page, getEditorSelector(0));
 
           const { width } = await getEditorDimensions(page, 0);
 
@@ -62,12 +98,7 @@ describe("Stamp Editor", () => {
           expect(bitmap.width).toEqual(512);
           expect(bitmap.height).toEqual(543);
 
-          await page.keyboard.down("Control");
-          await page.keyboard.press("a");
-          await page.keyboard.up("Control");
-          await page.waitForTimeout(10);
-
-          await page.keyboard.press("Backspace");
+          await clearAll(page);
         })
       );
     });
@@ -85,8 +116,7 @@ describe("Stamp Editor", () => {
           await input.uploadFile(
             `${path.join(__dirname, "../images/firefox_logo.svg")}`
           );
-
-          await page.waitForTimeout(300);
+          await waitForImage(page, getEditorSelector(1));
 
           const { width } = await getEditorDimensions(page, 1);
 
@@ -101,12 +131,7 @@ describe("Stamp Editor", () => {
           expect(bitmap.width).toEqual(Math.round(242 * ratio));
           expect(bitmap.height).toEqual(Math.round(80 * ratio));
 
-          await page.keyboard.down("Control");
-          await page.keyboard.press("a");
-          await page.keyboard.up("Control");
-          await page.waitForTimeout(10);
-
-          await page.keyboard.press("Backspace");
+          await clearAll(page);
         })
       );
     });
@@ -136,27 +161,21 @@ describe("Stamp Editor", () => {
 
           for (let i = 0; i < 4; i++) {
             if (i !== 0) {
-              await page.keyboard.down("Control");
-              await page.keyboard.press("a");
-              await page.keyboard.up("Control");
-              await page.waitForTimeout(10);
-              await page.keyboard.press("Backspace");
-              await page.waitForTimeout(10);
+              await clearAll(page);
             }
 
             await page.click("#editorStampAddImage");
-            await page.waitForTimeout(10);
             const input = await page.$("#stampEditorFileInput");
             await input.uploadFile(
               `${path.join(__dirname, "../images/firefox_logo.png")}`
             );
-
-            await page.waitForTimeout(300);
+            await waitForImage(page, getEditorSelector(i));
+            await page.waitForSelector(`${getEditorSelector(i)} .altText`);
 
             for (let j = 0; j < 4; j++) {
               await page.keyboard.press("Escape");
-              await page.waitForFunction(
-                `getComputedStyle(document.querySelector(".resizers")).display === "none"`
+              await page.waitForSelector(
+                `${getEditorSelector(i)} .resizers.hidden`
               );
 
               const promise = waitForAnnotationEditorLayer(page);
@@ -164,12 +183,13 @@ describe("Stamp Editor", () => {
                 window.PDFViewerApplication.rotatePages(90);
               });
               await promise;
-              await page.focus(".stampEditor");
 
-              await page.waitForFunction(
-                `getComputedStyle(document.querySelector(".resizers")).display === "block"`
+              await page.focus(".stampEditor");
+              await waitForSelectedEditor(page, getEditorSelector(i));
+
+              await page.waitForSelector(
+                `${getEditorSelector(i)} .resizers:not(.hidden)`
               );
-              await page.waitForTimeout(10);
 
               const [name, cursor] = await page.evaluate(() => {
                 const { x, y } = document
@@ -194,6 +214,220 @@ describe("Stamp Editor", () => {
             });
             await promise;
           }
+        })
+      );
+    });
+  });
+
+  describe("Alt text dialog", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer", 50);
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the alt-text flow is correctly implemented", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorStamp");
+
+          const data = fs
+            .readFileSync(path.join(__dirname, "../images/firefox_logo.png"))
+            .toString("base64");
+          await page.evaluate(async imageData => {
+            const resp = await fetch(`data:image/png;base64,${imageData}`);
+            const blob = await resp.blob();
+
+            await navigator.clipboard.write([
+              new ClipboardItem({
+                [blob.type]: blob,
+              }),
+            ]);
+          }, data);
+
+          let hasPasteEvent = false;
+          while (!hasPasteEvent) {
+            // We retry to paste if nothing has been pasted before 500ms.
+            const promise = Promise.race([
+              page.evaluate(
+                () =>
+                  new Promise(resolve => {
+                    document.addEventListener(
+                      "paste",
+                      e => resolve(e.clipboardData.items.length !== 0),
+                      {
+                        once: true,
+                      }
+                    );
+                  })
+              ),
+              page.evaluate(
+                () =>
+                  new Promise(resolve => {
+                    setTimeout(() => resolve(false), 500);
+                  })
+              ),
+            ]);
+            await page.keyboard.down("Control");
+            await page.keyboard.press("v");
+            await page.keyboard.up("Control");
+            hasPasteEvent = await promise;
+          }
+
+          await waitForImage(page, getEditorSelector(0));
+
+          // Wait for the alt-text button to be visible.
+          const buttonSelector = `${getEditorSelector(0)} button.altText`;
+          await page.waitForSelector(buttonSelector);
+
+          // Click on the alt-text button.
+          await page.click(buttonSelector);
+
+          // Check that the alt-text button has been hidden.
+          await page.waitForSelector(`${buttonSelector}[hidden]`);
+
+          // Wait for the alt-text dialog to be visible.
+          await page.waitForSelector("#altTextDialog", { visible: true });
+
+          // Click on the alt-text editor.
+          const textareaSelector = "#altTextDialog textarea";
+          await page.click(textareaSelector);
+          await page.type(textareaSelector, "Hello World");
+
+          // Click on save button.
+          const saveButtonSelector = "#altTextDialog #altTextSave";
+          await page.click(saveButtonSelector);
+
+          // Check that the canvas has an aria-describedby attribute.
+          await page.waitForSelector(
+            `${getEditorSelector(0)} canvas[aria-describedby]`
+          );
+
+          // Wait for the alt-text button to have the correct icon.
+          await page.waitForSelector(`${buttonSelector}:not([hidden]).done`);
+
+          // Hover the button.
+          await page.hover(buttonSelector);
+
+          // Wait for the tooltip to be visible.
+          const tooltipSelector = `${buttonSelector} .tooltip`;
+          await page.waitForSelector(tooltipSelector, { visible: true });
+
+          let tooltipText = await page.evaluate(
+            sel => document.querySelector(`${sel}`).innerText,
+            tooltipSelector
+          );
+          expect(tooltipText).toEqual("Hello World");
+
+          // Now we change the alt-text and check that the tooltip is updated.
+          await page.click(buttonSelector);
+          await page.waitForSelector("#altTextDialog", { visible: true });
+          await page.evaluate(sel => {
+            document.querySelector(`${sel}`).value = "";
+          }, textareaSelector);
+          await page.click(textareaSelector);
+          await page.type(textareaSelector, "Dlrow Olleh");
+          await page.click(saveButtonSelector);
+          await page.waitForSelector(`${buttonSelector}.done`);
+          await page.hover(buttonSelector);
+          await page.waitForSelector(tooltipSelector, { visible: true });
+          tooltipText = await page.evaluate(
+            sel => document.querySelector(`${sel}`).innerText,
+            tooltipSelector
+          );
+          expect(tooltipText).toEqual("Dlrow Olleh");
+
+          // Now we just check that cancel didn't change anything.
+          await page.click(buttonSelector);
+          await page.waitForSelector("#altTextDialog", { visible: true });
+          await page.evaluate(sel => {
+            document.querySelector(`${sel}`).value = "";
+          }, textareaSelector);
+          await page.click(textareaSelector);
+          await page.type(textareaSelector, "Hello PDF.js");
+          const cancelButtonSelector = "#altTextDialog #altTextCancel";
+          await page.click(cancelButtonSelector);
+          await page.waitForSelector(`${buttonSelector}.done`);
+          await page.hover(buttonSelector);
+          await page.waitForSelector(tooltipSelector, { visible: true });
+          tooltipText = await page.evaluate(
+            sel => document.querySelector(`${sel}`).innerText,
+            tooltipSelector
+          );
+          // The tooltip should still be "Dlrow Olleh".
+          expect(tooltipText).toEqual("Dlrow Olleh");
+
+          // Now we switch to decorative.
+          await page.click(buttonSelector);
+          await page.waitForSelector("#altTextDialog", { visible: true });
+          const decorativeSelector = "#altTextDialog #decorativeButton";
+          await page.click(decorativeSelector);
+          await page.click(saveButtonSelector);
+          await page.waitForSelector(`${buttonSelector}.done`);
+          await page.hover(buttonSelector);
+          await page.waitForSelector(tooltipSelector, { visible: true });
+          tooltipText = await page.evaluate(
+            sel => document.querySelector(`${sel}`).innerText,
+            tooltipSelector
+          );
+          expect(tooltipText).toEqual("Marked as decorative");
+
+          // Now we switch back to non-decorative.
+          await page.click(buttonSelector);
+          await page.waitForSelector("#altTextDialog", { visible: true });
+          const descriptionSelector = "#altTextDialog #descriptionButton";
+          await page.click(descriptionSelector);
+          await page.click(saveButtonSelector);
+          await page.waitForSelector(`${buttonSelector}.done`);
+          await page.hover(buttonSelector);
+          await page.waitForSelector(tooltipSelector, { visible: true });
+          tooltipText = await page.evaluate(
+            sel => document.querySelector(`${sel}`).innerText,
+            tooltipSelector
+          );
+          expect(tooltipText).toEqual("Dlrow Olleh");
+
+          // Now we remove the alt-text and check that the tooltip is removed.
+          await page.click(buttonSelector);
+          await page.waitForSelector("#altTextDialog", { visible: true });
+          await page.evaluate(sel => {
+            document.querySelector(`${sel}`).value = "";
+          }, textareaSelector);
+          await page.click(saveButtonSelector);
+          await page.waitForSelector(`${buttonSelector}:not(.done)`);
+          await page.hover(buttonSelector);
+          await page.evaluate(
+            sel => document.querySelector(sel) === null,
+            tooltipSelector
+          );
+
+          // We check that the alt-text button works correctly with the
+          // keyboard.
+          await page.evaluate(sel => {
+            document.getElementById("viewerContainer").focus();
+            return new Promise(resolve => {
+              setTimeout(() => {
+                const el = document.querySelector(sel);
+                el.addEventListener("focus", resolve, { once: true });
+                el.focus({ focusVisible: true });
+              }, 0);
+            });
+          }, buttonSelector);
+          await (browserName === "chrome"
+            ? page.waitForSelector(`${buttonSelector}:focus`)
+            : page.waitForSelector(`${buttonSelector}:focus-visible`));
+          await page.keyboard.press("Enter");
+          await page.waitForSelector(`${buttonSelector}[hidden]`);
+          await page.waitForSelector("#altTextDialog", { visible: true });
+          await page.keyboard.press("Escape");
+          await page.waitForSelector(`${buttonSelector}:not([hidden])`);
+          await (browserName === "chrome"
+            ? page.waitForSelector(`${buttonSelector}:focus`)
+            : page.waitForSelector(`${buttonSelector}:focus-visible`));
         })
       );
     });
