@@ -108,7 +108,6 @@ class PDFPrintService {
     printResolution,
     optionalContentConfigPromise = null,
     printAnnotationStoragePromise = null,
-    l10n,
     eventBus // #588 modified by ngx-extended-pdf-viewer
 
   ) {
@@ -120,7 +119,6 @@ class PDFPrintService {
       optionalContentConfigPromise || pdfDocument.getOptionalContentConfig();
     this._printAnnotationStoragePromise =
       printAnnotationStoragePromise || Promise.resolve();
-    this.l10n = l10n;
     this.currentPage = -1;
     // The temporary canvas where renderPage paints one page at a time.
     this.scratchCanvas = document.createElement("canvas");
@@ -221,7 +219,6 @@ class PDFPrintService {
         renderProgress(
           window.filteredPageCount | pageCount,
           window.filteredPageCount | pageCount,
-          this.l10n,
           this.eventBus // #588 modified by ngx-extended-pdf-viewer
         ); // #243
         resolve();
@@ -229,7 +226,7 @@ class PDFPrintService {
       }
 
       const index = this.currentPage;
-      renderProgress(index, window.filteredPageCount | pageCount, this.l10n, this.eventBus); // #243 and #588 modified by ngx-extended-pdf-viewer
+      renderProgress(index, window.filteredPageCount | pageCount, this.eventBus); // #243 and #588 modified by ngx-extended-pdf-viewer
       renderPage(
         this,
         this.pdfDocument,
@@ -383,7 +380,7 @@ function abort() {
   }
 }
 
-function renderProgress(index, total, l10n, eventBus) { // #588 modified by ngx-extended-pdf-viewer
+function renderProgress(index, total, eventBus) { // #588 modified by ngx-extended-pdf-viewer
   if (typeof PDFJSDev === "undefined" && window.isGECKOVIEW) {
     return;
   }
@@ -392,9 +389,7 @@ function renderProgress(index, total, l10n, eventBus) { // #588 modified by ngx-
   const progressBar = dialog.querySelector("progress");
   const progressPerc = dialog.querySelector(".relative-progress");
   progressBar.value = progress;
-  l10n.get("print_progress_percent", { progress }).then(msg => {
-    progressPerc.textContent = msg;
-  });
+  progressPerc.setAttribute("data-l10n-args", JSON.stringify({ progress }));
   // #588 modified by ngx-extended-pdf-viewer
   eventBus.dispatch("progress", {
     source: this,
@@ -404,6 +399,7 @@ function renderProgress(index, total, l10n, eventBus) { // #588 modified by ngx-
     percent: (100 * index) / total,
   });
   // #588 end of modification
+
 }
 
 window.addEventListener(
@@ -473,7 +469,6 @@ PDFPrintServiceFactory.instance = {
     printResolution,
     optionalContentConfigPromise,
     printAnnotationStoragePromise,
-    l10n,
     eventBus // #588 modified by ngx-extended-pdf-viewer
   ) {
     if (activeService) {
@@ -486,7 +481,6 @@ PDFPrintServiceFactory.instance = {
       printResolution,
       optionalContentConfigPromise,
       printAnnotationStoragePromise,
-      l10n,
       eventBus // #588 modified by ngx-extended-pdf-viewer
     );
     return activeService;

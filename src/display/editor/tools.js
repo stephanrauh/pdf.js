@@ -27,7 +27,12 @@ import {
   Util,
   warn,
 } from "../../shared/util.js";
-import { getColorValues, getRGB, PixelsPerInch } from "../display_utils.js";
+import {
+  fetchData,
+  getColorValues,
+  getRGB,
+  PixelsPerInch,
+} from "../display_utils.js";
 
 function bindEvents(obj, element, names) {
   for (const name of names) {
@@ -116,12 +121,7 @@ class ImageManager {
       let image;
       if (typeof rawData === "string") {
         data.url = rawData;
-
-        const response = await fetch(rawData);
-        if (!response.ok) {
-          throw new Error(response.statusText);
-        }
-        image = await response.blob();
+        image = await fetchData(rawData, "blob");
       } else {
         image = data.file = rawData;
       }
@@ -619,6 +619,14 @@ class AnnotationEditorUIManager {
       );
     };
 
+    const textInputChecker = (_self, { target: el }) => {
+      if (el instanceof HTMLInputElement) {
+        const { type } = el;
+        return type !== "text" && type !== "number";
+      }
+      return true;
+    };
+
     const small = this.TRANSLATE_SMALL;
     const big = this.TRANSLATE_BIG;
 
@@ -626,8 +634,12 @@ class AnnotationEditorUIManager {
       this,
       "_keyboardManager",
       new KeyboardManager([
-        [["ctrl+a", "mac+meta+a"], proto.selectAll],
-        [["ctrl+z", "mac+meta+z"], proto.undo],
+        [
+          ["ctrl+a", "mac+meta+a"],
+          proto.selectAll,
+          { checker: textInputChecker },
+        ],
+        [["ctrl+z", "mac+meta+z"], proto.undo, { checker: textInputChecker }],
         [
           // On mac, depending of the OS version, the event.key is either "z" or
           // "Z" when the user presses "meta+shift+z".
@@ -639,6 +651,7 @@ class AnnotationEditorUIManager {
             "mac+meta+shift+Z",
           ],
           proto.redo,
+          { checker: textInputChecker },
         ],
         [
           [
@@ -655,6 +668,7 @@ class AnnotationEditorUIManager {
             "mac+Delete",
           ],
           proto.delete,
+          { checker: textInputChecker },
         ],
         [
           ["Enter", "mac+Enter"],
@@ -663,8 +677,9 @@ class AnnotationEditorUIManager {
             // Those shortcuts can be used in the toolbar for some other actions
             // like zooming, hence we need to check if the container has the
             // focus.
-            checker: self =>
-              self.#container.contains(document.activeElement) &&
+            checker: (self, { target: el }) =>
+              !(el instanceof HTMLButtonElement) &&
+              self.#container.contains(el) &&
               !self.isEnterHandled,
           },
         ],
@@ -914,13 +929,11 @@ class AnnotationEditorUIManager {
   #addKeyboardManager() {
     // The keyboard events are caught at the container level in order to be able
     // to execute some callbacks even if the current page doesn't have focus.
-    window.addEventListener("keydown", this.#boundKeydown, { capture: true });
+    window.addEventListener("keydown", this.#boundKeydown);
   }
 
   #removeKeyboardManager() {
-    window.removeEventListener("keydown", this.#boundKeydown, {
-      capture: true,
-    });
+    window.removeEventListener("keydown", this.#boundKeydown);
   }
 
   #addCopyPasteListeners() {

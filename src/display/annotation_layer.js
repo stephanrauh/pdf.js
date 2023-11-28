@@ -41,7 +41,6 @@ import {
 } from "./display_utils.js";
 import { AnnotationStorage } from "./annotation_storage.js";
 import { ColorConverters } from "../shared/scripting_utils.js";
-import { NullL10n } from "display-l10n_utils";
 import { XfaLayer } from "./xfa_layer.js";
 
 const DEFAULT_TAB_INDEX = 1000;
@@ -806,7 +805,6 @@ class LinkAnnotationElement extends AnnotationElement {
     link.href = this.linkService.getAnchorUrl("");
     link.onclick = () => {
       this.downloadManager?.openOrDownloadData(
-        this.container,
         attachment.content,
         attachment.filename,
         dest
@@ -994,9 +992,11 @@ class TextAnnotationElement extends AnnotationElement {
       "annotation-" +
       this.data.name.toLowerCase() +
       ".svg";
-    image.alt = "[{{type}} Annotation]";
-    image.dataset.l10nId = "text_annotation_type";
-    image.dataset.l10nArgs = JSON.stringify({ type: this.data.name });
+    image.setAttribute("data-l10n-id", "pdfjs-text-annotation-type");
+    image.setAttribute(
+      "data-l10n-args",
+      JSON.stringify({ type: this.data.name })
+    );
 
     if (!this.data.popupRef && this.hasPopupData) {
       this._createPopup();
@@ -1027,8 +1027,7 @@ class WidgetAnnotationElement extends AnnotationElement {
   }
 
   _getKeyModifier(event) {
-    const { isWin, isMac } = FeatureTest.platform;
-    return (isWin && event.ctrlKey) || (isMac && event.metaKey);
+    return FeatureTest.platform.isMac ? event.metaKey : event.ctrlKey;
   }
 
   _setEventListener(element, elementData, baseName, eventName, valueGetter) {
@@ -1312,7 +1311,9 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
           }
           elementData.lastCommittedValue = target.value;
           elementData.commitKey = 1;
-          elementData.focused = true;
+          if (!this.data.actions?.Focus) {
+            elementData.focused = true;
+          }
         });
 
         element.addEventListener("updatefromsandbox", jsEvent => {
@@ -1431,7 +1432,9 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
           if (!elementData.focused || !event.relatedTarget) {
             return;
           }
-          elementData.focused = false;
+          if (!this.data.actions?.Blur) {
+            elementData.focused = false;
+          }
           const { value } = event.target;
           elementData.userValue = value;
           if (elementData.lastCommittedValue !== value) {
@@ -1712,6 +1715,21 @@ class RadioButtonWidgetAnnotationElement extends WidgetAnnotationElement {
       window.updateAngularFormValue(id, { value: data.buttonValue });
     }
     // #1737, #1887 end of modification by ngx-extended-pdf-viewer
+
+    if (value) {
+      // It's possible that multiple radio buttons are checked.
+      // So if this one is checked we just reset the other ones.
+      // (see bug 1864136). Then when the other ones will be rendered they will
+      // unchecked (because of their value in the storage).
+      // Consequently, the first checked radio button will be the only checked
+      // one.
+      for (const radio of this._getElementsByName(
+        data.fieldName,
+        /* skipId = */ id
+      )) {
+        storage.setValue(radio.id, { value: false });
+      }
+    }
 
     const element = document.createElement("input");
     GetElementsByNameSet.add(element);
@@ -2149,8 +2167,6 @@ class PopupAnnotationElement extends AnnotationElement {
 }
 
 class PopupElement {
-  #dateTimePromise = null;
-
   #boundKeyDown = this.#keyDown.bind(this);
 
   #boundHide = this.#hide.bind(this);
@@ -2164,6 +2180,8 @@ class PopupElement {
   #container = null;
 
   #contentsObj = null;
+
+  #dateObj = null;
 
   #elements = null;
 
@@ -2206,16 +2224,10 @@ class PopupElement {
     this.#parentRect = parentRect;
     this.#elements = elements;
 
-    const dateObject = PDFDateString.toDateObject(modificationDate);
-    if (dateObject) {
-      // The modification date is shown in the popup instead of the creation
-      // date if it is available and can be parsed correctly, which is
-      // consistent with other viewers such as Adobe Acrobat.
-      this.#dateTimePromise = parent.l10n.get("annotation_date_string", {
-        date: dateObject.toLocaleDateString(),
-        time: dateObject.toLocaleTimeString(),
-      });
-    }
+    // The modification date is shown in the popup instead of the creation
+    // date if it is available and can be parsed correctly, which is
+    // consistent with other viewers such as Adobe Acrobat.
+    this.#dateObj = PDFDateString.toDateObject(modificationDate);
 
     this.trigger = elements.flatMap(e => e.getElementsToTriggerPopup());
     // Attach the event listeners to the trigger element.
@@ -2242,9 +2254,6 @@ class PopupElement {
       this.#parent.popupShow.push(async () => {
         if (this.#container.hidden) {
           this.#show();
-        }
-        if (this.#dateTimePromise) {
-          await this.#dateTimePromise;
         }
       });
     }
@@ -2294,12 +2303,20 @@ class PopupElement {
     ({ dir: title.dir, str: title.textContent } = this.#titleObj);
     popup.append(header);
 
-    if (this.#dateTimePromise) {
+    if (this.#dateObj) {
       const modificationDate = document.createElement("span");
       modificationDate.classList.add("popupDate");
-      this.#dateTimePromise.then(localized => {
-        modificationDate.textContent = localized;
-      });
+      modificationDate.setAttribute(
+        "data-l10n-id",
+        "pdfjs-annotation-date-string"
+      );
+      modificationDate.setAttribute(
+        "data-l10n-args",
+        JSON.stringify({
+          date: this.#dateObj.toLocaleDateString(),
+          time: this.#dateObj.toLocaleTimeString(),
+        })
+      );
       header.append(modificationDate);
     }
 
@@ -2988,11 +3005,7 @@ class FileAttachmentAnnotationElement extends AnnotationElement {
    * Download the file attachment associated with this annotation.
    */
   #download() {
-    this.downloadManager?.openOrDownloadData(
-      this.container,
-      this.content,
-      this.filename
-    );
+    this.downloadManager?.openOrDownloadData(this.content, this.filename);
   }
 }
 
@@ -3030,24 +3043,16 @@ class AnnotationLayer {
     div,
     accessibilityManager,
     annotationCanvasMap,
-    l10n,
     page,
     viewport,
   }) {
     this.div = div;
     this.#accessibilityManager = accessibilityManager;
     this.#annotationCanvasMap = annotationCanvasMap;
-    this.l10n = l10n;
     this.page = page;
     this.viewport = viewport;
     this.zIndex = 0;
 
-    if (
-      typeof PDFJSDev !== "undefined" &&
-      PDFJSDev.test("GENERIC && !TESTING")
-    ) {
-      this.l10n ||= NullL10n;
-    }
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
       // For testing purposes.
       Object.defineProperty(this, "showPopups", {
@@ -3148,8 +3153,6 @@ class AnnotationLayer {
     }
 
     this.#setAnnotationCanvasMap();
-
-    await this.l10n.translate(layer);
   }
 
   /**

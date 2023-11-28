@@ -85,9 +85,7 @@ class InkEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   static initialize(l10n) {
-    AnnotationEditor.initialize(l10n, {
-      strings: ["editor_ink_canvas_aria_label", "editor_ink2_aria_label"],
-    });
+    AnnotationEditor.initialize(l10n);
   }
 
   /** @inheritdoc */
@@ -626,7 +624,7 @@ class InkEditor extends AnnotationEditor {
     this.div.classList.add("disabled");
 
     this.#fitToContent(/* firstTime = */ true);
-    this.makeResizable();
+    this.select();
 
     this.parent.addInkEditorIfNeeded(/* isCommitting = */ true);
 
@@ -662,12 +660,13 @@ class InkEditor extends AnnotationEditor {
 
     event.preventDefault();
 
-    if (event.type !== "mouse") {
-      // #1802 modified by ngx-extended-pdf-viewer
+    if (
+      event.pointerType !== "mouse" &&
+      !this.div.contains(document.activeElement)
+    ) {
       this.div.focus({
-        preventScroll: true /* See issue #15744 */,
+        preventScroll: true /* See issue #17327 */,
       });
-      // #1802 end of modification
     }
 
     this.#startDrawing(event.offsetX, event.offsetY);
@@ -741,10 +740,8 @@ class InkEditor extends AnnotationEditor {
     this.canvas = document.createElement("canvas");
     this.canvas.width = this.canvas.height = 0;
     this.canvas.className = "inkEditorCanvas";
+    this.canvas.setAttribute("data-l10n-id", "pdfjs-ink-canvas");
 
-    AnnotationEditor._l10nPromise
-      .get("editor_ink_canvas_aria_label")
-      .then(msg => this.canvas?.setAttribute("aria-label", msg));
     this.div.append(this.canvas);
     // #1659 modified by ngx-extended-pdf-viewer
     const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true } : undefined;
@@ -784,9 +781,7 @@ class InkEditor extends AnnotationEditor {
 
     super.render();
 
-    AnnotationEditor._l10nPromise
-      .get("editor_ink2_aria_label")
-      .then(msg => this.div?.setAttribute("aria-label", msg));
+    this.div.setAttribute("data-l10n-id", "pdfjs-ink");
 
     const [x, y, w, h] = this.#getInitialBBox();
     this.setAt(x, y, 0, 0);

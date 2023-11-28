@@ -23,6 +23,7 @@ import {
   KeyboardManager,
 } from "./tools.js";
 import { FeatureTest, shadow, unreachable } from "../../shared/util.js";
+import { EditorToolbar } from "./toolbar.js";
 import { noContextMenu } from "../display_utils.js";
 
 /**
@@ -61,6 +62,8 @@ class AnnotationEditor {
   #boundFocusin = this.focusin.bind(this);
 
   #boundFocusout = this.focusout.bind(this);
+
+  #editToolbar = null;
 
   #focusedResizerName = "";
 
@@ -200,18 +203,21 @@ class AnnotationEditor {
   static initialize(l10n, options = null) {
     AnnotationEditor._l10nPromise ||= new Map(
       [
-        "editor_alt_text_button_label",
-        "editor_alt_text_edit_button_label",
-        "editor_alt_text_decorative_tooltip",
-        "editor_resizer_label_topLeft",
-        "editor_resizer_label_topMiddle",
-        "editor_resizer_label_topRight",
-        "editor_resizer_label_middleRight",
-        "editor_resizer_label_bottomRight",
-        "editor_resizer_label_bottomMiddle",
-        "editor_resizer_label_bottomLeft",
-        "editor_resizer_label_middleLeft",
-      ].map(str => [str, l10n.get(str)])
+        "pdfjs-editor-alt-text-button-label",
+        "pdfjs-editor-alt-text-edit-button-label",
+        "pdfjs-editor-alt-text-decorative-tooltip",
+        "pdfjs-editor-resizer-label-topLeft",
+        "pdfjs-editor-resizer-label-topMiddle",
+        "pdfjs-editor-resizer-label-topRight",
+        "pdfjs-editor-resizer-label-middleRight",
+        "pdfjs-editor-resizer-label-bottomRight",
+        "pdfjs-editor-resizer-label-bottomMiddle",
+        "pdfjs-editor-resizer-label-bottomLeft",
+        "pdfjs-editor-resizer-label-middleLeft",
+      ].map(str => [
+        str,
+        l10n.get(str.replaceAll(/([A-Z])/g, c => `-${c.toLowerCase()}`)),
+      ])
     );
     if (options?.strings) {
       for (const str of options.strings) {
@@ -921,7 +927,7 @@ class AnnotationEditor {
     const altText = (this.#altTextButton = document.createElement("button"));
     altText.className = "altText";
     const msg = await AnnotationEditor._l10nPromise.get(
-      "editor_alt_text_button_label"
+      "pdfjs-editor-alt-text-button-label"
     );
     altText.textContent = msg;
     altText.setAttribute("aria-label", msg);
@@ -967,7 +973,7 @@ class AnnotationEditor {
     button.classList.add("done");
 
     AnnotationEditor._l10nPromise
-      .get("editor_alt_text_edit_button_label")
+      .get("pdfjs-editor-alt-text-edit-button-label")
       .then(msg => {
         button.setAttribute("aria-label", msg);
       });
@@ -1006,7 +1012,7 @@ class AnnotationEditor {
     }
     tooltip.innerText = this.#altTextDecorative
       ? await AnnotationEditor._l10nPromise.get(
-          "editor_alt_text_decorative_tooltip"
+          "pdfjs-editor-alt-text-decorative-tooltip"
         )
       : this.#altText;
 
@@ -1036,6 +1042,22 @@ class AnnotationEditor {
     this.#altTextButton.hidden = false;
     this.#altTextButton.focus({ focusVisible: this.#altTextWasFromKeyBoard });
     this.#altTextWasFromKeyBoard = false;
+  }
+
+  addEditToolbar() {
+    if (this.#editToolbar || this.#isInEditMode) {
+      return;
+    }
+    this.#editToolbar = new EditorToolbar(this);
+    this.div.append(this.#editToolbar.render());
+  }
+
+  removeEditToolbar() {
+    if (!this.#editToolbar) {
+      return;
+    }
+    this.#editToolbar.remove();
+    this.#editToolbar = null;
   }
 
   getClientDimensions() {
@@ -1390,6 +1412,7 @@ class AnnotationEditor {
       this.#moveInDOMTimeout = null;
     }
     this.#stopResizing();
+    this.removeEditToolbar();
   }
 
   /**
@@ -1441,7 +1464,7 @@ class AnnotationEditor {
         div.addEventListener("blur", boundResizerBlur);
         div.addEventListener("focus", this.#resizerFocus.bind(this, name));
         AnnotationEditor._l10nPromise
-          .get(`editor_resizer_label_${name}`)
+          .get(`pdfjs-editor-resizer-label-${name}`)
           .then(msg => div.setAttribute("aria-label", msg));
       }
     }
@@ -1478,7 +1501,7 @@ class AnnotationEditor {
         const div = this.#allResizerDivs[i++];
         const name = div.getAttribute("data-resizer-name");
         AnnotationEditor._l10nPromise
-          .get(`editor_resizer_label_${name}`)
+          .get(`pdfjs-editor-resizer-label-${name}`)
           .then(msg => child.setAttribute("aria-label", msg));
       }
     }
@@ -1547,6 +1570,8 @@ class AnnotationEditor {
   select() {
     this.makeResizable();
     this.div?.classList.add("selectedEditor");
+    this.addEditToolbar();
+    this.#editToolbar?.show();
   }
 
   /**
@@ -1560,6 +1585,7 @@ class AnnotationEditor {
       // go.
       this._uiManager.currentLayer.div.focus();
     }
+    this.#editToolbar?.hide();
   }
 
   /**

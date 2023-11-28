@@ -13,17 +13,14 @@
  * limitations under the License.
  */
 
+import { AnnotationEditorType, noContextMenu } from "pdfjs-lib";
 import {
-  animationStarted,
   DEFAULT_SCALE,
   DEFAULT_SCALE_VALUE,
   MAX_SCALE,
   MIN_SCALE,
   toggleCheckedBtn,
 } from "./ui_utils.js";
-import { AnnotationEditorType, noContextMenu } from "pdfjs-lib";
-
-const PAGE_NUMBER_LOADING_INDICATOR = "visiblePageIsLoading";
 
 /**
  * @typedef {Object} ToolbarOptions
@@ -40,7 +37,6 @@ const PAGE_NUMBER_LOADING_INDICATOR = "visiblePageIsLoading";
  * @property {HTMLButtonElement} zoomIn - Button to zoom in the pages.
  * @property {HTMLButtonElement} zoomOut - Button to zoom out the pages.
  * @property {HTMLButtonElement} viewFind - Button to open find bar.
- * @property {HTMLButtonElement} openFile - Button to open a new document.
  * // #1807 modified by ngx-extended-pdf-viewer
  * @property {HTMLButtonElement} presentationModeButton - Button to switch to
  *   presentation mode.
@@ -51,17 +47,13 @@ const PAGE_NUMBER_LOADING_INDICATOR = "visiblePageIsLoading";
  */
 
 class Toolbar {
-  #wasLocalized = false;
-
   /**
    * @param {ToolbarOptions} options
    * @param {EventBus} eventBus
-   * @param {IL10n} l10n - Localization service.
    */
-  constructor(options, eventBus, l10n) {
+  constructor(options, eventBus) {
     this.toolbar = options.container;
     this.eventBus = eventBus;
-    this.l10n = l10n;
     this.buttons = [
       { element: options.previous, eventName: "previouspage" },
       { element: options.next, eventName: "nextpage" },
@@ -112,9 +104,6 @@ class Toolbar {
         },
       },
     ];
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-      this.buttons.push({ element: options.openFile, eventName: "openfile" });
-    }
     this.items = {
       numPages: options.numPages,
       pageNumber: options.pageNumber,
@@ -228,12 +217,6 @@ class Toolbar {
     // Suppress context menus for some controls.
     scaleSelect.oncontextmenu = noContextMenu;
 
-    this.eventBus._on("localized", () => {
-      this.#wasLocalized = true;
-      this.#adjustScaleWidth();
-      this.#updateUIState(true);
-    });
-
     this.#bindEditorToolsListener(options);
   }
 
@@ -277,29 +260,32 @@ class Toolbar {
   }
 
   #updateUIState(resetNumPages = false) {
-    if (!this.#wasLocalized) {
-      // Don't update the UI state until we localize the toolbar.
-      return;
-    }
     const { pageNumber, pagesCount, pageScaleValue, pageScale, items } = this;
 
     if (resetNumPages) {
       if (this.hasPageLabels) {
         items.pageNumber.type = "text";
+
+        items.numPages.setAttribute("data-l10n-id", "pdfjs-page-of-pages");
       } else {
         items.pageNumber.type = "number";
-        this.l10n.get("of_pages", { pagesCount }).then(msg => {
-          items.numPages.textContent = msg;
-        });
+
+        items.numPages.setAttribute("data-l10n-id", "pdfjs-of-pages");
+        items.numPages.setAttribute(
+          "data-l10n-args",
+          JSON.stringify({ pagesCount })
+        );
       }
       items.pageNumber.max = pagesCount;
     }
 
     if (this.hasPageLabels) {
       items.pageNumber.value = this.pageLabel;
-      this.l10n.get("page_of_pages", { pageNumber, pagesCount }).then(msg => {
-        items.numPages.textContent = msg;
-      });
+
+      items.numPages.setAttribute(
+        "data-l10n-args",
+        JSON.stringify({ pageNumber, pagesCount })
+      );
     } else {
       items.pageNumber.value = pageNumber;
     }
@@ -310,26 +296,27 @@ class Toolbar {
     items.zoomOut.disabled = pageScale <= MIN_SCALE;
     items.zoomIn.disabled = pageScale >= MAX_SCALE;
 
-    this.l10n
-      .get("page_scale_percent", { scale: Math.round(pageScale * 10000) / 100 })
-      .then(msg => {
-        let predefinedValueFound = false;
-        // #1315 modified by ngx-extended-pdf-viewer
-        if (items.scaleSelect.options) {
-          for (const option of items.scaleSelect.options) {
-            if (option.value !== pageScaleValue) {
-              option.selected = false;
-              continue;
-            }
-            option.selected = true;
-            predefinedValueFound = true;
-          }
-        } // #1315 end of modofication by ngx-extended-pdf-viewer
-        if (!predefinedValueFound) {
-          items.customScaleOption.textContent = msg;
-          items.customScaleOption.selected = true;
+    let predefinedValueFound = false;
+    // #1315 modified by ngx-extended-pdf-viewer
+    if (items.scaleSelect.options) {
+      for (const option of items.scaleSelect.options) {
+        if (option.value !== pageScaleValue) {
+          option.selected = false;
+          continue;
         }
-      });
+        option.selected = true;
+        predefinedValueFound = true;
+      }
+    } // #1315 end of modification by ngx-extended-pdf-viewer
+    if (!predefinedValueFound) {
+      items.customScaleOption.selected = true;
+      items.customScaleOption.setAttribute(
+        "data-l10n-args",
+        JSON.stringify({
+          scale: Math.round(pageScale * 10000) / 100,
+        })
+      );
+    }
     // modified by ngx-extended-pdf-viewer
     this.eventBus.dispatch("updateuistate", {
       source: this,
@@ -345,58 +332,7 @@ class Toolbar {
   updateLoadingIndicatorState(loading = false) {
     const { pageNumber } = this.items;
 
-    pageNumber.classList.toggle(PAGE_NUMBER_LOADING_INDICATOR, loading);
-  }
-
-  /**
-   * Increase the width of the zoom dropdown DOM element if, and only if, it's
-   * too narrow to fit the *longest* of the localized strings.
-   */
-  async #adjustScaleWidth() {
-    const { items, l10n } = this;
-
-    const predefinedValuesPromise = Promise.all([
-      l10n.get("page_scale_auto"),
-      l10n.get("page_scale_actual"),
-      l10n.get("page_scale_fit"),
-      l10n.get("page_scale_width"),
-    ]);
-    await animationStarted;
-
-    const style = getComputedStyle(items.scaleSelect);
-    const scaleSelectWidth = parseFloat(
-      style.getPropertyValue("--scale-select-width")
-    );
-
-    // The temporary canvas is used to measure text length in the DOM.
-    const canvas = document.createElement("canvas");
-    // #1659 modified by ngx-extended-pdf-viewer
-    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
-    const ctx = canvas.getContext("2d", options);
-    // #1659 end of modification by ngx-extended-pdf-viewer
-    ctx.font = `${style.fontSize} ${style.fontFamily}`;
-
-    let maxWidth = 0;
-    for (const predefinedValue of await predefinedValuesPromise) {
-      try { // #707 modified by ngx-extended-pdf-viewer
-        const { width } = ctx.measureText(predefinedValue);
-        if (width > maxWidth) {
-          maxWidth = width;
-        }
-      } catch (fingerprintIsBlockedException) {} // #707 modified by ngx-extended-pdf-viewer
-    }
-    // Account for the icon width, and ensure that there's always some spacing
-    // between the text and the icon.
-    maxWidth += 0.3 * scaleSelectWidth;
-
-    if (maxWidth > scaleSelectWidth) {
-      const container = items.scaleSelect.parentNode;
-      container.style.setProperty("--scale-select-width", `${maxWidth}px`);
-    }
-    // Zeroing the width and height cause Firefox to release graphics resources
-    // immediately, which can greatly reduce memory consumption.
-    canvas.width = 0;
-    canvas.height = 0;
+    pageNumber.classList.toggle("loading", loading);
   }
 }
 
