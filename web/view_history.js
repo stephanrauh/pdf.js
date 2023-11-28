@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { AppOptions } from "./app_options";
+import { AppOptions } from "./app_options.js";
 
 const DEFAULT_VIEW_HISTORY_CACHE_SIZE = 20;
 
@@ -58,9 +58,11 @@ class ViewHistory {
   }
 
   async _writeToStorage() {
+    // #1163 modified by ngx-extended-pdf-viewer
     if (AppOptions.get("disableHistory")) {
       return;
     }
+    // #1163 end of modification by ngx-extended-pdf-viewer
     const databaseStr = JSON.stringify(this.database);
 
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {

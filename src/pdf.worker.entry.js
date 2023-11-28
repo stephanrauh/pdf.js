@@ -12,8 +12,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+/* eslint-disable import/no-commonjs */
 
 (typeof window !== "undefined"
   ? window
   : {}
-).pdfjsWorker = require("./pdf.worker.js");
+).pdfjsWorker = require("./pdf.worker.mjs");

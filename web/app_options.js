@@ -303,8 +303,10 @@ const defaultOptions = {
     value:
       // eslint-disable-next-line no-nested-ternary
       typeof PDFJSDev === "undefined"
-        ? "../src/worker_loader.js"
-        : "./assets/pdf.worker.js",
+        ? "../src/pdf.worker.js"
+        : PDFJSDev.test("MOZCENTRAL")
+        ? "resource://pdf.js/build/pdf.worker.mjs"
+        : "./assets/pdf.worker.mjs",
     kind: OptionKind.WORKER,
   },
 };
@@ -328,8 +330,8 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
     /** @type {string} */
     value:
       typeof PDFJSDev === "undefined"
-        ? "../build/dev-sandbox/pdf.sandbox.js"
-        : "../build/pdf.sandbox.js",
+        ? "../build/dev-sandbox/pdf.sandbox.mjs"
+        : "../build/pdf.sandbox.mjs",
     kind: OptionKind.VIEWER,
   };
 } else if (PDFJSDev.test("CHROME")) {

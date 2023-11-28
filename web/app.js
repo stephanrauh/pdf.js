@@ -44,7 +44,6 @@ import {
   InvalidPDFException,
   isDataScheme,
   isPdfFile,
-  loadScript,
   MissingPDFException,
   PDFWorker,
   PromiseCapability,
@@ -52,7 +51,7 @@ import {
   UnexpectedResponseException,
   version,
 } from "pdfjs-lib";
-import { ngxExtendedPdfViewerVersion } from "./ngx-extended-pdf-viewer-version";
+import { ngxExtendedPdfViewerVersion } from "./ngx-extended-pdf-viewer-version.js";
 import { AppOptions, OptionKind } from "./app_options.js";
 import { AutomationEventBus, EventBus } from "./event_utils.js";
 import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
@@ -1961,7 +1960,9 @@ const PDFViewerApplication = {
     this.pdfViewer.cleanup();
     this.pdfThumbnailViewer?.cleanup();
 
-    this.pdfDocument.cleanup();
+    this.pdfDocument.cleanup(
+      /* keepLoadedFonts = */ AppOptions.get("fontExtraProperties")
+    );
   },
 
   forceRendering() {
@@ -2428,10 +2429,10 @@ async function loadFakeWorker() {
   }
   // end of modification
   if (typeof PDFJSDev === "undefined") {
-    window.pdfjsWorker = await import("pdfjs/pdf.worker.js");
+    globalThis.pdfjsWorker = await import("pdfjs/pdf.worker.js");
     return;
   }
-  await loadScript(PDFWorker.workerSrc);
+  await __non_webpack_import__(PDFWorker.workerSrc); // eslint-disable-line no-undef
 }
 
 async function loadPDFBug(self) {
@@ -3331,6 +3332,8 @@ function webViewerKeyDown(evt) {
     curElementTagName === "INPUT" ||
     curElementTagName === "TEXTAREA" ||
     curElementTagName === "SELECT" ||
+    (curElementTagName === "BUTTON" &&
+      (evt.keyCode === /* Enter = */ 13 || evt.keyCode === /* Space = */ 32)) ||
     curElement?.isContentEditable
   ) {
     // Make sure that the secondary toolbar is closed when Escape is pressed.

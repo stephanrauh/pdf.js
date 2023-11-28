@@ -816,37 +816,6 @@ function noContextMenu(e) {
   e.preventDefault();
 }
 
-/**
- * @param {string} src
- * @param {boolean} [removeScriptElement]
- * @returns {Promise<void>}
- */
-function loadScript(src, removeScriptElement = false) {
-  return new Promise((resolve, reject) => {
-    const script = document.createElement("script");
-    // modified by ngx-extended-pdf-viewer #1512
-    let source = src;
-    if (src.constructor.name === "Function") {
-      source = src();
-    }
-    const secureSource = generateTrustedURL(source);
-    script.src = secureSource;
-    // end of modification
-
-    script.onload = function (evt) {
-      if (removeScriptElement) {
-        script.remove();
-      }
-      resolve(evt);
-    };
-    script.onerror = function (error) {
-      globalThis.ngxConsole.log(error);
-      reject(new Error(`Cannot load script at: ${script.src}`));
-    };
-    (document.head || document.documentElement).append(script);
-  });
-}
-
 // Deprecated API function -- display regardless of the `verbosity` setting.
 function deprecated(details) {
   globalThis.ngxConsole.log("Deprecated API usage: " + details);
@@ -1054,7 +1023,6 @@ export {
   isDataScheme,
   isPdfFile,
   isValidFetchUrl,
-  loadScript,
   noContextMenu,
   PageViewport,
   PDFDateString,

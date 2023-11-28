@@ -68,7 +68,7 @@ let TMP_DIR = BUILD_DIR + "tmp/"; // modified by ngx-extended-pdf-viewer to allo
 const TYPESTEST_DIR = BUILD_DIR + "typestest/";
 const COMMON_WEB_FILES = [
   "web/images/*.{png,svg,gif}",
-  "web/debugger.{css,js}",
+  "web/debugger.{css,mjs}",
 ];
 const MOZCENTRAL_DIFF_FILE = "mozcentral.diff";
 
@@ -205,6 +205,7 @@ function createWebpackConfig(
     !bundleDefines.LIB &&
     !bundleDefines.TESTING &&
     !disableSourceMaps;
+  const isModule = output.library?.type === "module";
   const skipBabel = bundleDefines.SKIP_BABEL;
 
   // `core-js`, see https://github.com/zloirock/core-js/issues/514,
@@ -217,10 +218,15 @@ function createWebpackConfig(
     : [
         [
           "@babel/preset-env",
-          { corejs: "3.32.2", shippedProposals: true, useBuiltIns: "usage" },
+          {
+            corejs: "3.33.0",
+            exclude: ["web.structured-clone"],
+            shippedProposals: true,
+            useBuiltIns: "usage",
+          },
         ],
       ];
-  const babelPlugins = ["@babel/plugin-transform-modules-commonjs"];
+  const babelPlugins = [];
 
   const plugins = [];
   if (!disableLicenseHeader) {
@@ -229,8 +235,7 @@ function createWebpackConfig(
     );
   }
 
-  const experiments =
-    output.library?.type === "module" ? { outputModule: true } : undefined;
+  const experiments = isModule ? { outputModule: true } : undefined;
 
   // Required to expose e.g., the `window` object.
   output.globalObject = "globalThis";
@@ -300,7 +305,11 @@ function createWebpackConfig(
   }
 
   return {
-    mode: "none",
+    mode: "production",
+    optimization: {
+      mangleExports: false,
+      minimize: false,
+    },
     experiments,
     output,
     performance: {
@@ -393,78 +402,58 @@ function checkChromePreferencesFile(chromePrefsPath, webPrefs) {
   return ret;
 }
 
-function replaceWebpackRequire() {
-  // Produced bundles can be rebundled again, avoid collisions (e.g. in api.js)
-  // by renaming  __webpack_require__ to something else.
-  return replace("__webpack_require__", "__w_pdfjs_require__");
-}
+function tweakWebpackOutput(jsName) {
+  const replacer = ["__non_webpack_import__\\("];
 
-function replaceNonWebpackImport() {
-  return replace("__non_webpack_import__", "import");
-}
-
-function addGlobalExports(amdName, jsName) {
-  const replacer = [
-    `module\\.exports = factory\\(\\);`,
-    `define\\("${amdName}", \\[\\], factory\\);`,
-    `exports\\["${amdName}"\\] = factory\\(\\);`,
-    `root\\["${amdName}"\\] = factory\\(\\);`,
-  ];
+  if (jsName) {
+    replacer.push(
+      " __webpack_exports__ = {};",
+      " __webpack_exports__ = await __webpack_exports__;"
+    );
+  }
   const regex = new RegExp(`(${replacer.join("|")})`, "gm");
 
   return replace(regex, match => {
     switch (match) {
-      case `module.exports = factory();`:
-        return `module.exports = root.${jsName} = factory();`;
-      case `define("${amdName}", [], factory);`:
-        return `define("${amdName}", [], () => { return (root.${jsName} = factory()); });`;
-      case `exports["${amdName}"] = factory();`:
-        return `exports["${amdName}"] = root.${jsName} = factory();`;
-      case `root["${amdName}"] = factory();`:
-        return `root["${amdName}"] = root.${jsName} = factory();`;
+      case "__non_webpack_import__(":
+        return "import(/* webpackIgnore: true */ ";
+      case " __webpack_exports__ = {};":
+        return ` __webpack_exports__ = globalThis.${jsName} = {};`;
+      case " __webpack_exports__ = await __webpack_exports__;":
+        return ` __webpack_exports__ = globalThis.${jsName} = await __webpack_exports__;`;
     }
     return match;
   });
 }
 
 function createMainBundle(defines) {
-  const mainAMDName = "pdfjs-dist/build/pdf";
-  const mainOutputName = "pdf.js";
-
   const mainFileConfig = createWebpackConfig(defines, {
-    filename: mainOutputName,
-    library: mainAMDName,
-    libraryTarget: "umd",
-    umdNamedDefine: true,
+    filename: "pdf.mjs",
+    library: {
+      type: "module",
+    },
   });
   return gulp
     .src("./src/pdf.js")
     .pipe(webpack2Stream(mainFileConfig))
-    .pipe(replaceWebpackRequire())
-    .pipe(replaceNonWebpackImport())
-    .pipe(addGlobalExports(mainAMDName, "pdfjsLib"));
+    .pipe(tweakWebpackOutput("pdfjsLib"));
 }
 
 function createScriptingBundle(defines, extraOptions = undefined) {
-  const scriptingAMDName = "pdfjs-dist/build/pdf.scripting";
-  const scriptingOutputName = "pdf.scripting.js";
-
   const scriptingFileConfig = createWebpackConfig(
     defines,
     {
-      filename: scriptingOutputName,
-      library: scriptingAMDName,
-      libraryTarget: "umd",
-      umdNamedDefine: true,
+      filename: "pdf.scripting.mjs",
+      library: {
+        type: "module",
+      },
     },
     extraOptions
   );
   return gulp
     .src("./src/pdf.scripting.js")
     .pipe(webpack2Stream(scriptingFileConfig))
-    .pipe(replaceWebpackRequire())
-    .pipe(replaceNonWebpackImport())
-    .pipe(addGlobalExports(scriptingAMDName, "pdfjsScripting"));
+    .pipe(tweakWebpackOutput());
 }
 
 function createSandboxExternal(defines) {
@@ -494,10 +483,7 @@ function createTemporaryScriptingBundle(defines, extraOptions = undefined) {
 }
 
 function createSandboxBundle(defines, extraOptions = undefined) {
-  const sandboxAMDName = "pdfjs-dist/build/pdf.sandbox";
-  const sandboxOutputName = "pdf.sandbox.js";
-
-  const scriptingPath = TMP_DIR + "pdf.scripting.js";
+  const scriptingPath = TMP_DIR + "pdf.scripting.mjs";
   // Insert the source as a string to be `eval`-ed in the sandbox.
   const sandboxDefines = builder.merge(defines, {
     PDF_SCRIPTING_JS_SOURCE: fs.readFileSync(scriptingPath).toString(),
@@ -507,10 +493,10 @@ function createSandboxBundle(defines, extraOptions = undefined) {
   const sandboxFileConfig = createWebpackConfig(
     sandboxDefines,
     {
-      filename: sandboxOutputName,
-      library: sandboxAMDName,
-      libraryTarget: "umd",
-      umdNamedDefine: true,
+      filename: "pdf.sandbox.mjs",
+      library: {
+        type: "module",
+      },
     },
     extraOptions
   );
@@ -518,36 +504,30 @@ function createSandboxBundle(defines, extraOptions = undefined) {
   return gulp
     .src("./src/pdf.sandbox.js")
     .pipe(webpack2Stream(sandboxFileConfig))
-    .pipe(replaceWebpackRequire())
-    .pipe(replaceNonWebpackImport())
-    .pipe(addGlobalExports(sandboxAMDName, "pdfjsSandbox"));
+    .pipe(tweakWebpackOutput("pdfjsSandbox"));
 }
 
 function createWorkerBundle(defines) {
-  const workerAMDName = "pdfjs-dist/build/pdf.worker";
-  const workerOutputName = "pdf.worker.js";
-
   const workerFileConfig = createWebpackConfig(defines, {
-    filename: workerOutputName,
-    library: workerAMDName,
-    libraryTarget: "umd",
-    umdNamedDefine: true,
+    filename: "pdf.worker.mjs",
+    library: {
+      type: "module",
+    },
   });
   return gulp
     .src("./src/pdf.worker.js")
     .pipe(webpack2Stream(workerFileConfig))
-    .pipe(replaceWebpackRequire())
-    .pipe(replaceNonWebpackImport())
-    .pipe(addGlobalExports(workerAMDName, "pdfjsWorker"));
+    .pipe(tweakWebpackOutput("pdfjsWorker"));
 }
 
 function createWebBundle(defines, options) {
-  const viewerOutputName = "viewer.js";
-
   const viewerFileConfig = createWebpackConfig(
     defines,
     {
-      filename: viewerOutputName,
+      filename: "viewer.mjs",
+      library: {
+        type: "module",
+      },
     },
     {
       defaultPreferencesDir: options.defaultPreferencesDir,
@@ -556,17 +536,19 @@ function createWebBundle(defines, options) {
   return gulp
     .src("./web/viewer.js")
     .pipe(webpack2Stream(viewerFileConfig))
-    .pipe(replaceNonWebpackImport());
+    .pipe(tweakWebpackOutput());
 }
 
 function createGVWebBundle(defines, options) {
-  const viewerOutputName = "viewer-geckoview.js";
   defines = builder.merge(defines, { GECKOVIEW: true });
 
   const viewerFileConfig = createWebpackConfig(
     defines,
     {
-      filename: viewerOutputName,
+      filename: "viewer-geckoview.mjs",
+      library: {
+        type: "module",
+      },
     },
     {
       defaultPreferencesDir: options.defaultPreferencesDir,
@@ -575,43 +557,33 @@ function createGVWebBundle(defines, options) {
   return gulp
     .src("./web/viewer-geckoview.js")
     .pipe(webpack2Stream(viewerFileConfig))
-    .pipe(replaceNonWebpackImport());
+    .pipe(tweakWebpackOutput());
 }
 
 function createComponentsBundle(defines) {
-  const componentsAMDName = "pdfjs-dist/web/pdf_viewer";
-  const componentsOutputName = "pdf_viewer.js";
-
   const componentsFileConfig = createWebpackConfig(defines, {
-    filename: componentsOutputName,
-    library: componentsAMDName,
-    libraryTarget: "umd",
-    umdNamedDefine: true,
+    filename: "pdf_viewer.mjs",
+    library: {
+      type: "module",
+    },
   });
   return gulp
     .src("./web/pdf_viewer.component.js")
     .pipe(webpack2Stream(componentsFileConfig))
-    .pipe(replaceWebpackRequire())
-    .pipe(replaceNonWebpackImport())
-    .pipe(addGlobalExports(componentsAMDName, "pdfjsViewer"));
+    .pipe(tweakWebpackOutput("pdfjsViewer"));
 }
 
 function createImageDecodersBundle(defines) {
-  const imageDecodersAMDName = "pdfjs-dist/image_decoders/pdf.image_decoders";
-  const imageDecodersOutputName = "pdf.image_decoders.js";
-
   const componentsFileConfig = createWebpackConfig(defines, {
-    filename: imageDecodersOutputName,
-    library: imageDecodersAMDName,
-    libraryTarget: "umd",
-    umdNamedDefine: true,
+    filename: "pdf.image_decoders.mjs",
+    library: {
+      type: "module",
+    },
   });
   return gulp
     .src("./src/pdf.image_decoders.js")
     .pipe(webpack2Stream(componentsFileConfig))
-    .pipe(replaceWebpackRequire())
-    .pipe(replaceNonWebpackImport())
-    .pipe(addGlobalExports(imageDecodersAMDName, "pdfjsImageDecoders"));
+    .pipe(tweakWebpackOutput("pdfjsImageDecoders"));
 }
 
 function createCMapBundle() {
@@ -1159,14 +1131,20 @@ function buildMinified(defines, dir) {
     createMainBundle(defines).pipe(gulp.dest(dir + "build")),
     createWorkerBundle(defines).pipe(gulp.dest(dir + "build")),
     createSandboxBundle(defines).pipe(gulp.dest(dir + "build")),
+
+    // modified by ngx-extended-pdf-viewer
     createWebBundle(defines, {
       defaultPreferencesDir: defines.SKIP_BABEL
         ? "minified/"
         : "minified-legacy/",
     }).pipe(gulp.dest(dir + "web")),
+    // end of modification
+
     createImageDecodersBundle(
       builder.merge(defines, { IMAGE_DECODERS: true })
     ).pipe(gulp.dest(dir + "image_decoders")),
+
+    // modified by ngx-extended-pdf-viewer
     gulp.src(COMMON_WEB_FILES, { base: "web/" }).pipe(gulp.dest(dir + "web")),
     gulp
       .src(["web/locale/*/viewer.properties", "web/locale/locale.properties"], {
@@ -1175,39 +1153,24 @@ function buildMinified(defines, dir) {
       .pipe(gulp.dest(dir + "web")),
     createCMapBundle().pipe(gulp.dest(dir + "web/cmaps")),
     createStandardFontBundle().pipe(gulp.dest(dir + "web/standard_fonts")),
-
-    preprocessHTML("web/viewer.html", defines).pipe(gulp.dest(dir + "web")),
-    preprocessCSS("web/viewer.css", defines)
-      .pipe(
-        postcss([
-          postcssDirPseudoClass(),
-          discardCommentsCSS(),
-          postcssNesting(),
-          autoprefixer(AUTOPREFIXER_CONFIG),
-        ])
-      )
-      .pipe(gulp.dest(dir + "web")),
-
-    gulp
-      .src("web/compressed.tracemonkey-pldi-09.pdf")
-      .pipe(gulp.dest(dir + "web")),
+    // end of modification
   ]);
 }
 
 async function parseMinified(dir) {
-  const pdfFile = fs.readFileSync(dir + "/build/pdf.js").toString();
+  const pdfFile = fs.readFileSync(dir + "build/pdf.mjs").toString();
   const pdfWorkerFile = fs
-    .readFileSync(dir + "/build/pdf.worker.js")
+    .readFileSync(dir + "build/pdf.worker.mjs")
     .toString();
   const pdfSandboxFile = fs
-    .readFileSync(dir + "/build/pdf.sandbox.js")
+    .readFileSync(dir + "build/pdf.sandbox.mjs")
     .toString();
   const pdfImageDecodersFile = fs
-    .readFileSync(dir + "/image_decoders/pdf.image_decoders.js")
+    .readFileSync(dir + "image_decoders/pdf.image_decoders.mjs")
     .toString();
   const viewerFiles = {
-    "pdf.js": pdfFile,
-    "viewer.js": fs.readFileSync(dir + "/web/viewer.js").toString(),
+    "pdf.mjs": pdfFile,
+    "viewer.mjs": fs.readFileSync(dir + "/web/viewer.mjs").toString(),
   };
 
   console.log();
@@ -1221,48 +1184,46 @@ async function parseMinified(dir) {
     },
     keep_classnames: true,
     keep_fnames: true,
+    module: true,
   };
 
   fs.writeFileSync(
-    dir + "/web/pdf.viewer.js",
+    dir + "/web/pdf.viewer.mjs",
     (await minify(viewerFiles, options)).code
   );
   fs.writeFileSync(
-    dir + "/build/pdf.min.js",
+    dir + "build/pdf.min.mjs",
     (await minify(pdfFile, options)).code
   );
   fs.writeFileSync(
-    dir + "/build/pdf.worker.min.js",
+    dir + "build/pdf.worker.min.mjs",
     (await minify(pdfWorkerFile, options)).code
   );
   fs.writeFileSync(
-    dir + "/build/pdf.sandbox.min.js",
+    dir + "build/pdf.sandbox.min.mjs",
     (await minify(pdfSandboxFile, options)).code
   );
   fs.writeFileSync(
-    dir + "image_decoders/pdf.image_decoders.min.js",
+    dir + "image_decoders/pdf.image_decoders.min.mjs",
     (await minify(pdfImageDecodersFile, options)).code
   );
 
   console.log();
   console.log("### Cleaning js files");
 
-  // modififed by ngx-extended-pdf-viewer
-  // fs.unlinkSync(dir + "/web/viewer.js");
-  // fs.unlinkSync(dir + "/web/debugger.js");
-  // fs.unlinkSync(dir + "/build/pdf.js");
-  // fs.unlinkSync(dir + "/build/pdf.worker.js");
-  // fs.unlinkSync(dir + "/build/pdf.sandbox.js");
-//
-  // fs.renameSync(dir + "/build/pdf.min.js", dir + "/build/pdf.js");
-  // fs.renameSync(dir + "/build/pdf.worker.min.js", dir + "/build/pdf.worker.js");
+  // fs.unlinkSync(dir + "build/pdf.mjs");
+  // fs.unlinkSync(dir + "build/pdf.worker.mjs");
+  // fs.unlinkSync(dir + "build/pdf.sandbox.mjs");
+
+  // fs.renameSync(dir + "build/pdf.min.mjs", dir + "build/pdf.mjs");
+  // fs.renameSync(dir + "build/pdf.worker.min.mjs", dir + "build/pdf.worker.mjs");
   // fs.renameSync(
-  //   dir + "/build/pdf.sandbox.min.js",
-  //   dir + "/build/pdf.sandbox.js"
+  //  dir + "build/pdf.sandbox.min.mjs",
+  //  dir + "build/pdf.sandbox.mjs"
   // );
   // fs.renameSync(
-  //   dir + "/image_decoders/pdf.image_decoders.min.js",
-  //   dir + "/image_decoders/pdf.image_decoders.js"
+  //  dir + "image_decoders/pdf.image_decoders.min.mjs",
+  //  dir + "image_decoders/pdf.image_decoders.mjs"
   // );
 }
 
@@ -1597,18 +1558,11 @@ gulp.task("types", function (done) {
 });
 
 function buildLibHelper(bundleDefines, inputStream, outputDir) {
-  // When we create a bundle, webpack is run on the source and it will replace
-  // require with __webpack_require__. When we want to use the real require,
-  // __non_webpack_require__ has to be used.
-  // In this target, we don't create a bundle, so we have to replace the
-  // occurrences of __non_webpack_require__ ourselves.
-  function babelPluginReplaceNonWebpackImports(b) {
+  function babelPluginReplaceNonWebpackImport(b) {
     return {
       visitor: {
         Identifier(curPath, state) {
-          if (curPath.node.name === "__non_webpack_require__") {
-            curPath.replaceWith(b.types.identifier("require"));
-          } else if (curPath.node.name === "__non_webpack_import__") {
+          if (curPath.node.name === "__non_webpack_import__") {
             curPath.replaceWith(b.types.identifier("import"));
           }
         },
@@ -1620,18 +1574,15 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     content = preprocessPDFJSCode(ctx, content);
     content = babel.transform(content, {
       sourceType: "module",
-      presets: skipBabel ? undefined : ["@babel/preset-env"],
-      plugins: [
-        "@babel/plugin-transform-modules-commonjs",
-        babelPluginReplaceNonWebpackImports,
-      ],
+      presets: skipBabel
+        ? undefined
+        : [["@babel/preset-env", { loose: false, modules: false }]],
+      plugins: [babelPluginReplaceNonWebpackImport],
       targets: BABEL_TARGETS,
     }).code;
-    const removeCjsSrc =
-      /^(var\s+\w+\s*=\s*(_interopRequireDefault\()?require\(".*?)(?:\/src)(\/[^"]*"\)\)?;)$/gm;
     content = content.replaceAll(
-      removeCjsSrc,
-      (all, prefix, interop, suffix) => prefix + suffix
+      /(\sfrom\s".*?)(?:\/src)(\/[^"]*"?;)$/gm,
+      (all, prefix, suffix) => prefix + suffix
     );
     return licenseHeaderLibre + content;
   }
@@ -1640,12 +1591,12 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     saveComments: false,
     defines: bundleDefines,
     map: {
-      "pdfjs-lib": "../pdf",
-      "display-fetch_stream": "./fetch_stream",
-      "display-l10n_utils": "../web/l10n_utils",
-      "display-network": "./network",
-      "display-node_stream": "./node_stream",
-      "display-node_utils": "./node_utils",
+      "pdfjs-lib": "../pdf.js",
+      "display-fetch_stream": "./fetch_stream.js",
+      "display-l10n_utils": "../web/l10n_utils.js",
+      "display-network": "./network.js",
+      "display-node_stream": "./node_stream.js",
+      "display-node_utils": "./node_utils.js",
     },
   };
   const licenseHeaderLibre = fs
@@ -1672,7 +1623,6 @@ function buildLib(defines, dir) {
     gulp.src(
       [
         "src/{core,display,shared}/**/*.js",
-        "!src/shared/{cffStandardStrings,fonts_utils}.js",
         "src/{pdf,pdf.image_decoders,pdf.worker}.js",
       ],
       { base: "src/" }
@@ -1909,8 +1859,8 @@ gulp.task(
         packageJson().pipe(gulp.dest(TYPESTEST_DIR)),
         gulp
           .src([
-            GENERIC_DIR + "build/pdf.js",
-            GENERIC_DIR + "build/pdf.worker.js",
+            GENERIC_DIR + "build/pdf.mjs",
+            GENERIC_DIR + "build/pdf.worker.mjs",
             SRC_DIR + "pdf.worker.entry.js",
           ])
           .pipe(gulp.dest(TYPESTEST_DIR + "build/")),
@@ -2203,7 +2153,7 @@ function packageJson() {
   const npmManifest = {
     name: DIST_NAME,
     version: VERSION,
-    main: "build/pdf.js",
+    main: "build/pdf.mjs",
     types: "types/src/pdf.d.ts",
     description: DIST_DESCRIPTION,
     keywords: DIST_KEYWORDS,
@@ -2221,7 +2171,6 @@ function packageJson() {
       https: false,
       url: false,
     },
-    format: "amd", // to not allow system.js to choose 'cjs'
     repository: {
       type: "git",
       url: DIST_REPO_URL,
@@ -2280,49 +2229,49 @@ gulp.task(
           .pipe(gulp.dest(DIST_DIR)),
         gulp
           .src([
-            GENERIC_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.js",
-            GENERIC_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.js.map",
+            GENERIC_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.mjs",
+            GENERIC_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.mjs.map",
             SRC_DIR + "pdf.worker.entry.js",
           ])
           .pipe(gulp.dest(DIST_DIR + "build/")),
         gulp
           .src([
-            GENERIC_LEGACY_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.js",
-            GENERIC_LEGACY_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.js.map",
+            GENERIC_LEGACY_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.mjs",
+            GENERIC_LEGACY_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.mjs.map",
             SRC_DIR + "pdf.worker.entry.js",
           ])
           .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
         gulp
-          .src(MINIFIED_DIR + "build/pdf.js")
-          .pipe(rename("pdf.min.js"))
+          .src(MINIFIED_DIR + "build/pdf.mjs")
+          .pipe(rename("pdf.min.mjs"))
           .pipe(gulp.dest(DIST_DIR + "build/")),
         gulp
-          .src(MINIFIED_DIR + "build/pdf.worker.js")
-          .pipe(rename("pdf.worker.min.js"))
+          .src(MINIFIED_DIR + "build/pdf.worker.mjs")
+          .pipe(rename("pdf.worker.min.mjs"))
           .pipe(gulp.dest(DIST_DIR + "build/")),
         gulp
-          .src(MINIFIED_DIR + "build/pdf.sandbox.js")
-          .pipe(rename("pdf.sandbox.min.js"))
+          .src(MINIFIED_DIR + "build/pdf.sandbox.mjs")
+          .pipe(rename("pdf.sandbox.min.mjs"))
           .pipe(gulp.dest(DIST_DIR + "build/")),
         gulp
-          .src(MINIFIED_DIR + "image_decoders/pdf.image_decoders.js")
-          .pipe(rename("pdf.image_decoders.min.js"))
+          .src(MINIFIED_DIR + "image_decoders/pdf.image_decoders.mjs")
+          .pipe(rename("pdf.image_decoders.min.mjs"))
           .pipe(gulp.dest(DIST_DIR + "image_decoders/")),
         gulp
-          .src(MINIFIED_LEGACY_DIR + "build/pdf.js")
-          .pipe(rename("pdf.min.js"))
+          .src(MINIFIED_LEGACY_DIR + "build/pdf.mjs")
+          .pipe(rename("pdf.min.mjs"))
           .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
         gulp
-          .src(MINIFIED_LEGACY_DIR + "build/pdf.worker.js")
-          .pipe(rename("pdf.worker.min.js"))
+          .src(MINIFIED_LEGACY_DIR + "build/pdf.worker.mjs")
+          .pipe(rename("pdf.worker.min.mjs"))
           .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
         gulp
-          .src(MINIFIED_LEGACY_DIR + "build/pdf.sandbox.js")
-          .pipe(rename("pdf.sandbox.min.js"))
+          .src(MINIFIED_LEGACY_DIR + "build/pdf.sandbox.mjs")
+          .pipe(rename("pdf.sandbox.min.mjs"))
           .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
         gulp
-          .src(MINIFIED_LEGACY_DIR + "image_decoders/pdf.image_decoders.js")
-          .pipe(rename("pdf.image_decoders.min.js"))
+          .src(MINIFIED_LEGACY_DIR + "image_decoders/pdf.image_decoders.mjs")
+          .pipe(rename("pdf.image_decoders.min.mjs"))
           .pipe(gulp.dest(DIST_DIR + "legacy/image_decoders/")),
         gulp
           .src(COMPONENTS_DIR + "**/*", { base: COMPONENTS_DIR })
