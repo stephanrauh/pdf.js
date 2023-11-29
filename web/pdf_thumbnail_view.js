@@ -112,7 +112,7 @@ class PDFThumbnailView {
     this.eventBus = eventBus;
     this.linkService = linkService;
     this.renderingQueue = renderingQueue;
-    this.eventBus = eventBus;   // #1696 modified by ngx-extended-pdf-viewer
+    this.eventBus = eventBus; // #1696 modified by ngx-extended-pdf-viewer
 
     this.renderTask = null;
     this.renderingState = RenderingStates.INITIAL;
@@ -120,15 +120,15 @@ class PDFThumbnailView {
 
     // modified by ngx-extended-pdf-viewer
     if (window.pdfThumbnailGenerator) {
-      this._placeholderImg = window.pdfThumbnailGenerator(this, linkService, id, container, this._thumbPageTitle);
+      this._placeholderImg = window.pdfThumbnailGenerator(this, linkService, id, container, this.#pageL10nArgs);
     } else {
-      this.createThumbnail(this, linkService, id, container, this._thumbPageTitle);
+      this.createThumbnail(this, linkService, id, container, this.#pageL10nArgs);
     }
     // end of modification
   }
 
   // modified by ngx-extended-pdf-viewer
-  createThumbnail(pdfThumbnailView, linkService, id, container, thumbPageTitlePromise) {
+  createThumbnail(pdfThumbnailView, linkService, id, container, pageL10nArgs) {
     const anchor = document.createElement("a");
     anchor.href = linkService.getAnchorUrl("#page=" + id);
     anchor.setAttribute("data-l10n-id", "pdfjs-thumb-page-title");

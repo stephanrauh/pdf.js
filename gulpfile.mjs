@@ -1176,12 +1176,13 @@ function buildMinified(defines, dir) {
       gulp.dest(dir + "image_decoders")
     ),
     // modified by ngx-extended-pdf-viewer
-    gulp.src(COMMON_WEB_FILES, { base: "web/" }).pipe(gulp.dest(dir + "web")),
+    gulp.src("LICENSE").pipe(gulp.dest(dir)),
     gulp
-      .src(["web/locale/*/viewer.properties", "web/locale/locale.properties"], {
+      .src(["web/locale/*/viewer.ftl", "web/locale/locale.json"], {
         base: "web/",
       })
       .pipe(gulp.dest(dir + "web")),
+    gulp.src(COMMON_WEB_FILES, { base: "web/" }).pipe(gulp.dest(dir + "web")),
     createCMapBundle().pipe(gulp.dest(dir + "web/cmaps")),
     createStandardFontBundle().pipe(gulp.dest(dir + "web/standard_fonts")),
     // end of modification
