@@ -569,7 +569,7 @@ const PDFViewerApplication = {
     }
 
     // #763 modified by ngx-extended-pdf-viewer
-    let prompt = AppOptions.get("passwordPrompt");
+    const prompt = AppOptions.get("passwordPrompt");
     if (!prompt) {
       if (appConfig.passwordOverlay) {
         this.passwordPrompt = new PasswordPrompt(
@@ -578,8 +578,9 @@ const PDFViewerApplication = {
           this.isViewerEmbedded
         );
       }
+    } else {
+      this.passwordPrompt = prompt;
     }
-    this.passwordPrompt = prompt;
     // #763 end of modification by ngx-extended-pdf-viewer=======
 
     if (appConfig.sidebar?.outlineView) {
