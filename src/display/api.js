@@ -2345,10 +2345,12 @@ class PDFWorker {
         // The worker was already loaded using e.g. a `<script>` tag.
         return mainWorkerMessageHandler;
       }
-      if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
-        const worker = await import("pdfjs/pdf.worker.js");
-        return worker.WorkerMessageHandler;
-      }
+      // #1864 modified by ngx-extended-pdf-viewer
+      // if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("PRODUCTION")) {
+      //  const worker = await import("pdfjs/pdf.worker.js");
+      //  return worker.WorkerMessageHandler;
+      // }
+      // #1864 end of modification
       if (
         PDFJSDev.test("GENERIC") &&
         isNodeJS &&
