@@ -41,6 +41,9 @@ async function docProperties(pdfDocument) {
 
 class GenericScripting {
   constructor(sandboxBundleSrc) {
+    if (sandboxBundleSrc?.constructor?.name === "Function") {
+      sandboxBundleSrc = sandboxBundleSrc();
+    }
     this._ready = new Promise((resolve, reject) => {
       const sandbox =
         typeof PDFJSDev === "undefined"
