@@ -32,6 +32,9 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
 }
 
 let fs, http, https, url;
+// #1976 modified by ngx-extended-pdf-viewer - removed because this code
+// confuses Vite
+/**
 if (isNodeJS) {
   // Native packages.
   fs = await __non_webpack_import__("fs");
@@ -39,6 +42,8 @@ if (isNodeJS) {
   https = await __non_webpack_import__("https");
   url = await __non_webpack_import__("url");
 }
+*/
+// #1976 end of modification by ngx-extended-pdf-viewer
 
 const fileUriRegex = /^file:\/\/\/[a-zA-Z]:\//;
 
