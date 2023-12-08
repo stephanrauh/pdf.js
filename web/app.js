@@ -2360,11 +2360,16 @@ async function loadFakeWorker() {
     GlobalWorkerOptions.workerSrc = GlobalWorkerOptions.workerSrc();
   }
   // end of modification
+  // #1864 modified by ngx-extended-pdf-viewer because the code confused Vite
+  /*
   if (typeof PDFJSDev === "undefined") {
     globalThis.pdfjsWorker = await import("pdfjs/pdf.worker.js");
     return;
   }
   await __non_webpack_import__(PDFWorker.workerSrc);
+   */
+ // #1864 end of modification by ngx-extended-pdf-viewer
+
 }
 
 async function loadPDFBug(self) {

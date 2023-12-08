@@ -28,6 +28,9 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
 }
 
 let fs, canvas, path2d_polyfill;
+// #1976 modified by ngx-extended-pdf-viewer - removed because this code
+// confuses Vite
+/*
 if (isNodeJS) {
   // Native packages.
   fs = await __non_webpack_import__("fs");
@@ -39,6 +42,8 @@ if (isNodeJS) {
     path2d_polyfill = await __non_webpack_import__("path2d-polyfill");
   } catch {}
 }
+*/
+// #1976 end of modification by ngx-extended-pdf-viewer
 
 if (typeof PDFJSDev !== "undefined" && !PDFJSDev.test("SKIP_BABEL")) {
   (function checkDOMMatrix() {
