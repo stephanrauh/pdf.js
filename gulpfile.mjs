@@ -1201,7 +1201,6 @@ async function parseMinified(dir) {
     .readFileSync(dir + "image_decoders/pdf.image_decoders.mjs")
     .toString();
   const viewerFiles = {
-    "pdf.mjs": pdfFile,
     "viewer.mjs": fs.readFileSync(dir + "/web/viewer.mjs").toString(),
   };
 
