@@ -23,6 +23,7 @@ import {
   KeyboardManager,
 } from "./tools.js";
 import { FeatureTest, shadow, unreachable } from "../../shared/util.js";
+import { AltText } from "./alt_text.js";
 import { EditorToolbar } from "./toolbar.js";
 import { noContextMenu } from "../display_utils.js";
 
@@ -41,17 +42,7 @@ import { noContextMenu } from "../display_utils.js";
 class AnnotationEditor {
   #allResizerDivs = null;
 
-  #altText = "";
-
-  #altTextDecorative = false;
-
-  #altTextButton = null;
-
-  #altTextTooltip = null;
-
-  #altTextTooltipTimeout = null;
-
-  #altTextWasFromKeyBoard = false;
+  #altText = null;
 
   #keepAspectRatio = false;
 
@@ -96,10 +87,6 @@ class AnnotationEditor {
   static _colorManager = new ColorManager();
 
   static _zIndex = 1;
-
-  // When one of the dimensions of an editor is smaller than this value, the
-  // button to edit the alt text is visually moved outside of the editor.
-  static SMALL_EDITOR_SIZE = 0;
 
   static get _resizerKeyboardManager() {
     const resize = AnnotationEditor.prototype._resizeWithKeyboard;
@@ -514,7 +501,11 @@ class AnnotationEditor {
     }
   }
 
-  fixAndSetPosition() {
+  /**
+   * Fix the position of the editor in order to keep it inside its parent page.
+   * @param {number} [rotation] - the rotation of the page.
+   */
+  fixAndSetPosition(rotation = this.rotation) {
     const [pageWidth, pageHeight] = this.pageDimensions;
     let { x, y, width, height } = this;
     width *= pageWidth;
@@ -522,7 +513,7 @@ class AnnotationEditor {
     x *= pageWidth;
     y *= pageHeight;
 
-    switch (this.rotation) {
+    switch (rotation) {
       case 0:
         x = Math.max(0, Math.min(pageWidth - width, x));
         y = Math.max(0, Math.min(pageHeight - height, y));
@@ -634,11 +625,6 @@ class AnnotationEditor {
     if (!this.#keepAspectRatio) {
       this.div.style.height = `${((100 * height) / parentHeight).toFixed(2)}%`;
     }
-    this.#altTextButton?.classList.toggle(
-      "small",
-      width < AnnotationEditor.SMALL_EDITOR_SIZE ||
-        height < AnnotationEditor.SMALL_EDITOR_SIZE
-    );
   }
 
   fixDims() {
@@ -712,7 +698,7 @@ class AnnotationEditor {
       return;
     }
 
-    this.#toggleAltTextButton(false);
+    this.#altText?.toggle(false);
 
     const boundResizerPointermove = this.#resizerPointermove.bind(this, name);
     const savedDraggable = this._isDraggable;
@@ -735,7 +721,7 @@ class AnnotationEditor {
 
     const pointerUpCallback = () => {
       this.parent.togglePointerEvents(true);
-      this.#toggleAltTextButton(true);
+      this.#altText?.toggle(true);
       this._isDraggable = savedDraggable;
       window.removeEventListener("pointerup", pointerUpCallback);
       window.removeEventListener("blur", pointerUpCallback);
@@ -920,136 +906,25 @@ class AnnotationEditor {
     this.fixAndSetPosition();
   }
 
-  async addAltTextButton() {
-    if (this.#altTextButton) {
-      return;
-    }
-    const altText = (this.#altTextButton = document.createElement("button"));
-    altText.className = "altText";
-    const msg = await AnnotationEditor._l10nPromise.get(
-      "pdfjs-editor-alt-text-button-label"
-    );
-    altText.textContent = msg;
-    altText.setAttribute("aria-label", msg);
-    altText.tabIndex = "0";
-    altText.addEventListener("contextmenu", noContextMenu);
-    altText.addEventListener("pointerdown", event => event.stopPropagation());
-
-    const onClick = event => {
-      this.#altTextButton.hidden = true;
-      event.preventDefault();
-      this._uiManager.editAltText(this);
-    };
-    altText.addEventListener("click", onClick, { capture: true });
-    altText.addEventListener("keydown", event => {
-      if (event.target === altText && event.key === "Enter") {
-        this.#altTextWasFromKeyBoard = true;
-        onClick(event);
-      }
-    });
-    this.#setAltTextButtonState();
-    this.div.append(altText);
-    if (!AnnotationEditor.SMALL_EDITOR_SIZE) {
-      // We take the width of the alt text button and we add 40% to it to be
-      // sure to have enough space for it.
-      const PERCENT = 40;
-      AnnotationEditor.SMALL_EDITOR_SIZE = Math.min(
-        128,
-        Math.round(altText.getBoundingClientRect().width * (1 + PERCENT / 100))
-      );
-    }
-  }
-
-  async #setAltTextButtonState() {
-    const button = this.#altTextButton;
-    if (!button) {
-      return;
-    }
-    if (!this.#altText && !this.#altTextDecorative) {
-      button.classList.remove("done");
-      this.#altTextTooltip?.remove();
-      return;
-    }
-    button.classList.add("done");
-
-    AnnotationEditor._l10nPromise
-      .get("pdfjs-editor-alt-text-edit-button-label")
-      .then(msg => {
-        button.setAttribute("aria-label", msg);
-      });
-    let tooltip = this.#altTextTooltip;
-    if (!tooltip) {
-      this.#altTextTooltip = tooltip = document.createElement("span");
-      tooltip.className = "tooltip";
-      tooltip.setAttribute("role", "tooltip");
-      const id = (tooltip.id = `alt-text-tooltip-${this.id}`);
-      button.setAttribute("aria-describedby", id);
-
-      const DELAY_TO_SHOW_TOOLTIP = 100;
-      button.addEventListener("mouseenter", () => {
-        this.#altTextTooltipTimeout = setTimeout(() => {
-          this.#altTextTooltipTimeout = null;
-          this.#altTextTooltip.classList.add("show");
-          this._uiManager._eventBus.dispatch("reporttelemetry", {
-            source: this,
-            details: {
-              type: "editing",
-              subtype: this.editorType,
-              data: {
-                action: "alt_text_tooltip",
-              },
-            },
-          });
-        }, DELAY_TO_SHOW_TOOLTIP);
-      });
-      button.addEventListener("mouseleave", () => {
-        if (this.#altTextTooltipTimeout) {
-          clearTimeout(this.#altTextTooltipTimeout);
-          this.#altTextTooltipTimeout = null;
-        }
-        this.#altTextTooltip?.classList.remove("show");
-      });
-    }
-    tooltip.innerText = this.#altTextDecorative
-      ? await AnnotationEditor._l10nPromise.get(
-          "pdfjs-editor-alt-text-decorative-tooltip"
-        )
-      : this.#altText;
-
-    if (!tooltip.parentNode) {
-      button.append(tooltip);
-    }
-
-    const element = this.getImageForAltText();
-    element?.setAttribute("aria-describedby", tooltip.id);
-  }
-
-  #toggleAltTextButton(enabled = false) {
-    if (!this.#altTextButton) {
-      return;
-    }
-    if (!enabled && this.#altTextTooltipTimeout) {
-      clearTimeout(this.#altTextTooltipTimeout);
-      this.#altTextTooltipTimeout = null;
-    }
-    this.#altTextButton.disabled = !enabled;
-  }
-
   altTextFinish() {
-    if (!this.#altTextButton) {
-      return;
-    }
-    this.#altTextButton.hidden = false;
-    this.#altTextButton.focus({ focusVisible: this.#altTextWasFromKeyBoard });
-    this.#altTextWasFromKeyBoard = false;
+    this.#altText?.finish();
   }
 
-  addEditToolbar() {
+  /**
+   * Add a toolbar for this editor.
+   * @returns {Promise<EditorToolbar|null>}
+   */
+  async addEditToolbar() {
     if (this.#editToolbar || this.#isInEditMode) {
-      return;
+      return this.#editToolbar;
     }
     this.#editToolbar = new EditorToolbar(this);
     this.div.append(this.#editToolbar.render());
+    if (this.#altText) {
+      this.#editToolbar.addAltTextButton(await this.#altText.render());
+    }
+
+    return this.#editToolbar;
   }
 
   removeEditToolbar() {
@@ -1058,29 +933,37 @@ class AnnotationEditor {
     }
     this.#editToolbar.remove();
     this.#editToolbar = null;
+
+    // We destroy the alt text but we don't null it because we want to be able
+    // to restore it in case the user undoes the deletion.
+    this.#altText?.destroy();
   }
 
   getClientDimensions() {
     return this.div.getBoundingClientRect();
   }
 
+  async addAltTextButton() {
+    if (this.#altText) {
+      return;
+    }
+    AltText.initialize(AnnotationEditor._l10nPromise);
+    this.#altText = new AltText(this);
+    await this.addEditToolbar();
+  }
+
   get altTextData() {
-    return {
-      altText: this.#altText,
-      decorative: this.#altTextDecorative,
-    };
+    return this.#altText?.data;
   }
 
   /**
    * Set the alt text data.
    */
-  set altTextData({ altText, decorative }) {
-    if (this.#altText === altText && this.#altTextDecorative === decorative) {
+  set altTextData(data) {
+    if (!this.#altText) {
       return;
     }
-    this.#altText = altText;
-    this.#altTextDecorative = decorative;
-    this.#setAltTextButtonState();
+    this.#altText.data = data;
   }
 
   /**
@@ -1132,14 +1015,28 @@ class AnnotationEditor {
 
     this.#hasBeenClicked = true;
 
-    this.#setUpDragSession(event);
-  }
-
-  #setUpDragSession(event) {
-    if (!this._isDraggable) {
+    if (this._isDraggable) {
+      this.#setUpDragSession(event);
       return;
     }
 
+    this.#selectOnPointerEvent(event);
+  }
+
+  #selectOnPointerEvent(event) {
+    const { isMac } = FeatureTest.platform;
+    if (
+      (event.ctrlKey && !isMac) ||
+      event.shiftKey ||
+      (event.metaKey && isMac)
+    ) {
+      this.parent.toggleSelected(this);
+    } else {
+      this.parent.setSelected(this);
+    }
+  }
+
+  #setUpDragSession(event) {
     const isSelected = this._uiManager.isSelected(this);
     this._uiManager.setUpDragSession();
 
@@ -1170,16 +1067,7 @@ class AnnotationEditor {
 
       this.#hasBeenClicked = false;
       if (!this._uiManager.endDragSession()) {
-        const { isMac } = FeatureTest.platform;
-        if (
-          (event.ctrlKey && !isMac) ||
-          event.shiftKey ||
-          (event.metaKey && isMac)
-        ) {
-          this.parent.toggleSelected(this);
-        } else {
-          this.parent.setSelected(this);
-        }
+        this.#selectOnPointerEvent(event);
       }
     };
     window.addEventListener("pointerup", pointerUpCallback);
@@ -1211,8 +1099,11 @@ class AnnotationEditor {
 
   /**
    * Convert the current rect into a page one.
+   * @param {number} tx - x-translation in screen coordinates.
+   * @param {number} ty - y-translation in screen coordinates.
+   * @param {number} [rotation] - the rotation of the page.
    */
-  getRect(tx, ty) {
+  getRect(tx, ty, rotation = this.rotation) {
     const scale = this.parentScale;
     const [pageWidth, pageHeight] = this.pageDimensions;
     const [pageX, pageY] = this.pageTranslation;
@@ -1223,7 +1114,7 @@ class AnnotationEditor {
     const width = this.width * pageWidth;
     const height = this.height * pageHeight;
 
-    switch (this.rotation) {
+    switch (rotation) {
       case 0:
         return [
           x + shiftX + pageX,
@@ -1340,6 +1231,12 @@ class AnnotationEditor {
   }
 
   /**
+   * Rotate the editor.
+   * @param {number} angle
+   */
+  rotate(_angle) {}
+
+  /**
    * Serialize the editor.
    * The result of the serialization will be used to construct a
    * new annotation to add to the pdf document.
@@ -1402,11 +1299,6 @@ class AnnotationEditor {
       this._uiManager.removeEditor(this);
     }
 
-    // The editor is removed so we can remove the alt text button and if it's
-    // restored then it's up to the subclass to add it back.
-    this.#altTextButton?.remove();
-    this.#altTextButton = null;
-    this.#altTextTooltip = null;
     if (this.#moveInDOMTimeout) {
       clearTimeout(this.#moveInDOMTimeout);
       this.#moveInDOMTimeout = null;
@@ -1431,6 +1323,10 @@ class AnnotationEditor {
       this.#resizersDiv.classList.remove("hidden");
       bindEvents(this, this.div, ["keydown"]);
     }
+  }
+
+  get toolbarPosition() {
+    return null;
   }
 
   /**
@@ -1570,7 +1466,17 @@ class AnnotationEditor {
   select() {
     this.makeResizable();
     this.div?.classList.add("selectedEditor");
-    this.addEditToolbar();
+    if (!this.#editToolbar) {
+      this.addEditToolbar().then(() => {
+        if (this.div?.classList.contains("selectedEditor")) {
+          // The editor can have been unselected while we were waiting for the
+          // edit toolbar to be created, hence we want to be sure that this
+          // editor is still selected.
+          this.#editToolbar?.show();
+        }
+      });
+      return;
+    }
     this.#editToolbar?.show();
   }
 
@@ -1599,21 +1505,13 @@ class AnnotationEditor {
    * When the user disables the editing mode some editors can change some of
    * their properties.
    */
-  disableEditing() {
-    if (this.#altTextButton) {
-      this.#altTextButton.hidden = true;
-    }
-  }
+  disableEditing() {}
 
   /**
    * When the user enables the editing mode some editors can change some of
    * their properties.
    */
-  enableEditing() {
-    if (this.#altTextButton) {
-      this.#altTextButton.hidden = false;
-    }
-  }
+  enableEditing() {}
 
   /**
    * The editor is about to be edited.
@@ -1675,6 +1573,10 @@ class AnnotationEditor {
 
   static get MIN_SIZE() {
     return 16;
+  }
+
+  static canCreateNewEmptyEditor() {
+    return true;
   }
 }
 

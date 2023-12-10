@@ -14,22 +14,23 @@
  */
 
 import {
+  awaitPromise,
   closePages,
+  createPromise,
+  getEditorSelector,
   getSelectedEditors,
   kbRedo,
   kbSelectAll,
   kbUndo,
   loadAndWait,
+  scrollIntoView,
   waitForStorageEntries,
 } from "./test_utils.mjs";
 
 const waitForPointerUp = page =>
-  page.evaluate(
-    () =>
-      new Promise(resolve => {
-        window.addEventListener("pointerup", resolve, { once: true });
-      })
-  );
+  createPromise(page, resolve => {
+    window.addEventListener("pointerup", resolve, { once: true });
+  });
 
 const selectAll = async page => {
   await kbSelectAll(page);
@@ -76,12 +77,12 @@ describe("Ink Editor", () => {
           for (let i = 0; i < 3; i++) {
             const x = rect.x + 100 + i * 100;
             const y = rect.y + 100 + i * 100;
-            const promise = waitForPointerUp(page);
+            const clickHandle = await waitForPointerUp(page);
             await page.mouse.move(x, y);
             await page.mouse.down();
             await page.mouse.move(x + 50, y + 50);
             await page.mouse.up();
-            await promise;
+            await awaitPromise(clickHandle);
 
             await commit(page);
           }
@@ -112,12 +113,12 @@ describe("Ink Editor", () => {
 
           const xStart = rect.x + 300;
           const yStart = rect.y + 300;
-          const clickPromise = waitForPointerUp(page);
+          const clickHandle = await waitForPointerUp(page);
           await page.mouse.move(xStart, yStart);
           await page.mouse.down();
           await page.mouse.move(xStart + 50, yStart + 50);
           await page.mouse.up();
-          await clickPromise;
+          await awaitPromise(clickHandle);
 
           await commit(page);
 
@@ -175,12 +176,12 @@ describe("Ink Editor", () => {
 
           const x = rect.x + 20;
           const y = rect.y + 20;
-          const clickPromise = waitForPointerUp(page);
+          const clickHandle = await waitForPointerUp(page);
           await page.mouse.move(x, y);
           await page.mouse.down();
           await page.mouse.move(x + 50, y + 50);
           await page.mouse.up();
-          await clickPromise;
+          await awaitPromise(clickHandle);
 
           await commit(page);
 
@@ -189,6 +190,108 @@ describe("Ink Editor", () => {
           expect(await getSelectedEditors(page))
             .withContext(`In ${browserName}`)
             .toEqual([0]);
+        })
+      );
+    });
+  });
+
+  describe("Invisible layers must be disabled", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the editor layer is disabled", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorInk");
+          await page.waitForSelector(".annotationEditorLayer.inkEditing");
+
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            // With Chrome something is wrong when serializing a DomRect,
+            // hence we extract the values and just return them.
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const x = rect.x + 20;
+          const y = rect.y + 20;
+          const clickHandle = await waitForPointerUp(page);
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x + 50, y + 50);
+          await page.mouse.up();
+          await awaitPromise(clickHandle);
+
+          await commit(page);
+
+          const oneToFourteen = Array.from(new Array(13).keys(), n => n + 2);
+          for (const pageNumber of oneToFourteen) {
+            await scrollIntoView(
+              page,
+              `.page[data-page-number = "${pageNumber}"]`
+            );
+          }
+
+          await page.click("#editorInk");
+          await page.waitForSelector(".annotationEditorLayer:not(.inkEditing)");
+
+          const fourteenToOne = Array.from(new Array(13).keys(), n => 13 - n);
+          for (const pageNumber of fourteenToOne) {
+            await scrollIntoView(
+              page,
+              `.page[data-page-number = "${pageNumber}"]`
+            );
+          }
+
+          await page.waitForSelector(
+            `.page[data-page-number = "1"] .annotationEditorLayer.disabled:not(.inkEditing)`
+          );
+        })
+      );
+    });
+  });
+
+  describe("Ink editor must be committed when blurred", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the ink editor is committed", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorInk");
+          await page.waitForSelector(".annotationEditorLayer.inkEditing");
+
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            // With Chrome something is wrong when serializing a DomRect,
+            // hence we extract the values and just return them.
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const x = rect.x + 20;
+          const y = rect.y + 20;
+          const clickHandle = await waitForPointerUp(page);
+          await page.mouse.move(x, y);
+          await page.mouse.down();
+          await page.mouse.move(x + 50, y + 50);
+          await page.mouse.up();
+          await awaitPromise(clickHandle);
+
+          page.mouse.click(rect.x - 10, rect.y + 10);
+          await page.waitForSelector(`${getEditorSelector(0)}.disabled`);
         })
       );
     });

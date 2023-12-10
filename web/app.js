@@ -111,7 +111,7 @@ class DefaultExternalServices {
     throw new Error("Not implemented: createL10n");
   }
 
-  static createScripting(options) {
+  static createScripting() {
     throw new Error("Not implemented: createScripting");
   }
 
@@ -407,10 +407,6 @@ const PDFViewerApplication = {
 
     const pdfScriptingManager = new PDFScriptingManager({
       eventBus,
-      sandboxBundleSrc:
-        typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC || CHROME")
-          ? AppOptions.get("sandboxBundleSrc")
-          : null,
       externalServices,
       docProperties: this._scriptingDocProperties.bind(this),
     });
@@ -454,6 +450,7 @@ const PDFViewerApplication = {
       textLayerMode: AppOptions.get("textLayerMode"),
       annotationMode: AppOptions.get("annotationMode"),
       annotationEditorMode,
+      annotationEditorHighlightColors: AppOptions.get("highlightEditorColors"),
       imageResourcesPath: AppOptions.get("imageResourcesPath"),
       removePageBorders: AppOptions.get("removePageBorders"), // #194
       enablePrintAutoRotate: AppOptions.get("enablePrintAutoRotate"),
@@ -500,6 +497,11 @@ const PDFViewerApplication = {
       if (annotationEditorMode !== AnnotationEditorType.DISABLE) {
         if (!isOffscreenCanvasSupported) {
           appConfig.toolbar?.editorStampButton?.classList.add("hidden");
+        }
+
+        const editorHighlightButton = appConfig.toolbar?.editorHighlightButton;
+        if (editorHighlightButton && AppOptions.get("enableHighlightEditor")) {
+          editorHighlightButton.hidden = false;
         }
 
         this.annotationEditorParams = new AnnotationEditorParams(
@@ -712,6 +714,7 @@ const PDFViewerApplication = {
       appConfig.toolbar?.viewFind?.classList.add("hidden");
     }
 
+<<<<<<< HEAD
     appConfig.mainContainer.addEventListener(
       "transitionend",
       function (evt) {
@@ -743,6 +746,18 @@ const PDFViewerApplication = {
         }
         // end of modification
       });
+=======
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      if (file) {
+        this.open({ url: file });
+      } else {
+        this._hideViewBookmark();
+      }
+    } else if (PDFJSDev.test("MOZCENTRAL || CHROME")) {
+      this.initPassiveLoading(file);
+    } else {
+      throw new Error("Not implemented: run");
+>>>>>>> upstream/master
     }
   },
 

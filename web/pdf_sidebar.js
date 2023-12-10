@@ -269,7 +269,7 @@ class PDFSidebar {
     this.#hideUINotification();
   }
 
-  close() {
+  close(evt = null) {
     if (!this.isOpen) {
       return;
     }
@@ -281,11 +281,16 @@ class PDFSidebar {
 
     this.onToggled();
     this.#dispatchEvent();
+
+    if (evt?.detail > 0) {
+      // Remove focus from the toggleButton if it's clicked (see issue 17361).
+      this.toggleButton.blur();
+    }
   }
 
-  toggle() {
+  toggle(evt = null) {
     if (this.isOpen) {
-      this.close();
+      this.close(evt);
     } else {
       this.open();
     }
@@ -334,11 +339,13 @@ class PDFSidebar {
     this.sidebarContainer.addEventListener("transitionend", evt => {
       if (evt.target === this.sidebarContainer) {
         this.outerContainer.classList.remove("sidebarMoving");
+        // Ensure that rendering is triggered after opening/closing the sidebar.
+        this.eventBus.dispatch("resize", { source: this });
       }
     });
 
-    this.toggleButton.addEventListener("click", () => {
-      this.toggle();
+    this.toggleButton.addEventListener("click", evt => {
+      this.toggle(evt);
     });
 
     // Buttons for switching views.

@@ -125,6 +125,14 @@ const defaultOptions = {
     value: false,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  enableHighlightEditor: {
+    // We'll probably want to make some experiments before enabling this
+    // in Firefox release, but it has to be temporary.
+    // TODO: remove it when unnecessary.
+    /** @type {boolean} */
+    value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
   enablePermissions: {
     /** @type {boolean} */
     value: false,
@@ -148,6 +156,11 @@ const defaultOptions = {
   externalLinkTarget: {
     /** @type {number} */
     value: 0,
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
+  highlightEditorColors: {
+    /** @type {string} */
+    value: "yellow=#FFFF98,green=#53FFBC,blue=#80EBFF,pink=#FFCBE6,red=#FF4F5F",
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   historyUpdateUrl: {
@@ -335,26 +348,12 @@ const defaultOptions = {
   },
 };
 if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
-  defaultOptions.viewerCssTheme = {
-    /** @type {number} */
-    value: typeof PDFJSDev !== "undefined" && PDFJSDev.test("CHROME") ? 2 : 0,
-    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
-  };
-}
-if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
   defaultOptions.defaultUrl = {
     /** @type {string} */
-    value: "compressed.tracemonkey-pldi-09.pdf",
-    kind: OptionKind.VIEWER,
-  };
-  defaultOptions.disablePreferences = {
-    /** @type {boolean} */
-    value: typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING"),
-    kind: OptionKind.VIEWER,
-  };
-  defaultOptions.locale = {
-    /** @type {string} */
-    value: navigator.language || "en-US",
+    value:
+      typeof PDFJSDev !== "undefined" && PDFJSDev.test("CHROME")
+        ? ""
+        : "compressed.tracemonkey-pldi-09.pdf",
     kind: OptionKind.VIEWER,
   };
   defaultOptions.sandboxBundleSrc = {
@@ -365,21 +364,28 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
         : "../build/pdf.sandbox.mjs",
     kind: OptionKind.VIEWER,
   };
-} else if (PDFJSDev.test("CHROME")) {
-  defaultOptions.defaultUrl = {
-    /** @type {string} */
-    value: "",
+  defaultOptions.viewerCssTheme = {
+    /** @type {number} */
+    value: typeof PDFJSDev !== "undefined" && PDFJSDev.test("CHROME") ? 2 : 0,
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  };
+}
+if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+  defaultOptions.disablePreferences = {
+    /** @type {boolean} */
+    value: typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING"),
     kind: OptionKind.VIEWER,
   };
+  defaultOptions.locale = {
+    /** @type {string} */
+    value: navigator.language || "en-US",
+    kind: OptionKind.VIEWER,
+  };
+} else if (PDFJSDev.test("CHROME")) {
   defaultOptions.disableTelemetry = {
     /** @type {boolean} */
     value: false,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
-  };
-  defaultOptions.sandboxBundleSrc = {
-    /** @type {string} */
-    value: "../build/pdf.sandbox.js",
-    kind: OptionKind.VIEWER,
   };
 }
 
