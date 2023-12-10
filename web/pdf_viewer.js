@@ -226,6 +226,13 @@ class PDFViewer {
 
   #textLayerMode = TextLayerMode.ENABLE;
 
+  // #1989 modified by ngx-extended-pdf-viewer
+  // to ensure rendering in infinite-scroll-mode
+  #outerScrollContainer = undefined;
+
+  #pageViewMode = "multiple";
+  // #1989 end of modification by ngx-extended-pdf-viewer
+
   /**
    * @param {PDFViewerOptions} options
    */
@@ -327,6 +334,37 @@ class PDFViewer {
       }
     });
   }
+
+  // #1989 modified by ngx-extended-pdf-viewer
+  // to ensure rendering in infinite-scroll-mode
+
+  get pageViewMode() {
+    return this.#pageViewMode;
+  }
+
+  set pageViewMode(viewMode) {
+    if (this.#pageViewMode !== viewMode) {
+      this.#pageViewMode = viewMode;
+      if (!this.#outerScrollContainer && viewMode === "infinite-scroll") {
+        this.#outerScrollContainer = this.#findParentWithScrollbar(this.container.offsetParent);
+        if (this.#outerScrollContainer) {
+          watchScroll(this.#outerScrollContainer, this._scrollUpdate.bind(this));
+        }
+      }
+    }
+  }
+
+  #findParentWithScrollbar(element) {
+    while (element) {
+      if (element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth) {
+        return element;
+      }
+      element = element.parentElement;
+    }
+    return null;
+  }
+  // #1989 end of modification by ngx-extended-pdf-viewer
+
 
   get pagesCount() {
     return this._pages.length;
