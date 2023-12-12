@@ -714,39 +714,6 @@ const PDFViewerApplication = {
       appConfig.toolbar?.viewFind?.classList.add("hidden");
     }
 
-<<<<<<< HEAD
-    appConfig.mainContainer.addEventListener(
-      "transitionend",
-      function (evt) {
-        if (evt.target === /* mainContainer */ this) {
-          eventBus.dispatch("resize", { source: this });
-        }
-      },
-      true
-    );
-
-    try {
-	    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-	      if (file) {
-	        this.open({ url: file });
-	      } else {
-	        this._hideViewBookmark();
-	      }
-	    } else if (PDFJSDev.test("MOZCENTRAL || CHROME")) {
-	      this.initPassiveLoading(file);
-	    } else {
-	      throw new Error("Not implemented: run");
-	    }
-    } catch (reason) {
-      l10n.get("loading_error").then(msg => {
-        this._documentError(msg, reason);
-        // #1401 modified by ngx-extended-pdf-viewer
-        if (PDFViewerApplication.onError) {
-          PDFViewerApplication.onError(reason);
-        }
-        // end of modification
-      });
-=======
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
       if (file) {
         this.open({ url: file });
@@ -757,7 +724,6 @@ const PDFViewerApplication = {
       this.initPassiveLoading(file);
     } else {
       throw new Error("Not implemented: run");
->>>>>>> upstream/master
     }
   },
 

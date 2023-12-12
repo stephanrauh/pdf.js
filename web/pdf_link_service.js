@@ -450,13 +450,7 @@ class PDFLinkService {
       if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
         return;
       }
-<<<<<<< HEAD
-      globalThis.ngxConsole.error(
-        `PDFLinkService.setHash: "${unescape(
-          hash
-        )}" is not a valid destination.`
-      );
-=======
+
       // Support opening of PDF attachments in the Firefox PDF Viewer,
       // which uses a couple of non-standard hash parameters; refer to
       // `DownloadManager.openOrDownloadData` in the firefoxcom.js file.
@@ -464,7 +458,6 @@ class PDFLinkService {
         return;
       }
       hash = params.get("filedest");
->>>>>>> upstream/master
     }
 
     // Named (or explicit) destination.
