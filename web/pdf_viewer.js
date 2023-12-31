@@ -446,6 +446,7 @@ class PDFViewer {
       } else {
         this.pageFlip.turnToPage(val - 1);
       }
+      this.ensureAdjacentPagesAreLoaded();
     }
     // #716 end of modification
   }
@@ -521,7 +522,7 @@ class PDFViewer {
 
         // #716 modified by ngx-extended-pdf-viewer
         if (this.#pageViewMode === "book") {
-          this.ensureAdjecentPagesAreLoaded();
+          this.ensureAdjacentPagesAreLoaded();
         }
         // #716 modified by ngx-extended-pdf-viewer
       }
@@ -565,23 +566,32 @@ class PDFViewer {
   // #950 end of modification by ngx-extended-pdf-viewer
 
   // #716 modified by ngx-extended-pdf-viewer
-  async ensureAdjecentPagesAreLoaded() {
-    const advances = [0, 1, -1, 2, -2];
+  async ensureAdjacentPagesAreLoaded() {
+    const advances = [0, 1, -1, 2, -2, -3];
+    let offset = 0;
+    if (this.currentPageNumber % 2 === 1) {
+      offset = -1;
+    }
+    let renderAsynchronously = false;
     for (const advance of advances) {
-      const pageIndex = this.currentPageNumber + advance;
+      const pageIndex = this.currentPageNumber + advance + offset;
       if (pageIndex >= 0 && pageIndex < this._pages.length) {
-        const pageView = this._pages[pageIndex];
-        await this.#ensurePdfPageLoaded(pageView);
+        try {
+          const pageView = this._pages[pageIndex];
+          await this.#ensurePdfPageLoaded(pageView);
 
-        const isAlreadyRendering = this._pages.some(
-          pv => pv.renderingState === RenderingStates.RUNNING || pv.renderingState === RenderingStates.PAUSED
-        );
-        if (isAlreadyRendering) {
-          const loader = () => this.adjacentPagesRenderer(loader, pageIndex);
-          this.eventBus._on("pagerendered", loader);
-          this.eventBus._on("thumbnailRendered", loader);
-        } else {
-          this.adjacentPagesRenderer(null, pageIndex);
+          const isAlreadyRendering = this._pages.some(
+            pv => pv.renderingState === RenderingStates.RUNNING || pv.renderingState === RenderingStates.PAUSED
+          );
+          if (isAlreadyRendering || renderAsynchronously) {
+            const loader = () => this.adjacentPagesRenderer(loader, pageIndex);
+            this.eventBus._on("pagerendered", loader);
+            this.eventBus._on("thumbnailRendered", loader);
+          } else {
+            renderAsynchronously = this.adjacentPagesRenderer(null, pageIndex);
+          }
+        } catch (exception) {
+          console.log("Exception during pre-rendering page " + pageIndex, exception);
         }
       }
     }
@@ -592,7 +602,7 @@ class PDFViewer {
     if (isAlreadyRendering) {
       // renderView() cancels any rendering in progress -
       // let's wait until the page has rendered
-      return;
+      return true;
     }
     const pausedRendering = this._pages.find(pageView => pageView.renderingState === RenderingStates.PAUSED);
     if (pausedRendering) {
@@ -600,7 +610,7 @@ class PDFViewer {
       // so let's wait until it has finished
       console.log("Delaying because " + pausedRendering.id + " is already in pause mode, so let's trigger this one first");
       this.renderingQueue.renderView(pausedRendering);
-      return;
+      return true;
     }
     if (self) {
       this.eventBus._off("pagerendered", self);
@@ -612,8 +622,10 @@ class PDFViewer {
       const needsToBeRendered = pageView.renderingState === RenderingStates.INITIAL;
       if (needsToBeRendered) {
         this.renderingQueue.renderView(pageView);
+        return true;
       }
     }
+    return false;
   }
   // #716 modified by ngx-extended-pdf-viewer
 
@@ -1166,10 +1178,10 @@ class PDFViewer {
             this._pagesCapability.resolve();
             return;
           }
-          
+
   		  // #716 modified by ngx-extended-pdf-viewer
           if (this.#pageViewMode === "book") {
-            await this.ensureAdjecentPagesAreLoaded();
+            await this.ensureAdjacentPagesAreLoaded();
           }
           // #716 end of modification by ngx-extended-pdf-viewer
 
