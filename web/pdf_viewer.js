@@ -470,7 +470,6 @@ class PDFViewer {
               size: "fixed",
             });
             this.pageFlip.loadFromHTML(document.querySelectorAll(".page"));
-            this.ensureAdjecentPagesAreLoaded();
             // triggered by page turning
             this.pageFlip.on("flip", e => {
               if (this._currentPageNumber !== e.data + 1) {
@@ -489,7 +488,7 @@ class PDFViewer {
    * @returns {boolean} Whether the pageNumber is valid (within bounds).
    * @private
    */
-  _setCurrentPageNumber(val, resetCurrentPageView = false) {
+  async _setCurrentPageNumber(val, resetCurrentPageView = false) {
     if (this._currentPageNumber === val) {
       if (resetCurrentPageView) {
         this.#resetCurrentPageView();
@@ -509,20 +508,19 @@ class PDFViewer {
     if (this.pageViewMode === "book" || this.pageViewMode === "infinite-scroll") {
       const pageView = this._pages[this.currentPageNumber - 1];
       if (pageView.div.parentElement.classList.contains("spread")) {
-        pageView.div.parentElement.childNodes.forEach(div => {
+        pageView.div.parentElement.childNodes.forEach(async div => {
           const pageNumber = Number(div.getAttribute("data-page-number"));
           const pv = this._pages[pageNumber - 1];
-          this.#ensurePdfPageLoaded(pv).then(() => {
-            this.renderingQueue.renderView(pv);
-          });
+          await this.#ensurePdfPageLoaded(pv);
+          this.renderingQueue.renderView(pv);
           div.style.display = "inline-block";
         });
       } else {
-        this.#ensurePdfPageLoaded(pageView).then(() => {
-          this.renderingQueue.renderView(pageView);
-        });
+        await this.#ensurePdfPageLoaded(pageView);
+        this.renderingQueue.renderView(pageView);
+
         // #716 modified by ngx-extended-pdf-viewer
-        if (this.pageViewMode === "book") {
+        if (this.#pageViewMode === "book") {
           this.ensureAdjecentPagesAreLoaded();
         }
         // #716 modified by ngx-extended-pdf-viewer
@@ -574,17 +572,23 @@ class PDFViewer {
       if (pageIndex >= 0 && pageIndex < this._pages.length) {
         const pageView = this._pages[pageIndex];
         await this.#ensurePdfPageLoaded(pageView);
+
+        const isAlreadyRendering = this._pages.some(
+          pv => pv.renderingState === RenderingStates.RUNNING || pv.renderingState === RenderingStates.PAUSED
+        );
+        if (isAlreadyRendering) {
+          const loader = () => this.adjacentPagesRenderer(loader, pageIndex);
+          this.eventBus._on("pagerendered", loader);
+          this.eventBus._on("thumbnailRendered", loader);
+        } else {
+          this.adjacentPagesRenderer(null, pageIndex);
+        }
       }
     }
-
-    const loader = () => this.adjacentPagesLoader(loader);
-    this.eventBus._on("pagerendered", loader);
-    this.eventBus._on("thumbnailRendered", loader);
   }
 
-  adjacentPagesLoader(self) {
-    const advances = [0, 1, -1, 2, -2];
-    const isAlreadyRendering = this._pages.some(pageView => pageView.renderingState === RenderingStates.RUNNING);
+  adjacentPagesRenderer(self, pageIndex) {
+    const isAlreadyRendering = this._pages.find(pageView => pageView.renderingState === RenderingStates.RUNNING);
     if (isAlreadyRendering) {
       // renderView() cancels any rendering in progress -
       // let's wait until the page has rendered
@@ -592,23 +596,24 @@ class PDFViewer {
     }
     const pausedRendering = this._pages.find(pageView => pageView.renderingState === RenderingStates.PAUSED);
     if (pausedRendering) {
+      // another page or thumbnail has already been requested,
+      // so let's wait until it has finished
+      console.log("Delaying because " + pausedRendering.id + " is already in pause mode, so let's trigger this one first");
       this.renderingQueue.renderView(pausedRendering);
       return;
     }
+    if (self) {
+      this.eventBus._off("pagerendered", self);
+      this.eventBus._off("thumbnailRendered", self);
+    }
 
-    for (const advance of advances) {
-      const pageIndex = this.currentPageNumber + advance;
-      if (pageIndex >= 0 && pageIndex < this._pages.length) {
-        const pageView = this._pages[pageIndex];
-        const needsToBeRendered = pageView.renderingState === RenderingStates.INITIAL;
-        if (needsToBeRendered) {
-          this.renderingQueue.renderView(pageView);
-          return;
-        }
+    if (pageIndex >= 0 && pageIndex < this._pages.length) {
+      const pageView = this._pages[pageIndex];
+      const needsToBeRendered = pageView.renderingState === RenderingStates.INITIAL;
+      if (needsToBeRendered) {
+        this.renderingQueue.renderView(pageView);
       }
     }
-    this.eventBus._off("pagerendered", self);
-    this.eventBus._off("thumbnailRendered", self);
   }
   // #716 modified by ngx-extended-pdf-viewer
 
@@ -1161,7 +1166,19 @@ class PDFViewer {
             this._pagesCapability.resolve();
             return;
           }
+          
+  		  // #716 modified by ngx-extended-pdf-viewer
+          if (this.#pageViewMode === "book") {
+            await this.ensureAdjecentPagesAreLoaded();
+          }
+          // #716 end of modification by ngx-extended-pdf-viewer
+
           for (let pageNum = 2; pageNum <= pagesCount; ++pageNum) {
+            // #716 modified by ngx-extended-pdf-viewer
+            if (this._pages[pageNum - 1]) {
+              continue;
+            }
+            // #716 end of modification by ngx-extended-pdf-viewer
             const promise = pdfDocument.getPage(pageNum).then(
               pdfPage => {
                 const pageView = this._pages[pageNum - 1];
