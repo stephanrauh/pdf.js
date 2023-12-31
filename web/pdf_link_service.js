@@ -294,7 +294,7 @@ class PDFLinkService {
 
     if (this.pdfViewer.pageViewMode === "book") {
       if (this.pdfViewer.pageFlip) {
-        this.pdfViewer.ensureAdjecentPagesAreLoaded();
+        this.pdfViewer.ensureAdjacentPagesAreLoaded();
         const evenPage = this.pdfViewer.currentPageNumber - (this.pdfViewer.currentPageNumber % 2);
         const evenTargetPage = pageNumber - (pageNumber % 2);
         if (evenPage === evenTargetPage - 2) {
