@@ -608,7 +608,6 @@ class PDFViewer {
     if (pausedRendering) {
       // another page or thumbnail has already been requested,
       // so let's wait until it has finished
-      console.log("Delaying because " + pausedRendering.id + " is already in pause mode, so let's trigger this one first");
       this.renderingQueue.renderView(pausedRendering);
       return true;
     }
