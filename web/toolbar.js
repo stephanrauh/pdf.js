@@ -339,27 +339,12 @@ class Toolbar {
     } // #1315 end of modification by ngx-extended-pdf-viewer
     if (!predefinedValueFound) {
       opts.customScaleOption.selected = true;
-      // #2045 modified by ngx-extended-pdf-viewer
-      /* For some reason, the mutation observer of fluent-dom sometimes
-         misses the attribute change, so let's set it manually
       opts.customScaleOption.setAttribute(
         "data-l10n-args",
         JSON.stringify({
           scale: Math.round(pageScale * 10000) / 100,
         })
       );
-      */
-      (async () => {
-        // eslint-disable-next-line no-undef
-        const x = await PDFViewerApplication.l10n.get(
-          "pdfjs-page-scale-percent",
-          { scale: Math.round(pageScale * 10000) / 100 },
-          "{ $scale }%"
-        );
-        opts.customScaleOption.innerText = x;
-      })();
-
-      // #2045 end of modification by ngx-extended-pdf-viewer
     }
     // modified by ngx-extended-pdf-viewer
     this.eventBus.dispatch("updateuistate", {
