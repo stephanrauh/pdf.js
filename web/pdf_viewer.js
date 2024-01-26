@@ -1196,11 +1196,6 @@ class PDFViewer {
           // #716 end of modification by ngx-extended-pdf-viewer
 
           for (let pageNum = 2; pageNum <= pagesCount; ++pageNum) {
-            // #716 modified by ngx-extended-pdf-viewer
-            if (this._pages[pageNum - 1]) {
-              continue;
-            }
-            // #716 end of modification by ngx-extended-pdf-viewer
             const promise = pdfDocument.getPage(pageNum).then(
               pdfPage => {
                 const pageView = this._pages[pageNum - 1];
