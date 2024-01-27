@@ -38,19 +38,31 @@
       var(--outline-around-width)
   );
   --editorFreeText-editing-cursor: text;
-  /*#if COMPONENTS*/
-  --editorInk-editing-cursor: pointer;
-  /*#else*/
   --editorInk-editing-cursor: url(images/cursor-editorInk.svg) 0 16, pointer;
-  /*#endif*/
+  --editorHighlight-editing-cursor: url(images/cursor-editorTextHighlight.svg)
+      23 23,
+    text;
+  --editorFreeHighlight-editing-cursor: url(images/toolbarButton-editorHighlight.svg)
+      0 16,
+    pointer;
+}
+
+.textLayer.highlighting {
+  cursor: var(--editorFreeHighlight-editing-cursor);
+
+  &:not(.free) span {
+    cursor: var(--editorHighlight-editing-cursor);
+  }
+
+  &.free span {
+    cursor: var(--editorFreeHighlight-editing-cursor);
+  }
 }
 
 @media (min-resolution: 1.1dppx) {
   :root {
-    /*#if !COMPONENTS*/
     --editorFreeText-editing-cursor: url(images/cursor-editorFreeText.svg) 0 16,
       text;
-    /*#endif*/
   }
 }
 
@@ -119,6 +131,10 @@
 
   &.draggable.selectedEditor {
     cursor: move;
+  }
+
+  &.moving {
+    touch-action: none;
   }
 
   &.selectedEditor {
@@ -938,25 +954,25 @@
 
 .annotationEditorLayer {
   &[data-main-rotation="0"] {
-    .highlightEditor > .editToolbar {
+    .highlightEditor:not(.free) > .editToolbar {
       rotate: 0deg;
     }
   }
 
   &[data-main-rotation="90"] {
-    .highlightEditor > .editToolbar {
+    .highlightEditor:not(.free) > .editToolbar {
       rotate: 270deg;
     }
   }
 
   &[data-main-rotation="180"] {
-    .highlightEditor > .editToolbar {
+    .highlightEditor:not(.free) > .editToolbar {
       rotate: 180deg;
     }
   }
 
   &[data-main-rotation="270"] {
-    .highlightEditor > .editToolbar {
+    .highlightEditor:not(.free) > .editToolbar {
       rotate: 90deg;
     }
   }
@@ -965,14 +981,17 @@
     position: absolute;
     background: transparent;
     z-index: 1;
-    transform-origin: 0 0;
     cursor: auto;
     max-width: 100%;
     max-height: 100%;
     border: none;
     outline: none;
     pointer-events: none;
-    transform: none;
+    transform-origin: 0 0;
+
+    &:not(.free) {
+      transform: none;
+    }
 
     .internal {
       position: absolute;
@@ -1025,6 +1044,10 @@
 
           &:has(.dropdown:not(.hidden)) {
             background-color: var(--editor-toolbar-hover-bg-color);
+
+            &::after {
+              scale: -1;
+            }
           }
 
           .dropdown {
@@ -1083,19 +1106,20 @@
   height: auto;
   padding-inline: 10px;
   padding-block: 10px 16px;
+  gap: 16px;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+
+  .editorParamsLabel {
+    width: fit-content;
+    inset-inline-start: 0;
+  }
 
   .colorPicker {
     display: flex;
     flex-direction: column;
     gap: 8px;
-
-    #highlightColorPickerLabel {
-      width: fit-content;
-      inset-inline-start: 0;
-    }
 
     .dropdown {
       display: flex;
@@ -1131,6 +1155,60 @@
         &:is(:hover, :active, :focus-visible) > .swatch {
           outline: 2px solid var(--hover-outline-color);
         }
+      }
+    }
+  }
+
+  #editorHighlightThickness {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    align-self: stretch;
+
+    .editorParamsLabel {
+      width: 100%;
+      height: auto;
+      align-self: stretch;
+    }
+
+    .thicknessPicker {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      align-self: stretch;
+
+      --example-color: #bfbfc9;
+
+      @media (prefers-color-scheme: dark) {
+        --example-color: #80808e;
+      }
+
+      @media screen and (forced-colors: active) {
+        --example-color: HighlightText;
+      }
+
+      &::before {
+        content: "";
+        width: 8px;
+        aspect-ratio: 1;
+        display: block;
+        border-radius: 100%;
+        background-color: var(--example-color);
+      }
+
+      .editorParamsSlider {
+        width: unset;
+        height: 14px;
+      }
+
+      &::after {
+        content: "";
+        width: 24px;
+        aspect-ratio: 1;
+        display: block;
+        border-radius: 100%;
+        background-color: var(--example-color);
       }
     }
   }

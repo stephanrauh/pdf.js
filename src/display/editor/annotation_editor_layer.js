@@ -67,6 +67,8 @@ class AnnotationEditorLayer {
 
   #boundPointerdown = this.pointerdown.bind(this);
 
+  #boundTextLayerPointerDown = this.#textLayerPointerDown.bind(this);
+
   #editorFocusTimeoutId = null;
 
   #boundSelectionStart = this.selectionStart.bind(this);
@@ -110,7 +112,7 @@ class AnnotationEditorLayer {
     if (!AnnotationEditorLayer._initialized) {
       AnnotationEditorLayer._initialized = true;
       for (const editorType of editorTypes) {
-        editorType.initialize(l10n);
+        editorType.initialize(l10n, uiManager);
       }
     }
     uiManager.registerEditorTypes(editorTypes);
@@ -199,7 +201,7 @@ class AnnotationEditorLayer {
       }
     }
 
-    const editor = this.#createAndAddNewEditor(
+    const editor = this.createAndAddNewEditor(
       { offsetX: 0, offsetY: 0 },
       /* isCentered = */ false
     );
@@ -328,12 +330,49 @@ class AnnotationEditorLayer {
   enableTextSelection() {
     if (this.#textLayer?.div) {
       document.addEventListener("selectstart", this.#boundSelectionStart);
+      this.#textLayer.div.addEventListener(
+        "pointerdown",
+        this.#boundTextLayerPointerDown
+      );
+      this.#textLayer.div.classList.add("highlighting");
     }
   }
 
   disableTextSelection() {
     if (this.#textLayer?.div) {
       document.removeEventListener("selectstart", this.#boundSelectionStart);
+      this.#textLayer.div.removeEventListener(
+        "pointerdown",
+        this.#boundTextLayerPointerDown
+      );
+      this.#textLayer.div.classList.remove("highlighting");
+    }
+  }
+
+  #textLayerPointerDown(event) {
+    // Unselect all the editors in order to let the user select some text
+    // without being annoyed by an editor toolbar.
+    this.#uiManager.unselectAll();
+    if (event.target === this.#textLayer.div) {
+      const { isMac } = FeatureTest.platform;
+      if (event.button !== 0 || (event.ctrlKey && isMac)) {
+        // Do nothing on right click.
+        return;
+      }
+      this.#textLayer.div.classList.add("free");
+      HighlightEditor.startHighlighting(
+        this,
+        this.#uiManager.direction === "ltr",
+        event
+      );
+      this.#textLayer.div.addEventListener(
+        "pointerup",
+        () => {
+          this.#textLayer.div.classList.remove("free");
+        },
+        { once: true }
+      );
+      event.preventDefault();
     }
   }
 
@@ -565,7 +604,7 @@ class AnnotationEditorLayer {
    * @param [Object] data
    * @returns {AnnotationEditor}
    */
-  #createAndAddNewEditor(event, isCentered, data = {}) {
+  createAndAddNewEditor(event, isCentered, data = {}) {
     const id = this.getNextId();
     const editor = this.#createNewEditor({
       parent: this,
@@ -603,10 +642,7 @@ class AnnotationEditorLayer {
    * Create and add a new editor.
    */
   addNewEditor() {
-    this.#createAndAddNewEditor(
-      this.#getCenterPoint(),
-      /* isCentered = */ true
-    );
+    this.createAndAddNewEditor(this.#getCenterPoint(), /* isCentered = */ true);
   }
 
   /**
@@ -726,7 +762,7 @@ class AnnotationEditorLayer {
       boxes.push(rotator(x, y, width, height));
     }
     if (boxes.length !== 0) {
-      this.#createAndAddNewEditor(event, false, {
+      this.createAndAddNewEditor(event, false, {
         boxes,
       });
     }
@@ -767,7 +803,7 @@ class AnnotationEditorLayer {
       return;
     }
 
-    this.#createAndAddNewEditor(event, /* isCentered = */ false);
+    this.createAndAddNewEditor(event, /* isCentered = */ false);
   }
 
   /**
@@ -900,6 +936,10 @@ class AnnotationEditorLayer {
   get pageDimensions() {
     const { pageWidth, pageHeight } = this.viewport.rawDims;
     return [pageWidth, pageHeight];
+  }
+
+  get scale() {
+    return this.#uiManager.viewParameters.realScale;
   }
 
   // #1825 modified by ngx-extended-pdf-viewer

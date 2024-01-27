@@ -144,8 +144,8 @@ class FreeTextEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
-  static initialize(l10n) {
-    AnnotationEditor.initialize(l10n, {
+  static initialize(l10n, uiManager) {
+    AnnotationEditor.initialize(l10n, uiManager, {
       strings: ["pdfjs-free-text-default-content"],
     });
     const style = getComputedStyle(document.documentElement);
@@ -224,12 +224,9 @@ class FreeTextEditor extends AnnotationEditor {
     };
     const savedFontsize = this.#fontSize;
     this.addCommands({
-      cmd: () => {
-        setFontsize(fontSize);
-      },
-      undo: () => {
-        setFontsize(savedFontsize);
-      },
+      cmd: setFontsize.bind(this, fontSize),
+      undo: setFontsize.bind(this, savedFontsize),
+      post: this._uiManager.updateUI.bind(this._uiManager, this),
       mustExec: true,
       type: AnnotationEditorParamsType.FREETEXT_SIZE,
       overwriteIfSameType: true,
@@ -242,14 +239,14 @@ class FreeTextEditor extends AnnotationEditor {
    * @param {string} color
    */
   #updateColor(color) {
+    const setColor = col => {
+      this.#color = this.editorDiv.style.color = col;
+    };
     const savedColor = this.#color;
     this.addCommands({
-      cmd: () => {
-        this.#color = this.editorDiv.style.color = color;
-      },
-      undo: () => {
-        this.#color = this.editorDiv.style.color = savedColor;
-      },
+      cmd: setColor.bind(this, color),
+      undo: setColor.bind(this, savedColor),
+      post: this._uiManager.updateUI.bind(this._uiManager, this),
       mustExec: true,
       type: AnnotationEditorParamsType.FREETEXT_COLOR,
       overwriteIfSameType: true,
@@ -386,13 +383,14 @@ class FreeTextEditor extends AnnotationEditor {
    * @returns {string}
    */
   #extractText() {
-    const divs = this.editorDiv.getElementsByTagName("div");
-    if (divs.length === 0) {
-      return this.editorDiv.innerText;
-    }
+    // We don't use innerText because there are some bugs with line breaks.
     const buffer = [];
-    for (const div of divs) {
-      buffer.push(div.innerText.replace(/\r\n?|\n/, ""));
+    this.editorDiv.normalize();
+    const EOL_PATTERN = /\r\n?|\n/g;
+    for (const child of this.editorDiv.childNodes) {
+      const content =
+        child.nodeType === Node.TEXT_NODE ? child.nodeValue : child.innerText;
+      buffer.push(content.replaceAll(EOL_PATTERN, ""));
     }
     return buffer.join("\n");
   }
@@ -648,6 +646,14 @@ class FreeTextEditor extends AnnotationEditor {
     }
   }
 
+  #serializeContent() {
+    return this.#content.replaceAll("\xa0", " ");
+  }
+
+  static #deserializeContent(content) {
+    return content.replaceAll(" ", "\xa0");
+  }
+
   /** @inheritdoc */
   get contentDiv() {
     return this.editorDiv;
@@ -690,10 +696,9 @@ class FreeTextEditor extends AnnotationEditor {
       };
     }
     const editor = super.deserialize(data, parent, uiManager);
-
     editor.#fontSize = data.fontSize;
     editor.#color = Util.makeHexColor(...data.color);
-    editor.#content = data.value;
+    editor.#content = FreeTextEditor.#deserializeContent(data.value);
     editor.annotationElementId = data.id || null;
     editor.#initialData = initialData;
 
@@ -726,7 +731,7 @@ class FreeTextEditor extends AnnotationEditor {
       annotationType: AnnotationEditorType.FREETEXT,
       color,
       fontSize: this.#fontSize,
-      value: this.#content,
+      value: this.#serializeContent(),
       pageIndex: this.pageIndex,
       rect,
       rotation: this.rotation,

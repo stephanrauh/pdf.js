@@ -532,23 +532,22 @@ class PartialEvaluator {
     const args = group ? [matrix, null] : [matrix, bbox];
     operatorList.addOp(OPS.paintFormXObjectBegin, args);
 
-    return this.getOperatorList({
+    await this.getOperatorList({
       stream: xobj,
       task,
       resources: dict.get("Resources") || resources,
       operatorList,
       initialState,
-    }).then(function () {
-      operatorList.addOp(OPS.paintFormXObjectEnd, []);
-
-      if (group) {
-        operatorList.addOp(OPS.endGroup, [groupOptions]);
-      }
-
-      if (optionalContent !== undefined) {
-        operatorList.addOp(OPS.endMarkedContent, []);
-      }
     });
+    operatorList.addOp(OPS.paintFormXObjectEnd, []);
+
+    if (group) {
+      operatorList.addOp(OPS.endGroup, [groupOptions]);
+    }
+
+    if (optionalContent !== undefined) {
+      operatorList.addOp(OPS.endMarkedContent, []);
+    }
   }
 
   _sendImgData(objId, imgData, cacheGlobally = false) {
@@ -1013,7 +1012,7 @@ class PartialEvaluator {
       });
   }
 
-  handleSetFont(
+  async handleSetFont(
     resources,
     fontArgs,
     fontRef,
@@ -1025,40 +1024,33 @@ class PartialEvaluator {
   ) {
     const fontName = fontArgs?.[0] instanceof Name ? fontArgs[0].name : null;
 
-    return this.loadFont(
+    let translated = await this.loadFont(
       fontName,
       fontRef,
       resources,
       fallbackFontDict,
       cssFontInfo
-    )
-      .then(translated => {
-        if (!translated.font.isType3Font) {
-          return translated;
-        }
-        return translated
-          .loadType3Data(this, resources, task)
-          .then(function () {
-            // Add the dependencies to the parent operatorList so they are
-            // resolved before Type3 operatorLists are executed synchronously.
-            operatorList.addDependencies(translated.type3Dependencies);
+    );
 
-            return translated;
-          })
-          .catch(reason => {
-            return new TranslatedFont({
-              loadedName: "g_font_error",
-              font: new ErrorFont(`Type3 font load error: ${reason}`),
-              dict: translated.font,
-              evaluatorOptions: this.options,
-            });
-          });
-      })
-      .then(translated => {
-        state.font = translated.font;
-        translated.send(this.handler);
-        return translated.loadedName;
-      });
+    if (translated.font.isType3Font) {
+      try {
+        await translated.loadType3Data(this, resources, task);
+        // Add the dependencies to the parent operatorList so they are
+        // resolved before Type3 operatorLists are executed synchronously.
+        operatorList.addDependencies(translated.type3Dependencies);
+      } catch (reason) {
+        translated = new TranslatedFont({
+          loadedName: "g_font_error",
+          font: new ErrorFont(`Type3 font load error: ${reason}`),
+          dict: translated.font,
+          evaluatorOptions: this.options,
+        });
+      }
+    }
+
+    state.font = translated.font;
+    translated.send(this.handler);
+    return translated.loadedName;
   }
 
   handleText(chars, state) {
@@ -1135,8 +1127,8 @@ class PartialEvaluator {
         case "Font":
           isSimpleGState = false;
 
-          promise = promise.then(() => {
-            return this.handleSetFont(
+          promise = promise.then(() =>
+            this.handleSetFont(
               resources,
               null,
               value[0],
@@ -1146,8 +1138,8 @@ class PartialEvaluator {
             ).then(function (loadedName) {
               operatorList.addDependency(loadedName);
               gStateObj.push([key, [loadedName, value[1]]]);
-            });
-          });
+            })
+          );
           break;
         case "BM":
           gStateObj.push([key, normalizeBlendMode(value)]);
@@ -1160,16 +1152,16 @@ class PartialEvaluator {
           if (value instanceof Dict) {
             isSimpleGState = false;
 
-            promise = promise.then(() => {
-              return this.handleSMask(
+            promise = promise.then(() =>
+              this.handleSMask(
                 value,
                 resources,
                 operatorList,
                 task,
                 stateManager,
                 localColorSpaceCache
-              );
-            });
+              )
+            );
             gStateObj.push([key, true]);
           } else {
             warn("Unsupported SMask type");
@@ -1202,15 +1194,15 @@ class PartialEvaluator {
           break;
       }
     }
-    return promise.then(function () {
-      if (gStateObj.length > 0) {
-        operatorList.addOp(OPS.setGState, [gStateObj]);
-      }
+    await promise;
 
-      if (isSimpleGState) {
-        localGStateCache.set(cacheKey, gStateRef, gStateObj);
-      }
-    });
+    if (gStateObj.length > 0) {
+      operatorList.addOp(OPS.setGState, [gStateObj]);
+    }
+
+    if (isSimpleGState) {
+      localGStateCache.set(cacheKey, gStateRef, gStateObj);
+    }
   }
 
   loadFont(
@@ -1220,6 +1212,7 @@ class PartialEvaluator {
     fallbackFontDict = null,
     cssFontInfo = null
   ) {
+    // eslint-disable-next-line arrow-body-style
     const errorFont = async () => {
       return new TranslatedFont({
         loadedName: "g_font_error",
@@ -1399,17 +1392,17 @@ class PartialEvaluator {
           const y = args[1] + args[3];
           minMax = [
             Math.min(args[0], x),
-            Math.max(args[0], x),
             Math.min(args[1], y),
+            Math.max(args[0], x),
             Math.max(args[1], y),
           ];
           break;
         case OPS.moveTo:
         case OPS.lineTo:
-          minMax = [args[0], args[0], args[1], args[1]];
+          minMax = [args[0], args[1], args[0], args[1]];
           break;
         default:
-          minMax = [Infinity, -Infinity, Infinity, -Infinity];
+          minMax = [Infinity, Infinity, -Infinity, -Infinity];
           break;
       }
       operatorList.addOp(OPS.constructPath, [[fn], args, minMax]);
@@ -1433,15 +1426,15 @@ class PartialEvaluator {
           const x = args[0] + args[2];
           const y = args[1] + args[3];
           minMax[0] = Math.min(minMax[0], args[0], x);
-          minMax[1] = Math.max(minMax[1], args[0], x);
-          minMax[2] = Math.min(minMax[2], args[1], y);
+          minMax[1] = Math.min(minMax[1], args[1], y);
+          minMax[2] = Math.max(minMax[2], args[0], x);
           minMax[3] = Math.max(minMax[3], args[1], y);
           break;
         case OPS.moveTo:
         case OPS.lineTo:
           minMax[0] = Math.min(minMax[0], args[0]);
-          minMax[1] = Math.max(minMax[1], args[0]);
-          minMax[2] = Math.min(minMax[2], args[1]);
+          minMax[1] = Math.min(minMax[1], args[1]);
+          minMax[2] = Math.max(minMax[2], args[0]);
           minMax[3] = Math.max(minMax[3], args[1]);
           break;
       }
@@ -2287,6 +2280,7 @@ class PartialEvaluator {
     viewBox,
     markedContentData = null,
     disableNormalization = false,
+    keepWhiteSpace = false,
   }) {
     // Ensure that `resources`/`stateManager` is correctly initialized,
     // even if the provided parameter is e.g. `null`.
@@ -2353,11 +2347,12 @@ class PartialEvaluator {
       twoLastChars[twoLastCharsPos] = char;
       twoLastCharsPos = nextPos;
 
-      return ret;
+      return !keepWhiteSpace && ret;
     }
 
     function shouldAddWhitepsace() {
       return (
+        !keepWhiteSpace &&
         twoLastChars[twoLastCharsPos] !== " " &&
         twoLastChars[(twoLastCharsPos + 1) % 2] === " "
       );
@@ -2560,29 +2555,21 @@ class PartialEvaluator {
       };
     }
 
-    function handleSetFont(fontName, fontRef) {
-      return self
-        .loadFont(fontName, fontRef, resources)
-        .then(function (translated) {
-          if (!translated.font.isType3Font) {
-            return translated;
-          }
-          return translated
-            .loadType3Data(self, resources, task)
-            .catch(function () {
-              // Ignore Type3-parsing errors, since we only use `loadType3Data`
-              // here to ensure that we'll always obtain a useful /FontBBox.
-            })
-            .then(function () {
-              return translated;
-            });
-        })
-        .then(function (translated) {
-          textState.loadedName = translated.loadedName;
-          textState.font = translated.font;
-          textState.fontMatrix =
-            translated.font.fontMatrix || FONT_IDENTITY_MATRIX;
-        });
+    async function handleSetFont(fontName, fontRef) {
+      const translated = await self.loadFont(fontName, fontRef, resources);
+
+      if (translated.font.isType3Font) {
+        try {
+          await translated.loadType3Data(self, resources, task);
+        } catch {
+          // Ignore Type3-parsing errors, since we only use `loadType3Data`
+          // here to ensure that we'll always obtain a useful /FontBBox.
+        }
+      }
+
+      textState.loadedName = translated.loadedName;
+      textState.font = translated.font;
+      textState.fontMatrix = translated.font.fontMatrix || FONT_IDENTITY_MATRIX;
     }
 
     function applyInverseRotation(x, y, matrix) {
@@ -2820,6 +2807,10 @@ class PartialEvaluator {
           }
         }
 
+        if (keepWhiteSpace) {
+          compareWithLastPosition(0);
+        }
+
         return;
       }
 
@@ -2842,7 +2833,7 @@ class PartialEvaluator {
         }
         let scaledDim = glyphWidth * scale;
 
-        if (category.isWhitespace) {
+        if (!keepWhiteSpace && category.isWhitespace) {
           // Don't push a " " in the textContentItem
           // (except when it's between two non-spaces chars),
           // it will be done (if required) in next call to
@@ -3278,6 +3269,7 @@ class PartialEvaluator {
                     viewBox,
                     markedContentData,
                     disableNormalization,
+                    keepWhiteSpace,
                   })
                   .then(function () {
                     if (!sinkWrapper.enqueueInvoked) {
@@ -3442,13 +3434,11 @@ class PartialEvaluator {
     });
   }
 
-  extractDataStructures(dict, baseDict, properties) {
+  async extractDataStructures(dict, properties) {
     const xref = this.xref;
     let cidToGidBytes;
     // 9.10.2
-    const toUnicodePromise = this.readToUnicode(
-      properties.toUnicode || dict.get("ToUnicode") || baseDict.get("ToUnicode")
-    );
+    const toUnicodePromise = this.readToUnicode(properties.toUnicode);
 
     if (properties.composite) {
       // CIDSystemInfo helps to match CID to glyphs
@@ -3568,21 +3558,19 @@ class PartialEvaluator {
     properties.baseEncodingName = baseEncodingName;
     properties.hasEncoding = !!baseEncodingName || differences.length > 0;
     properties.dict = dict;
-    return toUnicodePromise
-      .then(readToUnicode => {
-        properties.toUnicode = readToUnicode;
-        return this.buildToUnicode(properties);
-      })
-      .then(builtToUnicode => {
-        properties.toUnicode = builtToUnicode;
-        if (cidToGidBytes) {
-          properties.cidToGidMap = this.readCidToGidMap(
-            cidToGidBytes,
-            builtToUnicode
-          );
-        }
-        return properties;
-      });
+
+    properties.toUnicode = await toUnicodePromise;
+
+    const builtToUnicode = await this.buildToUnicode(properties);
+    properties.toUnicode = builtToUnicode;
+
+    if (cidToGidBytes) {
+      properties.cidToGidMap = this.readCidToGidMap(
+        cidToGidBytes,
+        builtToUnicode
+      );
+    }
+    return properties;
   }
 
   /**
@@ -3781,70 +3769,70 @@ class PartialEvaluator {
     return new IdentityToUnicodeMap(properties.firstChar, properties.lastChar);
   }
 
-  readToUnicode(cmapObj) {
+  async readToUnicode(cmapObj) {
     if (!cmapObj) {
-      return Promise.resolve(null);
+      return null;
     }
     if (cmapObj instanceof Name) {
-      return CMapFactory.create({
+      const cmap = await CMapFactory.create({
         encoding: cmapObj,
         fetchBuiltInCMap: this._fetchBuiltInCMapBound,
         useCMap: null,
-      }).then(function (cmap) {
+      });
+
+      if (cmap instanceof IdentityCMap) {
+        return new IdentityToUnicodeMap(0, 0xffff);
+      }
+      return new ToUnicodeMap(cmap.getMap());
+    }
+    if (cmapObj instanceof BaseStream) {
+      try {
+        const cmap = await CMapFactory.create({
+          encoding: cmapObj,
+          fetchBuiltInCMap: this._fetchBuiltInCMapBound,
+          useCMap: null,
+        });
+
         if (cmap instanceof IdentityCMap) {
           return new IdentityToUnicodeMap(0, 0xffff);
         }
-        return new ToUnicodeMap(cmap.getMap());
-      });
-    } else if (cmapObj instanceof BaseStream) {
-      return CMapFactory.create({
-        encoding: cmapObj,
-        fetchBuiltInCMap: this._fetchBuiltInCMapBound,
-        useCMap: null,
-      }).then(
-        function (cmap) {
-          if (cmap instanceof IdentityCMap) {
-            return new IdentityToUnicodeMap(0, 0xffff);
+        const map = new Array(cmap.length);
+        // Convert UTF-16BE
+        // NOTE: cmap can be a sparse array, so use forEach instead of
+        // `for(;;)` to iterate over all keys.
+        cmap.forEach(function (charCode, token) {
+          // Some cmaps contain *only* CID characters (fixes issue9367.pdf).
+          if (typeof token === "number") {
+            map[charCode] = String.fromCodePoint(token);
+            return;
           }
-          const map = new Array(cmap.length);
-          // Convert UTF-16BE
-          // NOTE: cmap can be a sparse array, so use forEach instead of
-          // `for(;;)` to iterate over all keys.
-          cmap.forEach(function (charCode, token) {
-            // Some cmaps contain *only* CID characters (fixes issue9367.pdf).
-            if (typeof token === "number") {
-              map[charCode] = String.fromCodePoint(token);
-              return;
+          const str = [];
+          for (let k = 0; k < token.length; k += 2) {
+            const w1 = (token.charCodeAt(k) << 8) | token.charCodeAt(k + 1);
+            if ((w1 & 0xf800) !== 0xd800) {
+              // w1 < 0xD800 || w1 > 0xDFFF
+              str.push(w1);
+              continue;
             }
-            const str = [];
-            for (let k = 0; k < token.length; k += 2) {
-              const w1 = (token.charCodeAt(k) << 8) | token.charCodeAt(k + 1);
-              if ((w1 & 0xf800) !== 0xd800) {
-                // w1 < 0xD800 || w1 > 0xDFFF
-                str.push(w1);
-                continue;
-              }
-              k += 2;
-              const w2 = (token.charCodeAt(k) << 8) | token.charCodeAt(k + 1);
-              str.push(((w1 & 0x3ff) << 10) + (w2 & 0x3ff) + 0x10000);
-            }
-            map[charCode] = String.fromCodePoint(...str);
-          });
-          return new ToUnicodeMap(map);
-        },
-        reason => {
-          if (reason instanceof AbortException) {
-            return null;
+            k += 2;
+            const w2 = (token.charCodeAt(k) << 8) | token.charCodeAt(k + 1);
+            str.push(((w1 & 0x3ff) << 10) + (w2 & 0x3ff) + 0x10000);
           }
-          if (this.options.ignoreErrors) {
-            warn(`readToUnicode - ignoring ToUnicode data: "${reason}".`);
-            return null;
-          }
-          throw reason;
+          map[charCode] = String.fromCodePoint(...str);
+        });
+        return new ToUnicodeMap(map);
+      } catch (reason) {
+        if (reason instanceof AbortException) {
+          return null;
         }
-      );
+        if (this.options.ignoreErrors) {
+          warn(`readToUnicode - ignoring ToUnicode data: "${reason}".`);
+          return null;
+        }
+        throw reason;
+      }
     }
-    return Promise.resolve(null);
+    return null;
   }
 
   readCidToGidMap(glyphsData, toUnicode) {
@@ -4033,7 +4021,7 @@ class PartialEvaluator {
     }
 
     let composite = false;
-    let hash, toUnicode;
+    let hash;
     if (type.name === "Type0") {
       // If font is a composite
       //  - get the descendant font
@@ -4058,6 +4046,8 @@ class PartialEvaluator {
     const firstChar = dict.get("FirstChar") || 0,
       lastChar = dict.get("LastChar") || (composite ? 0xffff : 0xff);
     const descriptor = dict.get("FontDescriptor");
+    const toUnicode = dict.get("ToUnicode") || baseDict.get("ToUnicode");
+
     if (descriptor) {
       hash = new MurmurHash3_64();
 
@@ -4095,7 +4085,6 @@ class PartialEvaluator {
 
       hash.update(`${firstChar}-${lastChar}`); // Fixes issue10665_reduced.pdf
 
-      toUnicode = dict.get("ToUnicode") || baseDict.get("ToUnicode");
       if (toUnicode instanceof BaseStream) {
         const stream = toUnicode.str || toUnicode;
         const uint8array = stream.buffer
@@ -4180,7 +4169,6 @@ class PartialEvaluator {
     cssFontInfo,
   }) {
     const isType3Font = type === "Type3";
-    let properties;
 
     if (!descriptor) {
       if (isType3Font) {
@@ -4211,7 +4199,7 @@ class PartialEvaluator {
             ? FontFlags.Symbolic
             : FontFlags.Nonsymbolic);
 
-        properties = {
+        const properties = {
           type,
           name: baseFontName,
           loadedName: baseDict.loadedName,
@@ -4245,24 +4233,25 @@ class PartialEvaluator {
             standardFontName
           );
         }
-        return this.extractDataStructures(dict, dict, properties).then(
-          newProperties => {
-            if (widths) {
-              const glyphWidths = [];
-              let j = firstChar;
-              for (const width of widths) {
-                glyphWidths[j++] = this.xref.fetchIfRef(width);
-              }
-              newProperties.widths = glyphWidths;
-            } else {
-              newProperties.widths = this.buildCharCodeToWidth(
-                metrics.widths,
-                newProperties
-              );
-            }
-            return new Font(baseFontName, file, newProperties);
-          }
+
+        const newProperties = await this.extractDataStructures(
+          dict,
+          properties
         );
+        if (widths) {
+          const glyphWidths = [];
+          let j = firstChar;
+          for (const width of widths) {
+            glyphWidths[j++] = this.xref.fetchIfRef(width);
+          }
+          newProperties.widths = glyphWidths;
+        } else {
+          newProperties.widths = this.buildCharCodeToWidth(
+            metrics.widths,
+            newProperties
+          );
+        }
+        return new Font(baseFontName, file, newProperties);
       }
     }
 
@@ -4366,7 +4355,7 @@ class PartialEvaluator {
       }
     }
 
-    properties = {
+    const properties = {
       type,
       name: fontName.name,
       subtype,
@@ -4409,13 +4398,10 @@ class PartialEvaluator {
       properties.vertical = properties.cMap.vertical;
     }
 
-    return this.extractDataStructures(dict, baseDict, properties).then(
-      newProperties => {
-        this.extractWidths(dict, descriptor, newProperties);
+    const newProperties = await this.extractDataStructures(dict, properties);
+    this.extractWidths(dict, descriptor, newProperties);
 
-        return new Font(fontName.name, fontFile, newProperties);
-      }
-    );
+    return new Font(fontName.name, fontFile, newProperties);
   }
 
   static buildFontPaths(font, glyphs, handler, evaluatorOptions) {
@@ -4775,124 +4761,128 @@ class EvaluatorPreprocessor {
     //
     // If variableArgs === true: [0, `numArgs`] expected
     // If variableArgs === false: exactly `numArgs` expected
-    return shadow(this, "opMap", {
-      // Graphic state
-      w: { id: OPS.setLineWidth, numArgs: 1, variableArgs: false },
-      J: { id: OPS.setLineCap, numArgs: 1, variableArgs: false },
-      j: { id: OPS.setLineJoin, numArgs: 1, variableArgs: false },
-      M: { id: OPS.setMiterLimit, numArgs: 1, variableArgs: false },
-      d: { id: OPS.setDash, numArgs: 2, variableArgs: false },
-      ri: { id: OPS.setRenderingIntent, numArgs: 1, variableArgs: false },
-      i: { id: OPS.setFlatness, numArgs: 1, variableArgs: false },
-      gs: { id: OPS.setGState, numArgs: 1, variableArgs: false },
-      q: { id: OPS.save, numArgs: 0, variableArgs: false },
-      Q: { id: OPS.restore, numArgs: 0, variableArgs: false },
-      cm: { id: OPS.transform, numArgs: 6, variableArgs: false },
+    return shadow(
+      this,
+      "opMap",
+      Object.assign(Object.create(null), {
+        // Graphic state
+        w: { id: OPS.setLineWidth, numArgs: 1, variableArgs: false },
+        J: { id: OPS.setLineCap, numArgs: 1, variableArgs: false },
+        j: { id: OPS.setLineJoin, numArgs: 1, variableArgs: false },
+        M: { id: OPS.setMiterLimit, numArgs: 1, variableArgs: false },
+        d: { id: OPS.setDash, numArgs: 2, variableArgs: false },
+        ri: { id: OPS.setRenderingIntent, numArgs: 1, variableArgs: false },
+        i: { id: OPS.setFlatness, numArgs: 1, variableArgs: false },
+        gs: { id: OPS.setGState, numArgs: 1, variableArgs: false },
+        q: { id: OPS.save, numArgs: 0, variableArgs: false },
+        Q: { id: OPS.restore, numArgs: 0, variableArgs: false },
+        cm: { id: OPS.transform, numArgs: 6, variableArgs: false },
 
-      // Path
-      m: { id: OPS.moveTo, numArgs: 2, variableArgs: false },
-      l: { id: OPS.lineTo, numArgs: 2, variableArgs: false },
-      c: { id: OPS.curveTo, numArgs: 6, variableArgs: false },
-      v: { id: OPS.curveTo2, numArgs: 4, variableArgs: false },
-      y: { id: OPS.curveTo3, numArgs: 4, variableArgs: false },
-      h: { id: OPS.closePath, numArgs: 0, variableArgs: false },
-      re: { id: OPS.rectangle, numArgs: 4, variableArgs: false },
-      S: { id: OPS.stroke, numArgs: 0, variableArgs: false },
-      s: { id: OPS.closeStroke, numArgs: 0, variableArgs: false },
-      f: { id: OPS.fill, numArgs: 0, variableArgs: false },
-      F: { id: OPS.fill, numArgs: 0, variableArgs: false },
-      "f*": { id: OPS.eoFill, numArgs: 0, variableArgs: false },
-      B: { id: OPS.fillStroke, numArgs: 0, variableArgs: false },
-      "B*": { id: OPS.eoFillStroke, numArgs: 0, variableArgs: false },
-      b: { id: OPS.closeFillStroke, numArgs: 0, variableArgs: false },
-      "b*": { id: OPS.closeEOFillStroke, numArgs: 0, variableArgs: false },
-      n: { id: OPS.endPath, numArgs: 0, variableArgs: false },
+        // Path
+        m: { id: OPS.moveTo, numArgs: 2, variableArgs: false },
+        l: { id: OPS.lineTo, numArgs: 2, variableArgs: false },
+        c: { id: OPS.curveTo, numArgs: 6, variableArgs: false },
+        v: { id: OPS.curveTo2, numArgs: 4, variableArgs: false },
+        y: { id: OPS.curveTo3, numArgs: 4, variableArgs: false },
+        h: { id: OPS.closePath, numArgs: 0, variableArgs: false },
+        re: { id: OPS.rectangle, numArgs: 4, variableArgs: false },
+        S: { id: OPS.stroke, numArgs: 0, variableArgs: false },
+        s: { id: OPS.closeStroke, numArgs: 0, variableArgs: false },
+        f: { id: OPS.fill, numArgs: 0, variableArgs: false },
+        F: { id: OPS.fill, numArgs: 0, variableArgs: false },
+        "f*": { id: OPS.eoFill, numArgs: 0, variableArgs: false },
+        B: { id: OPS.fillStroke, numArgs: 0, variableArgs: false },
+        "B*": { id: OPS.eoFillStroke, numArgs: 0, variableArgs: false },
+        b: { id: OPS.closeFillStroke, numArgs: 0, variableArgs: false },
+        "b*": { id: OPS.closeEOFillStroke, numArgs: 0, variableArgs: false },
+        n: { id: OPS.endPath, numArgs: 0, variableArgs: false },
 
-      // Clipping
-      W: { id: OPS.clip, numArgs: 0, variableArgs: false },
-      "W*": { id: OPS.eoClip, numArgs: 0, variableArgs: false },
+        // Clipping
+        W: { id: OPS.clip, numArgs: 0, variableArgs: false },
+        "W*": { id: OPS.eoClip, numArgs: 0, variableArgs: false },
 
-      // Text
-      BT: { id: OPS.beginText, numArgs: 0, variableArgs: false },
-      ET: { id: OPS.endText, numArgs: 0, variableArgs: false },
-      Tc: { id: OPS.setCharSpacing, numArgs: 1, variableArgs: false },
-      Tw: { id: OPS.setWordSpacing, numArgs: 1, variableArgs: false },
-      Tz: { id: OPS.setHScale, numArgs: 1, variableArgs: false },
-      TL: { id: OPS.setLeading, numArgs: 1, variableArgs: false },
-      Tf: { id: OPS.setFont, numArgs: 2, variableArgs: false },
-      Tr: { id: OPS.setTextRenderingMode, numArgs: 1, variableArgs: false },
-      Ts: { id: OPS.setTextRise, numArgs: 1, variableArgs: false },
-      Td: { id: OPS.moveText, numArgs: 2, variableArgs: false },
-      TD: { id: OPS.setLeadingMoveText, numArgs: 2, variableArgs: false },
-      Tm: { id: OPS.setTextMatrix, numArgs: 6, variableArgs: false },
-      "T*": { id: OPS.nextLine, numArgs: 0, variableArgs: false },
-      Tj: { id: OPS.showText, numArgs: 1, variableArgs: false },
-      TJ: { id: OPS.showSpacedText, numArgs: 1, variableArgs: false },
-      "'": { id: OPS.nextLineShowText, numArgs: 1, variableArgs: false },
-      '"': {
-        id: OPS.nextLineSetSpacingShowText,
-        numArgs: 3,
-        variableArgs: false,
-      },
+        // Text
+        BT: { id: OPS.beginText, numArgs: 0, variableArgs: false },
+        ET: { id: OPS.endText, numArgs: 0, variableArgs: false },
+        Tc: { id: OPS.setCharSpacing, numArgs: 1, variableArgs: false },
+        Tw: { id: OPS.setWordSpacing, numArgs: 1, variableArgs: false },
+        Tz: { id: OPS.setHScale, numArgs: 1, variableArgs: false },
+        TL: { id: OPS.setLeading, numArgs: 1, variableArgs: false },
+        Tf: { id: OPS.setFont, numArgs: 2, variableArgs: false },
+        Tr: { id: OPS.setTextRenderingMode, numArgs: 1, variableArgs: false },
+        Ts: { id: OPS.setTextRise, numArgs: 1, variableArgs: false },
+        Td: { id: OPS.moveText, numArgs: 2, variableArgs: false },
+        TD: { id: OPS.setLeadingMoveText, numArgs: 2, variableArgs: false },
+        Tm: { id: OPS.setTextMatrix, numArgs: 6, variableArgs: false },
+        "T*": { id: OPS.nextLine, numArgs: 0, variableArgs: false },
+        Tj: { id: OPS.showText, numArgs: 1, variableArgs: false },
+        TJ: { id: OPS.showSpacedText, numArgs: 1, variableArgs: false },
+        "'": { id: OPS.nextLineShowText, numArgs: 1, variableArgs: false },
+        '"': {
+          id: OPS.nextLineSetSpacingShowText,
+          numArgs: 3,
+          variableArgs: false,
+        },
 
-      // Type3 fonts
-      d0: { id: OPS.setCharWidth, numArgs: 2, variableArgs: false },
-      d1: {
-        id: OPS.setCharWidthAndBounds,
-        numArgs: 6,
-        variableArgs: false,
-      },
+        // Type3 fonts
+        d0: { id: OPS.setCharWidth, numArgs: 2, variableArgs: false },
+        d1: {
+          id: OPS.setCharWidthAndBounds,
+          numArgs: 6,
+          variableArgs: false,
+        },
 
-      // Color
-      CS: { id: OPS.setStrokeColorSpace, numArgs: 1, variableArgs: false },
-      cs: { id: OPS.setFillColorSpace, numArgs: 1, variableArgs: false },
-      SC: { id: OPS.setStrokeColor, numArgs: 4, variableArgs: true },
-      SCN: { id: OPS.setStrokeColorN, numArgs: 33, variableArgs: true },
-      sc: { id: OPS.setFillColor, numArgs: 4, variableArgs: true },
-      scn: { id: OPS.setFillColorN, numArgs: 33, variableArgs: true },
-      G: { id: OPS.setStrokeGray, numArgs: 1, variableArgs: false },
-      g: { id: OPS.setFillGray, numArgs: 1, variableArgs: false },
-      RG: { id: OPS.setStrokeRGBColor, numArgs: 3, variableArgs: false },
-      rg: { id: OPS.setFillRGBColor, numArgs: 3, variableArgs: false },
-      K: { id: OPS.setStrokeCMYKColor, numArgs: 4, variableArgs: false },
-      k: { id: OPS.setFillCMYKColor, numArgs: 4, variableArgs: false },
+        // Color
+        CS: { id: OPS.setStrokeColorSpace, numArgs: 1, variableArgs: false },
+        cs: { id: OPS.setFillColorSpace, numArgs: 1, variableArgs: false },
+        SC: { id: OPS.setStrokeColor, numArgs: 4, variableArgs: true },
+        SCN: { id: OPS.setStrokeColorN, numArgs: 33, variableArgs: true },
+        sc: { id: OPS.setFillColor, numArgs: 4, variableArgs: true },
+        scn: { id: OPS.setFillColorN, numArgs: 33, variableArgs: true },
+        G: { id: OPS.setStrokeGray, numArgs: 1, variableArgs: false },
+        g: { id: OPS.setFillGray, numArgs: 1, variableArgs: false },
+        RG: { id: OPS.setStrokeRGBColor, numArgs: 3, variableArgs: false },
+        rg: { id: OPS.setFillRGBColor, numArgs: 3, variableArgs: false },
+        K: { id: OPS.setStrokeCMYKColor, numArgs: 4, variableArgs: false },
+        k: { id: OPS.setFillCMYKColor, numArgs: 4, variableArgs: false },
 
-      // Shading
-      sh: { id: OPS.shadingFill, numArgs: 1, variableArgs: false },
+        // Shading
+        sh: { id: OPS.shadingFill, numArgs: 1, variableArgs: false },
 
-      // Images
-      BI: { id: OPS.beginInlineImage, numArgs: 0, variableArgs: false },
-      ID: { id: OPS.beginImageData, numArgs: 0, variableArgs: false },
-      EI: { id: OPS.endInlineImage, numArgs: 1, variableArgs: false },
+        // Images
+        BI: { id: OPS.beginInlineImage, numArgs: 0, variableArgs: false },
+        ID: { id: OPS.beginImageData, numArgs: 0, variableArgs: false },
+        EI: { id: OPS.endInlineImage, numArgs: 1, variableArgs: false },
 
-      // XObjects
-      Do: { id: OPS.paintXObject, numArgs: 1, variableArgs: false },
-      MP: { id: OPS.markPoint, numArgs: 1, variableArgs: false },
-      DP: { id: OPS.markPointProps, numArgs: 2, variableArgs: false },
-      BMC: { id: OPS.beginMarkedContent, numArgs: 1, variableArgs: false },
-      BDC: {
-        id: OPS.beginMarkedContentProps,
-        numArgs: 2,
-        variableArgs: false,
-      },
-      EMC: { id: OPS.endMarkedContent, numArgs: 0, variableArgs: false },
+        // XObjects
+        Do: { id: OPS.paintXObject, numArgs: 1, variableArgs: false },
+        MP: { id: OPS.markPoint, numArgs: 1, variableArgs: false },
+        DP: { id: OPS.markPointProps, numArgs: 2, variableArgs: false },
+        BMC: { id: OPS.beginMarkedContent, numArgs: 1, variableArgs: false },
+        BDC: {
+          id: OPS.beginMarkedContentProps,
+          numArgs: 2,
+          variableArgs: false,
+        },
+        EMC: { id: OPS.endMarkedContent, numArgs: 0, variableArgs: false },
 
-      // Compatibility
-      BX: { id: OPS.beginCompat, numArgs: 0, variableArgs: false },
-      EX: { id: OPS.endCompat, numArgs: 0, variableArgs: false },
+        // Compatibility
+        BX: { id: OPS.beginCompat, numArgs: 0, variableArgs: false },
+        EX: { id: OPS.endCompat, numArgs: 0, variableArgs: false },
 
-      // (reserved partial commands for the lexer)
-      BM: null,
-      BD: null,
-      true: null,
-      fa: null,
-      fal: null,
-      fals: null,
-      false: null,
-      nu: null,
-      nul: null,
-      null: null,
-    });
+        // (reserved partial commands for the lexer)
+        BM: null,
+        BD: null,
+        true: null,
+        fa: null,
+        fal: null,
+        fals: null,
+        false: null,
+        nu: null,
+        nul: null,
+        null: null,
+      })
+    );
   }
 
   static MAX_INVALID_PATH_OPS = 10;

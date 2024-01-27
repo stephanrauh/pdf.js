@@ -209,11 +209,11 @@ describe("FreeText Editor", () => {
         await waitForStorageEntries(page, 2);
 
         const content = await page.$eval(getEditorSelector(0), el =>
-          el.innerText.trimEnd()
+          el.innerText.trimEnd().replaceAll("\xa0", " ")
         );
 
         let pastedContent = await page.$eval(getEditorSelector(1), el =>
-          el.innerText.trimEnd()
+          el.innerText.trimEnd().replaceAll("\xa0", " ")
         );
 
         expect(pastedContent).withContext(`In ${browserName}`).toEqual(content);
@@ -225,7 +225,7 @@ describe("FreeText Editor", () => {
         await waitForStorageEntries(page, 3);
 
         pastedContent = await page.$eval(getEditorSelector(2), el =>
-          el.innerText.trimEnd()
+          el.innerText.trimEnd().replaceAll("\xa0", " ")
         );
         expect(pastedContent).withContext(`In ${browserName}`).toEqual(content);
       }
@@ -237,9 +237,10 @@ describe("FreeText Editor", () => {
           await clearAll(page);
 
           for (const n of [0, 1, 2]) {
-            const hasEditor = await page.evaluate(sel => {
-              return !!document.querySelector(sel);
-            }, getEditorSelector(n));
+            const hasEditor = await page.evaluate(
+              sel => !!document.querySelector(sel),
+              getEditorSelector(n)
+            );
 
             expect(hasEditor).withContext(`In ${browserName}`).toEqual(false);
           }
@@ -865,7 +866,7 @@ describe("FreeText Editor", () => {
             .toEqual([13, 13]);
 
           // Change the colors for all the annotations.
-          page.evaluate(() => {
+          await page.evaluate(() => {
             window.PDFViewerApplication.eventBus.dispatch(
               "switchannotationeditorparams",
               {
@@ -3178,6 +3179,195 @@ describe("FreeText Editor", () => {
           await page.waitForSelector(getEditorSelector(1), {
             visible: true,
           });
+        })
+      );
+    });
+  });
+
+  describe("Consecutive white spaces in Freetext without appearance", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("bug1871353.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that consecutive white spaces are preserved when a freetext is edited", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+          await page.click(getEditorSelector(0), { count: 2 });
+          await page.type(`${getEditorSelector(0)} .internal`, "C");
+
+          await page.click("#editorFreeText");
+          await page.waitForSelector(
+            `.annotationEditorLayer:not(.freetextEditing)`
+          );
+
+          const [value] = await getSerialized(page, x => x.value);
+          expect(value)
+            .withContext(`In ${browserName}`)
+            .toEqual("CA          B");
+        })
+      );
+    });
+  });
+
+  describe("Consecutive white spaces in Freetext with appearance", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("bug1871353.1.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that consecutive white spaces are preserved when a freetext is edited", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+          await page.click(getEditorSelector(0), { count: 2 });
+          await page.type(`${getEditorSelector(0)} .internal`, "Z");
+
+          await page.click("#editorFreeText");
+          await page.waitForSelector(
+            `.annotationEditorLayer:not(.freetextEditing)`
+          );
+
+          const [value] = await getSerialized(page, x => x.value);
+          expect(value)
+            .withContext(`In ${browserName}`)
+            .toEqual("ZX          Y");
+        })
+      );
+    });
+  });
+
+  describe("Freetext with several lines", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that all lines are correctly exported", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            // With Chrome something is wrong when serializing a DomRect,
+            // hence we extract the values and just return them.
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const data = "Hello\nPDF.js\nWorld\n!!";
+          await page.mouse.click(rect.x + 100, rect.y + 100);
+          await page.waitForSelector(getEditorSelector(0), {
+            visible: true,
+          });
+          await page.type(`${getEditorSelector(0)} .internal`, data);
+
+          // Commit.
+          await page.keyboard.press("Escape");
+          await page.waitForSelector(
+            `${getEditorSelector(0)} .overlay.enabled`
+          );
+
+          await waitForSerialized(page, 1);
+          const serialized = (await getSerialized(page))[0];
+          expect(serialized.value)
+            .withContext(`In ${browserName}`)
+            .toEqual(data);
+        })
+      );
+    });
+  });
+
+  describe("Freetext UI when undoing/redoing", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the parameters are updated when undoing/redoing", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            // With Chrome something is wrong when serializing a DomRect,
+            // hence we extract the values and just return them.
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const data = "Hello PDF.js World !!";
+          await page.mouse.click(rect.x + 100, rect.y + 100);
+          await page.waitForSelector(getEditorSelector(0), {
+            visible: true,
+          });
+          await page.type(`${getEditorSelector(0)} .internal`, data);
+
+          // Commit.
+          await page.keyboard.press("Escape");
+          await page.waitForSelector(
+            `${getEditorSelector(0)} .overlay.enabled`
+          );
+
+          await page.evaluate(() => {
+            window.PDFViewerApplication.eventBus.dispatch(
+              "switchannotationeditorparams",
+              {
+                source: null,
+                type: window.pdfjsLib.AnnotationEditorParamsType.FREETEXT_COLOR,
+                value: "#FF0000",
+              }
+            );
+          });
+          await page.waitForFunction(
+            () =>
+              getComputedStyle(
+                document.querySelector(".selectedEditor .internal")
+              ).color === "rgb(255, 0, 0)"
+          );
+          await kbUndo(page);
+          await page.waitForFunction(
+            () =>
+              getComputedStyle(
+                document.querySelector(".selectedEditor .internal")
+              ).color === "rgb(0, 0, 0)"
+          );
+          await page.waitForFunction(
+            () =>
+              document.getElementById("editorFreeTextColor").value === "#000000"
+          );
+          await kbRedo(page);
+          await page.waitForFunction(
+            () =>
+              getComputedStyle(
+                document.querySelector(".selectedEditor .internal")
+              ).color === "rgb(255, 0, 0)"
+          );
+          await page.waitForFunction(
+            () =>
+              document.getElementById("editorFreeTextColor").value === "#ff0000"
+          );
         })
       );
     });

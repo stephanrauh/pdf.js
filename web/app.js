@@ -57,6 +57,8 @@ import { AutomationEventBus, EventBus } from "./event_utils.js";
 import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
 import { AltTextManager } from "web-alt_text_manager";
 import { AnnotationEditorParams } from "web-annotation_editor_params";
+import { DownloadManager } from "web-download_manager";
+import { ExternalServices } from "web-external_services";
 import { OverlayManager } from "./overlay_manager.js";
 import { PasswordPrompt } from "./password_prompt.js";
 import { PDFAttachmentViewer } from "web-pdf_attachment_viewer";
@@ -73,6 +75,7 @@ import { PDFScriptingManager } from "./pdf_scripting_manager.js";
 import { PDFSidebar } from "web-pdf_sidebar";
 import { PDFThumbnailViewer } from "web-pdf_thumbnail_viewer";
 import { PDFViewer } from "./pdf_viewer.js";
+import { Preferences } from "web-preferences";
 import { SecondaryToolbar } from "web-secondary_toolbar";
 import { Toolbar } from "web-toolbar";
 import { ViewHistory } from "./view_history.js";
@@ -85,44 +88,6 @@ const ViewOnLoad = {
   PREVIOUS: 0, // Default value.
   INITIAL: 1,
 };
-
-class DefaultExternalServices {
-  constructor() {
-    throw new Error("Cannot initialize DefaultExternalServices.");
-  }
-
-  static updateFindControlState(data) {}
-
-  static updateFindMatchesCount(data) {}
-
-  static initPassiveLoading(callbacks) {}
-
-  static reportTelemetry(data) {}
-
-  static createDownloadManager() {
-    throw new Error("Not implemented: createDownloadManager");
-  }
-
-  static createPreferences() {
-    throw new Error("Not implemented: createPreferences");
-  }
-
-  static async createL10n() {
-    throw new Error("Not implemented: createL10n");
-  }
-
-  static createScripting() {
-    throw new Error("Not implemented: createScripting");
-  }
-
-  static updateEditorStates(data) {
-    throw new Error("Not implemented: updateEditorStates");
-  }
-
-  static getNimbusExperimentData() {
-    return shadow(this, "getNimbusExperimentData", Promise.resolve(null));
-  }
-}
 
 const PDFViewerApplication = {
   initialBookmark: document.location.hash.substring(1),
@@ -181,7 +146,7 @@ const PDFViewerApplication = {
   url: "",
   baseUrl: "",
   _downloadUrl: "",
-  externalServices: DefaultExternalServices,
+  externalServices: new ExternalServices(),
   _boundEvents: Object.create(null),
   documentInfo: null,
   metadata: null,
@@ -362,6 +327,16 @@ const PDFViewerApplication = {
     ) {
       AppOptions.set("locale", params.get("locale"));
     }
+
+    // Set some specific preferences for tests.
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
+      if (params.has("highlighteditorcolors")) {
+        AppOptions.set(
+          "highlightEditorColors",
+          params.get("highlighteditorcolors")
+        );
+      }
+    }
   },
 
   /**
@@ -389,8 +364,7 @@ const PDFViewerApplication = {
     });
     this.pdfLinkService = pdfLinkService;
 
-    const downloadManager = externalServices.createDownloadManager();
-    this.downloadManager = downloadManager;
+    const downloadManager = (this.downloadManager = new DownloadManager());
 
     const findController = new PDFFindController({
       linkService: pdfLinkService,
@@ -454,7 +428,6 @@ const PDFViewerApplication = {
       imageResourcesPath: AppOptions.get("imageResourcesPath"),
       removePageBorders: AppOptions.get("removePageBorders"), // #194
       enablePrintAutoRotate: AppOptions.get("enablePrintAutoRotate"),
-      isOffscreenCanvasSupported,
       maxCanvasPixels: AppOptions.get("maxCanvasPixels"),
       /** #495 modified by ngx-extended-pdf-viewer */
       pageViewMode: AppOptions.get("pageViewMode"),
@@ -636,7 +609,7 @@ const PDFViewerApplication = {
   },
 
   async run(config) {
-    this.preferences = this.externalServices.createPreferences();
+    this.preferences = new Preferences();
     await this.initialize(config);
 
     const { appConfig, eventBus } = this;
@@ -1030,6 +1003,9 @@ const PDFViewerApplication = {
     }
     // Set the necessary global worker parameters, using the available options.
     const workerParams = AppOptions.getAll(OptionKind.WORKER);
+    if (workerParams.workerSrc.constructor.name === "Function") {
+      workerParams.workerSrc = workerParams.workerSrc();
+    }
     Object.assign(GlobalWorkerOptions, workerParams);
 
     if (
@@ -1892,9 +1868,7 @@ const PDFViewerApplication = {
       .catch(() => {
         /* Avoid breaking printing; ignoring errors. */
       })
-      .then(() => {
-        return this.pdfDocument?.annotationStorage.print;
-      });
+      .then(() => this.pdfDocument?.annotationStorage.print);
 
     if (this.printService) {
       // There is no way to suppress beforePrint/afterPrint events,
@@ -3436,8 +3410,4 @@ const PDFPrintServiceFactory = {
   },
 };
 
-export {
-  DefaultExternalServices,
-  PDFPrintServiceFactory,
-  PDFViewerApplication,
-};
+export { PDFPrintServiceFactory, PDFViewerApplication };

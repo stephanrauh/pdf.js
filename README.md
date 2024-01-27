@@ -55,11 +55,16 @@ Next, install Node.js via the [official package](https://nodejs.org) or via
 [nvm](https://github.com/creationix/nvm). You need to install the gulp package
 globally (see also [gulp's getting started](https://github.com/gulpjs/gulp/tree/master/docs/getting-started)):
 
-    $ npm install -g gulp-cli
+    $ npm install -g gulp-cli@^2.3.0
+
+If you prefer to not install `gulp-cli` globally, you have to prefix all the `gulp` commands with `npx` (for example, `npx gulp server` instead of `gulp server`).
 
 If everything worked out, install all dependencies for PDF.js:
 
     $ npm install
+
+> [!NOTE]
+> On MacOS M1/M2 you may see some `node-gyp`-related errors when running `npm install`. This is because one of our dependencies, `"canvas"`, does not provide pre-built binaries for this platform and instead `npm` will try to build it from source. Please make sure to first install the necessary native dependencies using `brew`: https://github.com/Automattic/node-canvas#compiling.
 
 Finally, you need to start a local web server as some browsers do not allow opening
 PDF files using a `file://` URL. Run:

@@ -20,6 +20,8 @@ import { noContextMenu } from "../display_utils.js";
 class ColorPicker {
   #boundKeyDown = this.#keyDown.bind(this);
 
+  #boundPointerDown = this.#pointerDown.bind(this);
+
   #button = null;
 
   #buttonSwatch = null;
@@ -35,6 +37,8 @@ class ColorPicker {
   #eventBus;
 
   #uiManager = null;
+
+  #type;
 
   static get _keyboardManager() {
     return shadow(
@@ -61,7 +65,13 @@ class ColorPicker {
   }
 
   constructor({ editor = null, uiManager = null }) {
-    this.#isMainColorPicker = !editor;
+    if (editor) {
+      this.#isMainColorPicker = false;
+      this.#type = AnnotationEditorParamsType.HIGHLIGHT_COLOR;
+    } else {
+      this.#isMainColorPicker = true;
+      this.#type = AnnotationEditorParamsType.HIGHLIGHT_DEFAULT_COLOR;
+    }
     this.#uiManager = editor?._uiManager || uiManager;
     this.#eventBus = this.#uiManager._eventBus;
     this.#defaultColor =
@@ -77,6 +87,7 @@ class ColorPicker {
     button.setAttribute("data-l10n-id", "pdfjs-editor-colorpicker-button");
     button.setAttribute("aria-haspopup", true);
     button.addEventListener("click", this.#openDropdown.bind(this));
+    button.addEventListener("keydown", this.#boundKeyDown);
     const swatch = (this.#buttonSwatch = document.createElement("span"));
     swatch.className = "swatch";
     swatch.style.backgroundColor = this.#defaultColor;
@@ -85,16 +96,14 @@ class ColorPicker {
   }
 
   renderMainDropdown() {
-    const dropdown = (this.#dropdown = this.#getDropdownRoot(
-      AnnotationEditorParamsType.HIGHLIGHT_DEFAULT_COLOR
-    ));
+    const dropdown = (this.#dropdown = this.#getDropdownRoot());
     dropdown.setAttribute("aria-orientation", "horizontal");
     dropdown.setAttribute("aria-labelledby", "highlightColorPickerLabel");
 
     return dropdown;
   }
 
-  #getDropdownRoot(paramType) {
+  #getDropdownRoot() {
     const div = document.createElement("div");
     div.addEventListener("contextmenu", noContextMenu);
     div.className = "dropdown";
@@ -114,10 +123,7 @@ class ColorPicker {
       swatch.className = "swatch";
       swatch.style.backgroundColor = color;
       button.setAttribute("aria-selected", color === this.#defaultColor);
-      button.addEventListener(
-        "click",
-        this.#colorSelect.bind(this, paramType, color)
-      );
+      button.addEventListener("click", this.#colorSelect.bind(this, color));
       div.append(button);
     }
 
@@ -126,16 +132,20 @@ class ColorPicker {
     return div;
   }
 
-  #colorSelect(type, color, event) {
+  #colorSelect(color, event) {
     event.stopPropagation();
     this.#eventBus.dispatch("switchannotationeditorparams", {
       source: this,
-      type,
+      type: this.#type,
       value: color,
     });
   }
 
   _colorSelectFromKeyboard(event) {
+    if (event.target === this.#button) {
+      this.#openDropdown(event);
+      return;
+    }
     const color = event.target.getAttribute("data-color");
     if (!color) {
       return;
@@ -144,6 +154,10 @@ class ColorPicker {
   }
 
   _moveToNext(event) {
+    if (!this.#isDropdownVisible) {
+      this.#openDropdown(event);
+      return;
+    }
     if (event.target === this.#button) {
       this.#dropdown.firstChild?.focus();
       return;
@@ -152,14 +166,34 @@ class ColorPicker {
   }
 
   _moveToPrevious(event) {
+    if (
+      event.target === this.#dropdown?.firstChild ||
+      event.target === this.#button
+    ) {
+      if (this.#isDropdownVisible) {
+        this._hideDropdownFromKeyboard();
+      }
+      return;
+    }
+    if (!this.#isDropdownVisible) {
+      this.#openDropdown(event);
+    }
     event.target.previousSibling?.focus();
   }
 
-  _moveToBeginning() {
+  _moveToBeginning(event) {
+    if (!this.#isDropdownVisible) {
+      this.#openDropdown(event);
+      return;
+    }
     this.#dropdown.firstChild?.focus();
   }
 
-  _moveToEnd() {
+  _moveToEnd(event) {
+    if (!this.#isDropdownVisible) {
+      this.#openDropdown(event);
+      return;
+    }
     this.#dropdown.lastChild?.focus();
   }
 
@@ -168,36 +202,41 @@ class ColorPicker {
   }
 
   #openDropdown(event) {
-    if (this.#dropdown && !this.#dropdown.classList.contains("hidden")) {
+    if (this.#isDropdownVisible) {
       this.hideDropdown();
       return;
     }
-    this.#button.addEventListener("keydown", this.#boundKeyDown);
     this.#dropdownWasFromKeyboard = event.detail === 0;
+    window.addEventListener("pointerdown", this.#boundPointerDown);
     if (this.#dropdown) {
       this.#dropdown.classList.remove("hidden");
       return;
     }
-    const root = (this.#dropdown = this.#getDropdownRoot(
-      AnnotationEditorParamsType.HIGHLIGHT_COLOR
-    ));
+    const root = (this.#dropdown = this.#getDropdownRoot());
     this.#button.append(root);
+  }
+
+  #pointerDown(event) {
+    if (this.#dropdown?.contains(event.target)) {
+      return;
+    }
+    this.hideDropdown();
   }
 
   hideDropdown() {
     this.#dropdown?.classList.add("hidden");
+    window.removeEventListener("pointerdown", this.#boundPointerDown);
+  }
+
+  get #isDropdownVisible() {
+    return this.#dropdown && !this.#dropdown.classList.contains("hidden");
   }
 
   _hideDropdownFromKeyboard() {
-    if (
-      this.#isMainColorPicker ||
-      !this.#dropdown ||
-      this.#dropdown.classList.contains("hidden")
-    ) {
+    if (this.#isMainColorPicker || !this.#isDropdownVisible) {
       return;
     }
     this.hideDropdown();
-    this.#button.removeEventListener("keydown", this.#boundKeyDown);
     this.#button.focus({
       preventScroll: true,
       focusVisible: this.#dropdownWasFromKeyboard,

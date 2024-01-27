@@ -84,8 +84,8 @@ class InkEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
-  static initialize(l10n) {
-    AnnotationEditor.initialize(l10n);
+  static initialize(l10n, uiManager) {
+    AnnotationEditor.initialize(l10n, uiManager);
   }
 
   /** @inheritdoc */
@@ -158,16 +158,15 @@ class InkEditor extends AnnotationEditor {
    * @param {number} thickness
    */
   #updateThickness(thickness) {
+    const setThickness = th => {
+      this.thickness = th;
+      this.#fitToContent();
+    };
     const savedThickness = this.thickness;
     this.addCommands({
-      cmd: () => {
-        this.thickness = thickness;
-        this.#fitToContent();
-      },
-      undo: () => {
-        this.thickness = savedThickness;
-        this.#fitToContent();
-      },
+      cmd: setThickness.bind(this, thickness),
+      undo: setThickness.bind(this, savedThickness),
+      post: this._uiManager.updateUI.bind(this._uiManager, this),
       mustExec: true,
       type: AnnotationEditorParamsType.INK_THICKNESS,
       overwriteIfSameType: true,
@@ -180,16 +179,15 @@ class InkEditor extends AnnotationEditor {
    * @param {string} color
    */
   #updateColor(color) {
+    const setColor = col => {
+      this.color = col;
+      this.#redraw();
+    };
     const savedColor = this.color;
     this.addCommands({
-      cmd: () => {
-        this.color = color;
-        this.#redraw();
-      },
-      undo: () => {
-        this.color = savedColor;
-        this.#redraw();
-      },
+      cmd: setColor.bind(this, color),
+      undo: setColor.bind(this, savedColor),
+      post: this._uiManager.updateUI.bind(this._uiManager, this),
       mustExec: true,
       type: AnnotationEditorParamsType.INK_COLOR,
       overwriteIfSameType: true,
@@ -202,17 +200,16 @@ class InkEditor extends AnnotationEditor {
    * @param {number} opacity
    */
   #updateOpacity(opacity) {
+    const setOpacity = op => {
+      this.opacity = op;
+      this.#redraw();
+    };
     opacity /= 100;
     const savedOpacity = this.opacity;
     this.addCommands({
-      cmd: () => {
-        this.opacity = opacity;
-        this.#redraw();
-      },
-      undo: () => {
-        this.opacity = savedOpacity;
-        this.#redraw();
-      },
+      cmd: setOpacity.bind(this, opacity),
+      undo: setOpacity.bind(this, savedOpacity),
+      post: this._uiManager.updateUI.bind(this._uiManager, this),
       mustExec: true,
       type: AnnotationEditorParamsType.INK_OPACITY,
       overwriteIfSameType: true,
@@ -628,7 +625,7 @@ class InkEditor extends AnnotationEditor {
 
     this.parent.addInkEditorIfNeeded(/* isCommitting = */ true);
 
-    // When commiting, the position of this editor is changed, hence we must
+    // When committing, the position of this editor is changed, hence we must
     // move it to the right position in the DOM.
     this.moveInDOM();
     this.div.focus({
@@ -998,6 +995,14 @@ class InkEditor extends AnnotationEditor {
       const points = [];
       for (let j = 0, jj = bezier.length; j < jj; j++) {
         const [first, control1, control2, second] = bezier[j];
+        if (first[0] === second[0] && first[1] === second[1] && jj === 1) {
+          // We have only one point.
+          const p0 = s * first[0] + shiftX;
+          const p1 = s * first[1] + shiftY;
+          buffer.push(p0, p1);
+          points.push(p0, p1);
+          break;
+        }
         const p10 = s * first[0] + shiftX;
         const p11 = s * first[1] + shiftY;
         const p20 = s * control1[0] + shiftX;

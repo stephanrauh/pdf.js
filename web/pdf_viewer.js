@@ -116,8 +116,6 @@ function isValidAnnotationEditorMode(mode) {
  *   mainly for annotation icons. Include trailing slash.
  * @property {boolean} [enablePrintAutoRotate] - Enables automatic rotation of
  *   landscape pages upon printing. The default is `false`.
- * @property {boolean} [isOffscreenCanvasSupported] - Allows to use an
- *   OffscreenCanvas if needed.
  * @property {number} [maxCanvasPixels] - The maximum supported canvas size in
  *   total pixels, i.e. width * height. Use `-1` for no limit, or `0` for
  *   CSS-only zooming. The default value is 4096 * 4096 (16 mega-pixels).
@@ -299,8 +297,6 @@ class PDFViewer {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
       this.removePageBorders = options.removePageBorders || false;
     }
-    this.isOffscreenCanvasSupported =
-      options.isOffscreenCanvasSupported ?? true;
     this.maxCanvasPixels = options.maxCanvasPixels;
     this.l10n = options.l10n || NullL10n;
     this.#enablePermissions = options.enablePermissions || false;
@@ -827,7 +823,7 @@ class PDFViewer {
     return params;
   }
 
-  #onePageRenderedOrForceFetch() {
+  async #onePageRenderedOrForceFetch() {
     // Unless the viewer *and* its pages are visible, rendering won't start and
     // `this._onePageRenderedCapability` thus won't be resolved.
     // To ensure that automatic printing, on document load, still works even in
@@ -843,7 +839,7 @@ class PDFViewer {
       !this.container.offsetParent ||
       this._getVisiblePages().views.length === 0
     ) {
-      return Promise.resolve();
+      return;
     }
 
     // Handle the window/tab becoming inactive *after* rendering has started;
@@ -854,20 +850,17 @@ class PDFViewer {
           return;
         }
         resolve();
-
-        document.removeEventListener(
-          "visibilitychange",
-          this.#onVisibilityChange
-        );
-        this.#onVisibilityChange = null;
       };
       document.addEventListener("visibilitychange", this.#onVisibilityChange);
     });
 
-    return Promise.race([
+    await Promise.race([
       this._onePageRenderedCapability.promise,
       visibilityChangePromise,
     ]);
+    // Ensure that the "visibilitychange" listener is always removed.
+    document.removeEventListener("visibilitychange", this.#onVisibilityChange);
+    this.#onVisibilityChange = null;
   }
 
   async getAllText() {
@@ -1029,14 +1022,6 @@ class PDFViewer {
 
       this.eventBus._off("pagerendered", this._onAfterDraw);
       this._onAfterDraw = null;
-
-      if (this.#onVisibilityChange) {
-        document.removeEventListener(
-          "visibilitychange",
-          this.#onVisibilityChange
-        );
-        this.#onVisibilityChange = null;
-      }
     };
     this.eventBus._on("pagerendered", this._onAfterDraw);
 
@@ -1103,10 +1088,21 @@ class PDFViewer {
           this.viewer.style.setProperty(
             "--hcm-highlight-filter",
             pdfDocument.filterFactory.addHighlightHCMFilter(
+              "highlight",
               "CanvasText",
               "Canvas",
               "HighlightText",
               "Highlight"
+            )
+          );
+          this.viewer.style.setProperty(
+            "--hcm-highlight-selected-filter",
+            pdfDocument.filterFactory.addHighlightHCMFilter(
+              "highlight_selected",
+              "CanvasText",
+              "Canvas",
+              "HighlightText",
+              "ButtonText"
             )
           );
         }
@@ -1123,9 +1119,6 @@ class PDFViewer {
             textLayerMode,
             annotationMode,
             imageResourcesPath: this.imageResourcesPath,
-            removePageBorders: this.removePageBorders, // #194
-            useOnlyCssZoom: this.useOnlyCssZoom,
-            isOffscreenCanvasSupported: this.isOffscreenCanvasSupported,
             maxCanvasPixels: this.maxCanvasPixels,
             pageColors: this.pageColors,
             l10n: this.l10n,

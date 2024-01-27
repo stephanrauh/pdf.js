@@ -42,15 +42,21 @@ files.forEach(function (expectationFilename) {
   if (out !== expectation) {
     errors++;
 
-    globalThis.ngxConsole.log("Assertion failed for " + inFilename);
-    globalThis.ngxConsole.log("--------------------------------------------------");
-    globalThis.ngxConsole.log("EXPECTED:");
-    globalThis.ngxConsole.log(expectation);
-    globalThis.ngxConsole.log("--------------------------------------------------");
-    globalThis.ngxConsole.log("ACTUAL");
-    globalThis.ngxConsole.log(out);
-    globalThis.ngxConsole.log("--------------------------------------------------");
-    globalThis.ngxConsole.log();
+    // Allow regenerating the expected output using
+    //   OVERWRITE=true node ./external/builder/test-fixtures.mjs
+    if (process.env.OVERWRITE) {
+      fs.writeFileSync(expectationFilename, out + "\n");
+    }
+
+    console.log("Assertion failed for " + inFilename);
+    console.log("--------------------------------------------------");
+    console.log("EXPECTED:");
+    console.log(expectation);
+    console.log("--------------------------------------------------");
+    console.log("ACTUAL");
+    console.log(out);
+    console.log("--------------------------------------------------");
+    console.log();
   }
 });
 

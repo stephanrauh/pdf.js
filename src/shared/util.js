@@ -88,6 +88,7 @@ const AnnotationEditorParamsType = {
   INK_OPACITY: 23,
   HIGHLIGHT_COLOR: 31,
   HIGHLIGHT_DEFAULT_COLOR: 32,
+  HIGHLIGHT_THICKNESS: 33,
 };
 
 // Permission flags from Table 22, Section 7.6.3.2 of the PDF specification.
@@ -663,52 +664,52 @@ class Util {
 
   // Apply a scaling matrix to some min/max values.
   // If a scaling factor is negative then min and max must be
-  // swaped.
+  // swapped.
   static scaleMinMax(transform, minMax) {
     let temp;
     if (transform[0]) {
       if (transform[0] < 0) {
         temp = minMax[0];
-        minMax[0] = minMax[1];
-        minMax[1] = temp;
+        minMax[0] = minMax[2];
+        minMax[2] = temp;
       }
       minMax[0] *= transform[0];
-      minMax[1] *= transform[0];
+      minMax[2] *= transform[0];
 
       if (transform[3] < 0) {
-        temp = minMax[2];
-        minMax[2] = minMax[3];
+        temp = minMax[1];
+        minMax[1] = minMax[3];
         minMax[3] = temp;
       }
-      minMax[2] *= transform[3];
+      minMax[1] *= transform[3];
       minMax[3] *= transform[3];
     } else {
       temp = minMax[0];
-      minMax[0] = minMax[2];
-      minMax[2] = temp;
-      temp = minMax[1];
-      minMax[1] = minMax[3];
+      minMax[0] = minMax[1];
+      minMax[1] = temp;
+      temp = minMax[2];
+      minMax[2] = minMax[3];
       minMax[3] = temp;
 
       if (transform[1] < 0) {
-        temp = minMax[2];
-        minMax[2] = minMax[3];
+        temp = minMax[1];
+        minMax[1] = minMax[3];
         minMax[3] = temp;
       }
-      minMax[2] *= transform[1];
+      minMax[1] *= transform[1];
       minMax[3] *= transform[1];
 
       if (transform[2] < 0) {
         temp = minMax[0];
-        minMax[0] = minMax[1];
-        minMax[1] = temp;
+        minMax[0] = minMax[2];
+        minMax[2] = temp;
       }
       minMax[0] *= transform[2];
-      minMax[1] *= transform[2];
+      minMax[2] *= transform[2];
     }
     minMax[0] += transform[4];
-    minMax[1] += transform[4];
-    minMax[2] += transform[5];
+    minMax[1] += transform[5];
+    minMax[2] += transform[4];
     minMax[3] += transform[5];
   }
 
@@ -834,76 +835,116 @@ class Util {
     return [xLow, yLow, xHigh, yHigh];
   }
 
+  static #getExtremumOnCurve(x0, x1, x2, x3, y0, y1, y2, y3, t, minMax) {
+    if (t <= 0 || t >= 1) {
+      return;
+    }
+    const mt = 1 - t;
+    const tt = t * t;
+    const ttt = tt * t;
+    const x = mt * (mt * (mt * x0 + 3 * t * x1) + 3 * tt * x2) + ttt * x3;
+    const y = mt * (mt * (mt * y0 + 3 * t * y1) + 3 * tt * y2) + ttt * y3;
+    minMax[0] = Math.min(minMax[0], x);
+    minMax[1] = Math.min(minMax[1], y);
+    minMax[2] = Math.max(minMax[2], x);
+    minMax[3] = Math.max(minMax[3], y);
+  }
+
+  static #getExtremum(x0, x1, x2, x3, y0, y1, y2, y3, a, b, c, minMax) {
+    if (Math.abs(a) < 1e-12) {
+      if (Math.abs(b) >= 1e-12) {
+        this.#getExtremumOnCurve(
+          x0,
+          x1,
+          x2,
+          x3,
+          y0,
+          y1,
+          y2,
+          y3,
+          -c / b,
+          minMax
+        );
+      }
+      return;
+    }
+
+    const delta = b ** 2 - 4 * c * a;
+    if (delta < 0) {
+      return;
+    }
+    const sqrtDelta = Math.sqrt(delta);
+    const a2 = 2 * a;
+    this.#getExtremumOnCurve(
+      x0,
+      x1,
+      x2,
+      x3,
+      y0,
+      y1,
+      y2,
+      y3,
+      (-b + sqrtDelta) / a2,
+      minMax
+    );
+    this.#getExtremumOnCurve(
+      x0,
+      x1,
+      x2,
+      x3,
+      y0,
+      y1,
+      y2,
+      y3,
+      (-b - sqrtDelta) / a2,
+      minMax
+    );
+  }
+
   // From https://github.com/adobe-webplatform/Snap.svg/blob/b365287722a72526000ac4bfcf0ce4cac2faa015/src/path.js#L852
-  static bezierBoundingBox(x0, y0, x1, y1, x2, y2, x3, y3) {
-    const tvalues = [],
-      bounds = [[], []];
-    let a, b, c, t, t1, t2, b2ac, sqrtb2ac;
-    for (let i = 0; i < 2; ++i) {
-      if (i === 0) {
-        b = 6 * x0 - 12 * x1 + 6 * x2;
-        a = -3 * x0 + 9 * x1 - 9 * x2 + 3 * x3;
-        c = 3 * x1 - 3 * x0;
-      } else {
-        b = 6 * y0 - 12 * y1 + 6 * y2;
-        a = -3 * y0 + 9 * y1 - 9 * y2 + 3 * y3;
-        c = 3 * y1 - 3 * y0;
-      }
-      if (Math.abs(a) < 1e-12) {
-        if (Math.abs(b) < 1e-12) {
-          continue;
-        }
-        t = -c / b;
-        if (0 < t && t < 1) {
-          tvalues.push(t);
-        }
-        continue;
-      }
-      b2ac = b * b - 4 * c * a;
-      sqrtb2ac = Math.sqrt(b2ac);
-      if (b2ac < 0) {
-        continue;
-      }
-      t1 = (-b + sqrtb2ac) / (2 * a);
-      if (0 < t1 && t1 < 1) {
-        tvalues.push(t1);
-      }
-      t2 = (-b - sqrtb2ac) / (2 * a);
-      if (0 < t2 && t2 < 1) {
-        tvalues.push(t2);
-      }
+  static bezierBoundingBox(x0, y0, x1, y1, x2, y2, x3, y3, minMax) {
+    if (minMax) {
+      minMax[0] = Math.min(minMax[0], x0, x3);
+      minMax[1] = Math.min(minMax[1], y0, y3);
+      minMax[2] = Math.max(minMax[2], x0, x3);
+      minMax[3] = Math.max(minMax[3], y0, y3);
+    } else {
+      minMax = [
+        Math.min(x0, x3),
+        Math.min(y0, y3),
+        Math.max(x0, x3),
+        Math.max(y0, y3),
+      ];
     }
-
-    let j = tvalues.length,
-      mt;
-    const jlen = j;
-    while (j--) {
-      t = tvalues[j];
-      mt = 1 - t;
-      bounds[0][j] =
-        mt * mt * mt * x0 +
-        3 * mt * mt * t * x1 +
-        3 * mt * t * t * x2 +
-        t * t * t * x3;
-      bounds[1][j] =
-        mt * mt * mt * y0 +
-        3 * mt * mt * t * y1 +
-        3 * mt * t * t * y2 +
-        t * t * t * y3;
-    }
-
-    bounds[0][jlen] = x0;
-    bounds[1][jlen] = y0;
-    bounds[0][jlen + 1] = x3;
-    bounds[1][jlen + 1] = y3;
-    bounds[0].length = bounds[1].length = jlen + 2;
-
-    return [
-      Math.min(...bounds[0]),
-      Math.min(...bounds[1]),
-      Math.max(...bounds[0]),
-      Math.max(...bounds[1]),
-    ];
+    this.#getExtremum(
+      x0,
+      x1,
+      x2,
+      x3,
+      y0,
+      y1,
+      y2,
+      y3,
+      3 * (-x0 + 3 * (x1 - x2) + x3),
+      6 * (x0 - 2 * x1 + x2),
+      3 * (x1 - x0),
+      minMax
+    );
+    this.#getExtremum(
+      x0,
+      x1,
+      x2,
+      x3,
+      y0,
+      y1,
+      y2,
+      y3,
+      3 * (-y0 + 3 * (y1 - y2) + y3),
+      6 * (y0 - 2 * y1 + y2),
+      3 * (y1 - y0),
+      minMax
+    );
+    return minMax;
   }
 }
 
@@ -974,10 +1015,6 @@ function stringToUTF8String(str) {
 
 function utf8StringToString(str) {
   return unescape(encodeURIComponent(str));
-}
-
-function isArrayBuffer(v) {
-  return typeof v === "object" && v?.byteLength !== undefined;
 }
 
 function isArrayEqual(arr1, arr2) {
@@ -1056,9 +1093,9 @@ function normalizeUnicode(str) {
       /([\u00a0\u00b5\u037e\u0eb3\u2000-\u200a\u202f\u2126\ufb00-\ufb04\ufb06\ufb20-\ufb36\ufb38-\ufb3c\ufb3e\ufb40-\ufb41\ufb43-\ufb44\ufb46-\ufba1\ufba4-\ufba9\ufbae-\ufbb1\ufbd3-\ufbdc\ufbde-\ufbe7\ufbea-\ufbf8\ufbfc-\ufbfd\ufc00-\ufc5d\ufc64-\ufcf1\ufcf5-\ufd3d\ufd88\ufdf4\ufdfa-\ufdfb\ufe71\ufe77\ufe79\ufe7b\ufe7d]+)|(\ufb05+)/gu;
     NormalizationMap = new Map([["ﬅ", "ſt"]]);
   }
-  return str.replaceAll(NormalizeRegex, (_, p1, p2) => {
-    return p1 ? p1.normalize("NFKC") : NormalizationMap.get(p2);
-  });
+  return str.replaceAll(NormalizeRegex, (_, p1, p2) =>
+    p1 ? p1.normalize("NFKC") : NormalizationMap.get(p2)
+  );
 }
 
 function getUuid() {
@@ -1114,7 +1151,6 @@ export {
   ImageKind,
   info,
   InvalidPDFException,
-  isArrayBuffer,
   isArrayEqual,
   isNodeJS,
   LINE_DESCENT_FACTOR,

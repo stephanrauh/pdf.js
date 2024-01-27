@@ -14,6 +14,10 @@
  */
 /* eslint-env node */
 
+import {
+  babelPluginPDFJSPreprocessor,
+  preprocessPDFJSCode,
+} from "./external/builder/babel-plugin-pdfjs-preprocessor.mjs";
 import { exec, spawn, spawnSync } from "child_process";
 import autoprefixer from "autoprefixer";
 import babel from "@babel/core";
@@ -30,7 +34,6 @@ import postcssDirPseudoClass from "postcss-dir-pseudo-class";
 import postcssDiscardComments from "postcss-discard-comments";
 import postcssNesting from "postcss-nesting";
 import { preprocess } from "./external/builder/builder.mjs";
-import { preprocessPDFJSCode } from "./external/builder/preprocessor2.mjs";
 import rename from "gulp-rename";
 import replace from "gulp-replace";
 import rimraf from "rimraf";
@@ -213,10 +216,11 @@ function createWebpackConfig(
   const isModule = output.library?.type === "module";
   const skipBabel = bundleDefines.SKIP_BABEL;
 
-  // `core-js`, see https://github.com/zloirock/core-js/issues/514,
-  // should be excluded from processing.
-  const babelExcludes = ["node_modules[\\\\\\/]core-js"];
-  const babelExcludeRegExp = new RegExp(`(${babelExcludes.join("|")})`);
+  const babelExcludeRegExp = [
+    // `core-js`, see https://github.com/zloirock/core-js/issues/514,
+    // should be excluded from processing.
+    /node_modules[\\/]core-js/,
+  ];
 
   const babelPresets = skipBabel
     ? undefined
@@ -224,14 +228,22 @@ function createWebpackConfig(
         [
           "@babel/preset-env",
           {
-            corejs: "3.34.0",
+            corejs: "3.35.0",
             exclude: ["web.structured-clone"],
             shippedProposals: true,
             useBuiltIns: "usage",
           },
         ],
       ];
-  const babelPlugins = [];
+  const babelPlugins = [
+    [
+      babelPluginPDFJSPreprocessor,
+      {
+        rootPath: __dirname,
+        defines: bundleDefines,
+      },
+    ],
+  ];
 
   const plugins = [];
   if (!disableLicenseHeader) {
@@ -262,6 +274,8 @@ function createWebpackConfig(
     "web-alt_text_manager": "web/alt_text_manager.js",
     "web-annotation_editor_params": "web/annotation_editor_params.js",
     "web-com": "",
+    "web-download_manager": "",
+    "web-external_services": "",
     "web-l10n_utils": "web/stubs.js",
     "web-pdf_attachment_viewer": "web/pdf_attachment_viewer.js",
     "web-pdf_cursor_tools": "web/pdf_cursor_tools.js",
@@ -272,6 +286,7 @@ function createWebpackConfig(
     "web-pdf_presentation_mode": "web/pdf_presentation_mode.js",
     "web-pdf_sidebar": "web/pdf_sidebar.js",
     "web-pdf_thumbnail_viewer": "web/pdf_thumbnail_viewer.js",
+    "web-preferences": "",
     "web-print_service": "",
     "web-secondary_toolbar": "web/secondary_toolbar.js",
     "web-toolbar": "web/toolbar.js",
@@ -281,6 +296,9 @@ function createWebpackConfig(
     libraryAlias["display-network"] = "src/display/network.js";
 
     viewerAlias["web-com"] = "web/chromecom.js";
+    viewerAlias["web-download_manager"] = "web/download_manager.js";
+    viewerAlias["web-external_services"] = "web/chromecom.js";
+    viewerAlias["web-preferences"] = "web/chromecom.js";
     viewerAlias["web-print_service"] = "web/pdf_print_service.js";
   } else if (bundleDefines.GENERIC) {
     // Aliases defined here must also be replicated in the paths section of
@@ -292,7 +310,10 @@ function createWebpackConfig(
     libraryAlias["display-node_utils"] = "src/display/node_utils.js";
 
     viewerAlias["web-com"] = "web/genericcom.js";
+    viewerAlias["web-download_manager"] = "web/download_manager.js";
+    viewerAlias["web-external_services"] = "web/genericcom.js";
     viewerAlias["web-l10n_utils"] = "web/l10n_utils.js";
+    viewerAlias["web-preferences"] = "web/genericcom.js";
     viewerAlias["web-print_service"] = "web/pdf_print_service.js";
   } else if (bundleDefines.MOZCENTRAL) {
     if (bundleDefines.GECKOVIEW) {
@@ -305,6 +326,9 @@ function createWebpackConfig(
       }
     }
     viewerAlias["web-com"] = "web/firefoxcom.js";
+    viewerAlias["web-download_manager"] = "web/firefoxcom.js";
+    viewerAlias["web-external_services"] = "web/firefoxcom.js";
+    viewerAlias["web-preferences"] = "web/firefoxcom.js";
     viewerAlias["web-print_service"] = "web/firefox_print_service.js";
   }
   const alias = { ...basicAlias, ...libraryAlias, ...viewerAlias };
@@ -338,14 +362,6 @@ function createWebpackConfig(
             plugins: babelPlugins,
             targets: BABEL_TARGETS,
             compact: skipBabel ? "auto" : true,
-          },
-        },
-        {
-          loader: path.join(__dirname, "external/webpack/pdfjsdev-loader.mjs"),
-          options: {
-            rootPath: __dirname,
-            saveComments: false,
-            defines: bundleDefines,
           },
         },
       ],
@@ -468,7 +484,6 @@ function createSandboxExternal(defines) {
   const licenseHeader = fs.readFileSync("./src/license_header.js").toString();
 
   const ctx = {
-    saveComments: false,
     defines,
   };
   return gulp
@@ -696,6 +711,9 @@ function createTestSource(testsName, { bot = false, xfaOnly = false } = {}) {
 
     const testProcess = startNode(args, { cwd: TEST_DIR, stdio: "inherit" });
     testProcess.on("close", function (code) {
+      if (code !== 0) {
+        throw new Error(`Running ${testsName} tests failed.`);
+      }
       source.push(null);
     });
     return undefined;
@@ -727,6 +745,10 @@ function makeRef(done, bot) {
 
   const testProcess = startNode(args, { cwd: TEST_DIR, stdio: "inherit" });
   testProcess.on("close", function (code) {
+    if (code !== 0) {
+      done(new Error("Creating reference images failed."));
+      return;
+    }
     done();
   });
 }
@@ -1084,7 +1106,8 @@ function buildComponents(defines, dir) {
     "web/images/loading-icon.gif",
     "web/images/altText_*.svg",
     "web/images/editor-toolbar-*.svg",
-    "web/images/toolbarButton-menuArrow.svg",
+    "web/images/toolbarButton-{editorHighlight,menuArrow}.svg",
+    "web/images/cursor-*.svg",
   ];
 
   return merge([
@@ -1598,13 +1621,15 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
   }
   function preprocessLib(content) {
     const skipBabel = bundleDefines.SKIP_BABEL;
-    content = preprocessPDFJSCode(ctx, content);
     content = babel.transform(content, {
       sourceType: "module",
       presets: skipBabel
         ? undefined
         : [["@babel/preset-env", { loose: false, modules: false }]],
-      plugins: [babelPluginReplaceNonWebpackImport],
+      plugins: [
+        babelPluginReplaceNonWebpackImport,
+        [babelPluginPDFJSPreprocessor, ctx],
+      ],
       targets: BABEL_TARGETS,
     }).code;
     content = content.replaceAll(
@@ -1615,7 +1640,6 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
   }
   const ctx = {
     rootPath: __dirname,
-    saveComments: false,
     defines: bundleDefines,
     map: {
       "pdfjs-lib": "../pdf.js",
@@ -1969,7 +1993,7 @@ gulp.task(
 
 gulp.task("lint", function (done) {
   console.log();
-  console.log("### Linting JS/CSS files");
+  console.log("### Linting JS/CSS/JSON files");
 
   // Ensure that we lint the Firefox specific *.jsm files too.
   const esLintOptions = [
@@ -1992,6 +2016,16 @@ gulp.task("lint", function (done) {
     styleLintOptions.push("--fix");
   }
 
+  const prettierOptions = [
+    "node_modules/prettier/bin/prettier.cjs",
+    "**/*.json",
+  ];
+  if (process.argv.includes("--fix")) {
+    prettierOptions.push("--log-level", "silent", "--write");
+  } else {
+    prettierOptions.push("--log-level", "warn", "--check");
+  }
+
   const esLintProcess = startNode(esLintOptions, { stdio: "inherit" });
   esLintProcess.on("close", function (esLintCode) {
     if (esLintCode !== 0) {
@@ -2005,8 +2039,16 @@ gulp.task("lint", function (done) {
         done(new Error("Stylelint failed."));
         return;
       }
-      console.log("files checked, no errors found");
-      done();
+
+      const prettierProcess = startNode(prettierOptions, { stdio: "inherit" });
+      prettierProcess.on("close", function (prettierCode) {
+        if (prettierCode !== 0) {
+          done(new Error("Prettier failed."));
+          return;
+        }
+        console.log("files checked, no errors found");
+        done();
+      });
     });
   });
 });

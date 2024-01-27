@@ -52,9 +52,9 @@ describe("Scripting", function () {
       send_queue.set(command, { command, value });
     };
     // eslint-disable-next-line no-unsanitized/method
-    const promise = import(sandboxBundleSrc).then(pdfjsSandbox => {
-      return pdfjsSandbox.QuickJSSandbox();
-    });
+    const promise = import(sandboxBundleSrc).then(pdfjsSandbox =>
+      pdfjsSandbox.QuickJSSandbox()
+    );
     sandbox = {
       createSandbox(data) {
         promise.then(sbx => sbx.create(data));
@@ -152,14 +152,12 @@ describe("Scripting", function () {
     });
 
     it("should get field using a path", async () => {
-      const base = value => {
-        return {
-          id: getId(),
-          value,
-          actions: {},
-          type: "text",
-        };
-      };
+      const base = value => ({
+        id: getId(),
+        value,
+        actions: {},
+        type: "text",
+      });
       const data = {
         objects: {
           A: [base(1)],
@@ -716,6 +714,11 @@ describe("Scripting", function () {
                     `AFNumber_Format(2, 0, 3, 0, "€", false);` +
                       `event.source.value = event.value;`,
                   ],
+                  test6: [
+                    `event.value = 0;` +
+                      `AFNumber_Format(2, 0, 0, 0, "€", false);` +
+                      `event.source.value = event.value;`,
+                  ],
                 },
                 type: "text",
               },
@@ -727,6 +730,30 @@ describe("Scripting", function () {
         };
 
         sandbox.createSandbox(data);
+        await sandbox.dispatchEventInSandbox({
+          id: refId,
+          value: "0",
+          name: "test1",
+        });
+        expect(send_queue.has(refId)).toEqual(true);
+        expect(send_queue.get(refId)).toEqual({
+          id: refId,
+          value: "0.00€",
+        });
+        send_queue.delete(refId);
+
+        await sandbox.dispatchEventInSandbox({
+          id: refId,
+          value: "",
+          name: "test6",
+        });
+        expect(send_queue.has(refId)).toEqual(true);
+        expect(send_queue.get(refId)).toEqual({
+          id: refId,
+          value: "0.00€",
+        });
+        send_queue.delete(refId);
+
         await sandbox.dispatchEventInSandbox({
           id: refId,
           value: "123456.789",

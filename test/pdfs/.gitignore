@@ -300,6 +300,7 @@
 !helloworld-bad.pdf
 !zerowidthline.pdf
 !colorspace_cos.pdf
+!issue17554.pdf
 !issue13242.pdf
 !js-colors.pdf
 !annotation-line-without-appearance-empty-Rect.pdf
@@ -620,3 +621,10 @@
 !issue17215.pdf
 !bug1863910.pdf
 !bug1865341.pdf
+!bug1872721.pdf
+!bug1871353.pdf
+!bug1871353.1.pdf
+!file_pdfjs_form.pdf
+!issue17492.pdf
+!issue17540.pdf
+!bug1669097.pdf
