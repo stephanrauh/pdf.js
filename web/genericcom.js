@@ -25,7 +25,7 @@ if (typeof PDFJSDev !== "undefined" && !PDFJSDev.test("GENERIC")) {
   );
 }
 
-const GenericCom = {};
+function initCom(app) {}
 
 class Preferences extends BasePreferences {
   async _writeToStorage(prefObj) {
@@ -60,4 +60,4 @@ class ExternalServices extends BaseExternalServices {
   }
 }
 
-export { ExternalServices, GenericCom, Preferences };
+export { ExternalServices, initCom, Preferences };

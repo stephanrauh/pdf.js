@@ -273,7 +273,6 @@ function createWebpackConfig(
   const viewerAlias = {
     "web-alt_text_manager": "web/alt_text_manager.js",
     "web-annotation_editor_params": "web/annotation_editor_params.js",
-    "web-com": "",
     "web-download_manager": "",
     "web-external_services": "",
     "web-null_l10n": "",
@@ -295,7 +294,6 @@ function createWebpackConfig(
     libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
     libraryAlias["display-network"] = "src/display/network.js";
 
-    viewerAlias["web-com"] = "web/chromecom.js";
     viewerAlias["web-download_manager"] = "web/download_manager.js";
     viewerAlias["web-external_services"] = "web/chromecom.js";
     viewerAlias["web-null_l10n"] = "web/l10n.js";
@@ -310,7 +308,6 @@ function createWebpackConfig(
     libraryAlias["display-node_stream"] = "src/display/node_stream.js";
     libraryAlias["display-node_utils"] = "src/display/node_utils.js";
 
-    viewerAlias["web-com"] = "web/genericcom.js";
     viewerAlias["web-download_manager"] = "web/download_manager.js";
     viewerAlias["web-external_services"] = "web/genericcom.js";
     viewerAlias["web-null_l10n"] = "web/genericl10n.js";
@@ -325,7 +322,6 @@ function createWebpackConfig(
         viewerAlias[key] = gvAlias[key] || "web/stubs-geckoview.js";
       }
     }
-    viewerAlias["web-com"] = "web/firefoxcom.js";
     viewerAlias["web-download_manager"] = "web/firefoxcom.js";
     viewerAlias["web-external_services"] = "web/firefoxcom.js";
     viewerAlias["web-null_l10n"] = "web/l10n.js";

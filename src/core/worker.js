@@ -35,7 +35,7 @@ import {
   getNewAnnotationsMap,
   XRefParseException,
 } from "./core_utils.js";
-import { Dict, Ref } from "./primitives.js";
+import { Dict, isDict, Ref } from "./primitives.js";
 import { LocalPdfManager, NetworkPdfManager } from "./pdf_manager.js";
 import { AnnotationFactory } from "./annotation.js";
 import { clearGlobalCaches } from "./cleanup_helper.js";
@@ -751,6 +751,8 @@ class WorkerMessageHandler {
           acroFormRef,
           acroForm,
           xfaData,
+          // Use the same kind of XRef as the previous one.
+          useXrefStream: isDict(xref.topDict, "XRef"),
         }).finally(() => {
           xref.resetNewTemporaryRef();
         });
@@ -917,6 +919,9 @@ class WorkerMessageHandler {
         return pdfManager
           .ensureXRef("trailer")
           .then(trailer => trailer.get("Prev"));
+      });
+      handler.on("GetStartXRefPos", function (data) {
+        return pdfManager.ensureDoc("startXRef");
       });
       handler.on("GetAnnotArray", function (data) {
         return pdfManager.getPage(data.pageIndex).then(function (page) {
