@@ -92,17 +92,22 @@ function babelPluginPDFJSPreprocessor(babel, ctx) {
           }
         },
       },
-      UnaryExpression(path) {
-        const { node } = path;
-        if (node.operator === "typeof" && isPDFJSPreprocessor(node.argument)) {
-          // typeof PDFJSDev => 'object'
-          path.replaceWith(t.stringLiteral("object"));
-          return;
-        }
-        if (node.operator === "!" && t.isBooleanLiteral(node.argument)) {
-          // !true => false,  !false => true
-          path.replaceWith(t.booleanLiteral(!node.argument.value));
-        }
+      UnaryExpression: {
+        exit(path) {
+          const { node } = path;
+          if (
+            node.operator === "typeof" &&
+            isPDFJSPreprocessor(node.argument)
+          ) {
+            // typeof PDFJSDev => 'object'
+            path.replaceWith(t.stringLiteral("object"));
+            return;
+          }
+          if (node.operator === "!" && t.isBooleanLiteral(node.argument)) {
+            // !true => false,  !false => true
+            path.replaceWith(t.booleanLiteral(!node.argument.value));
+          }
+        },
       },
       LogicalExpression: {
         exit(path) {
@@ -164,17 +169,6 @@ function babelPluginPDFJSPreprocessor(babel, ctx) {
             path
           );
           path.replaceWith(t.inherits(t.valueToNode(result), path.node));
-        }
-
-        // require('string')
-        if (
-          t.isIdentifier(node.callee, { name: "require" }) &&
-          node.arguments.length === 1 &&
-          t.isStringLiteral(node.arguments[0]) &&
-          ctx.map?.[node.arguments[0].value]
-        ) {
-          const requireName = node.arguments[0];
-          requireName.value = requireName.raw = ctx.map[requireName.value];
         }
       },
       BlockStatement: {

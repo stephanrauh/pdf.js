@@ -3961,7 +3961,7 @@ class PartialEvaluator {
 
   isSerifFont(baseFontName) {
     // Simulating descriptor flags attribute
-    const fontNameWoStyle = baseFontName.split("-")[0];
+    const fontNameWoStyle = baseFontName.split("-", 1)[0];
     return (
       fontNameWoStyle in getSerifFonts() || /serif/gi.test(fontNameWoStyle)
     );
@@ -4191,7 +4191,7 @@ class PartialEvaluator {
         const metrics = this.getBaseFontMetrics(baseFontName);
 
         // Simulating descriptor flags attribute
-        const fontNameWoStyle = baseFontName.split("-")[0];
+        const fontNameWoStyle = baseFontName.split("-", 1)[0];
         const flags =
           (this.isSerifFont(fontNameWoStyle) ? FontFlags.Serif : 0) |
           (metrics.monospace ? FontFlags.FixedPitch : 0) |

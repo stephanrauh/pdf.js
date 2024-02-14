@@ -64,6 +64,11 @@ const defaultOptions = {
     value: false,
     kind: OptionKind.BROWSER,
   },
+  supportsCaretBrowsingMode: {
+    /** @type {boolean} */
+    value: false,
+    kind: OptionKind.BROWSER,
+  },
   supportsDocumentFonts: {
     /** @type {boolean} */
     value: true,
@@ -104,6 +109,11 @@ const defaultOptions = {
     /** @type {number} */
     value: 0,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
+  debuggerSrc: {
+    /** @type {string} */
+    value: "./debugger.mjs",
+    kind: OptionKind.VIEWER,
   },
   defaultZoomDelay: {
     /** @type {number} */

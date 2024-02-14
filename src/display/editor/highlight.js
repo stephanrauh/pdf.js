@@ -138,8 +138,7 @@ class HighlightEditor extends AnnotationEditor {
       this.parent.drawLayer.updateLine(this.#id, highlightOutlines);
       this.parent.drawLayer.updateLine(this.#outlineId, this.#focusOutlines);
     }
-    const { x, y, width, height, lastPoint } = highlightOutlines.box;
-    this.#lastPoint = lastPoint;
+    const { x, y, width, height } = highlightOutlines.box;
     switch (this.rotation) {
       case 0:
         this.x = x;
@@ -170,6 +169,9 @@ class HighlightEditor extends AnnotationEditor {
         break;
       }
     }
+
+    const { lastPoint } = this.#focusOutlines.box;
+    this.#lastPoint = [(lastPoint[0] - x) / width, (lastPoint[1] - y) / height];
   }
 
   /** @inheritdoc */

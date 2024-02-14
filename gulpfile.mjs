@@ -228,7 +228,7 @@ function createWebpackConfig(
         [
           "@babel/preset-env",
           {
-            corejs: "3.35.0",
+            corejs: "3.35.1",
             exclude: ["web.structured-clone"],
             shippedProposals: true,
             useBuiltIns: "usage",
@@ -276,7 +276,7 @@ function createWebpackConfig(
     "web-com": "",
     "web-download_manager": "",
     "web-external_services": "",
-    "web-l10n_utils": "web/stubs.js",
+    "web-null_l10n": "",
     "web-pdf_attachment_viewer": "web/pdf_attachment_viewer.js",
     "web-pdf_cursor_tools": "web/pdf_cursor_tools.js",
     "web-pdf_document_properties": "web/pdf_document_properties.js",
@@ -298,6 +298,7 @@ function createWebpackConfig(
     viewerAlias["web-com"] = "web/chromecom.js";
     viewerAlias["web-download_manager"] = "web/download_manager.js";
     viewerAlias["web-external_services"] = "web/chromecom.js";
+    viewerAlias["web-null_l10n"] = "web/l10n.js";
     viewerAlias["web-preferences"] = "web/chromecom.js";
     viewerAlias["web-print_service"] = "web/pdf_print_service.js";
   } else if (bundleDefines.GENERIC) {
@@ -312,13 +313,12 @@ function createWebpackConfig(
     viewerAlias["web-com"] = "web/genericcom.js";
     viewerAlias["web-download_manager"] = "web/download_manager.js";
     viewerAlias["web-external_services"] = "web/genericcom.js";
-    viewerAlias["web-l10n_utils"] = "web/l10n_utils.js";
+    viewerAlias["web-null_l10n"] = "web/genericl10n.js";
     viewerAlias["web-preferences"] = "web/genericcom.js";
     viewerAlias["web-print_service"] = "web/pdf_print_service.js";
   } else if (bundleDefines.MOZCENTRAL) {
     if (bundleDefines.GECKOVIEW) {
       const gvAlias = {
-        "web-l10n_utils": "web/stubs.js",
         "web-toolbar": "web/toolbar-geckoview.js",
       };
       for (const key in viewerAlias) {
@@ -328,6 +328,7 @@ function createWebpackConfig(
     viewerAlias["web-com"] = "web/firefoxcom.js";
     viewerAlias["web-download_manager"] = "web/firefoxcom.js";
     viewerAlias["web-external_services"] = "web/firefoxcom.js";
+    viewerAlias["web-null_l10n"] = "web/l10n.js";
     viewerAlias["web-preferences"] = "web/firefoxcom.js";
     viewerAlias["web-print_service"] = "web/firefox_print_service.js";
   }
@@ -1649,7 +1650,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       "display-node_utils": "./node_utils.js",
       "fluent-bundle": "../../../node_modules/@fluent/bundle/esm/index.js",
       "fluent-dom": "../../../node_modules/@fluent/dom/esm/index.js",
-      "web-l10n_utils": "../web/l10n_utils.js",
+      "web-null_l10n": "../web/genericl10n.js",
     },
   };
   const licenseHeaderLibre = fs

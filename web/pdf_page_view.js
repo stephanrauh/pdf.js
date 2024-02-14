@@ -43,7 +43,7 @@ import { AnnotationEditorLayerBuilder } from "./annotation_editor_layer_builder.
 import { AnnotationLayerBuilder } from "./annotation_layer_builder.js";
 import { compatibilityParams } from "./app_options.js";
 import { DrawLayerBuilder } from "./draw_layer_builder.js";
-import { NullL10n } from "web-l10n_utils";
+import { GenericL10n } from "web-null_l10n";
 import { SimpleLinkService } from "./pdf_link_service.js";
 import { StructTreeLayerBuilder } from "./struct_tree_layer_builder.js";
 import { TextAccessibilityManager } from "./text_accessibility.js";
@@ -159,7 +159,10 @@ class PDFPageView {
 
     this.eventBus = options.eventBus;
     this.renderingQueue = options.renderingQueue;
-    this.l10n = options.l10n || NullL10n;
+    this.l10n = options.l10n;
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      this.l10n ||= new GenericL10n();
+    }
 
     this.renderTask = null;
     this.resume = null;
@@ -216,7 +219,7 @@ class PDFPageView {
       }
 
       // Ensure that Fluent is connected in e.g. the COMPONENTS build.
-      if (this.l10n === NullL10n) {
+      if (!options.l10n) {
         this.l10n.translate(this.div);
       }
     }

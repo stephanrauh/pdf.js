@@ -63,7 +63,7 @@ import {
   VERTICAL_PADDING,
   watchScroll,
 } from "./ui_utils.js";
-import { NullL10n } from "web-l10n_utils";
+import { GenericL10n } from "web-null_l10n";
 import { PageFlip } from "./page-flip.module.js"; // #716 modified by ngx-extended-pdf-viewer
 import { PDFPageView } from "./pdf_page_view.js";
 import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
@@ -298,7 +298,10 @@ class PDFViewer {
       this.removePageBorders = options.removePageBorders || false;
     }
     this.maxCanvasPixels = options.maxCanvasPixels;
-    this.l10n = options.l10n || NullL10n;
+    this.l10n = options.l10n;
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      this.l10n ||= new GenericL10n();
+    }
     this.#enablePermissions = options.enablePermissions || false;
     this.pageColors = options.pageColors || null;
 
@@ -339,7 +342,7 @@ class PDFViewer {
 
     if (
       (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
-      this.l10n === NullL10n
+      !options.l10n
     ) {
       // Ensure that Fluent is connected in e.g. the COMPONENTS build.
       this.l10n.translate(this.container);

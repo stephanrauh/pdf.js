@@ -204,11 +204,6 @@ function getViewerConfiguration() {
       ),
     },
     printContainer: document.getElementById("printContainer"),
-    openFileInput:
-      typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")
-        ? document.getElementById("fileInput")
-        : null,
-    debuggerScriptPath: "./debugger.mjs",
   };
 }
 
