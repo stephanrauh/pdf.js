@@ -424,7 +424,7 @@ function checkChromePreferencesFile(chromePrefsPath, webPrefs) {
 }
 
 function tweakWebpackOutput(jsName) {
-  const replacer = ["__non_webpack_import__\\("];
+  const replacer = [];
 
   if (jsName) {
     replacer.push(
@@ -436,8 +436,6 @@ function tweakWebpackOutput(jsName) {
 
   return replace(regex, match => {
     switch (match) {
-      case "__non_webpack_import__(":
-        return "import(/* webpackIgnore: true */ ";
       case " __webpack_exports__ = {};":
         return ` __webpack_exports__ = globalThis.${jsName} = {};`;
       case " __webpack_exports__ = await __webpack_exports__;":
@@ -1605,17 +1603,6 @@ gulp.task("types", function (done) {
 });
 
 function buildLibHelper(bundleDefines, inputStream, outputDir) {
-  function babelPluginReplaceNonWebpackImport(b) {
-    return {
-      visitor: {
-        Identifier(curPath, state) {
-          if (curPath.node.name === "__non_webpack_import__") {
-            curPath.replaceWith(b.types.identifier("import"));
-          }
-        },
-      },
-    };
-  }
   function preprocessLib(content) {
     const skipBabel = bundleDefines.SKIP_BABEL;
     content = babel.transform(content, {
@@ -1623,10 +1610,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       presets: skipBabel
         ? undefined
         : [["@babel/preset-env", { loose: false, modules: false }]],
-      plugins: [
-        babelPluginReplaceNonWebpackImport,
-        [babelPluginPDFJSPreprocessor, ctx],
-      ],
+      plugins: [[babelPluginPDFJSPreprocessor, ctx]],
       targets: BABEL_TARGETS,
     }).code;
     content = content.replaceAll(
