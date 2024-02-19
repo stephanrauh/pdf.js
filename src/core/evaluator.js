@@ -2190,6 +2190,7 @@ class PartialEvaluator {
           case OPS.beginMarkedContentProps:
             if (!(args[0] instanceof Name)) {
               warn(`Expected name for beginMarkedContentProps arg0=${args[0]}`);
+              operatorList.addOp(OPS.beginMarkedContentProps, ["OC", null]);
               continue;
             }
             if (args[0].name === "OC") {
@@ -2210,6 +2211,10 @@ class PartialEvaluator {
                       warn(
                         `getOperatorList - ignoring beginMarkedContentProps: "${reason}".`
                       );
+                      operatorList.addOp(OPS.beginMarkedContentProps, [
+                        "OC",
+                        null,
+                      ]);
                       return;
                     }
                     throw reason;
