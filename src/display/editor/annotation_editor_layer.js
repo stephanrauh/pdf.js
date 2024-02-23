@@ -151,8 +151,9 @@ class AnnotationEditorLayer {
       case AnnotationEditorType.NONE:
         this.disableTextSelection();
         this.togglePointerEvents(false);
+        this.toggleAnnotationLayerPointerEvents(true);
         this.disableClick();
-        break;
+        return;
       case AnnotationEditorType.INK:
         // We always want to have an ink editor ready to draw in.
         this.addInkEditorIfNeeded(false);
@@ -172,16 +173,19 @@ class AnnotationEditorLayer {
         this.enableClick();
     }
 
-    if (mode !== AnnotationEditorType.NONE) {
-      const { classList } = this.div;
-      for (const editorType of AnnotationEditorLayer.#editorTypes.values()) {
-        classList.toggle(
-          `${editorType._type}Editing`,
-          mode === editorType._editorType
-        );
-      }
-      this.div.hidden = false;
+    this.toggleAnnotationLayerPointerEvents(false);
+    const { classList } = this.div;
+    for (const editorType of AnnotationEditorLayer.#editorTypes.values()) {
+      classList.toggle(
+        `${editorType._type}Editing`,
+        mode === editorType._editorType
+      );
     }
+    this.div.hidden = false;
+  }
+
+  hasTextLayer(textLayer) {
+    return textLayer === this.#textLayer?.div;
   }
 
   addInkEditorIfNeeded(isCommitting) {
@@ -226,6 +230,10 @@ class AnnotationEditorLayer {
 
   togglePointerEvents(enabled = false) {
     this.div.classList.toggle("disabled", !enabled);
+  }
+
+  toggleAnnotationLayerPointerEvents(enabled = false) {
+    this.#annotationLayer?.div.classList.toggle("disabled", !enabled);
   }
 
   /**
@@ -306,6 +314,7 @@ class AnnotationEditorLayer {
       classList.remove(`${editorType._type}Editing`);
     }
     this.disableTextSelection();
+    this.toggleAnnotationLayerPointerEvents(true);
 
     this.#isDisabling = false;
   }
@@ -716,78 +725,13 @@ class AnnotationEditorLayer {
    * @param {PointerEvent} event
    */
   pointerUpAfterSelection(event) {
-    const selection = document.getSelection();
-    if (selection.rangeCount === 0) {
-      return;
-    }
-    const range = selection.getRangeAt(0);
-    if (range.collapsed) {
-      return;
-    }
-
-    if (!this.#textLayer?.div.contains(range.commonAncestorContainer)) {
-      return;
-    }
-
-    const {
-      x: layerX,
-      y: layerY,
-      width: parentWidth,
-      height: parentHeight,
-    } = this.#textLayer.div.getBoundingClientRect();
-    const bboxes = range.getClientRects();
-
-    // We must rotate the boxes because we want to have them in the non-rotated
-    // page coordinates.
-    let rotator;
-    switch (this.viewport.rotation) {
-      case 90:
-        rotator = (x, y, w, h) => ({
-          x: (y - layerY) / parentHeight,
-          y: 1 - (x + w - layerX) / parentWidth,
-          width: h / parentHeight,
-          height: w / parentWidth,
-        });
-        break;
-      case 180:
-        rotator = (x, y, w, h) => ({
-          x: 1 - (x + w - layerX) / parentWidth,
-          y: 1 - (y + h - layerY) / parentHeight,
-          width: w / parentWidth,
-          height: h / parentHeight,
-        });
-        break;
-      case 270:
-        rotator = (x, y, w, h) => ({
-          x: 1 - (y + h - layerY) / parentHeight,
-          y: (x - layerX) / parentWidth,
-          width: h / parentHeight,
-          height: w / parentWidth,
-        });
-        break;
-      default:
-        rotator = (x, y, w, h) => ({
-          x: (x - layerX) / parentWidth,
-          y: (y - layerY) / parentHeight,
-          width: w / parentWidth,
-          height: h / parentHeight,
-        });
-        break;
-    }
-
-    const boxes = [];
-    for (const { x, y, width, height } of bboxes) {
-      if (width === 0 || height === 0) {
-        continue;
-      }
-      boxes.push(rotator(x, y, width, height));
-    }
-    if (boxes.length !== 0) {
+    const boxes = this.#uiManager.getSelectionBoxes(this.#textLayer?.div);
+    if (boxes) {
       this.createAndAddNewEditor(event, false, {
         boxes,
       });
+      document.getSelection().empty();
     }
-    selection.empty();
   }
 
   /**

@@ -840,4 +840,257 @@ describe("Highlight Editor", () => {
       );
     });
   });
+
+  describe("Highlight links", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "bug1868759.pdf",
+        ".annotationEditorLayer",
+        null,
+        null,
+        { highlightEditorColors: "red=#AB0000" }
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that it's possible to highlight a part of a link", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(
+            page,
+            1,
+            "Questions courantes"
+          );
+          const x = rect.x + 0.75 * rect.width;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2 });
+
+          await page.waitForSelector(`${getEditorSelector(0)}`);
+          const usedColor = await page.evaluate(() => {
+            const highlight = document.querySelector(
+              `.page[data-page-number = "1"] .canvasWrapper > svg.highlight`
+            );
+            return highlight.getAttribute("fill");
+          });
+
+          expect(usedColor).withContext(`In ${browserName}`).toEqual("#AB0000");
+        })
+      );
+    });
+  });
+
+  describe("Highlight forms", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "issue12233.pdf",
+        ".annotationEditorLayer",
+        null,
+        null,
+        { highlightEditorColors: "red=#AB0000" }
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that it's possible to highlight a part of a form", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect1 = await page.$eval("#pdfjs_internal_id_5R", el => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          });
+          const rect2 = await page.$eval("#pdfjs_internal_id_16R", el => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          });
+
+          const x1 = rect1.x + rect1.width / 2;
+          const y1 = rect1.y + rect1.height / 2;
+          const x2 = rect2.x + rect2.width / 2;
+          const y2 = rect2.y + rect2.height / 2;
+          const clickHandle = await waitForPointerUp(page);
+          await page.mouse.move(x1, y1);
+          await page.mouse.down();
+          await page.mouse.move(x2, y2);
+          await page.mouse.up();
+          await awaitPromise(clickHandle);
+
+          await page.waitForSelector(getEditorSelector(0));
+          const usedColor = await page.evaluate(() => {
+            const highlight = document.querySelector(
+              `.page[data-page-number = "1"] .canvasWrapper > svg.highlight`
+            );
+            return highlight.getAttribute("fill");
+          });
+
+          expect(usedColor).withContext(`In ${browserName}`).toEqual("#AB0000");
+        })
+      );
+    });
+  });
+
+  describe("Send a message when some text is selected", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "tracemonkey.pdf",
+        `.page[data-page-number = "1"] .endOfContent`,
+        null,
+        async page => {
+          await page.waitForFunction(async () => {
+            await window.PDFViewerApplication.initializedPromise;
+            return true;
+          });
+          await page.evaluate(() => {
+            window.editingEvents = [];
+            window.PDFViewerApplication.eventBus.on(
+              "annotationeditorstateschanged",
+              ({ details }) => {
+                window.editingEvents.push(details);
+              }
+            );
+          });
+        },
+        { highlightEditorColors: "red=#AB0000" }
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that a message is sent on selection", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2 });
+          await page.waitForFunction(() => window.editingEvents.length > 0);
+
+          let editingEvent = await page.evaluate(() => {
+            const e = window.editingEvents[0];
+            window.editingEvents.length = 0;
+            return e;
+          });
+          expect(editingEvent.isEditing)
+            .withContext(`In ${browserName}`)
+            .toBe(false);
+          expect(editingEvent.hasSelectedText)
+            .withContext(`In ${browserName}`)
+            .toBe(true);
+
+          // Click somewhere to unselect the current selection.
+          await page.mouse.click(rect.x + rect.width + 10, y, { count: 1 });
+          await page.waitForFunction(() => window.editingEvents.length > 0);
+          editingEvent = await page.evaluate(() => {
+            const e = window.editingEvents[0];
+            window.editingEvents.length = 0;
+            return e;
+          });
+          expect(editingEvent.hasSelectedText)
+            .withContext(`In ${browserName}`)
+            .toBe(false);
+
+          await page.mouse.click(x, y, { count: 2 });
+          await page.waitForFunction(() => window.editingEvents.length > 0);
+
+          await page.evaluate(() => {
+            window.PDFViewerApplication.eventBus.dispatch("editingaction", {
+              name: "highlightSelection",
+            });
+          });
+
+          await page.waitForSelector(getEditorSelector(0));
+          const usedColor = await page.evaluate(() => {
+            const highlight = document.querySelector(
+              `.page[data-page-number = "1"] .canvasWrapper > svg.highlight`
+            );
+            return highlight.getAttribute("fill");
+          });
+
+          expect(usedColor).withContext(`In ${browserName}`).toEqual("#AB0000");
+        })
+      );
+    });
+  });
+
+  describe("Highlight and caret browsing", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "tracemonkey.pdf",
+        ".annotationEditorLayer",
+        null,
+        null,
+        {
+          highlightEditorColors: "red=#AB0000",
+          supportsCaretBrowsingMode: true,
+        }
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the caret can move a highlighted text", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2 });
+
+          await page.waitForSelector(`${getEditorSelector(0)}`);
+          await page.keyboard.press("Escape");
+          await page.waitForSelector(
+            `${getEditorSelector(0)}:not(.selectedEditor)`
+          );
+
+          await page.evaluate(() => {
+            const text =
+              "Dynamic languages such as JavaScript are more difﬁcult to com-";
+            for (const el of document.querySelectorAll(
+              `.page[data-page-number="${1}"] > .textLayer > span`
+            )) {
+              if (el.textContent === text) {
+                window.getSelection().setPosition(el.firstChild, 1);
+                break;
+              }
+            }
+          });
+
+          await page.keyboard.press("ArrowUp");
+          const [text, offset] = await page.evaluate(() => {
+            const selection = window.getSelection();
+            return [selection.anchorNode.textContent, selection.anchorOffset];
+          });
+
+          expect(text).withContext(`In ${browserName}`).toEqual("Abstract");
+          expect(offset).withContext(`In ${browserName}`).toEqual(1);
+        })
+      );
+    });
+  });
 });

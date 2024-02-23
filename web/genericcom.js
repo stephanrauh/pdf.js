@@ -60,4 +60,10 @@ class ExternalServices extends BaseExternalServices {
   }
 }
 
-export { ExternalServices, initCom, Preferences };
+class MLManager {
+  async guess() {
+    return null;
+  }
+}
+
+export { ExternalServices, initCom, MLManager, Preferences };

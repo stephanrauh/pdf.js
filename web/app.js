@@ -54,7 +54,7 @@ import {
 import { ngxExtendedPdfViewerVersion } from "./ngx-extended-pdf-viewer-version.js";
 import { AppOptions, OptionKind } from "./app_options.js";
 import { AutomationEventBus, EventBus } from "./event_utils.js";
-import { ExternalServices, initCom } from "web-external_services";
+import { ExternalServices, initCom, MLManager } from "web-external_services";
 import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
 import { AltTextManager } from "web-alt_text_manager";
 import { AnnotationEditorParams } from "web-annotation_editor_params";
@@ -338,6 +338,12 @@ const PDFViewerApplication = {
           params.get("highlighteditorcolors")
         );
       }
+      if (params.has("supportscaretbrowsingmode")) {
+        AppOptions.set(
+          "supportsCaretBrowsingMode",
+          params.get("supportscaretbrowsingmode") === "true"
+        );
+      }
     }
   },
 
@@ -436,6 +442,7 @@ const PDFViewerApplication = {
       /** end of modification */
       enablePermissions: AppOptions.get("enablePermissions"),
       pageColors,
+      mlManager: this.mlManager,
     });
     this.pdfViewer = pdfViewer;
 
@@ -708,6 +715,14 @@ const PDFViewerApplication = {
 
   get externalServices() {
     return shadow(this, "externalServices", new ExternalServices());
+  },
+
+  get mlManager() {
+    return shadow(
+      this,
+      "mlManager",
+      AppOptions.get("enableML") === true ? new MLManager() : null
+    );
   },
 
   get initialized() {
