@@ -719,7 +719,9 @@ class AnnotationEditorUIManager {
             // Those shortcuts can be used in the toolbar for some other actions
             // like zooming, hence we need to check if the container has the
             // focus.
-            checker: self => self.#container.contains(document.activeElement),
+            checker: (self, { target: el }) =>
+              !(el instanceof HTMLButtonElement) &&
+              self.#container.contains(document.activeElement),
           },
         ],
         [["Escape", "mac+Escape"], proto.unselectAll],
@@ -879,6 +881,16 @@ class AnnotationEditorUIManager {
     );
   }
 
+  get highlightColorNames() {
+    return shadow(
+      this,
+      "highlightColorNames",
+      this.highlightColors
+        ? new Map(Array.from(this.highlightColors, e => e.reverse()))
+        : null
+    );
+  }
+
   setMainHighlightColorPicker(colorPicker) {
     this.#mainHighlightColorPicker = colorPicker;
   }
@@ -940,12 +952,12 @@ class AnnotationEditorUIManager {
     this.viewParameters.rotation = pagesRotation;
   }
 
-  highlightSelection() {
+  highlightSelection(methodOfCreation = "") {
     const selection = document.getSelection();
     if (!selection || selection.isCollapsed) {
       return;
     }
-    const { anchorNode } = selection;
+    const { anchorNode, anchorOffset, focusNode, focusOffset } = selection;
     const anchorElement =
       anchorNode.nodeType === Node.TEXT_NODE
         ? anchorNode.parentElement
@@ -961,7 +973,14 @@ class AnnotationEditorUIManager {
     }
     for (const layer of this.#allLayers.values()) {
       if (layer.hasTextLayer(textLayer)) {
-        layer.createAndAddNewEditor({ x: 0, y: 0 }, false, { boxes });
+        layer.createAndAddNewEditor({ x: 0, y: 0 }, false, {
+          methodOfCreation,
+          boxes,
+          anchorNode,
+          anchorOffset,
+          focusNode,
+          focusOffset,
+        });
         break;
       }
     }
@@ -1028,7 +1047,7 @@ class AnnotationEditorUIManager {
         window.removeEventListener("pointerup", pointerup);
         window.removeEventListener("blur", pointerup);
         if (e.type === "pointerup") {
-          this.highlightSelection();
+          this.highlightSelection("main_toolbar");
         }
       };
       window.addEventListener("pointerup", pointerup);
@@ -1058,7 +1077,7 @@ class AnnotationEditorUIManager {
     this.isShiftKeyDown = false;
     if (this.#highlightWhenShiftUp) {
       this.#highlightWhenShiftUp = false;
-      this.highlightSelection();
+      this.highlightSelection("main_toolbar");
     }
     if (!this.hasSelection) {
       return;
@@ -1273,7 +1292,7 @@ class AnnotationEditorUIManager {
       this.isShiftKeyDown = false;
       if (this.#highlightWhenShiftUp) {
         this.#highlightWhenShiftUp = false;
-        this.highlightSelection();
+        this.highlightSelection("main_toolbar");
       }
     }
   }
@@ -1282,15 +1301,18 @@ class AnnotationEditorUIManager {
    * Execute an action for a given name.
    * For example, the user can click on the "Undo" entry in the context menu
    * and it'll trigger the undo action.
-   * @param {Object} details
    */
-  onEditingAction(details) {
-    if (
-      ["undo", "redo", "delete", "selectAll", "highlightSelection"].includes(
-        details.name
-      )
-    ) {
-      this[details.name]();
+  onEditingAction({ name }) {
+    switch (name) {
+      case "undo":
+      case "redo":
+      case "delete":
+      case "selectAll":
+        this[name]();
+        break;
+      case "highlightSelection":
+        this.highlightSelection("context_menu");
+        break;
     }
   }
 
@@ -1309,6 +1331,17 @@ class AnnotationEditorUIManager {
         source: this,
         details: Object.assign(this.#previousStates, details),
       });
+      // We could listen on our own event but it sounds like a bit weird and
+      // it's a way to simpler to handle that stuff here instead of having to
+      // add something in every place where an editor can be unselected.
+      if (
+        this.#mode === AnnotationEditorType.HIGHLIGHT &&
+        details.hasSelectedEditor === false
+      ) {
+        this.#dispatchUpdateUI([
+          [AnnotationEditorParamsType.HIGHLIGHT_FREE, true],
+        ]);
+      }
     }
   }
 

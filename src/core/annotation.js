@@ -3706,6 +3706,10 @@ class LinkAnnotation extends Annotation {
     const { dict, annotationGlobals } = params;
     this.data.annotationType = AnnotationType.LINK;
 
+    // A link is never rendered on the main canvas so we must render its HTML
+    // version.
+    this.data.noHTML = false;
+
     const quadPoints = getQuadPoints(dict, this.rectangle);
     if (quadPoints) {
       this.data.quadPoints = quadPoints;
@@ -4982,4 +4986,5 @@ export {
   getQuadPoints,
   MarkupAnnotation,
   PopupAnnotation,
+  WidgetAnnotation,
 };

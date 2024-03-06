@@ -18,6 +18,7 @@ import {
   closePages,
   createPromise,
   getEditorSelector,
+  getFirstSerialized,
   getSerialized,
   kbBigMoveLeft,
   kbBigMoveUp,
@@ -1151,6 +1152,291 @@ describe("Highlight Editor", () => {
           });
 
           expect(usedColor).withContext(`In ${browserName}`).toEqual("#AB0000");
+        })
+      );
+    });
+
+    it("must check that an highlight can be left with the keyboard", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          if (browserName === "chrome") {
+            // Unfortunately, we can't test this on Chrome because we can't set
+            // the caret browsing mode to true.
+            return;
+          }
+
+          let rect = await getSpanRectFromText(
+            page,
+            1,
+            "Dynamic languages such as JavaScript are more difﬁcult to com-"
+          );
+          await page.mouse.click(rect.x + 5, rect.y + rect.height / 2);
+          await page.keyboard.down("Shift");
+          for (let i = 0; i < 10; i++) {
+            await page.keyboard.press("ArrowRight");
+          }
+          const focusOffset = await page.evaluate(
+            () => window.getSelection().focusOffset
+          );
+          await page.keyboard.up("Shift");
+
+          await page.waitForSelector(getEditorSelector(0));
+
+          for (let i = 0; i < 5; i++) {
+            await page.keyboard.press("ArrowRight");
+          }
+
+          let offset = await page.evaluate(
+            () => window.getSelection().anchorOffset
+          );
+
+          expect(offset)
+            .withContext(`In ${browserName}`)
+            .toEqual(focusOffset + 4);
+
+          rect = await getSpanRectFromText(
+            page,
+            1,
+            "experience and enable a new generation of applications, virtual ma-"
+          );
+          await page.mouse.click(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2
+          );
+          await page.keyboard.down("Shift");
+          for (let i = 0; i < 10; i++) {
+            await page.keyboard.press("ArrowRight");
+          }
+          const anchorOffset = await page.evaluate(
+            () => window.getSelection().anchorOffset
+          );
+          await page.keyboard.up("Shift");
+
+          await page.waitForSelector(getEditorSelector(1));
+
+          for (let i = 0; i < 5; i++) {
+            await page.keyboard.press("ArrowLeft");
+          }
+
+          offset = await page.evaluate(
+            () => window.getSelection().anchorOffset
+          );
+
+          expect(offset)
+            .withContext(`In ${browserName}`)
+            .toEqual(anchorOffset - 4);
+        })
+      );
+    });
+  });
+
+  describe("Editor must be removed in using the space key on the delete button", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the highlight has been deleted", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+
+          await page.waitForSelector(getEditorSelector(0));
+          await waitForSerialized(page, 1);
+          await page.waitForSelector(`${getEditorSelector(0)} button.delete`);
+
+          await page.focus(`${getEditorSelector(0)} button.delete`);
+          await page.keyboard.press(" ");
+
+          await waitForSerialized(page, 0);
+        })
+      );
+    });
+  });
+
+  describe("Thickness must be enabled when there's no selected highlights", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check the thickness input state", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          let rect = await getSpanRectFromText(page, 1, "Abstract");
+          await page.mouse.click(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2,
+            { count: 2, delay: 100 }
+          );
+
+          await page.waitForSelector(getEditorSelector(0));
+
+          rect = await page.$eval(".annotationEditorLayer", el => {
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const clickHandle = await waitForPointerUp(page);
+          await page.mouse.move(rect.x + 5, rect.y + 5);
+          await page.mouse.down();
+          await page.mouse.move(rect.x + 100, rect.y + 100);
+          await page.mouse.up();
+          await awaitPromise(clickHandle);
+
+          await page.waitForSelector(getEditorSelector(1));
+          await page.waitForSelector(
+            "#editorFreeHighlightThickness:not([disabled])"
+          );
+
+          await page.click(getEditorSelector(0));
+          await page.waitForSelector(getEditorSelector(0));
+          await page.waitForSelector("#editorFreeHighlightThickness[disabled]");
+
+          await page.click("#editorHighlight");
+          await page.waitForSelector(
+            ".annotationEditorLayer:not(.highlightEditing)"
+          );
+
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          await page.waitForSelector(
+            "#editorFreeHighlightThickness:not([disabled])"
+          );
+        })
+      );
+    });
+  });
+
+  describe("Quadpoints must be correct", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the quadpoints for an highlight are almost correct", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(page, 1, "Languages");
+          await page.mouse.click(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2,
+            { count: 2, delay: 100 }
+          );
+
+          await page.waitForSelector(getEditorSelector(0));
+          await waitForSerialized(page, 1);
+          const quadPoints = await getFirstSerialized(page, e => e.quadPoints);
+          const expected = [263, 674, 346, 674, 263, 696, 346, 696];
+          expect(quadPoints.every((x, i) => Math.abs(x - expected[i]) <= 5))
+            .withContext(`In ${browserName}`)
+            .toBeTrue();
+        })
+      );
+    });
+  });
+
+  describe("Editor must be unselected when the color picker is Escaped", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the highlight editor is unselected", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+
+          await page.waitForSelector(getEditorSelector(0));
+          await page.focus(`${getEditorSelector(0)} button.colorPicker`);
+
+          await page.keyboard.press("Escape");
+          await page.focus(`${getEditorSelector(0)}:not(selectedEditor)`);
+        })
+      );
+    });
+  });
+
+  describe("Highlight editor mustn't be moved when close to the page limits", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check the editor coordinates", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const clickHandle = await waitForPointerUp(page);
+          await page.mouse.move(rect.x + 1, rect.y + 50);
+          await page.mouse.down();
+          await page.mouse.move(rect.x + 1, rect.y + 100);
+          await page.mouse.up();
+          await awaitPromise(clickHandle);
+
+          await page.waitForSelector(getEditorSelector(0));
+          const editorX = await page.$eval(
+            getEditorSelector(0),
+            el => el.getBoundingClientRect().x
+          );
+
+          expect(editorX < rect.x)
+            .withContext(`In ${browserName}`)
+            .toBeTrue();
         })
       );
     });
