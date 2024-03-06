@@ -820,7 +820,7 @@ function isValidFetchUrl(url, baseUrl) {
 // modified by ngx-extended-pdf-viewer #1512
 function generateTrustedURL(sourcePath) {
   if (window.trustedTypes) {
-    const sanitizer = window.trustedTypes.createPolicy("foo", {
+    const sanitizer = window.trustedTypes.createPolicy("pdf-viewer-2", {
       createScriptURL: url => url,
     });
     return sanitizer.createScriptURL(sourcePath);
