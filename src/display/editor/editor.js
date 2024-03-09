@@ -76,6 +76,8 @@ class AnnotationEditor {
 
   _initialOptions = Object.create(null);
 
+  _isVisible = true;
+
   _uiManager = null;
 
   _focusEventsAllowed = true;
@@ -1008,6 +1010,9 @@ class AnnotationEditor {
     this.div.className = this.name;
     this.div.setAttribute("id", this.id);
     this.div.setAttribute("tabIndex", 0);
+    if (!this._isVisible) {
+      this.div.classList.add("hidden");
+    }
 
     this.setInForeground();
 
@@ -1270,6 +1275,7 @@ class AnnotationEditor {
   rebuild() {
     this.div?.addEventListener("focusin", this.#boundFocusin);
     this.div?.addEventListener("focusout", this.#boundFocusout);
+    this.show(this._isVisible);
   }
 
   /**
@@ -1671,6 +1677,15 @@ class AnnotationEditor {
         data,
       },
     });
+  }
+
+  /**
+   * Show or hide this editor.
+   * @param {boolean} visible
+   */
+  show(visible) {
+    this.div.classList.toggle("hidden", !visible);
+    this._isVisible = visible;
   }
 }
 

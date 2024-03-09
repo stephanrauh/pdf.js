@@ -200,6 +200,7 @@ function getViewerConfiguration() {
       editorFreeHighlightThickness: document.getElementById(
         "editorFreeHighlightThickness"
       ),
+      editorHighlightShowAll: document.getElementById("editorHighlightShowAll"),
     },
     printContainer: document.getElementById("printContainer"),
   };
