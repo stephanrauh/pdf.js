@@ -643,6 +643,7 @@ const PDFViewerApplication = {
       fileInput.hidden = true;
       fileInput.type = "file";
       fileInput.value = null;
+      fileInput.accept = ".pdf,application/pdf";
       document.body.append(fileInput);
 
       fileInput.addEventListener("change", function (evt) {
