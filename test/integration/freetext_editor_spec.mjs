@@ -18,6 +18,7 @@ import {
   closePages,
   createPromise,
   dragAndDropAnnotation,
+  firstPageOnTop,
   getEditors,
   getEditorSelector,
   getFirstSerialized,
@@ -39,6 +40,7 @@ import {
   kbUndo,
   loadAndWait,
   scrollIntoView,
+  waitForAnnotationEditorLayer,
   waitForEvent,
   waitForSelectedEditor,
   waitForSerialized,
@@ -444,15 +446,16 @@ describe("FreeText Editor", () => {
 
         await clearAll(page);
 
+        const editorSelector = getEditorSelector(9);
         await page.mouse.click(rect.x + 200, rect.y + 100);
-        await page.waitForSelector(getEditorSelector(9), {
+        await page.waitForSelector(editorSelector, {
           visible: true,
         });
 
         for (let i = 0; i < 5; i++) {
-          await page.type(`${getEditorSelector(9)} .internal`, "A");
+          await page.type(`${editorSelector} .internal`, "A");
 
-          const editorRect = await page.$eval(getEditorSelector(9), el => {
+          const editorRect = await page.$eval(editorSelector, el => {
             const { x, y, width, height } = el.getBoundingClientRect();
             return { x, y, width, height };
           });
@@ -462,9 +465,7 @@ describe("FreeText Editor", () => {
             editorRect.x + 1.5 * editorRect.width,
             editorRect.y
           );
-          await page.waitForSelector(
-            `${getEditorSelector(9)} .overlay.enabled`
-          );
+          await page.waitForSelector(`${editorSelector} .overlay.enabled`);
 
           if (i < 4) {
             // And select it again.
@@ -474,13 +475,13 @@ describe("FreeText Editor", () => {
               { count: 2 }
             );
             await page.waitForSelector(
-              `${getEditorSelector(9)} .overlay:not(.enabled)`
+              `${editorSelector} .overlay:not(.enabled)`
             );
           }
         }
 
         let prevText = await page.$eval(
-          `${getEditorSelector(9)} .internal`,
+          `${editorSelector} .internal`,
           el => el.innerText
         );
 
@@ -489,10 +490,10 @@ describe("FreeText Editor", () => {
             (prev, sel) => document.querySelector(sel).innerText !== prev,
             {},
             previous,
-            `${getEditorSelector(9)} .internal`
+            `${editorSelector} .internal`
           );
         const getText = () =>
-          page.$eval(`${getEditorSelector(9)} .internal`, el => el.innerText);
+          page.$eval(`${editorSelector} .internal`, el => el.innerText);
 
         // We're in the middle of the text.
         await kbUndo(page);
@@ -528,7 +529,7 @@ describe("FreeText Editor", () => {
         );
 
         await kbRedo(page);
-        await page.waitForSelector(getEditorSelector(9), {
+        await page.waitForSelector(editorSelector, {
           visible: true,
         });
 
@@ -536,7 +537,7 @@ describe("FreeText Editor", () => {
         expect(text).withContext(`In ${browserName}`).toEqual("A");
 
         // Add a new A.
-        const editorRect = await page.$eval(getEditorSelector(9), el => {
+        let editorRect = await page.$eval(editorSelector, el => {
           const { x, y, width, height } = el.getBoundingClientRect();
           return { x, y, width, height };
         });
@@ -545,17 +546,20 @@ describe("FreeText Editor", () => {
           editorRect.y + editorRect.height / 2,
           { count: 2 }
         );
-        await page.waitForSelector(
-          `${getEditorSelector(9)} .overlay:not(.enabled)`
-        );
-        await page.type(`${getEditorSelector(9)} .internal`, "A");
+        await page.waitForSelector(`${editorSelector} .overlay:not(.enabled)`);
+        await page.type(`${editorSelector} .internal`, "A");
+
+        editorRect = await page.$eval(editorSelector, el => {
+          const { x, y, width, height } = el.getBoundingClientRect();
+          return { x, y, width, height };
+        });
 
         // Commit.
         await page.mouse.click(
           editorRect.x + 1.5 * editorRect.width,
           editorRect.y
         );
-        await page.waitForSelector(`${getEditorSelector(9)} .overlay.enabled`);
+        await page.waitForSelector(`${editorSelector} .overlay.enabled`);
 
         text = await getText();
         expect(text).withContext(`In ${browserName}`).toEqual("AA");
@@ -921,6 +925,7 @@ describe("FreeText Editor", () => {
           let currentId = 0;
 
           for (let step = 0; step < 3; step++) {
+            await firstPageOnTop(page);
             const rect = await page.$eval(".annotationEditorLayer", el => {
               // With Chrome something is wrong when serializing a DomRect,
               // hence we extract the values and just return them.
@@ -929,8 +934,8 @@ describe("FreeText Editor", () => {
             });
 
             const data = `Hello ${step}`;
-            const x = rect.x + 0.1 * rect.width;
-            const y = rect.y + 0.1 * rect.height;
+            const x = Math.max(rect.x + 0.1 * rect.width, 10);
+            const y = Math.max(rect.y + 0.1 * rect.height, 10);
             await page.mouse.click(x, y);
             await page.waitForSelector(getEditorSelector(currentId), {
               visible: true,
@@ -943,9 +948,12 @@ describe("FreeText Editor", () => {
               `${getEditorSelector(currentId)} .overlay.enabled`
             );
 
+            const promise = await waitForAnnotationEditorLayer(page);
             await page.evaluate(() => {
               document.getElementById("pageRotateCw").click();
             });
+            await awaitPromise(promise);
+
             currentId += 1;
             await page.waitForSelector(
               ".page[data-page-number='1'] .canvasWrapper",
@@ -2305,7 +2313,7 @@ describe("FreeText Editor", () => {
         pages.map(async ([browserName, page]) => {
           await switchToFreeText(page);
 
-          const rect = await page.$eval(".annotationEditorLayer", el => {
+          let rect = await page.$eval(".annotationEditorLayer", el => {
             const { x, y } = el.getBoundingClientRect();
             return { x, y };
           });
@@ -2322,7 +2330,15 @@ describe("FreeText Editor", () => {
             `${getEditorSelector(0)} .overlay.enabled`
           );
 
-          await page.mouse.click(rect.x + 110, rect.y + 150);
+          rect = await page.$eval(getEditorSelector(0), el => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          });
+
+          await page.mouse.click(
+            rect.x + 5 * rect.width,
+            rect.y + 5 * rect.height
+          );
           await page.waitForSelector(getEditorSelector(1), {
             visible: true,
           });
@@ -2334,7 +2350,15 @@ describe("FreeText Editor", () => {
             `${getEditorSelector(1)} .overlay.enabled`
           );
 
-          await page.mouse.click(rect.x + 111, rect.y + 151);
+          rect = await page.$eval(getEditorSelector(0), el => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          });
+
+          await page.mouse.click(
+            rect.x + 5 * rect.width,
+            rect.y + 5 * rect.height
+          );
           await waitForSelectedEditor(page, getEditorSelector(1));
 
           const pos = n =>
@@ -3369,6 +3393,155 @@ describe("FreeText Editor", () => {
             () =>
               document.getElementById("editorFreeTextColor").value === "#ff0000"
           );
+        })
+      );
+    });
+  });
+
+  describe("Annotation editor layer visibility", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the annotation layer is visible after a rotation", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+
+          for (let i = 0; i < 4; i++) {
+            await page.waitForSelector(
+              ".page[data-page-number='1'] .annotationEditorLayer:not([hidden])",
+              {
+                timeout: 0,
+              }
+            );
+            const promise = await waitForAnnotationEditorLayer(page);
+            await page.evaluate(() => {
+              document.getElementById("pageRotateCw").click();
+            });
+            await awaitPromise(promise);
+          }
+        })
+      );
+    });
+  });
+
+  describe("Delete a freetext and undo it on another page", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that a freetext can be undone", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const data = "Hello PDF.js World !!";
+          await page.mouse.click(rect.x + 100, rect.y + 100);
+          await page.waitForSelector(getEditorSelector(0), {
+            visible: true,
+          });
+          await page.type(`${getEditorSelector(0)} .internal`, data);
+
+          // Commit.
+          await page.keyboard.press("Escape");
+          await page.waitForSelector(
+            `${getEditorSelector(0)} .overlay.enabled`
+          );
+          await waitForSerialized(page, 1);
+
+          await page.waitForSelector(`${getEditorSelector(0)} button.delete`);
+          await page.click(`${getEditorSelector(0)} button.delete`);
+          await waitForSerialized(page, 0);
+
+          const twoToFourteen = Array.from(new Array(13).keys(), n => n + 2);
+          for (const pageNumber of twoToFourteen) {
+            const pageSelector = `.page[data-page-number = "${pageNumber}"]`;
+            await scrollIntoView(page, pageSelector);
+          }
+
+          await kbUndo(page);
+          await waitForSerialized(page, 1);
+
+          const thirteenToOne = Array.from(new Array(13).keys(), n => 13 - n);
+          for (const pageNumber of thirteenToOne) {
+            const pageSelector = `.page[data-page-number = "${pageNumber}"]`;
+            await scrollIntoView(page, pageSelector);
+          }
+
+          await page.waitForSelector(getEditorSelector(0));
+        })
+      );
+    });
+  });
+
+  describe("Delete a freetext, scroll and undo it", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that a freetext can be undone", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+
+          const rect = await page.$eval(".annotationEditorLayer", el => {
+            const { x, y } = el.getBoundingClientRect();
+            return { x, y };
+          });
+
+          const data = "Hello PDF.js World !!";
+          await page.mouse.click(rect.x + 100, rect.y + 100);
+          await page.waitForSelector(getEditorSelector(0), {
+            visible: true,
+          });
+          await page.type(`${getEditorSelector(0)} .internal`, data);
+
+          // Commit.
+          await page.keyboard.press("Escape");
+          await page.waitForSelector(
+            `${getEditorSelector(0)} .overlay.enabled`
+          );
+          await waitForSerialized(page, 1);
+
+          await page.waitForSelector(`${getEditorSelector(0)} button.delete`);
+          await page.click(`${getEditorSelector(0)} button.delete`);
+          await waitForSerialized(page, 0);
+
+          const twoToOne = Array.from(new Array(13).keys(), n => n + 2).concat(
+            Array.from(new Array(13).keys(), n => 13 - n)
+          );
+          for (const pageNumber of twoToOne) {
+            const pageSelector = `.page[data-page-number = "${pageNumber}"]`;
+            await scrollIntoView(page, pageSelector);
+          }
+
+          await kbUndo(page);
+          await waitForSerialized(page, 1);
+          await page.waitForSelector(getEditorSelector(0));
         })
       );
     });

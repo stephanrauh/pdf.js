@@ -27,7 +27,7 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
   );
 }
 
-let fs, canvas, path2d_polyfill;
+let fs, canvas, path2d;
 // #1976 modified by ngx-extended-pdf-viewer - removed because this code
 // confuses Vite
 /*
@@ -39,7 +39,7 @@ if (isNodeJS) {
     canvas = await __non_webpack_import__("canvas");
   } catch {}
   try {
-    path2d_polyfill = await __non_webpack_import__("path2d-polyfill");
+    path2d = await __non_webpack_import__("path2d");
   } catch {}
 }
 */
@@ -64,11 +64,17 @@ if (typeof PDFJSDev !== "undefined" && !PDFJSDev.test("SKIP_BABEL")) {
       return;
     }
     const CanvasRenderingContext2D = canvas?.CanvasRenderingContext2D;
-    const polyfillPath2D = path2d_polyfill?.polyfillPath2D;
+    const applyPath2DToCanvasRenderingContext =
+      path2d?.applyPath2DToCanvasRenderingContext;
+    const Path2D = path2d?.Path2D;
 
-    if (CanvasRenderingContext2D && polyfillPath2D) {
-      globalThis.CanvasRenderingContext2D = CanvasRenderingContext2D;
-      polyfillPath2D(globalThis);
+    if (
+      CanvasRenderingContext2D &&
+      applyPath2DToCanvasRenderingContext &&
+      Path2D
+    ) {
+      applyPath2DToCanvasRenderingContext(CanvasRenderingContext2D);
+      globalThis.Path2D = Path2D;
     } else {
       warn("Cannot polyfill `Path2D`, rendering may be broken.");
     }
@@ -76,15 +82,7 @@ if (typeof PDFJSDev !== "undefined" && !PDFJSDev.test("SKIP_BABEL")) {
 }
 
 const fetchData = function (url) {
-  return new Promise((resolve, reject) => {
-    fs.readFile(url, (error, data) => {
-      if (error || !data) {
-        reject(new Error(error));
-        return;
-      }
-      resolve(new Uint8Array(data));
-    });
-  });
+  return fs.promises.readFile(url).then(data => new Uint8Array(data));
 };
 
 class NodeFilterFactory extends BaseFilterFactory {}

@@ -436,6 +436,9 @@ const PDFViewerApplication = {
       annotationMode: AppOptions.get("annotationMode"),
       annotationEditorMode,
       annotationEditorHighlightColors: AppOptions.get("highlightEditorColors"),
+      enableHighlightFloatingButton: AppOptions.get(
+        "enableHighlightFloatingButton"
+      ),
       imageResourcesPath: AppOptions.get("imageResourcesPath"),
       removePageBorders: AppOptions.get("removePageBorders"), // #194
       enablePrintAutoRotate: AppOptions.get("enablePrintAutoRotate"),
@@ -711,7 +714,9 @@ const PDFViewerApplication = {
         this._hideViewBookmark();
       }
     } else if (PDFJSDev.test("MOZCENTRAL || CHROME")) {
-      this.initPassiveLoading(file);
+      this.setTitleUsingUrl(file, /* downloadUrl = */ file);
+
+      this.externalServices.initPassiveLoading();
     } else {
       throw new Error("Not implemented: run");
     }
@@ -835,11 +840,7 @@ const PDFViewerApplication = {
   },
 
   get supportsCaretBrowsingMode() {
-    return shadow(
-      this,
-      "supportsCaretBrowsingMode",
-      AppOptions.get("supportsCaretBrowsingMode")
-    );
+    return AppOptions.get("supportsCaretBrowsingMode");
   },
 
   moveCaret(isUp, select) {
@@ -849,48 +850,6 @@ const PDFViewerApplication = {
       this.appConfig.toolbar?.container
     );
     this._caretBrowsing.moveCaret(isUp, select);
-  },
-
-  initPassiveLoading(file) {
-    if (
-      typeof PDFJSDev === "undefined" ||
-      !PDFJSDev.test("MOZCENTRAL || CHROME")
-    ) {
-      throw new Error("Not implemented: initPassiveLoading");
-    }
-    this.setTitleUsingUrl(file, /* downloadUrl = */ file);
-
-    this.externalServices.initPassiveLoading({
-      onOpenWithTransport: range => {
-        this.open({ range });
-      },
-      onOpenWithData: (data, contentDispositionFilename) => {
-        if (isPdfFile(contentDispositionFilename)) {
-          this._contentDispositionFilename = contentDispositionFilename;
-        }
-        this.open({ data });
-      },
-      onOpenWithURL: (url, length, originalUrl) => {
-        this.open({ url, length, originalUrl });
-      },
-      onError: err => {
-        this.l10n.get("pdfjs-loading-error").then(msg => {
-          this._documentError(msg, err);
-        });
-      },
-      onProgress: (loaded, total) => {
-        this.progress(loaded / total);
-        // #588 modified by ngx-extended-pdf-viewer
-        this.eventBus?.dispatch("progress", {
-          source: this,
-          type: "load",
-          total,
-          loaded,
-          percent: (100 * loaded) / total,
-        });
-        // #588 end of modification
-      },
-    });
   },
 
   setTitleUsingUrl(url = "", downloadUrl = null) {
@@ -1043,97 +1002,99 @@ const PDFViewerApplication = {
     // #1665 end of modification by ngx-extended-pdf-viewer
     window.ngxZone.runOutsideAngular(async () => {
 
-    if (this.pdfLoadingTask) {
-      // We need to destroy already opened document.
-      await this.close();
-    }
-    // Set the necessary global worker parameters, using the available options.
-    const workerParams = AppOptions.getAll(OptionKind.WORKER);
-    if (workerParams.workerSrc.constructor.name === "Function") {
-      workerParams.workerSrc = workerParams.workerSrc();
-    }
-    Object.assign(GlobalWorkerOptions, workerParams);
+      if (this.pdfLoadingTask) {
+        // We need to destroy already opened document.
+        await this.close();
+      }
+      // Set the necessary global worker parameters, using the available options.
+      const workerParams = AppOptions.getAll(OptionKind.WORKER);
+      if (workerParams.workerSrc.constructor.name === "Function") {
+        workerParams.workerSrc = workerParams.workerSrc();
+      }
+      Object.assign(GlobalWorkerOptions, workerParams);
 
-    if (
-      (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
-      args.url
-    ) {
-      // The Firefox built-in viewer always calls `setTitleUsingUrl`, before
-      // `initPassiveLoading`, and it never provides an `originalUrl` here.
-      this.setTitleUsingUrl(
-        args.originalUrl || args.url,
-        /* downloadUrl = */ args.url
+      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+        if (args.data && isPdfFile(args.filename)) {
+          this._contentDispositionFilename = args.filename;
+        }
+      } else if (args.url) {
+        // The Firefox built-in viewer always calls `setTitleUsingUrl`, before
+        // `initPassiveLoading`, and it never provides an `originalUrl` here.
+        this.setTitleUsingUrl(
+          args.originalUrl || args.url,
+          /* downloadUrl = */ args.url
+        );
+      }
+      // Always set `docBaseUrl` in development mode, and in the (various)
+      // extension builds.
+      if (typeof PDFJSDev === "undefined") {
+        AppOptions.set("docBaseUrl", document.URL.split("#", 1)[0]);
+      } else if (PDFJSDev.test("MOZCENTRAL || CHROME")) {
+        AppOptions.set("docBaseUrl", this.baseUrl);
+      }
+
+      // Set the necessary API parameters, using all the available options.
+      const apiParams = AppOptions.getAll(OptionKind.API);
+      const loadingTask = getDocument({
+        ...apiParams,
+        ...args,
+      });
+      this.pdfLoadingTask = loadingTask;
+
+      loadingTask.onPassword = (updateCallback, reason) => {
+        if (this.isViewerEmbedded) {
+          // The load event can't be triggered until the password is entered, so
+          // if the viewer is in an iframe and its visibility depends on the
+          // onload callback then the viewer never shows (bug 1801341).
+          this._unblockDocumentLoadEvent();
+        }
+
+        this.pdfLinkService.externalLinkEnabled = false;
+        this.passwordPrompt.setUpdateCallback(updateCallback, reason);
+        this.passwordPrompt.open();
+      };
+
+      loadingTask.onProgress = ({ loaded, total }) => {
+          this.progress(loaded / total);
+          // #588 modified by ngx-extended-pdf-viewer
+          this.eventBus?.dispatch("progress", {
+            source: this,
+            type: "load",
+            total,
+            loaded,
+            percent: (100 * loaded) / total,
+          });
+      };
+
+      return loadingTask.promise.then(
+        pdfDocument => {
+          this.load(pdfDocument);
+        },
+        reason => {
+          if (loadingTask !== this.pdfLoadingTask) {
+            return undefined; // Ignore errors for previously opened PDF files.
+          }
+
+          let key = "pdfjs-loading-error";
+          if (reason instanceof InvalidPDFException) {
+            key = "pdfjs-invalid-file-error";
+          } else if (reason instanceof MissingPDFException) {
+            key = "pdfjs-missing-file-error";
+          } else if (reason instanceof UnexpectedResponseException) {
+            key = "pdfjs-unexpected-response-error";
+          }
+          // #1401 modified by ngx-extended-pdf-viewer
+          if (PDFViewerApplication.onError) {
+            PDFViewerApplication.onError(reason);
+          }
+          // end of modification
+          return this._documentError(key, { message: reason.message }).then(
+            () => {
+              throw reason;
+            }
+          );
+        }
       );
-    }
-    // Always set `docBaseUrl` in development mode, and in the (various)
-    // extension builds.
-    if (typeof PDFJSDev === "undefined") {
-      AppOptions.set("docBaseUrl", document.URL.split("#", 1)[0]);
-    } else if (PDFJSDev.test("MOZCENTRAL || CHROME")) {
-      AppOptions.set("docBaseUrl", this.baseUrl);
-    }
-
-    // Set the necessary API parameters, using all the available options.
-    const apiParams = AppOptions.getAll(OptionKind.API);
-    const loadingTask = getDocument({
-      ...apiParams,
-      ...args,
-    });
-    this.pdfLoadingTask = loadingTask;
-
-    loadingTask.onPassword = (updateCallback, reason) => {
-      if (this.isViewerEmbedded) {
-        // The load event can't be triggered until the password is entered, so
-        // if the viewer is in an iframe and its visibility depends on the
-        // onload callback then the viewer never shows (bug 1801341).
-        this._unblockDocumentLoadEvent();
-      }
-
-      this.pdfLinkService.externalLinkEnabled = false;
-      this.passwordPrompt.setUpdateCallback(updateCallback, reason);
-      this.passwordPrompt.open();
-    };
-
-    loadingTask.onProgress = ({ loaded, total }) => {
-        this.progress(loaded / total);
-        // #588 modified by ngx-extended-pdf-viewer
-        this.eventBus?.dispatch("progress", {
-          source: this,
-          type: "load",
-          total,
-          loaded,
-          percent: (100 * loaded) / total,
-        });
-    };
-
-    return loadingTask.promise.then(
-      pdfDocument => {
-        this.load(pdfDocument);
-      },
-      reason => {
-        if (loadingTask !== this.pdfLoadingTask) {
-          return undefined; // Ignore errors for previously opened PDF files.
-        }
-
-        let key = "pdfjs-loading-error";
-        if (reason instanceof InvalidPDFException) {
-          key = "pdfjs-invalid-file-error";
-        } else if (reason instanceof MissingPDFException) {
-          key = "pdfjs-missing-file-error";
-        } else if (reason instanceof UnexpectedResponseException) {
-          key = "pdfjs-unexpected-response-error";
-        }
-        // #1401 modified by ngx-extended-pdf-viewer
-        if (PDFViewerApplication.onError) {
-          PDFViewerApplication.onError(reason);
-        }
-        // end of modification
-        return this.l10n.get(key).then(msg => {
-          this._documentError(msg, { message: reason?.message });
-          throw reason;
-        });
-      }
-    );
     });
   },
 
@@ -1260,10 +1221,13 @@ const PDFViewerApplication = {
    * Report the error; used for errors affecting loading and/or parsing of
    * the entire PDF document.
    */
-  _documentError(message, moreInfo = null) {
+  async _documentError(key, moreInfo = null) {
     this._unblockDocumentLoadEvent();
 
-    this._otherError(message, moreInfo);
+    const message = await this._otherError(
+      key || "pdfjs-loading-error",
+      moreInfo
+    );
 
     this.eventBus.dispatch("documenterror", {
       source: this,
@@ -1274,12 +1238,15 @@ const PDFViewerApplication = {
 
   /**
    * Report the error; used for errors affecting e.g. only a single page.
-   * @param {string} message - A message that is human readable.
+   * @param {string} key - The localization key for the error.
    * @param {Object} [moreInfo] - Further information about the error that is
    *                              more technical. Should have a 'message' and
    *                              optionally a 'stack' property.
+   * @returns {string} A (localized) error message that is human readable.
    */
-  _otherError(message, moreInfo = null) {
+  async _otherError(key, moreInfo = null) {
+    const message = await this.l10n.get(key);
+
     const moreInfoText = [`PDF.js v${version || "?"} (build: ${build || "?"})`];
     if (moreInfo) {
       moreInfoText.push(`Message: ${moreInfo.message}`);
@@ -1297,6 +1264,7 @@ const PDFViewerApplication = {
     }
 
     console.error(`${message}\n\n${moreInfoText.join("\n")}`);
+    return message;
   },
 
   progress(level) {
@@ -1518,9 +1486,7 @@ const PDFViewerApplication = {
           PDFViewerApplication.onError(reason);
         }
         // end of modification
-        this.l10n.get("pdfjs-loading-error").then(msg => {
-          this._documentError(msg, { message: reason?.message });
-        });
+        this._documentError("pdfjs-loading-error", { message: reason.message });
       }
     );
 
@@ -1920,9 +1886,7 @@ const PDFViewerApplication = {
     }
 
     if (!this.supportsPrinting) {
-      this.l10n.get("pdfjs-printing-not-supported").then(msg => {
-        this._otherError(msg);
-      });
+      this._otherError("pdfjs-printing-not-supported");
       return;
     }
 
@@ -1941,7 +1905,6 @@ const PDFViewerApplication = {
       pagesOverview: this.pdfViewer.getPagesOverview(),
       printContainer: this.appConfig.printContainer,
       printResolution: AppOptions.get("printResolution"),
-      optionalContentConfigPromise: this.pdfViewer.optionalContentConfigPromise,
       printAnnotationStoragePromise: this._printAnnotationStoragePromise,
       eventBus: this.pdfViewer.eventBus, // #588 modified by ngx-extended-pdf-viewer
     });
@@ -2173,8 +2136,9 @@ const PDFViewerApplication = {
     });
     const scroll = (_boundEvents.mainContainerScroll = () => {
       if (
-        this._lastScrollTop === mainContainer.scrollTop &&
-        this._lastScrollLeft === mainContainer.scrollLeft
+        this._isCtrlKeyDown ||
+        (this._lastScrollTop === mainContainer.scrollTop &&
+          this._lastScrollLeft === mainContainer.scrollLeft)
       ) {
         return;
       }
@@ -2397,8 +2361,8 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
         PDFViewerApplication.onError(ex);
       }
       // end of modification
-      PDFViewerApplication.l10n.get("pdfjs-loading-error").then(msg => {
-        PDFViewerApplication._documentError(msg, { message: ex?.message });
+      PDFViewerApplication._documentError("pdfjs-loading-error", {
+        message: ex.message,
       });
       throw ex;
     }
@@ -2477,9 +2441,7 @@ function webViewerPageRendered({ pageNumber, error }) {
   }
 
   if (error) {
-    PDFViewerApplication.l10n.get("pdfjs-rendering-error").then(msg => {
-      PDFViewerApplication._otherError(msg, error);
-    });
+    PDFViewerApplication._otherError("pdfjs-rendering-error", error);
   }
 }
 

@@ -128,9 +128,8 @@ function transform(charEncoding, transformFunction) {
   });
 }
 
-function safeSpawnSync(command, parameters, options) {
+function safeSpawnSync(command, parameters, options = {}) {
   // Execute all commands in a shell.
-  options = options || {};
   options.shell = true;
   // `options.shell = true` requires parameters to be quoted.
   parameters = parameters.map(param => {
@@ -177,6 +176,87 @@ function createStringSource(filename, content) {
     this.push(null);
   };
   return source;
+}
+
+function createWebpackAlias(defines) {
+  const basicAlias = {
+    pdfjs: "src",
+    "pdfjs-web": "web",
+    "pdfjs-lib": "web/pdfjs",
+    "fluent-bundle": "node_modules/@fluent/bundle/esm/index.js",
+    "fluent-dom": "node_modules/@fluent/dom/esm/index.js",
+  };
+  const libraryAlias = {
+    "display-fetch_stream": "src/display/stubs.js",
+    "display-network": "src/display/stubs.js",
+    "display-node_stream": "src/display/stubs.js",
+    "display-node_utils": "src/display/stubs.js",
+  };
+  const viewerAlias = {
+    "web-alt_text_manager": "web/alt_text_manager.js",
+    "web-annotation_editor_params": "web/annotation_editor_params.js",
+    "web-download_manager": "",
+    "web-external_services": "",
+    "web-null_l10n": "",
+    "web-pdf_attachment_viewer": "web/pdf_attachment_viewer.js",
+    "web-pdf_cursor_tools": "web/pdf_cursor_tools.js",
+    "web-pdf_document_properties": "web/pdf_document_properties.js",
+    "web-pdf_find_bar": "web/pdf_find_bar.js",
+    "web-pdf_layer_viewer": "web/pdf_layer_viewer.js",
+    "web-pdf_outline_viewer": "web/pdf_outline_viewer.js",
+    "web-pdf_presentation_mode": "web/pdf_presentation_mode.js",
+    "web-pdf_sidebar": "web/pdf_sidebar.js",
+    "web-pdf_thumbnail_viewer": "web/pdf_thumbnail_viewer.js",
+    "web-preferences": "",
+    "web-print_service": "",
+    "web-secondary_toolbar": "web/secondary_toolbar.js",
+    "web-toolbar": "web/toolbar.js",
+  };
+
+  if (defines.CHROME) {
+    libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
+    libraryAlias["display-network"] = "src/display/network.js";
+
+    viewerAlias["web-download_manager"] = "web/download_manager.js";
+    viewerAlias["web-external_services"] = "web/chromecom.js";
+    viewerAlias["web-null_l10n"] = "web/l10n.js";
+    viewerAlias["web-preferences"] = "web/chromecom.js";
+    viewerAlias["web-print_service"] = "web/pdf_print_service.js";
+  } else if (defines.GENERIC) {
+    // Aliases defined here must also be replicated in the paths section of
+    // the tsconfig.json file for the type generation to work.
+    // In the tsconfig.json files, the .js extension must be omitted.
+    libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
+    libraryAlias["display-network"] = "src/display/network.js";
+    libraryAlias["display-node_stream"] = "src/display/node_stream.js";
+    libraryAlias["display-node_utils"] = "src/display/node_utils.js";
+
+    viewerAlias["web-download_manager"] = "web/download_manager.js";
+    viewerAlias["web-external_services"] = "web/genericcom.js";
+    viewerAlias["web-null_l10n"] = "web/genericl10n.js";
+    viewerAlias["web-preferences"] = "web/genericcom.js";
+    viewerAlias["web-print_service"] = "web/pdf_print_service.js";
+  } else if (defines.MOZCENTRAL) {
+    if (defines.GECKOVIEW) {
+      const gvAlias = {
+        "web-toolbar": "web/toolbar-geckoview.js",
+      };
+      for (const key in viewerAlias) {
+        viewerAlias[key] = gvAlias[key] || "web/stubs-geckoview.js";
+      }
+    }
+    viewerAlias["web-download_manager"] = "web/firefoxcom.js";
+    viewerAlias["web-external_services"] = "web/firefoxcom.js";
+    viewerAlias["web-null_l10n"] = "web/l10n.js";
+    viewerAlias["web-preferences"] = "web/firefoxcom.js";
+    viewerAlias["web-print_service"] = "web/firefox_print_service.js";
+  }
+
+  const alias = { ...basicAlias, ...libraryAlias, ...viewerAlias };
+  for (const key in alias) {
+    alias[key] = path.join(__dirname, alias[key]);
+  }
+  return alias;
 }
 
 function createWebpackConfig(
@@ -231,7 +311,7 @@ function createWebpackConfig(
         [
           "@babel/preset-env",
           {
-            corejs: "3.36.0",
+            corejs: "3.36.1",
             exclude: ["web.structured-clone"],
             shippedProposals: true,
             useBuiltIns: "usage",
@@ -255,86 +335,11 @@ function createWebpackConfig(
     );
   }
 
+  const alias = createWebpackAlias(bundleDefines);
   const experiments = isModule ? { outputModule: true } : undefined;
 
   // Required to expose e.g., the `window` object.
   output.globalObject = "globalThis";
-
-  const basicAlias = {
-    pdfjs: "src",
-    "pdfjs-web": "web",
-    "pdfjs-lib": "web/pdfjs",
-    "fluent-bundle": "node_modules/@fluent/bundle/esm/index.js",
-    "fluent-dom": "node_modules/@fluent/dom/esm/index.js",
-  };
-  const libraryAlias = {
-    "display-fetch_stream": "src/display/stubs.js",
-    "display-network": "src/display/stubs.js",
-    "display-node_stream": "src/display/stubs.js",
-    "display-node_utils": "src/display/stubs.js",
-  };
-  const viewerAlias = {
-    "web-alt_text_manager": "web/alt_text_manager.js",
-    "web-annotation_editor_params": "web/annotation_editor_params.js",
-    "web-download_manager": "",
-    "web-external_services": "",
-    "web-null_l10n": "",
-    "web-pdf_attachment_viewer": "web/pdf_attachment_viewer.js",
-    "web-pdf_cursor_tools": "web/pdf_cursor_tools.js",
-    "web-pdf_document_properties": "web/pdf_document_properties.js",
-    "web-pdf_find_bar": "web/pdf_find_bar.js",
-    "web-pdf_layer_viewer": "web/pdf_layer_viewer.js",
-    "web-pdf_outline_viewer": "web/pdf_outline_viewer.js",
-    "web-pdf_presentation_mode": "web/pdf_presentation_mode.js",
-    "web-pdf_sidebar": "web/pdf_sidebar.js",
-    "web-pdf_thumbnail_viewer": "web/pdf_thumbnail_viewer.js",
-    "web-preferences": "",
-    "web-print_service": "",
-    "web-secondary_toolbar": "web/secondary_toolbar.js",
-    "web-toolbar": "web/toolbar.js",
-  };
-  if (bundleDefines.CHROME) {
-    libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
-    libraryAlias["display-network"] = "src/display/network.js";
-
-    viewerAlias["web-download_manager"] = "web/download_manager.js";
-    viewerAlias["web-external_services"] = "web/chromecom.js";
-    viewerAlias["web-null_l10n"] = "web/l10n.js";
-    viewerAlias["web-preferences"] = "web/chromecom.js";
-    viewerAlias["web-print_service"] = "web/pdf_print_service.js";
-  } else if (bundleDefines.GENERIC) {
-    // Aliases defined here must also be replicated in the paths section of
-    // the tsconfig.json file for the type generation to work.
-    // In the tsconfig.json files, the .js extension must be omitted.
-    libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
-    libraryAlias["display-network"] = "src/display/network.js";
-    libraryAlias["display-node_stream"] = "src/display/node_stream.js";
-    libraryAlias["display-node_utils"] = "src/display/node_utils.js";
-
-    viewerAlias["web-download_manager"] = "web/download_manager.js";
-    viewerAlias["web-external_services"] = "web/genericcom.js";
-    viewerAlias["web-null_l10n"] = "web/genericl10n.js";
-    viewerAlias["web-preferences"] = "web/genericcom.js";
-    viewerAlias["web-print_service"] = "web/pdf_print_service.js";
-  } else if (bundleDefines.MOZCENTRAL) {
-    if (bundleDefines.GECKOVIEW) {
-      const gvAlias = {
-        "web-toolbar": "web/toolbar-geckoview.js",
-      };
-      for (const key in viewerAlias) {
-        viewerAlias[key] = gvAlias[key] || "web/stubs-geckoview.js";
-      }
-    }
-    viewerAlias["web-download_manager"] = "web/firefoxcom.js";
-    viewerAlias["web-external_services"] = "web/firefoxcom.js";
-    viewerAlias["web-null_l10n"] = "web/l10n.js";
-    viewerAlias["web-preferences"] = "web/firefoxcom.js";
-    viewerAlias["web-print_service"] = "web/firefox_print_service.js";
-  }
-  const alias = { ...basicAlias, ...libraryAlias, ...viewerAlias };
-  for (const key in alias) {
-    alias[key] = path.join(__dirname, alias[key]);
-  }
 
   return {
     mode: "production",
@@ -409,7 +414,7 @@ function checkChromePreferencesFile(chromePrefsPath, webPrefs) {
     // Deprecated keys are allowed in the managed preferences file.
     // The code maintainer is responsible for adding migration logic to
     // extensions/chromium/options/migration.js and web/chromecom.js .
-    return !description || !description.startsWith("DEPRECATED.");
+    return !description?.startsWith("DEPRECATED.");
   });
 
   let ret = true;
@@ -519,7 +524,7 @@ function createSandboxExternal(defines) {
 
 function createTemporaryScriptingBundle(defines, extraOptions = undefined) {
   return createScriptingBundle(defines, {
-    disableVersionInfo: !!(extraOptions && extraOptions.disableVersionInfo),
+    disableVersionInfo: !!extraOptions?.disableVersionInfo,
     disableSourceMaps: true,
     disableLicenseHeader: true,
   }).pipe(gulp.dest(TMP_DIR));
@@ -868,11 +873,17 @@ async function parseDefaultPreferences(dir) {
     "./" + DEFAULT_PREFERENCES_DIR + dir + "app_options.mjs"
   );
 
-  const browserPrefs = AppOptions.getAll(OptionKind.BROWSER);
+  const browserPrefs = AppOptions.getAll(
+    OptionKind.BROWSER,
+    /* defaultOnly = */ true
+  );
   if (Object.keys(browserPrefs).length === 0) {
     throw new Error("No browser preferences found.");
   }
-  const prefs = AppOptions.getAll(OptionKind.PREFERENCE);
+  const prefs = AppOptions.getAll(
+    OptionKind.PREFERENCE,
+    /* defaultOnly = */ true
+  );
   if (Object.keys(prefs).length === 0) {
     throw new Error("No default preferences found.");
   }
@@ -2170,7 +2181,7 @@ function packageJson() {
     license: DIST_LICENSE,
     optionalDependencies: {
       canvas: "^2.11.2",
-      "path2d-polyfill": "^2.0.1",
+      path2d: "^0.1.2",
     },
     browser: {
       canvas: false,
@@ -2248,25 +2259,15 @@ gulp.task(
           ])
           .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
         gulp
-          .src(MINIFIED_DIR + "build/pdf.min.mjs")
-          .pipe(gulp.dest(DIST_DIR + "build/")),
-        gulp
-          .src(MINIFIED_DIR + "build/pdf.worker.min.mjs")
-          .pipe(gulp.dest(DIST_DIR + "build/")),
-        gulp
-          .src(MINIFIED_DIR + "build/pdf.sandbox.min.mjs")
+          .src(MINIFIED_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.min.mjs")
           .pipe(gulp.dest(DIST_DIR + "build/")),
         gulp
           .src(MINIFIED_DIR + "image_decoders/pdf.image_decoders.min.mjs")
           .pipe(gulp.dest(DIST_DIR + "image_decoders/")),
         gulp
-          .src(MINIFIED_LEGACY_DIR + "build/pdf.min.mjs")
-          .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
-        gulp
-          .src(MINIFIED_LEGACY_DIR + "build/pdf.worker.min.mjs")
-          .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
-        gulp
-          .src(MINIFIED_LEGACY_DIR + "build/pdf.sandbox.min.mjs")
+          .src(
+            MINIFIED_LEGACY_DIR + "build/{pdf,pdf.worker,pdf.sandbox}.min.mjs"
+          )
           .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
         gulp
           .src(

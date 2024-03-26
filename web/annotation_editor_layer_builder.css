@@ -48,6 +48,22 @@
     pointer;
 }
 
+/* The following class is used to hide an element but keep it available to
+ * for screen readers. */
+.visuallyHidden {
+  position: absolute;
+  top: 0;
+  left: 0;
+  border: 0;
+  margin: 0;
+  padding: 0;
+  width: 0;
+  height: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: 0;
+}
+
 .textLayer.highlighting {
   cursor: var(--editorFreeHighlight-editing-cursor);
 
@@ -96,7 +112,6 @@
   font-size: calc(100px * var(--scale-factor));
   transform-origin: 0 0;
   cursor: auto;
-  z-index: 4;
 }
 
 .annotationEditorLayer.waiting {
@@ -182,10 +197,12 @@
 }
 
 .annotationEditorLayer
-  :is(.freeTextEditor, .inkEditor, .stampEditor, .highlightEditor) {
+  :is(.freeTextEditor, .inkEditor, .stampEditor, .highlightEditor),
+.textLayer {
   .editToolbar {
     --editor-toolbar-delete-image: url(images/editor-toolbar-delete.svg);
     --editor-toolbar-bg-color: #f0f0f4;
+    --editor-toolbar-highlight-image: url(images/toolbarButton-editorHighlight.svg);
     --editor-toolbar-fg-color: #2e2e56;
     --editor-toolbar-border-color: #8f8f9d;
     --editor-toolbar-hover-border-color: var(--editor-toolbar-border-color);
@@ -269,6 +286,25 @@
         background-color: var(--editor-toolbar-border-color);
         display: inline-block;
         margin-inline: 2px;
+      }
+
+      .highlightButton {
+        width: var(--editor-toolbar-height);
+
+        &::before {
+          content: "";
+          mask-image: var(--editor-toolbar-highlight-image);
+          mask-repeat: no-repeat;
+          mask-position: center;
+          display: inline-block;
+          background-color: var(--editor-toolbar-fg-color);
+          width: 100%;
+          height: 100%;
+        }
+
+        &:hover::before {
+          background-color: var(--editor-toolbar-hover-fg-color);
+        }
       }
 
       .delete {
@@ -1215,8 +1251,33 @@
 
   #editorHighlightVisibility {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
     align-self: stretch;
+
+    .divider {
+      --divider-color: #d7d7db;
+
+      @media (prefers-color-scheme: dark) {
+        --divider-color: #8f8f9d;
+      }
+
+      @media screen and (forced-colors: active) {
+        --divider-color: CanvasText;
+      }
+
+      margin-block: 4px;
+      width: 100%;
+      height: 1px;
+      background-color: var(--divider-color);
+    }
+
+    .toggler {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      align-self: stretch;
+    }
   }
 }

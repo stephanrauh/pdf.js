@@ -61,6 +61,8 @@ class HighlightEditor extends AnnotationEditor {
 
   #outlineId = null;
 
+  #text = "";
+
   #thickness;
 
   #methodOfCreation = "";
@@ -104,6 +106,7 @@ class HighlightEditor extends AnnotationEditor {
     this.#opacity = params.opacity || HighlightEditor._defaultOpacity;
     this.#boxes = params.boxes || null;
     this.#methodOfCreation = params.methodOfCreation || "";
+    this.#text = params.text || "";
     this._isDraggable = false;
 
     if (params.highlightId > -1) {
@@ -415,11 +418,11 @@ class HighlightEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   remove() {
-    super.remove();
     this.#cleanDrawLayer();
     this._reportTelemetry({
       action: "deleted",
     });
+    super.remove();
   }
 
   /** @inheritdoc */
@@ -558,6 +561,13 @@ class HighlightEditor extends AnnotationEditor {
     }
 
     const div = super.render();
+    if (this.#text) {
+      const mark = document.createElement("mark");
+      div.append(mark);
+      mark.append(document.createTextNode(this.#text));
+      // The text is invisible but it's still visible by a screen reader.
+      mark.className = "visuallyHidden";
+    }
     if (this.#isFreeHighlight) {
       div.classList.add("free");
     } else {
@@ -565,6 +575,7 @@ class HighlightEditor extends AnnotationEditor {
     }
     const highlightDiv = (this.#highlightDiv = document.createElement("div"));
     div.append(highlightDiv);
+    highlightDiv.setAttribute("aria-hidden", "true");
     highlightDiv.className = "internal";
     highlightDiv.style.clipPath = this.#clipPathId;
     const [parentWidth, parentHeight] = this.parentDimensions;
@@ -617,6 +628,9 @@ class HighlightEditor extends AnnotationEditor {
   /** @inheritdoc */
   select() {
     super.select();
+    if (!this.#outlineId) {
+      return;
+    }
     this.parent?.drawLayer.removeClass(this.#outlineId, "hovered");
     this.parent?.drawLayer.addClass(this.#outlineId, "selected");
   }
@@ -624,6 +638,9 @@ class HighlightEditor extends AnnotationEditor {
   /** @inheritdoc */
   unselect() {
     super.unselect();
+    if (!this.#outlineId) {
+      return;
+    }
     this.parent?.drawLayer.removeClass(this.#outlineId, "selected");
     if (!this.#isFreeHighlight) {
       this.#setCaret(/* start = */ false);
@@ -635,7 +652,8 @@ class HighlightEditor extends AnnotationEditor {
     return !this.#isFreeHighlight;
   }
 
-  show(visible) {
+  /** @inheritdoc */
+  show(visible = this._isVisible) {
     super.show(visible);
     if (this.parent) {
       this.parent.drawLayer.show(this.#id, visible);

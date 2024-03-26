@@ -194,7 +194,9 @@ class PDFThumbnailViewer {
     }
     this.initialized = true;
     const firstPagePromise = pdfDocument.getPage(1);
-    const optionalContentConfigPromise = pdfDocument.getOptionalContentConfig();
+    const optionalContentConfigPromise = pdfDocument.getOptionalContentConfig({
+      intent: "display",
+    });
 
     firstPagePromise
       .then(firstPdfPage => {

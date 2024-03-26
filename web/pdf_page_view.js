@@ -41,7 +41,7 @@ import {
 } from "./ui_utils.js";
 import { AnnotationEditorLayerBuilder } from "./annotation_editor_layer_builder.js";
 import { AnnotationLayerBuilder } from "./annotation_layer_builder.js";
-import { compatibilityParams } from "./app_options.js";
+import { AppOptions } from "./app_options.js";
 import { DrawLayerBuilder } from "./draw_layer_builder.js";
 import { GenericL10n } from "web-null_l10n";
 import { SimpleLinkService } from "./pdf_link_service.js";
@@ -76,7 +76,7 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  *   for annotation icons. Include trailing slash.
  * @property {number} [maxCanvasPixels] - The maximum supported canvas size in
  *   total pixels, i.e. width * height. Use `-1` for no limit, or `0` for
- *   CSS-only zooming. The default value is 4096 * 4096 (16 mega-pixels).
+ *   CSS-only zooming. The default value is 4096 * 8192 (32 mega-pixels).
  * @property {Object} [pageColors] - Overwrites background and foreground colors
  *   with user defined ones in order to improve readability in high contrast
  *   mode.
@@ -84,8 +84,6 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  * @property {Object} [layerProperties] - The object that is used to lookup
  *   the necessary layer-properties.
  */
-
-const MAX_CANVAS_PIXELS = compatibilityParams.maxCanvasPixels || 16777216;
 
 const DEFAULT_LAYER_PROPERTIES =
   typeof PDFJSDev === "undefined" || !PDFJSDev.test("COMPONENTS")
@@ -102,6 +100,14 @@ const DEFAULT_LAYER_PROPERTIES =
           return new SimpleLinkService();
         },
       };
+
+const LAYERS_ORDER = new Map([
+  ["canvasWrapper", 0],
+  ["textLayer", 1],
+  ["annotationLayer", 2],
+  ["annotationEditorLayer", 3],
+  ["xfaLayer", 3],
+]);
 
 /**
  * @implements {IRenderableView}
@@ -131,6 +137,8 @@ class PDFPageView {
 
   #viewportMap = new WeakMap();
 
+  #layers = [null, null, null, null];
+
   /**
    * @param {PDFPageViewOptions} options
    */
@@ -154,7 +162,9 @@ class PDFPageView {
     this.#annotationMode =
       options.annotationMode ?? AnnotationMode.ENABLE_FORMS;
     this.imageResourcesPath = options.imageResourcesPath || "";
-    this.maxCanvasPixels = options.maxCanvasPixels ?? MAX_CANVAS_PIXELS;
+    this.maxCanvasPixels =
+      options.maxCanvasPixels ??
+      (AppOptions.getCompat("maxCanvasPixels") || 2 ** 25);
     this.pageColors = options.pageColors || null;
 
     this.eventBus = options.eventBus;
@@ -223,6 +233,24 @@ class PDFPageView {
         this.l10n.translate(this.div);
       }
     }
+  }
+
+  #addLayer(div, name) {
+    const pos = LAYERS_ORDER.get(name);
+    const oldDiv = this.#layers[pos];
+    this.#layers[pos] = div;
+    if (oldDiv) {
+      oldDiv.replaceWith(div);
+      return;
+    }
+    for (let i = pos - 1; i >= 0; i--) {
+      const layer = this.#layers[i];
+      if (layer) {
+        layer.after(div);
+        return;
+      }
+    }
+    this.div.prepend(div);
   }
 
   get renderingState() {
@@ -394,7 +422,7 @@ class PDFPageView {
       if (this.xfaLayer?.div) {
         // Pause translation when inserting the xfaLayer in the DOM.
         this.l10n.pause();
-        this.div.append(this.xfaLayer.div);
+        this.#addLayer(this.xfaLayer.div, "xfaLayer");
         this.l10n.resume();
       }
 
@@ -533,6 +561,10 @@ class PDFPageView {
           continue;
       }
       node.remove();
+      const layerIndex = this.#layers.indexOf(node);
+      if (layerIndex >= 0) {
+        this.#layers[layerIndex] = null;
+      }
     }
     div.removeAttribute("data-loaded");
 
@@ -879,7 +911,8 @@ class PDFPageView {
     // overflow will be hidden in Firefox.
     const canvasWrapper = document.createElement("div");
     canvasWrapper.classList.add("canvasWrapper");
-    div.append(canvasWrapper);
+    canvasWrapper.setAttribute("aria-hidden", true);
+    this.#addLayer(canvasWrapper, "canvasWrapper");
 
     if (
       !this.textLayer &&
@@ -893,13 +926,13 @@ class PDFPageView {
         accessibilityManager: this._accessibilityManager,
         enablePermissions:
           this.#textLayerMode === TextLayerMode.ENABLE_PERMISSIONS,
+        onAppend: textLayerDiv => {
+          // Pause translation when inserting the textLayer in the DOM.
+          this.l10n.pause();
+          this.#addLayer(textLayerDiv, "textLayer");
+          this.l10n.resume();
+        },
       });
-      this.textLayer.onAppend = textLayerDiv => {
-        // Pause translation when inserting the textLayer in the DOM.
-        this.l10n.pause();
-        this.div.append(textLayerDiv);
-        this.l10n.resume();
-      };
     }
 
     if (
@@ -917,7 +950,6 @@ class PDFPageView {
 
       this._annotationCanvasMap ||= new Map();
       this.annotationLayer = new AnnotationLayerBuilder({
-        pageDiv: div,
         pdfPage,
         annotationStorage,
         imageResourcesPath: this.imageResourcesPath,
@@ -929,6 +961,9 @@ class PDFPageView {
         fieldObjectsPromise,
         annotationCanvasMap: this._annotationCanvasMap,
         accessibilityManager: this._accessibilityManager,
+        onAppend: annotationLayerDiv => {
+          this.#addLayer(annotationLayerDiv, "annotationLayer");
+        },
       });
     }
 
@@ -1068,13 +1103,15 @@ class PDFPageView {
         if (!this.annotationEditorLayer) {
           this.annotationEditorLayer = new AnnotationEditorLayerBuilder({
             uiManager: annotationEditorUIManager,
-            pageDiv: div,
             pdfPage,
             l10n,
             accessibilityManager: this._accessibilityManager,
             annotationLayer: this.annotationLayer?.annotationLayer,
             textLayer: this.textLayer,
             drawLayer: this.drawLayer.getDrawLayer(),
+            onAppend: annotationEditorLayerDiv => {
+              this.#addLayer(annotationEditorLayerDiv, "annotationEditorLayer");
+            },
           });
         }
         this.#renderAnnotationEditorLayer();

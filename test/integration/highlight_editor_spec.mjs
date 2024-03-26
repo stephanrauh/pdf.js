@@ -22,7 +22,10 @@ import {
   getSerialized,
   kbBigMoveLeft,
   kbBigMoveUp,
+  kbFocusNext,
+  kbFocusPrevious,
   kbSelectAll,
+  kbUndo,
   loadAndWait,
   scrollIntoView,
   waitForSerialized,
@@ -46,8 +49,11 @@ const getXY = (page, selector) =>
     return `${bbox.x}::${bbox.y}`;
   }, selector);
 
-const getSpanRectFromText = (page, pageNumber, text) =>
-  page.evaluate(
+const getSpanRectFromText = async (page, pageNumber, text) => {
+  await page.waitForSelector(
+    `.page[data-page-number="${pageNumber}"] > .textLayer .endOfContent`
+  );
+  return page.evaluate(
     (number, content) => {
       for (const el of document.querySelectorAll(
         `.page[data-page-number="${number}"] > .textLayer > span`
@@ -62,6 +68,7 @@ const getSpanRectFromText = (page, pageNumber, text) =>
     pageNumber,
     text
   );
+};
 
 describe("Highlight Editor", () => {
   describe("Editor must be removed without exception", () => {
@@ -1506,6 +1513,290 @@ describe("Highlight Editor", () => {
 
           await page.waitForSelector(`${getEditorSelector(0)}:not(.hidden)`);
           await page.waitForSelector(`${getEditorSelector(1)}:not(.hidden)`);
+        })
+      );
+    });
+  });
+
+  describe("Highlight from floating highlight button", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "tracemonkey.pdf",
+        ".annotationEditorLayer",
+        null,
+        null,
+        { highlightEditorColors: "red=#AB0000" }
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that clicking on the highlight floating button triggers an highlight", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+
+          await page.waitForSelector(".textLayer .highlightButton");
+          await page.click(".textLayer .highlightButton");
+
+          await page.waitForSelector(getEditorSelector(0));
+          const usedColor = await page.evaluate(() => {
+            const highlight = document.querySelector(
+              `.page[data-page-number = "1"] .canvasWrapper > svg.highlight`
+            );
+            return highlight.getAttribute("fill");
+          });
+
+          expect(usedColor).withContext(`In ${browserName}`).toEqual("#AB0000");
+        })
+      );
+    });
+  });
+
+  describe("Text layer must have the focus before highlights", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check the focus order", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          let rect = await getSpanRectFromText(page, 1, "Abstract");
+          let x = rect.x + rect.width / 2;
+          let y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+          await page.waitForSelector(getEditorSelector(0));
+
+          rect = await getSpanRectFromText(page, 1, "Languages");
+          x = rect.x + rect.width / 2;
+          y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+          await page.waitForSelector(getEditorSelector(1));
+          await page.focus(getEditorSelector(1));
+
+          await kbFocusPrevious(page);
+          await page.waitForFunction(
+            sel => document.querySelector(sel) === document.activeElement,
+            {},
+            `.page[data-page-number="1"] > .textLayer`
+          );
+
+          await kbFocusNext(page);
+          await page.waitForFunction(
+            sel => document.querySelector(sel) === document.activeElement,
+            {},
+            getEditorSelector(1)
+          );
+        })
+      );
+    });
+  });
+
+  describe("Text inside mark element", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must have null dimensions", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+          await page.waitForSelector(getEditorSelector(0));
+
+          const [w, h] = await page.evaluate(
+            sel => {
+              const mark = document.querySelector(sel);
+              const range = document.createRange();
+              range.selectNodeContents(mark);
+              const { width, height } = range.getClientRects()[0];
+              return [width, height];
+            },
+            `${getEditorSelector(0)} mark`
+          );
+
+          expect(w).withContext(`In ${browserName}`).toEqual(0);
+          expect(h).withContext(`In ${browserName}`).toEqual(0);
+        })
+      );
+    });
+  });
+
+  describe("Undo a highlight", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".annotationEditorLayer");
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that a highlight can be undone", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+          await page.waitForSelector(getEditorSelector(0));
+          await waitForSerialized(page, 1);
+
+          await page.waitForSelector(`${getEditorSelector(0)} button.delete`);
+          await page.click(`${getEditorSelector(0)} button.delete`);
+          await waitForSerialized(page, 0);
+
+          await kbUndo(page);
+          await waitForSerialized(page, 1);
+          await page.waitForSelector(getEditorSelector(0));
+        })
+      );
+    });
+  });
+
+  describe("Delete a highlight and undo it an other page", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "tracemonkey.pdf",
+        ".annotationEditorLayer",
+        null,
+        null,
+        {
+          highlightEditorColors:
+            "yellow=#FFFF00,green=#00FF00,blue=#0000FF,pink=#FF00FF,red=#FF0000",
+        }
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that a highlight can be undone", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+          await page.waitForSelector(getEditorSelector(0));
+          await waitForSerialized(page, 1);
+
+          await page.waitForSelector(`${getEditorSelector(0)} button.delete`);
+          await page.click(`${getEditorSelector(0)} button.delete`);
+          await waitForSerialized(page, 0);
+
+          const twoToFourteen = Array.from(new Array(13).keys(), n => n + 2);
+          for (const pageNumber of twoToFourteen) {
+            const pageSelector = `.page[data-page-number = "${pageNumber}"]`;
+            await scrollIntoView(page, pageSelector);
+          }
+
+          await kbUndo(page);
+          await waitForSerialized(page, 1);
+
+          const thirteenToOne = Array.from(new Array(13).keys(), n => 13 - n);
+          for (const pageNumber of thirteenToOne) {
+            const pageSelector = `.page[data-page-number = "${pageNumber}"]`;
+            await scrollIntoView(page, pageSelector);
+          }
+
+          await page.waitForSelector(getEditorSelector(0));
+          await page.waitForSelector(
+            `.page[data-page-number = "1"] svg.highlight[fill = "#FFFF00"]`
+          );
+        })
+      );
+    });
+  });
+
+  describe("Delete a highlight, scroll and undo it", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "tracemonkey.pdf",
+        ".annotationEditorLayer",
+        null,
+        null,
+        {
+          highlightEditorColors:
+            "yellow=#FFFF00,green=#00FF00,blue=#0000FF,pink=#FF00FF,red=#FF0000",
+        }
+      );
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that a highlight can be undone", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("#editorHighlight");
+          await page.waitForSelector(".annotationEditorLayer.highlightEditing");
+
+          const rect = await getSpanRectFromText(page, 1, "Abstract");
+          const x = rect.x + rect.width / 2;
+          const y = rect.y + rect.height / 2;
+          await page.mouse.click(x, y, { count: 2, delay: 100 });
+          await page.waitForSelector(getEditorSelector(0));
+          await waitForSerialized(page, 1);
+
+          await page.waitForSelector(`${getEditorSelector(0)} button.delete`);
+          await page.click(`${getEditorSelector(0)} button.delete`);
+          await waitForSerialized(page, 0);
+
+          const twoToOne = Array.from(new Array(13).keys(), n => n + 2).concat(
+            Array.from(new Array(13).keys(), n => 13 - n)
+          );
+          for (const pageNumber of twoToOne) {
+            const pageSelector = `.page[data-page-number = "${pageNumber}"]`;
+            await scrollIntoView(page, pageSelector);
+          }
+
+          await kbUndo(page);
+          await waitForSerialized(page, 1);
+          await page.waitForSelector(getEditorSelector(0));
+          await page.waitForSelector(
+            `.page[data-page-number = "1"] svg.highlight[fill = "#FFFF00"]`
+          );
         })
       );
     });
