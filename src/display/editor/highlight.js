@@ -341,6 +341,16 @@ class HighlightEditor extends AnnotationEditor {
       },
       /* mustWait = */ true
     );
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "colorChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: color,
+      previousValue: savedColor,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -366,6 +376,16 @@ class HighlightEditor extends AnnotationEditor {
       { action: "thickness_changed", thickness },
       /* mustWait = */ true
     );
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "thicknessChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: thickness,
+      previousValue: savedThickness,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */

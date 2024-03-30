@@ -1313,6 +1313,7 @@ class AnnotationEditorUIManager {
         }
       };
       this.addCommands({ cmd, undo, mustExec: true });
+      console.log('paste: added new editors');
     } catch (ex) {
       warn(`paste: "${ex.message}".`);
     }
@@ -2028,6 +2029,7 @@ class AnnotationEditorUIManager {
           for (const editor of editors) {
             if (this.#allEditors.has(editor.id)) {
               editor.translateInPage(totalX, totalY);
+              console.log('translateSelectedEditors: translated editor', editor.id, totalX, totalY);
             }
           }
         },
@@ -2076,6 +2078,7 @@ class AnnotationEditorUIManager {
    * @returns {boolean} true if at least one editor has been moved.
    */
   endDragSession() {
+    console.log("endDragSession", this.#draggingEditors)
     if (!this.#draggingEditors) {
       return false;
     }
@@ -2118,6 +2121,7 @@ class AnnotationEditorUIManager {
       cmd: () => {
         for (const [editor, { newX, newY, newPageIndex }] of map) {
           move(editor, newX, newY, newPageIndex);
+          console.log('endDragSession: moved editor', editor.id, newX, newY, newPageIndex);
         }
       },
       undo: () => {

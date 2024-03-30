@@ -68,6 +68,7 @@ class AnnotationEditorLayerBuilder {
     this.#textLayer = options.textLayer || null;
     this.#drawLayer = options.drawLayer || null;
     this.#onAppend = options.onAppend || null;
+    this.eventBus = options.eventBus; // #2256 modified by ngx-extended-pdf-viewer
   }
 
   /**
@@ -107,6 +108,7 @@ class AnnotationEditorLayerBuilder {
       annotationLayer: this.#annotationLayer,
       textLayer: this.#textLayer,
       drawLayer: this.#drawLayer,
+      eventBus: this.eventBus, // modified by ngx-extended-pdf-viewer #2256
     });
 
     const parameters = {

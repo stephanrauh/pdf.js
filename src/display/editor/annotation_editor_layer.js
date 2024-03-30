@@ -103,6 +103,7 @@ class AnnotationEditorLayer {
     textLayer,
     viewport,
     l10n,
+    eventBus, // modified by ngx-extended-pdf-viewer #2256
   }) {
     const editorTypes = [...AnnotationEditorLayer.#editorTypes.values()];
     if (!AnnotationEditorLayer._initialized) {
@@ -123,6 +124,7 @@ class AnnotationEditorLayer {
     this.drawLayer = drawLayer;
 
     this.#uiManager.addLayer(this);
+    this.eventBus = eventBus; // modified by ngx-extended-pdf-viewer #2256
   }
 
   get isEmpty() {
@@ -642,6 +644,7 @@ class AnnotationEditorLayer {
       y: event.offsetY,
       uiManager: this.#uiManager,
       isCentered,
+      eventBus: this.eventBus, // modified by ngx-extended-pdf-viewer #2256
       ...data,
     });
     if (editor) {

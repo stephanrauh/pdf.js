@@ -232,6 +232,16 @@ class FreeTextEditor extends AnnotationEditor {
       overwriteIfSameType: true,
       keepUndo: true,
     });
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "fontSizeChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: fontSize,
+      previousValue: this.#fontSize,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -252,6 +262,16 @@ class FreeTextEditor extends AnnotationEditor {
       overwriteIfSameType: true,
       keepUndo: true,
     });
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "colorChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: color,
+      previousValue: this.#color,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -462,6 +482,15 @@ class FreeTextEditor extends AnnotationEditor {
       mustExec: false,
     });
     this.#setEditorDimensions();
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "commit",
+      page: this.pageIndex + 1,
+      value: newText,
+      previousValue: savedText,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */
