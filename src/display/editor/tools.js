@@ -1813,10 +1813,10 @@ class AnnotationEditorUIManager {
           move(editor, newX, newY, newPageIndex);
           // #2256 modified by ngx-extended-pdf-viewer
           this._eventBus?.dispatch("annotation-editor-event", {
-            source: this,
+            source: editor,
             type: "moved",
             page: newPageIndex + 1,
-            editorType: this.constructor.name,
+            editorType: editor.constructor.name,
             previousValue: {
               x: savedX,
               y: savedY,
