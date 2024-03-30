@@ -1768,7 +1768,7 @@ class AnnotationEditorUIManager {
    * @returns {boolean} true if at least one editor has been moved.
    */
   endDragSession() {
-    console.log("endDragSession", this.#draggingEditors)
+
     if (!this.#draggingEditors) {
       return false;
     }
@@ -1809,9 +1809,26 @@ class AnnotationEditorUIManager {
 
     this.addCommands({
       cmd: () => {
-        for (const [editor, { newX, newY, newPageIndex }] of map) {
+        for (const [editor, { newX, newY, newPageIndex, savedX, savedY, savedPageIndex }] of map) { // #2256 modified by ngx-extended-pdf-viewer
           move(editor, newX, newY, newPageIndex);
-          console.log('endDragSession: moved editor', editor.id, newX, newY, newPageIndex);
+          // #2256 modified by ngx-extended-pdf-viewer
+          this._eventBus?.dispatch("annotation-editor-event", {
+            source: this,
+            type: "moved",
+            page: newPageIndex + 1,
+            editorType: this.constructor.name,
+            previousValue: {
+              x: savedX,
+              y: savedY,
+              page: savedPageIndex + 1,
+            },
+            value: {
+              x: newX,
+              y: newY,
+              page: newPageIndex + 1,
+            },
+          });
+          // #2256 end of modification by ngx-extended-pdf-viewer
         }
       },
       undo: () => {
