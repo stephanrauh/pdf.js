@@ -158,6 +158,7 @@ class AnnotationEditor {
 
     this.isAttachedToDOM = false;
     this.deleted = false;
+    this.eventBus = parameters.eventBus; // #2256 modified by ngx-extended-pdf-viewer
   }
 
   get editorType() {
@@ -394,6 +395,16 @@ class AnnotationEditor {
    */
   commit() {
     this.addToAnnotationStorage();
+    console.log("commit", this);
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "commit",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: this,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   addToAnnotationStorage() {
@@ -754,6 +765,20 @@ class AnnotationEditor {
     ) {
       return;
     }
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "sizeChanged",
+      editorType: this.constructor.name,
+      page: this.pageIndex + 1,
+      value: {
+        x: savedX,
+        y: savedY,
+        width: savedWidth,
+        height: savedHeight,
+      },
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
 
     this.addCommands({
       cmd: () => {
@@ -908,6 +933,15 @@ class AnnotationEditor {
 
   altTextFinish() {
     this.#altText?.finish();
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "altTextChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: this.#altText,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -923,7 +957,6 @@ class AnnotationEditor {
     if (this.#altText) {
       this.#editToolbar.addAltTextButton(await this.#altText.render());
     }
-
     return this.#editToolbar;
   }
 
@@ -1171,7 +1204,8 @@ class AnnotationEditor {
   /**
    * Executed once this editor has been rendered.
    */
-  onceAdded() {}
+  onceAdded() {
+  }
 
   /**
    * Check if the editor contains something.
@@ -1305,6 +1339,15 @@ class AnnotationEditor {
     }
     this.#stopResizing();
     this.removeEditToolbar();
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "removed",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: this,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /**

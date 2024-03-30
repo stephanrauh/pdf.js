@@ -173,6 +173,16 @@ class InkEditor extends AnnotationEditor {
       overwriteIfSameType: true,
       keepUndo: true,
     });
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "thicknessChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: thickness,
+      previousValue: savedThickness,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -195,6 +205,16 @@ class InkEditor extends AnnotationEditor {
       overwriteIfSameType: true,
       keepUndo: true,
     });
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "colorChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: color,
+      previousValue: savedColor,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -218,6 +238,16 @@ class InkEditor extends AnnotationEditor {
       overwriteIfSameType: true,
       keepUndo: true,
     });
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "opacityChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: opacity,
+      previousValue: savedOpacity,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */
@@ -493,6 +523,16 @@ class InkEditor extends AnnotationEditor {
     };
 
     this.addCommands({ cmd, undo, mustExec: true });
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "bezierPathChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: bezier,
+      previousValue: currentPath,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   #drawPoints() {

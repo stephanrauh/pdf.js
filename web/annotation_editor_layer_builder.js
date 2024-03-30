@@ -63,6 +63,7 @@ class AnnotationEditorLayerBuilder {
     this.#annotationLayer = options.annotationLayer || null;
     this.#textLayer = options.textLayer || null;
     this.#drawLayer = options.drawLayer || null;
+    this.eventBus = options.eventBus; // #2256 modified by ngx-extended-pdf-viewer>>>>>>> 4d5f93ddf (stephanrauh/ngx-extended-pdf-viewer#2256 emit events when a user adds, removes, or edits an annotation)
   }
 
   /**
@@ -103,6 +104,7 @@ class AnnotationEditorLayerBuilder {
       annotationLayer: this.#annotationLayer,
       textLayer: this.#textLayer,
       drawLayer: this.#drawLayer,
+      eventBus: this.eventBus, // modified by ngx-extended-pdf-viewer #2256
     });
 
     const parameters = {

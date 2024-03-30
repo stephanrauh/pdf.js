@@ -164,6 +164,17 @@ class HighlightEditor extends AnnotationEditor {
       overwriteIfSameType: true,
       keepUndo: true,
     });
+
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "colorChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: color,
+      previousValue: savedColor,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */

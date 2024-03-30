@@ -1066,6 +1066,7 @@ class PDFPageView {
             annotationLayer: this.annotationLayer?.annotationLayer,
             textLayer: this.textLayer,
             drawLayer: this.drawLayer.getDrawLayer(),
+            eventBus: this.eventBus, // #2256 modified by ngx-extended-pdf-viewer
           });
         }
         this.#renderAnnotationEditorLayer();
