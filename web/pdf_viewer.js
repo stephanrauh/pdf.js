@@ -1418,7 +1418,7 @@ class PDFViewer {
         if (targetPageSpot.top.endsWith("%")) {
           const percent = Number(targetPageSpot.top.replace("%", ""));
           const viewerHeight = this.viewer.querySelector(".page")?.clientHeight;
-          let height = pageDiv.clientHeight ? pageDiv.clientHeight : viewerHeight;
+          let height = pageDiv.clientHeight ?? viewerHeight;
           const visibleWindowHeight = this.viewer.parentElement.clientHeight;
           height = Math.max(0, height - visibleWindowHeight);
           targetPageSpot.top = (percent * height) / 100;
@@ -1428,13 +1428,13 @@ class PDFViewer {
         if (targetPageSpot.left.endsWith("%")) {
           const percent = Number(targetPageSpot.left.replace("%", ""));
           const viewerWidth = this.viewer.querySelector(".page")?.clientWidth;
-          const width = pageDiv.clientWidth ? pageDiv.clientWidth : viewerWidth;
+          const width = pageDiv.clientWidth ?? viewerWidth;
           targetPageSpot.left = (percent * width) / 100;
         }
       }
       this.#scrollIntoView({ div: pageDiv, id: pageNumber }, targetPageSpot);
     } else {
-      this.#scrollIntoView({ pageDiv, pageNumber });
+      this.#scrollIntoView({ div: pageDiv, id: pageNumber });
     }
   }
   // #1301 end of modification by ngx-extended-pdf-viewer
