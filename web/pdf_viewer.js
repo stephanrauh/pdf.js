@@ -1512,6 +1512,7 @@ class PDFViewer {
           presetValue: newValue,
           previousScale,
           previousPresetValue: previousScaleValue,
+          noScroll,
         });
       }
       return;
@@ -1566,6 +1567,7 @@ class PDFViewer {
       presetValue: preset ? newValue : undefined,
       previousScale,
       previousPresetValue: previousScaleValue,
+      noScroll,
     });
 
     if (this.defaultRenderingQueue) {
@@ -1886,7 +1888,7 @@ class PDFViewer {
     };
   }
 
-  update() {
+  update(noScroll = false) { // #2275 modified by ngx-extended-pdf-viewer
     // #1201 modified by ngx-extended-pdf-viewer
     if (this.scrollMode === ScrollMode.PAGE) {
       this.viewer.classList.add("singlePageView");
@@ -1928,7 +1930,7 @@ class PDFViewer {
     }
     // #1808 modified by ngx-extended-pdf-viewer
     // stop the infinite loop in presentation mode with [(page)]
-    if (this.scrollMode !== ScrollMode.PAGE) {
+    if (this.scrollMode !== ScrollMode.PAGE && !noScroll) { // #2275 modified by ngx-extended-pdf-viewer
       this._setCurrentPageNumber(
         stillFullyVisible ? currentId : visiblePages[0].id
       );

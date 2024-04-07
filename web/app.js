@@ -2748,8 +2748,7 @@ function webViewerUpdateFindControlState({
 
 function webViewerScaleChanging(evt) {
   PDFViewerApplication.toolbar?.setPageScale(evt.presetValue, evt.scale);
-
-  PDFViewerApplication.pdfViewer.update();
+  PDFViewerApplication.pdfViewer.update(evt.noScroll); // #2275 modified by ngx-extended-pdf-viewer
 }
 
 function webViewerRotationChanging(evt) {
