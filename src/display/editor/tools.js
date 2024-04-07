@@ -2227,9 +2227,11 @@ class AnnotationEditorUIManager {
     let hasChanged = false;
     this.#allLayers.forEach(layer => layer.setCleaningUp(true));
     this.#allEditors.forEach(editor => {
-      if (filterFunction(editor.serialize())) {
-        editor.remove();
-        hasChanged = true;
+      if (editor?.serialize()) {
+        if (filterFunction(editor.serialize())) {
+          editor.remove();
+          hasChanged = true;
+        }
       }
     });
     this.#allLayers.forEach(layer => layer.setCleaningUp(false));
