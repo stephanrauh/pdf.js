@@ -13,8 +13,9 @@
  * limitations under the License.
  */
 
-const compatibilityParams = Object.create(null);
 if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+  // eslint-disable-next-line no-var
+  var compatibilityParams = Object.create(null);
   if (
     typeof PDFJSDev !== "undefined" &&
     PDFJSDev.test("LIB") &&
@@ -422,6 +423,14 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
 
 const userOptions = Object.create(null);
 
+if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+  // Apply any compatibility-values to the user-options,
+  // see also `AppOptions.remove` below.
+  for (const name in compatibilityParams) {
+    userOptions[name] = compatibilityParams[name];
+  }
+}
+
 if (globalThis.pdfDefaultOptions) {
   for (const key in globalThis.pdfDefaultOptions) {
     userOptions[key] = globalThis.pdfDefaultOptions[key];
@@ -440,7 +449,10 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING || LIB")) {
       if (kind & OptionKind.BROWSER) {
         throw new Error(`Cannot mix "PREFERENCE" and "BROWSER" kind: ${name}`);
       }
-      if (compatibilityParams[name] !== undefined) {
+      if (
+        typeof compatibilityParams === "object" &&
+        compatibilityParams[name] !== undefined
+      ) {
         throw new Error(
           `Should not have compatibility-value for "PREFERENCE" kind: ${name}`
         );
@@ -462,17 +474,8 @@ class AppOptions {
     throw new Error("Cannot initialize AppOptions.");
   }
 
-  static getCompat(name) {
-    return compatibilityParams[name] ?? undefined;
-  }
-
   static get(name) {
-    return (
-      userOptions[name] ??
-      compatibilityParams[name] ??
-      defaultOptions[name]?.value ??
-      undefined
-    );
+    return userOptions[name] ?? defaultOptions[name]?.value ?? undefined;
   }
 
   static getAll(kind = null, defaultOnly = false) {
@@ -485,7 +488,7 @@ class AppOptions {
       }
       options[name] = defaultOnly
         ? defaultOption.value
-        : userOptions[name] ?? compatibilityParams[name] ?? defaultOption.value;
+        : userOptions[name] ?? defaultOption.value;
     }
     return options;
   }
@@ -501,11 +504,16 @@ class AppOptions {
         // opt-out of having the `Preferences` override existing `AppOptions`.
         return;
       }
-      if (Object.keys(userOptions).length) {
+      for (const name in userOptions) {
+        // Ignore any compatibility-values in the user-options.
+        if (compatibilityParams[name] !== undefined) {
+          continue;
+        }
         console.warn(
           "setAll: The Preferences may override manually set AppOptions; " +
             'please use the "disablePreferences"-option in order to prevent that.'
         );
+        break;
       }
     }
 
@@ -516,6 +524,14 @@ class AppOptions {
 
   static remove(name) {
     delete userOptions[name];
+
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      // Re-apply a compatibility-value, if it exists, to the user-options.
+      const val = compatibilityParams[name];
+      if (val !== undefined) {
+        userOptions[name] = val;
+      }
+    }
   }
 }
 

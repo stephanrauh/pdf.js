@@ -16,7 +16,7 @@
 /** @typedef {import("./event_utils").EventBus} EventBus */
 
 import { apiPageLayoutToViewerModes, RenderingStates } from "./ui_utils.js";
-import { PromiseCapability, shadow } from "pdfjs-lib";
+import { shadow } from "pdfjs-lib";
 
 /**
  * @typedef {Object} PDFScriptingManagerOptions
@@ -58,6 +58,19 @@ class PDFScriptingManager {
     this.#eventBus = eventBus;
     this.#externalServices = externalServices;
     this.#docProperties = docProperties;
+
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
+      Object.defineProperty(this, "sandboxTrip", {
+        value: () =>
+          setTimeout(
+            () =>
+              this.#scripting?.dispatchEventInSandbox({
+                name: "sandboxtripbegin",
+              }),
+            0
+          ),
+      });
+    }
   }
 
   setViewer(pdfViewer) {
@@ -199,7 +212,7 @@ class PDFScriptingManager {
       return;
     }
     await this.#willPrintCapability?.promise;
-    this.#willPrintCapability = new PromiseCapability();
+    this.#willPrintCapability = Promise.withResolvers();
     try {
       await this.#scripting.dispatchEventInSandbox({
         id: "doc",
@@ -258,6 +271,17 @@ class PDFScriptingManager {
 
     const { id, siblings, command, value } = detail;
     if (!id) {
+      if (
+        typeof PDFJSDev !== "undefined" &&
+        PDFJSDev.test("TESTING") &&
+        command === "sandboxTripEnd"
+      ) {
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent("sandboxtripend"));
+        }, 0);
+        return;
+      }
+
       switch (command) {
         case "clear":
           globalThis.ngxConsole.clear();
@@ -344,7 +368,7 @@ class PDFScriptingManager {
       visitedPages = this._visitedPages;
 
     if (initialize) {
-      this.#closeCapability = new PromiseCapability();
+      this.#closeCapability = Promise.withResolvers();
     }
     if (!this.#closeCapability) {
       return; // Scripting isn't fully initialized yet.
@@ -406,7 +430,7 @@ class PDFScriptingManager {
   }
 
   #initScripting() {
-    this.#destroyCapability = new PromiseCapability();
+    this.#destroyCapability = Promise.withResolvers();
 
     if (this.#scripting) {
       throw new Error("#initScripting: Scripting already exists.");

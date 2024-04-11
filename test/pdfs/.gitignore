@@ -462,6 +462,7 @@
 !issue15716.pdf
 !bug1671312_reduced.pdf
 !bug1671312_ArialNarrow.pdf
+!issue17848.pdf
 !issue6108.pdf
 !issue6113.pdf
 !openoffice.pdf
@@ -513,6 +514,7 @@
 !issue11549_reduced.pdf
 !issue8097_reduced.pdf
 !issue15262.pdf
+!issue17904.pdf
 !bug1743245.pdf
 !quadpoints.pdf
 !transparent.pdf
@@ -635,3 +637,7 @@
 !bug1868759.pdf
 !issue17730.pdf
 !bug1883609.pdf
+!issue17808.pdf
+!issue17871_bottom_right.pdf
+!issue17871_top_right.pdf
+!bug1889122.pdf

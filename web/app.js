@@ -46,7 +46,6 @@ import {
   isPdfFile,
   MissingPDFException,
   PDFWorker,
-  PromiseCapability,
   shadow,
   UnexpectedResponseException,
   version,
@@ -93,7 +92,10 @@ const ViewOnLoad = {
 
 const PDFViewerApplication = {
   initialBookmark: document.location.hash.substring(1),
-  _initializedCapability: new PromiseCapability(),
+  _initializedCapability: {
+    ...Promise.withResolvers(),
+    settled: false,
+  },
   appConfig: null,
   pdfDocument: null,
   pdfLoadingTask: null,
@@ -241,6 +243,7 @@ const PDFViewerApplication = {
     this.bindEvents();
     this.bindWindowEvents();
 
+    this._initializedCapability.settled = true;
     this._initializedCapability.resolve();
 
     /* modified by ngx-extended-pdf-viewer #633.
@@ -2052,9 +2055,6 @@ const PDFViewerApplication = {
         once: true,
       });
 
-      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-        return;
-      }
       _boundEvents.removeWindowResolutionChange ||= function () {
         mediaQueryList.removeEventListener("change", addWindowResolutionChange);
         _boundEvents.removeWindowResolutionChange = null;
