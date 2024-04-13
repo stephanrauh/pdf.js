@@ -1598,7 +1598,8 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
       // #1737 end of modification by ngx-extended-pdf-viewer
     } else if (angularData?.value !== undefined && angularData.value !== formValue) {
       // The value has been changed by Angular
-      value = angularData.value === data.exportValue;
+      const isChecked = angularData.value === true || angularData.value === data.exportValue;
+      value = isChecked ? data.exportValue : undefined;
       storage.setValue(id, { value });
     }
 
@@ -1701,9 +1702,12 @@ class RadioButtonWidgetAnnotationElement extends WidgetAnnotationElement {
     const id = data.id;
     // #1737, #1887 modified by ngx-extended-pdf-viewer
     const angularData = window.getFormValueFromAngular(this.data.fieldName);
+    // #2204 modified by ngx-extended-pdf-viewer
+    const defaultValue = data.fieldValue === data.buttonValue ? data.buttonValue : undefined;
     const formValue = storage.getValue(id, {
-      value: data.fieldValue === data.buttonValue,
+      value: defaultValue,
     }).value;
+    // #2204 end of modification by ngx-extended-pdf-viewer
     let value =
       angularData.value ??
       formValue;
