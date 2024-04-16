@@ -14,6 +14,12 @@
  * limitations under the License.
  */
 
+/** @typedef {import("./interfaces.js").IL10n} IL10n */
+// eslint-disable-next-line max-len
+/** @typedef {import("../src/display/api.js").PDFDocumentProxy} PDFDocumentProxy */
+// eslint-disable-next-line max-len
+/** @typedef {import("../src/display/api.js").PDFDocumentLoadingTask} PDFDocumentLoadingTask */
+
 import {
   animationStarted,
   apiPageLayoutToViewerModes,
@@ -97,7 +103,9 @@ const PDFViewerApplication = {
     settled: false,
   },
   appConfig: null,
+  /** @type {PDFDocumentProxy} */
   pdfDocument: null,
+  /** @type {PDFDocumentLoadingTask} */
   pdfLoadingTask: null,
   printService: null,
   /** @type {PDFViewer} */
@@ -403,9 +411,6 @@ const PDFViewerApplication = {
     const container = appConfig.mainContainer,
       viewer = appConfig.viewerContainer;
     const annotationEditorMode = AppOptions.get("annotationEditorMode");
-    const isOffscreenCanvasSupported =
-      AppOptions.get("isOffscreenCanvasSupported") &&
-      FeatureTest.isOffscreenCanvasSupported;
     const pageColors =
       AppOptions.get("forcePageColors") ||
       window.matchMedia("(forced-colors: active)").matches
@@ -486,7 +491,7 @@ const PDFViewerApplication = {
 
     if (appConfig.annotationEditorParams) {
       if (annotationEditorMode !== AnnotationEditorType.DISABLE) {
-        if (AppOptions.get("enableStampEditor") && isOffscreenCanvasSupported) {
+        if (AppOptions.get("enableStampEditor")) {
           appConfig.toolbar?.editorStampButton?.classList.remove("hidden");
         }
 

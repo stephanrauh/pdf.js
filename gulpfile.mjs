@@ -26,7 +26,6 @@ import { fileURLToPath } from "url";
 import fs from "fs";
 import gulp from "gulp";
 import merge from "merge-stream";
-import { mkdirp } from "mkdirp";
 import path from "path";
 import postcss from "gulp-postcss";
 import postcssDarkThemeClass from "postcss-dark-theme-class";
@@ -85,7 +84,7 @@ const ENV_TARGETS = [
   "last 2 versions",
   "Chrome >= 98",
   "Firefox ESR",
-  "Safari >= 15.4",
+  "Safari >= 16.4",
   "Node >= 18",
   "> 1%",
   "not IE > 0",
@@ -672,7 +671,7 @@ function replaceInFile(filePath, find, replacement) {
 }
 
 function getTempFile(prefix, suffix) {
-  mkdirp.sync(BUILD_DIR + "tmp/");
+  fs.mkdirSync(BUILD_DIR + "tmp/", { recursive: true });
   const bytes = crypto.randomBytes(6).toString("hex");
   const filePath = BUILD_DIR + "tmp/" + prefix + bytes + suffix;
   fs.writeFileSync(filePath, "");
@@ -928,7 +927,7 @@ gulp.task("locale", function () {
   console.log("### Building localization files");
 
   rimraf.sync(VIEWER_LOCALE_OUTPUT);
-  mkdirp.sync(VIEWER_LOCALE_OUTPUT);
+  fs.mkdirSync(VIEWER_LOCALE_OUTPUT, { recursive: true });
 
   const subfolders = fs.readdirSync(L10N_DIR);
   subfolders.sort();
@@ -944,7 +943,7 @@ gulp.task("locale", function () {
       continue;
     }
 
-    mkdirp.sync(VIEWER_LOCALE_OUTPUT + "/" + locale);
+    fs.mkdirSync(VIEWER_LOCALE_OUTPUT + "/" + locale, { recursive: true });
 
     locales.push(locale);
 
@@ -1534,14 +1533,15 @@ gulp.task("jsdoc", function (done) {
   const JSDOC_FILES = ["src/display/api.js"];
 
   rimraf(JSDOC_BUILD_DIR, function () {
-    mkdirp(JSDOC_BUILD_DIR).then(function () {
-      const command =
-        '"node_modules/.bin/jsdoc" -d ' +
-        JSDOC_BUILD_DIR +
-        " " +
-        JSDOC_FILES.join(" ");
-      exec(command, done);
-    });
+    fs.mkdirSync(JSDOC_BUILD_DIR, { recursive: true });
+
+    const command =
+      '"node_modules/.bin/jsdoc" -d ' +
+      JSDOC_BUILD_DIR +
+      " " +
+      JSDOC_FILES.join(" ");
+
+    exec(command, done);
   });
 });
 
@@ -1626,6 +1626,7 @@ function buildLib(defines, dir) {
     ),
     gulp.src(["web/*.js", "!web/{pdfjs,viewer}.js"], { base: "." }),
     gulp.src("test/unit/*.js", { base: "." }),
+    gulp.src("external/openjpeg/*.js", { base: "openjpeg/" }),
   ]);
 
   return buildLibHelper(bundleDefines, inputStream, dir);
@@ -1885,7 +1886,7 @@ function createBaseline(done) {
 
   let initializeCommand = "git fetch origin";
   if (!checkDir(BASELINE_DIR)) {
-    mkdirp.sync(BASELINE_DIR);
+    fs.mkdirSync(BASELINE_DIR, { recursive: true });
     initializeCommand = "git clone ../../ .";
   }
 
@@ -2221,7 +2222,7 @@ gulp.task(
       console.log("### Cloning baseline distribution");
 
       rimraf.sync(DIST_DIR);
-      mkdirp.sync(DIST_DIR);
+      fs.mkdirSync(DIST_DIR, { recursive: true });
       safeSpawnSync("git", ["clone", "--depth", "1", DIST_REPO_URL, DIST_DIR]);
 
       console.log();
@@ -2369,7 +2370,7 @@ gulp.task(
 
     // Copy the mozcentral build to the mozcentral baseline directory.
     rimraf.sync(MOZCENTRAL_BASELINE_DIR);
-    mkdirp.sync(MOZCENTRAL_BASELINE_DIR);
+    fs.mkdirSync(MOZCENTRAL_BASELINE_DIR, { recursive: true });
 
     gulp
       .src([BASELINE_DIR + BUILD_DIR + "mozcentral/**/*"])
