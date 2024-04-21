@@ -1297,7 +1297,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
       };
 
       // #1737 modified by ngx-extended-pdf-viewer
-      window.registerAcroformField(id, element, storedData.value);
+      window.registerAcroformField(id, element, storedData.value, undefined, this.data.fieldValue);
       element.addEventListener("updateFromAngular", newvalue => storage.setValue(id, { value: newvalue.detail }));
       // #1737 end of modification by ngx-extended-pdf-viewer
       if (this.enableScripting && this.hasJSActions) {
@@ -1643,7 +1643,7 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
     });
 
     // #1737 modified by ngx-extended-pdf-viewer
-    window.registerAcroformField(id, element, value ? data.exportValue : false);
+    window.registerAcroformField(id, element, value ? data.exportValue : false, undefined, this.data.fieldValue);
     element.addEventListener("updateFromAngular", newvalue => storage.setValue(id, { value: newvalue.detail }));
     // #1887 end of modification by ngx-extended-pdf-viewer
     if (updateAngularValueNecessary) {
@@ -1771,7 +1771,7 @@ class RadioButtonWidgetAnnotationElement extends WidgetAnnotationElement {
     });
 
     // #1737 modified by ngx-extended-pdf-viewer
-    window.registerAcroformField(id, element, value ? data.buttonValue : undefined, data.buttonValue);
+    window.registerAcroformField(id, element, value ? data.buttonValue : undefined, data.buttonValue, this.data.fieldValue);
     element.addEventListener("updateFromAngular", newvalue => storage.setValue(id, { value: newvalue.detail }));
     // #1737 end of modification by ngx-extended-pdf-viewer
     if (this.enableScripting && this.hasJSActions) {
@@ -1947,7 +1947,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
     };
 
     // #1737 modified by ngx-extended-pdf-viewer
-    window.registerAcroformField(id, selectElement, selectedValues);
+    window.registerAcroformField(id, selectElement, selectedValues, undefined, this.data.fieldValue);
     selectElement.addEventListener("updateFromAngular", newvalue => storage.setValue(id, { value: newvalue.detail }));
     // #1737 end of modification by ngx-extended-pdf-viewer
     if (this.enableScripting && this.hasJSActions) {

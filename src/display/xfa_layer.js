@@ -37,8 +37,9 @@ class XfaLayer {
     if (angularData.value) {
       storage.setValue(id, angularData);
     }
-    const storedData = angularData.value ? angularData : storage.getValue(id, { value: null });
-    window.registerXFAField(html, storedData);
+    const initialValue = storage.getValue(id, { value: null });
+    const storedData = angularData.value ? angularData : initialValue;
+    window.registerXFAField(html, storedData, initialValue);
     html.addEventListener("updateFromAngular", value => storage.setValue(id, { value: value.detail }));
     // #1737 end of modification by ngx-extended-pdf-viewer
     switch (element.name) {
