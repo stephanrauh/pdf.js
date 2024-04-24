@@ -13,12 +13,13 @@
  * limitations under the License.
  */
 
-import { BaseException } from "../shared/util.js";
+import { BaseException, warn } from "../shared/util.js";
 import OpenJPEG from "../../external/openjpeg/openjpeg.js";
+import { Stream } from "./stream.js";
 
 class JpxError extends BaseException {
   constructor(msg) {
-    super(`JPX error: ${msg}`, "JpxError");
+    super(msg, "JpxError");
   }
 }
 
@@ -26,7 +27,7 @@ class JpxImage {
   static #module = null;
 
   static decode(data, ignoreColorSpace = false) {
-    this.#module ||= OpenJPEG();
+    this.#module ||= OpenJPEG({ warn });
     const imageData = this.#module.decode(data, ignoreColorSpace);
     if (typeof imageData === "string") {
       throw new JpxError(imageData);
@@ -39,6 +40,13 @@ class JpxImage {
   }
 
   static parseImageProperties(stream) {
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("IMAGE_DECODERS")) {
+      if (stream instanceof ArrayBuffer || ArrayBuffer.isView(stream)) {
+        stream = new Stream(stream);
+      } else {
+        throw new JpxError("Invalid data format, must be a TypedArray.");
+      }
+    }
     // No need to use OpenJPEG here since we're only getting very basic
     // information which are located in the first bytes of the file.
     let newByte = stream.getByte();
@@ -68,4 +76,4 @@ class JpxImage {
   }
 }
 
-export { JpxImage };
+export { JpxError, JpxImage };

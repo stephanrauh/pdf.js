@@ -766,6 +766,7 @@ class AnnotationEditor {
       boundResizerPointermove,
       pointerMoveOptions
     );
+    window.addEventListener("contextmenu", noContextMenu);
     const savedX = this.x;
     const savedY = this.y;
     const savedWidth = this.width;
@@ -786,6 +787,7 @@ class AnnotationEditor {
         boundResizerPointermove,
         pointerMoveOptions
       );
+      window.removeEventListener("contextmenu", noContextMenu);
       this.parent.div.style.cursor = savedParentCursor;
       this.div.style.cursor = savedCursor;
 

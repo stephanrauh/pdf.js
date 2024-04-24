@@ -2118,6 +2118,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
 
       selectElement.addEventListener("input", event => {
         const exportValue = getValue(/* isExport */ true);
+        const change = getValue(/* isExport */ false);
         storage.setValue(id, { value: exportValue });
         // #1737 modified by ngx-extended-pdf-viewer
         window.updateAngularFormValue(id, { value: exportValue });
@@ -2131,6 +2132,7 @@ class ChoiceWidgetAnnotationElement extends WidgetAnnotationElement {
             id,
             name: "Keystroke",
             value: selectedValues,
+            change,
             changeEx: exportValue,
             willCommit: false,
             commitKey: 1,

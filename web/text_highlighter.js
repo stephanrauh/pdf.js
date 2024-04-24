@@ -29,6 +29,8 @@
  * either the text layer or XFA layer depending on the type of document.
  */
 class TextHighlighter {
+  #eventAbortController = null;
+
   /**
    * @param {TextHighlighterOptions} options
    */
@@ -37,7 +39,6 @@ class TextHighlighter {
     this.matches = [];
     this.eventBus = eventBus;
     this.pageIdx = pageIndex;
-    this._onUpdateTextLayerMatches = null;
     this.textDivs = null;
     this.textContentItemsStr = null;
     this.enabled = false;
@@ -74,15 +75,18 @@ class TextHighlighter {
       // #1501 end of modification by ngx-extended-pdf-viewer
     }
     this.enabled = true;
-    if (!this._onUpdateTextLayerMatches) {
-      this._onUpdateTextLayerMatches = evt => {
-        if (evt.pageIndex === this.pageIdx || evt.pageIndex === -1) {
-          this._updateMatches();
-        }
-      };
+
+    if (!this.#eventAbortController) {
+      this.#eventAbortController = new AbortController();
+
       this.eventBus._on(
         "updatetextlayermatches",
-        this._onUpdateTextLayerMatches
+        evt => {
+          if (evt.pageIndex === this.pageIdx || evt.pageIndex === -1) {
+            this._updateMatches();
+          }
+        },
+        { signal: this.#eventAbortController.signal }
       );
     }
     this._updateMatches();
@@ -93,13 +97,10 @@ class TextHighlighter {
       return;
     }
     this.enabled = false;
-    if (this._onUpdateTextLayerMatches) {
-      this.eventBus._off(
-        "updatetextlayermatches",
-        this._onUpdateTextLayerMatches
-      );
-      this._onUpdateTextLayerMatches = null;
-    }
+
+    this.#eventAbortController?.abort();
+    this.#eventAbortController = null;
+
     this._updateMatches(/* reset = */ true);
   }
 
