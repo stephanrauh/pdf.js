@@ -19,6 +19,7 @@ import {
   BaseException,
   objectSize,
   stringToPDFString,
+  Util,
   warn,
 } from "../shared/util.js";
 import { Dict, isName, Ref, RefSet } from "./primitives.js";
@@ -216,6 +217,51 @@ function readUint32(data, offset) {
 // Checks if ch is one of the following characters: SPACE, TAB, CR or LF.
 function isWhiteSpace(ch) {
   return ch === 0x20 || ch === 0x09 || ch === 0x0d || ch === 0x0a;
+}
+
+/**
+ * Checks if something is an Array containing only boolean values,
+ * and (optionally) checks its length.
+ * @param {any} arr
+ * @param {number | null} len
+ * @returns {boolean}
+ */
+function isBooleanArray(arr, len) {
+  return (
+    Array.isArray(arr) &&
+    (len === null || arr.length === len) &&
+    arr.every(x => typeof x === "boolean")
+  );
+}
+
+/**
+ * Checks if something is an Array containing only numbers,
+ * and (optionally) checks its length.
+ * @param {any} arr
+ * @param {number | null} len
+ * @returns {boolean}
+ */
+function isNumberArray(arr, len) {
+  return (
+    Array.isArray(arr) &&
+    (len === null || arr.length === len) &&
+    arr.every(x => typeof x === "number")
+  );
+}
+
+// Returns the matrix, or the fallback value if it's invalid.
+function lookupMatrix(arr, fallback) {
+  return isNumberArray(arr, 6) ? arr : fallback;
+}
+
+// Returns the rectangle, or the fallback value if it's invalid.
+function lookupRect(arr, fallback) {
+  return isNumberArray(arr, 4) ? arr : fallback;
+}
+
+// Returns the normalized rectangle, or the fallback value if it's invalid.
+function lookupNormalRect(arr, fallback) {
+  return isNumberArray(arr, 4) ? Util.normalizeRect(arr) : fallback;
 }
 
 /**
@@ -637,8 +683,13 @@ export {
   getRotationMatrix,
   getSizeInBytes,
   isAscii,
+  isBooleanArray,
+  isNumberArray,
   isWhiteSpace,
   log2,
+  lookupMatrix,
+  lookupNormalRect,
+  lookupRect,
   MissingDataException,
   numberToString,
   ParserEOFException,

@@ -4005,7 +4005,7 @@ describe("annotation", function () {
       const fileSpecRef = Ref.get(19, 0);
       const fileSpecDict = new Dict();
       fileSpecDict.set("Type", Name.get("Filespec"));
-      fileSpecDict.set("Desc", "");
+      fileSpecDict.set("Desc", "abc");
       fileSpecDict.set("EF", embeddedFileDict);
       fileSpecDict.set("UF", "Test.txt");
 
@@ -4033,8 +4033,12 @@ describe("annotation", function () {
         idFactoryMock
       );
       expect(data.annotationType).toEqual(AnnotationType.FILEATTACHMENT);
-      expect(data.file.filename).toEqual("Test.txt");
-      expect(data.file.content).toEqual(stringToBytes("Test attachment"));
+      expect(data.file).toEqual({
+        rawFilename: "Test.txt",
+        filename: "Test.txt",
+        content: stringToBytes("Test attachment"),
+        description: "abc",
+      });
     });
   });
 

@@ -35,7 +35,6 @@ import postcssNesting from "postcss-nesting";
 import { preprocess } from "./external/builder/builder.mjs";
 import rename from "gulp-rename";
 import replace from "gulp-replace";
-import rimraf from "rimraf";
 import stream from "stream";
 import streamqueue from "streamqueue";
 import TerserPlugin from "terser-webpack-plugin";
@@ -100,7 +99,7 @@ const AUTOPREFIXER_CONFIG = {
 const BABEL_TARGETS = ENV_TARGETS.join(", ");
 
 const BABEL_PRESET_ENV_OPTS = Object.freeze({
-  corejs: "3.37.0",
+  corejs: "3.37.1",
   exclude: ["web.structured-clone"],
   shippedProposals: true,
   useBuiltIns: "usage",
@@ -447,10 +446,8 @@ function checkChromePreferencesFile(chromePrefsPath, webPrefs) {
 
 function tweakWebpackOutput(jsName) {
   const replacer = [
-    " __webpack_exports__ = {};",
-    ",__webpack_exports__={};",
-    " __webpack_exports__ = await __webpack_exports__;",
-    "\\(__webpack_exports__=await __webpack_exports__\\)",
+    " __webpack_exports__ = {};", // Normal builds.
+    ",__webpack_exports__={};", // Minified builds.
   ];
   const regex = new RegExp(`(${replacer.join("|")})`, "gm");
 
@@ -460,10 +457,6 @@ function tweakWebpackOutput(jsName) {
         return ` __webpack_exports__ = globalThis.${jsName} = {};`;
       case ",__webpack_exports__={};":
         return `,__webpack_exports__=globalThis.${jsName}={};`;
-      case " __webpack_exports__ = await __webpack_exports__;":
-        return ` __webpack_exports__ = globalThis.${jsName} = await (globalThis.${jsName}Promise = __webpack_exports__);`;
-      case "(__webpack_exports__=await __webpack_exports__)":
-        return `(__webpack_exports__=globalThis.${jsName}=await (globalThis.${jsName}Promise=__webpack_exports__))`;
     }
     return match;
   });
@@ -926,7 +919,7 @@ gulp.task("locale", function () {
   console.log();
   console.log("### Building localization files");
 
-  rimraf.sync(VIEWER_LOCALE_OUTPUT);
+  fs.rmSync(VIEWER_LOCALE_OUTPUT, { recursive: true, force: true });
   fs.mkdirSync(VIEWER_LOCALE_OUTPUT, { recursive: true });
 
   const subfolders = fs.readdirSync(L10N_DIR);
@@ -1028,7 +1021,7 @@ function preprocessHTML(source, defines) {
 }
 
 function buildGeneric(defines, dir) {
-  rimraf.sync(dir);
+  fs.rmSync(dir, { recursive: true, force: true });
 
   return merge([
     createMainBundle(defines).pipe(gulp.dest(dir + "build")),
@@ -1123,7 +1116,7 @@ gulp.task(
 );
 
 function buildComponents(defines, dir) {
-  rimraf.sync(dir);
+  fs.rmSync(dir, { recursive: true, force: true });
 
   const COMPONENTS_IMAGES = [
     "web/images/annotation-*.svg",
@@ -1209,7 +1202,7 @@ gulp.task(
 );
 
 function buildMinified(defines, dir) {
-  rimraf.sync(dir);
+  fs.rmSync(dir, { recursive: true, force: true });
 
   return merge([
     createMainBundle(defines).pipe(gulp.dest(dir + "build")),
@@ -1361,7 +1354,7 @@ gulp.task(
       };
 
       // Clear out everything in the firefox extension build directory
-      rimraf.sync(MOZCENTRAL_DIR);
+      fs.rmSync(MOZCENTRAL_DIR, { recursive: true, force: true });
 
       return merge([
         createMainBundle(defines).pipe(
@@ -1459,7 +1452,7 @@ gulp.task(
       ];
 
       // Clear out everything in the chrome extension build directory
-      rimraf.sync(CHROME_BUILD_DIR);
+      fs.rmSync(CHROME_BUILD_DIR, { recursive: true, force: true });
 
       const version = getVersionJSON().version;
 
@@ -1532,17 +1525,16 @@ gulp.task("jsdoc", function (done) {
 
   const JSDOC_FILES = ["src/display/api.js"];
 
-  rimraf(JSDOC_BUILD_DIR, function () {
-    fs.mkdirSync(JSDOC_BUILD_DIR, { recursive: true });
+  fs.rmSync(JSDOC_BUILD_DIR, { recursive: true, force: true });
+  fs.mkdirSync(JSDOC_BUILD_DIR, { recursive: true });
 
-    const command =
-      '"node_modules/.bin/jsdoc" -d ' +
-      JSDOC_BUILD_DIR +
-      " " +
-      JSDOC_FILES.join(" ");
+  const command =
+    '"node_modules/.bin/jsdoc" -d ' +
+    JSDOC_BUILD_DIR +
+    " " +
+    JSDOC_FILES.join(" ");
 
-    exec(command, done);
-  });
+  exec(command, done);
 });
 
 gulp.task("types", function (done) {
@@ -2042,7 +2034,7 @@ gulp.task(
       const defines = { ...DEFINES, GENERIC: true, TESTING: true };
       const sandboxDir = BUILD_DIR + "dev-sandbox/";
 
-      rimraf.sync(sandboxDir);
+      fs.rmSync(sandboxDir, { recursive: true, force: true });
 
       return createSandboxBundle(defines, {
         disableVersionInfo: true,
@@ -2088,7 +2080,8 @@ gulp.task("clean", function (done) {
   console.log();
   console.log("### Cleaning up project builds");
 
-  rimraf(BUILD_DIR, done);
+  fs.rmSync(BUILD_DIR, { recursive: true, force: true });
+  done();
 });
 
 gulp.task("importl10n", async function () {
@@ -2107,7 +2100,7 @@ function ghPagesPrepare() {
   console.log();
   console.log("### Creating web site");
 
-  rimraf.sync(GH_PAGES_DIR);
+  fs.rmSync(GH_PAGES_DIR, { recursive: true, force: true });
 
   return merge([
     gulp
@@ -2221,13 +2214,20 @@ gulp.task(
       console.log();
       console.log("### Cloning baseline distribution");
 
-      rimraf.sync(DIST_DIR);
+      fs.rmSync(DIST_DIR, { recursive: true, force: true });
       fs.mkdirSync(DIST_DIR, { recursive: true });
       safeSpawnSync("git", ["clone", "--depth", "1", DIST_REPO_URL, DIST_DIR]);
 
       console.log();
       console.log("### Overwriting all files");
-      rimraf.sync(path.join(DIST_DIR, "*"));
+
+      // Remove all files/folders, except for `.git` because it needs to be a
+      // valid Git repository for the Git commands in the `dist` target to work.
+      for (const entry of fs.readdirSync(DIST_DIR)) {
+        if (entry !== ".git") {
+          fs.rmSync(DIST_DIR + entry, { recursive: true, force: true });
+        }
+      }
 
       return merge([
         packageJson().pipe(gulp.dest(DIST_DIR)),
@@ -2359,7 +2359,7 @@ gulp.task(
     console.log("### Creating mozcentral baseline environment");
 
     // Create a mozcentral build.
-    rimraf.sync(BASELINE_DIR + BUILD_DIR);
+    fs.rmSync(BASELINE_DIR + BUILD_DIR, { recursive: true, force: true });
 
     const workingDirectory = path.resolve(process.cwd(), BASELINE_DIR);
     safeSpawnSync("gulp", ["mozcentral"], {
@@ -2369,7 +2369,7 @@ gulp.task(
     });
 
     // Copy the mozcentral build to the mozcentral baseline directory.
-    rimraf.sync(MOZCENTRAL_BASELINE_DIR);
+    fs.rmSync(MOZCENTRAL_BASELINE_DIR, { recursive: true, force: true });
     fs.mkdirSync(MOZCENTRAL_BASELINE_DIR, { recursive: true });
 
     gulp
@@ -2398,10 +2398,16 @@ gulp.task(
 
       // Create the diff between the current mozcentral build and the
       // baseline mozcentral build, which both exist at this point.
-      // The mozcentral baseline directory is a Git repository, so we
-      // remove all files and copy the current mozcentral build files
-      // into it to create the diff.
-      rimraf.sync(MOZCENTRAL_BASELINE_DIR + "*");
+      // Remove all files/folders, except for `.git` because it needs to be a
+      // valid Git repository for the Git commands below to work.
+      for (const entry of fs.readdirSync(MOZCENTRAL_BASELINE_DIR)) {
+        if (entry !== ".git") {
+          fs.rmSync(MOZCENTRAL_BASELINE_DIR + entry, {
+            recursive: true,
+            force: true,
+          });
+        }
+      }
 
       gulp
         .src([BUILD_DIR + "mozcentral/**/*"])
@@ -2437,8 +2443,8 @@ gulp.task("externaltest", function (done) {
   });
 
   console.log();
-  console.log("### Running test-fixtures_esprima.js");
-  safeSpawnSync("node", ["external/builder/test-fixtures_esprima.mjs"], {
+  console.log("### Running test-fixtures_babel.js");
+  safeSpawnSync("node", ["external/builder/test-fixtures_babel.mjs"], {
     stdio: "inherit",
   });
   done();

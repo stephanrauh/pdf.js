@@ -1475,10 +1475,29 @@ describe("api", function () {
       const pdfDoc = await loadingTask.promise;
       const attachments = await pdfDoc.getAttachments();
 
-      const attachment = attachments["foo.txt"];
-      expect(attachment.filename).toEqual("foo.txt");
-      expect(attachment.content).toEqual(
-        new Uint8Array([98, 97, 114, 32, 98, 97, 122, 32, 10])
+      expect(attachments["foo.txt"]).toEqual({
+        rawFilename: "foo.txt",
+        filename: "foo.txt",
+        content: new Uint8Array([98, 97, 114, 32, 98, 97, 122, 32, 10]),
+        description: "",
+      });
+
+      await loadingTask.destroy();
+    });
+
+    it("gets attachments, with /Desc", async function () {
+      const loadingTask = getDocument(buildGetDocumentParams("issue18030.pdf"));
+      const pdfDoc = await loadingTask.promise;
+      const attachments = await pdfDoc.getAttachments();
+
+      const { rawFilename, filename, content, description } =
+        attachments["empty.pdf"];
+      expect(rawFilename).toEqual("Empty page.pdf");
+      expect(filename).toEqual("Empty page.pdf");
+      expect(content instanceof Uint8Array).toEqual(true);
+      expect(content.length).toEqual(2357);
+      expect(description).toEqual(
+        "SHA512: 06bec56808f93846f1d41ff0be4e54079c1291b860378c801c0f35f1d127a8680923ff6de59bd5a9692f01f0d97ca4f26da178ed03635fa4813d86c58a6c981a"
       );
 
       await loadingTask.destroy();
@@ -3109,10 +3128,11 @@ describe("api", function () {
     });
 
     it("gets text content", async function () {
-      const { items, styles } = await page.getTextContent();
+      const { items, styles, lang } = await page.getTextContent();
 
       expect(items.length).toEqual(15);
       expect(objectSize(styles)).toEqual(5);
+      expect(lang).toEqual("en");
 
       const text = mergeText(items);
       expect(text).toEqual(`Table Of Content
@@ -3127,13 +3147,14 @@ page 1 / 3`);
       );
       const pdfDoc = await loadingTask.promise;
       const pdfPage = await pdfDoc.getPage(1);
-      const { items, styles } = await pdfPage.getTextContent({
+      const { items, styles, lang } = await pdfPage.getTextContent({
         disableNormalization: true,
       });
       expect(items.length).toEqual(1);
       // Font name will be a random object id.
       const fontName = items[0].fontName;
       expect(Object.keys(styles)).toEqual([fontName]);
+      expect(lang).toEqual(null);
 
       expect(items[0]).toEqual({
         dir: "ltr",
@@ -4180,6 +4201,65 @@ Caron Broadcasting, Inc., an Ohio corporation (“Lessee”).`)
 
       await loadingTask.destroy();
       firstStatsOverall = null;
+    });
+
+    it("caches image resources at the document/page level, with corrupt images (issue 18042)", async function () {
+      const { NUM_PAGES_THRESHOLD } = GlobalImageCache;
+
+      const loadingTask = getDocument(buildGetDocumentParams("issue18042.pdf"));
+      const pdfDoc = await loadingTask.promise;
+      let checkedGlobalDecodeFailed = false;
+
+      for (let i = 1; i <= pdfDoc.numPages; i++) {
+        const pdfPage = await pdfDoc.getPage(i);
+        const viewport = pdfPage.getViewport({ scale: 1 });
+
+        const canvasAndCtx = CanvasFactory.create(
+          viewport.width,
+          viewport.height
+        );
+        const renderTask = pdfPage.render({
+          canvasContext: canvasAndCtx.context,
+          viewport,
+        });
+
+        await renderTask.promise;
+        const opList = renderTask.getOperatorList();
+        // The canvas is no longer necessary, since we only care about
+        // the image-data below.
+        CanvasFactory.destroy(canvasAndCtx);
+
+        const { commonObjs, objs } = pdfPage;
+        const imgIndex = opList.fnArray.indexOf(OPS.paintImageXObject);
+        const [objId] = opList.argsArray[imgIndex];
+
+        if (i < NUM_PAGES_THRESHOLD) {
+          expect(objId).toEqual(`img_p${i - 1}_1`);
+
+          expect(objs.has(objId)).toEqual(true);
+          expect(commonObjs.has(objId)).toEqual(false);
+        } else {
+          expect(objId).toEqual(
+            `g_${loadingTask.docId}_img_p${NUM_PAGES_THRESHOLD - 1}_1`
+          );
+
+          expect(objs.has(objId)).toEqual(false);
+          expect(commonObjs.has(objId)).toEqual(true);
+        }
+
+        // Ensure that the actual image data is identical for all pages.
+        const objsPool = i >= NUM_PAGES_THRESHOLD ? commonObjs : objs;
+        const imgData = objsPool.get(objId);
+
+        expect(imgData).toBe(null);
+
+        if (i === NUM_PAGES_THRESHOLD) {
+          checkedGlobalDecodeFailed = true;
+        }
+      }
+      expect(checkedGlobalDecodeFailed).toBeTruthy();
+
+      await loadingTask.destroy();
     });
 
     it("render for printing, with `printAnnotationStorage` set", async function () {

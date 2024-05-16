@@ -669,12 +669,12 @@ class PDFPageView {
             this.maxCanvasPixels;
         }
       }
-      const postponeDrawing =
-        !onlyCssZoom && drawingDelay >= 0 && drawingDelay < 1000;
+      const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
 
       if (postponeDrawing || onlyCssZoom) {
         if (
           postponeDrawing &&
+          !onlyCssZoom &&
           this.renderingState !== RenderingStates.FINISHED
         ) {
           this.cancelRendering({
@@ -910,7 +910,6 @@ class PDFPageView {
     // overflow will be hidden in Firefox.
     const canvasWrapper = document.createElement("div");
     canvasWrapper.classList.add("canvasWrapper");
-    canvasWrapper.setAttribute("aria-hidden", true);
     this.#addLayer(canvasWrapper, "canvasWrapper");
 
     if (

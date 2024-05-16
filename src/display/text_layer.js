@@ -16,7 +16,7 @@
 /** @typedef {import("./display_utils").PageViewport} PageViewport */
 /** @typedef {import("./api").TextContent} TextContent */
 
-import { AbortException, Util } from "../shared/util.js";
+import { AbortException, Util, warn } from "../shared/util.js";
 import { setLayerDimensions } from "./display_utils.js";
 
 /**
@@ -64,7 +64,7 @@ const DEFAULT_FONT_ASCENT = 0.8;
 const ascentCache = new Map();
 let _canvasContext = null;
 
-function getCtx() {
+function getCtx(lang = null) {
   if (!_canvasContext) {
     // We don't use an OffscreenCanvas here because we use serif/sans serif
     // fonts with it and they depends on the locale.
@@ -93,13 +93,13 @@ function cleanupTextLayer() {
   _canvasContext = null;
 }
 
-function getAscent(fontFamily) {
+function getAscent(fontFamily, lang) {
   const cachedAscent = ascentCache.get(fontFamily);
   if (cachedAscent) {
     return cachedAscent;
   }
 
-  const ctx = getCtx();
+  const ctx = getCtx(lang);
 
   const savedFont = ctx.font;
   ctx.canvas.width = ctx.canvas.height = DEFAULT_FONT_SIZE;
@@ -166,99 +166,6 @@ function getAscent(fontFamily) {
   return DEFAULT_FONT_ASCENT;
 }
 
-function appendText(task, geom, styles) {
-  // Initialize all used properties to keep the caches monomorphic.
-  const textDiv = document.createElement("span");
-  const textDivProperties = {
-    angle: 0,
-    canvasWidth: 0,
-    hasText: geom.str !== "",
-    hasEOL: geom.hasEOL,
-    fontSize: 0,
-  };
-  task._textDivs.push(textDiv);
-
-  const tx = Util.transform(task._transform, geom.transform);
-  let angle = Math.atan2(tx[1], tx[0]);
-  const style = styles[geom.fontName];
-  if (style.vertical) {
-    angle += Math.PI / 2;
-  }
-
-  const fontFamily =
-    (task._fontInspectorEnabled && style.fontSubstitution) || style.fontFamily;
-  const fontHeight = Math.hypot(tx[2], tx[3]);
-  const fontAscent = fontHeight * getAscent(fontFamily);
-
-  let left, top;
-  if (angle === 0) {
-    left = tx[4];
-    top = tx[5] - fontAscent;
-  } else {
-    left = tx[4] + fontAscent * Math.sin(angle);
-    top = tx[5] - fontAscent * Math.cos(angle);
-  }
-
-  const scaleFactorStr = "calc(var(--scale-factor)*";
-  const divStyle = textDiv.style;
-  // Setting the style properties individually, rather than all at once,
-  // should be OK since the `textDiv` isn't appended to the document yet.
-  if (task._container === task._rootContainer) {
-    divStyle.left = `${((100 * left) / task._pageWidth).toFixed(2)}%`;
-    divStyle.top = `${((100 * top) / task._pageHeight).toFixed(2)}%`;
-  } else {
-    // We're in a marked content span, hence we can't use percents.
-    divStyle.left = `${scaleFactorStr}${left.toFixed(2)}px)`;
-    divStyle.top = `${scaleFactorStr}${top.toFixed(2)}px)`;
-  }
-  divStyle.fontSize = `${scaleFactorStr}${fontHeight.toFixed(2)}px)`;
-  divStyle.fontFamily = fontFamily;
-
-  textDivProperties.fontSize = fontHeight;
-
-  // Keeps screen readers from pausing on every new text span.
-  textDiv.setAttribute("role", "presentation");
-
-  textDiv.textContent = geom.str;
-  // geom.dir may be 'ttb' for vertical texts.
-  textDiv.dir = geom.dir;
-
-  // `fontName` is only used by the FontInspector, and we only use `dataset`
-  // here to make the font name available in the debugger.
-  if (task._fontInspectorEnabled) {
-    textDiv.dataset.fontName =
-      style.fontSubstitutionLoadedName || geom.fontName;
-  }
-  if (angle !== 0) {
-    textDivProperties.angle = angle * (180 / Math.PI);
-  }
-  // We don't bother scaling single-char text divs, because it has very
-  // little effect on text highlighting. This makes scrolling on docs with
-  // lots of such divs a lot faster.
-  let shouldScaleText = false;
-  if (geom.str.length > 1) {
-    shouldScaleText = true;
-  } else if (geom.str !== " " && geom.transform[0] !== geom.transform[3]) {
-    const absScaleX = Math.abs(geom.transform[0]),
-      absScaleY = Math.abs(geom.transform[3]);
-    // When the horizontal/vertical scaling differs significantly, also scale
-    // even single-char text to improve highlighting (fixes issue11713.pdf).
-    if (
-      absScaleX !== absScaleY &&
-      Math.max(absScaleX, absScaleY) / Math.min(absScaleX, absScaleY) > 1.5
-    ) {
-      shouldScaleText = true;
-    }
-  }
-  if (shouldScaleText) {
-    textDivProperties.canvasWidth = style.vertical ? geom.height : geom.width;
-  }
-  task._textDivProperties.set(textDiv, textDivProperties);
-  if (task._isReadableStream) {
-    task._layoutText(textDiv);
-  }
-}
-
 function layout(params) {
   const { div, scale, properties, ctx, prevFontSize, prevFontFamily } = params;
   const { style } = div;
@@ -290,30 +197,13 @@ function layout(params) {
   }
 }
 
-function render(task) {
-  if (task._canceled) {
-    return;
-  }
-  const textDivs = task._textDivs;
-  const capability = task._capability;
-  const textDivsLength = textDivs.length;
-
-  // No point in rendering many divs as it would make the browser
-  // unusable even after the divs are rendered.
-  if (textDivsLength > MAX_TEXT_DIVS_TO_RENDER) {
-    capability.resolve();
-    return;
-  }
-
-  if (!task._isReadableStream) {
-    for (const textDiv of textDivs) {
-      task._layoutText(textDiv);
-    }
-  }
-  capability.resolve();
-}
-
 class TextLayerRenderTask {
+  #disableProcessItems = false;
+
+  #reader = null;
+
+  #textContentSource = null;
+
   constructor({
     textContentSource,
     container,
@@ -322,14 +212,26 @@ class TextLayerRenderTask {
     textDivProperties,
     textContentItemsStr,
   }) {
-    this._textContentSource = textContentSource;
-    this._isReadableStream = textContentSource instanceof ReadableStream;
+    if (textContentSource instanceof ReadableStream) {
+      this.#textContentSource = textContentSource;
+    } else if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+      typeof textContentSource === "object"
+    ) {
+      this.#textContentSource = new ReadableStream({
+        start(controller) {
+          controller.enqueue(textContentSource);
+          controller.close();
+        },
+      });
+    } else {
+      throw new Error('No "textContentSource" parameter specified.');
+    }
     this._container = this._rootContainer = container;
     this._textDivs = textDivs || [];
     this._textContentItemsStr = textContentItemsStr || [];
     this._fontInspectorEnabled = !!globalThis.FontInspector?.enabled;
 
-    this._reader = null;
     this._textDivProperties = textDivProperties || new WeakMap();
     this._canceled = false;
     this._capability = Promise.withResolvers();
@@ -339,8 +241,9 @@ class TextLayerRenderTask {
       div: null,
       scale: viewport.scale * (globalThis.devicePixelRatio || 1),
       properties: null,
-      ctx: getCtx(),
+      ctx: null,
     };
+    this._styleCache = Object.create(null);
     const { pageWidth, pageHeight, pageX, pageY } = viewport.rawDims;
     this._transform = [1, 0, 0, -1, -pageX, pageY + pageHeight];
     this._pageWidth = pageWidth;
@@ -352,6 +255,7 @@ class TextLayerRenderTask {
     this._capability.promise
       .finally(() => {
         this._layoutTextParams = null;
+        this._styleCache = null;
       })
       .catch(() => {
         // Avoid "Uncaught promise" messages in the globalThis.ngxConsole.
@@ -371,22 +275,37 @@ class TextLayerRenderTask {
    */
   cancel() {
     this._canceled = true;
-    if (this._reader) {
-      this._reader
-        .cancel(new AbortException("TextLayer task cancelled."))
-        .catch(() => {
-          // Avoid "Uncaught promise" messages in the globalThis.ngxConsole.
-        });
-      this._reader = null;
-    }
-    this._capability.reject(new AbortException("TextLayer task cancelled."));
+    const abortEx = new AbortException("TextLayer task cancelled.");
+
+    this.#reader?.cancel(abortEx).catch(() => {
+      // Avoid "Uncaught promise" messages in the console.
+    });
+    this.#reader = null;
+
+    this._capability.reject(abortEx);
   }
 
-  /**
-   * @private
-   */
-  _processItems(items, styleCache) {
+  #processItems(items, lang) {
+    if (this.#disableProcessItems) {
+      return;
+    }
+    if (!this._layoutTextParams.ctx) {
+      this._textDivProperties.set(this._rootContainer, { lang });
+      this._layoutTextParams.ctx = getCtx(lang);
+    }
+    const textDivs = this._textDivs,
+      textContentItemsStr = this._textContentItemsStr;
+
     for (const item of items) {
+      // No point in rendering many divs as it would make the browser
+      // unusable even after the divs are rendered.
+      if (textDivs.length > MAX_TEXT_DIVS_TO_RENDER) {
+        warn("Ignoring additional textDivs for performance reasons.");
+
+        this.#disableProcessItems = true; // Avoid multiple warnings for one page.
+        return;
+      }
+
       if (item.str === undefined) {
         if (
           item.type === "beginMarkedContentProps" ||
@@ -404,18 +323,106 @@ class TextLayerRenderTask {
         }
         continue;
       }
-      this._textContentItemsStr.push(item.str);
-      appendText(this, item, styleCache);
+      textContentItemsStr.push(item.str);
+      this.#appendText(item, lang);
     }
   }
 
-  /**
-   * @private
-   */
-  _layoutText(textDiv) {
-    const textDivProperties = (this._layoutTextParams.properties =
-      this._textDivProperties.get(textDiv));
+  #appendText(geom, lang) {
+    // Initialize all used properties to keep the caches monomorphic.
+    const textDiv = document.createElement("span");
+    const textDivProperties = {
+      angle: 0,
+      canvasWidth: 0,
+      hasText: geom.str !== "",
+      hasEOL: geom.hasEOL,
+      fontSize: 0,
+    };
+    this._textDivs.push(textDiv);
+
+    const tx = Util.transform(this._transform, geom.transform);
+    let angle = Math.atan2(tx[1], tx[0]);
+    const style = this._styleCache[geom.fontName];
+    if (style.vertical) {
+      angle += Math.PI / 2;
+    }
+
+    const fontFamily =
+      (this._fontInspectorEnabled && style.fontSubstitution) ||
+      style.fontFamily;
+    const fontHeight = Math.hypot(tx[2], tx[3]);
+    const fontAscent = fontHeight * getAscent(fontFamily, lang);
+
+    let left, top;
+    if (angle === 0) {
+      left = tx[4];
+      top = tx[5] - fontAscent;
+    } else {
+      left = tx[4] + fontAscent * Math.sin(angle);
+      top = tx[5] - fontAscent * Math.cos(angle);
+    }
+
+    const scaleFactorStr = "calc(var(--scale-factor)*";
+    const divStyle = textDiv.style;
+    // Setting the style properties individually, rather than all at once,
+    // should be OK since the `textDiv` isn't appended to the document yet.
+    if (this._container === this._rootContainer) {
+      divStyle.left = `${((100 * left) / this._pageWidth).toFixed(2)}%`;
+      divStyle.top = `${((100 * top) / this._pageHeight).toFixed(2)}%`;
+    } else {
+      // We're in a marked content span, hence we can't use percents.
+      divStyle.left = `${scaleFactorStr}${left.toFixed(2)}px)`;
+      divStyle.top = `${scaleFactorStr}${top.toFixed(2)}px)`;
+    }
+    divStyle.fontSize = `${scaleFactorStr}${fontHeight.toFixed(2)}px)`;
+    divStyle.fontFamily = fontFamily;
+
+    textDivProperties.fontSize = fontHeight;
+
+    // Keeps screen readers from pausing on every new text span.
+    textDiv.setAttribute("role", "presentation");
+
+    textDiv.textContent = geom.str;
+    // geom.dir may be 'ttb' for vertical texts.
+    textDiv.dir = geom.dir;
+
+    // `fontName` is only used by the FontInspector, and we only use `dataset`
+    // here to make the font name available in the debugger.
+    if (this._fontInspectorEnabled) {
+      textDiv.dataset.fontName =
+        style.fontSubstitutionLoadedName || geom.fontName;
+    }
+    if (angle !== 0) {
+      textDivProperties.angle = angle * (180 / Math.PI);
+    }
+    // We don't bother scaling single-char text divs, because it has very
+    // little effect on text highlighting. This makes scrolling on docs with
+    // lots of such divs a lot faster.
+    let shouldScaleText = false;
+    if (geom.str.length > 1) {
+      shouldScaleText = true;
+    } else if (geom.str !== " " && geom.transform[0] !== geom.transform[3]) {
+      const absScaleX = Math.abs(geom.transform[0]),
+        absScaleY = Math.abs(geom.transform[3]);
+      // When the horizontal/vertical scaling differs significantly, also scale
+      // even single-char text to improve highlighting (fixes issue11713.pdf).
+      if (
+        absScaleX !== absScaleY &&
+        Math.max(absScaleX, absScaleY) / Math.min(absScaleX, absScaleY) > 1.5
+      ) {
+        shouldScaleText = true;
+      }
+    }
+    if (shouldScaleText) {
+      textDivProperties.canvasWidth = style.vertical ? geom.height : geom.width;
+    }
+    this._textDivProperties.set(textDiv, textDivProperties);
+    this.#layoutText(textDiv, textDivProperties);
+  }
+
+  #layoutText(textDiv, textDivProperties) {
     this._layoutTextParams.div = textDiv;
+    this._layoutTextParams.properties = textDivProperties;
     layout(this._layoutTextParams);
 
     if (textDivProperties.hasText) {
@@ -432,37 +439,22 @@ class TextLayerRenderTask {
    * @private
    */
   _render() {
-    const { promise, resolve, reject } = Promise.withResolvers();
-    let styleCache = Object.create(null);
+    const styleCache = this._styleCache;
 
-    if (this._isReadableStream) {
-      const pump = () => {
-        this._reader.read().then(({ value, done }) => {
-          if (done) {
-            resolve();
-            return;
-          }
+    const pump = () => {
+      this.#reader.read().then(({ value, done }) => {
+        if (done) {
+          this._capability.resolve();
+          return;
+        }
 
-          Object.assign(styleCache, value.styles);
-          this._processItems(value.items, styleCache);
-          pump();
-        }, reject);
-      };
-
-      this._reader = this._textContentSource.getReader();
-      pump();
-    } else if (this._textContentSource) {
-      const { items, styles } = this._textContentSource;
-      this._processItems(items, styles);
-      resolve();
-    } else {
-      throw new Error('No "textContentSource" parameter specified.');
-    }
-
-    promise.then(() => {
-      styleCache = null;
-      render(this);
-    }, this._capability.reject);
+        Object.assign(styleCache, value.styles);
+        this.#processItems(value.items, value.lang);
+        pump();
+      }, this._capability.reject);
+    };
+    this.#reader = this.#textContentSource.getReader();
+    pump();
   }
 }
 
@@ -493,7 +485,7 @@ function updateTextLayer({
   }
 
   if (mustRescale) {
-    const ctx = getCtx();
+    const ctx = getCtx(textDivProperties.get(container)?.lang);
     const scale = viewport.scale * (globalThis.devicePixelRatio || 1);
     const params = {
       prevFontSize: null,

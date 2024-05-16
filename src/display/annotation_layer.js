@@ -37,7 +37,6 @@ import {
 } from "../shared/util.js";
 import {
   DOMSVGFactory,
-  getFilenameFromUrl,
   PDFDateString,
   setLayerDimensions,
 } from "./display_utils.js";
@@ -857,6 +856,9 @@ class LinkAnnotationElement extends AnnotationElement {
    */
   #bindAttachment(link, attachment, dest = null) {
     link.href = this.linkService.getAnchorUrl("");
+    if (attachment.description) {
+      link.title = attachment.description;
+    }
     link.onclick = () => {
       this.downloadManager?.openOrDownloadData(
         attachment.content,
@@ -2987,14 +2989,13 @@ class FileAttachmentAnnotationElement extends AnnotationElement {
   constructor(parameters) {
     super(parameters, { isRenderable: true });
 
-    const { filename, content } = this.data.file;
-    this.filename = getFilenameFromUrl(filename, /* onlyStripPath = */ true);
-    this.content = content;
+    const { file } = this.data;
+    this.filename = file.filename;
+    this.content = file.content;
 
     this.linkService.eventBus?.dispatch("fileattachmentannotation", {
       source: this,
-      filename,
-      content,
+      ...file,
     });
   }
 

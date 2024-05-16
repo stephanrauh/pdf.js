@@ -40,6 +40,7 @@ import {
   getInheritableProperty,
   getNewAnnotationsMap,
   isWhiteSpace,
+  lookupNormalRect,
   MissingDataException,
   PDF_VERSION_REGEXP,
   validateCSSFont,
@@ -160,10 +161,12 @@ class Page {
     if (this.xfaData) {
       return this.xfaData.bbox;
     }
-    let box = this._getInheritableProperty(name, /* getArray = */ true);
+    const box = lookupNormalRect(
+      this._getInheritableProperty(name, /* getArray = */ true),
+      null
+    );
 
-    if (Array.isArray(box) && box.length === 4) {
-      box = Util.normalizeRect(box);
+    if (box) {
       if (box[2] - box[0] > 0 && box[3] - box[1] > 0) {
         return box;
       }
@@ -392,10 +395,9 @@ class Page {
   }
 
   loadResources(keys) {
-    if (!this.resourcesPromise) {
-      // TODO: add async `_getInheritableProperty` and remove this.
-      this.resourcesPromise = this.pdfManager.ensure(this, "resources");
-    }
+    // TODO: add async `_getInheritableProperty` and remove this.
+    this.resourcesPromise ||= this.pdfManager.ensure(this, "resources");
+
     return this.resourcesPromise.then(() => {
       const objectLoader = new ObjectLoader(this.resources, keys, this.xref);
       return objectLoader.load();
@@ -622,7 +624,7 @@ class Page {
     });
   }
 
-  extractTextContent({
+  async extractTextContent({
     handler,
     task,
     includeMarkedContent,
@@ -636,31 +638,35 @@ class Page {
       "Properties",
       "XObject",
     ]);
+    const langPromise = this.pdfManager.ensureCatalog("lang");
 
-    const dataPromises = Promise.all([contentStreamPromise, resourcesPromise]);
-    return dataPromises.then(([contentStream]) => {
-      const partialEvaluator = new PartialEvaluator({
-        xref: this.xref,
-        handler,
-        pageIndex: this.pageIndex,
-        idFactory: this._localIdFactory,
-        fontCache: this.fontCache,
-        builtInCMapCache: this.builtInCMapCache,
-        standardFontDataCache: this.standardFontDataCache,
-        globalImageCache: this.globalImageCache,
-        systemFontCache: this.systemFontCache,
-        options: this.evaluatorOptions,
-      });
+    const [contentStream, , lang] = await Promise.all([
+      contentStreamPromise,
+      resourcesPromise,
+      langPromise,
+    ]);
+    const partialEvaluator = new PartialEvaluator({
+      xref: this.xref,
+      handler,
+      pageIndex: this.pageIndex,
+      idFactory: this._localIdFactory,
+      fontCache: this.fontCache,
+      builtInCMapCache: this.builtInCMapCache,
+      standardFontDataCache: this.standardFontDataCache,
+      globalImageCache: this.globalImageCache,
+      systemFontCache: this.systemFontCache,
+      options: this.evaluatorOptions,
+    });
 
-      return partialEvaluator.getTextContent({
-        stream: contentStream,
-        task,
-        resources: this.resources,
-        includeMarkedContent,
-        disableNormalization,
-        sink,
-        viewBox: this.view,
-      });
+    return partialEvaluator.getTextContent({
+      stream: contentStream,
+      task,
+      resources: this.resources,
+      includeMarkedContent,
+      disableNormalization,
+      sink,
+      viewBox: this.view,
+      lang,
     });
   }
 

@@ -20,6 +20,7 @@ import {
   getEditorSelector,
   getFirstSerialized,
   getSerialized,
+  getSpanRectFromText,
   kbBigMoveLeft,
   kbBigMoveUp,
   kbFocusNext,
@@ -48,27 +49,6 @@ const getXY = (page, selector) =>
     const bbox = document.querySelector(sel).getBoundingClientRect();
     return `${bbox.x}::${bbox.y}`;
   }, selector);
-
-const getSpanRectFromText = async (page, pageNumber, text) => {
-  await page.waitForSelector(
-    `.page[data-page-number="${pageNumber}"] > .textLayer .endOfContent`
-  );
-  return page.evaluate(
-    (number, content) => {
-      for (const el of document.querySelectorAll(
-        `.page[data-page-number="${number}"] > .textLayer > span`
-      )) {
-        if (el.textContent === content) {
-          const { x, y, width, height } = el.getBoundingClientRect();
-          return { x, y, width, height };
-        }
-      }
-      return null;
-    },
-    pageNumber,
-    text
-  );
-};
 
 describe("Highlight Editor", () => {
   describe("Editor must be removed without exception", () => {
@@ -1591,18 +1571,12 @@ describe("Highlight Editor", () => {
           await page.focus(getEditorSelector(1));
 
           await kbFocusPrevious(page);
-          await page.waitForFunction(
-            sel => document.querySelector(sel) === document.activeElement,
-            {},
-            `.page[data-page-number="1"] > .textLayer`
+          await page.waitForSelector(
+            `.page[data-page-number="1"] > .textLayer:focus`
           );
 
           await kbFocusNext(page);
-          await page.waitForFunction(
-            sel => document.querySelector(sel) === document.activeElement,
-            {},
-            getEditorSelector(1)
-          );
+          await page.waitForSelector(`${getEditorSelector(1)}:focus`);
         })
       );
     });

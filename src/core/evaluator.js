@@ -53,6 +53,7 @@ import {
 import { getTilingPatternIR, Pattern } from "./pattern.js";
 import { getXfaFontDict, getXfaFontName } from "./xfa_fonts.js";
 import { IdentityToUnicodeMap, ToUnicodeMap } from "./to_unicode_map.js";
+import { isNumberArray, lookupMatrix, lookupNormalRect } from "./core_utils.js";
 import { isPDFFunction, PDFFunctionFactory } from "./function.js";
 import { Lexer, Parser } from "./parser.js";
 import {
@@ -465,12 +466,8 @@ class PartialEvaluator {
     localColorSpaceCache
   ) {
     const dict = xobj.dict;
-    const matrix = dict.getArray("Matrix");
-    let bbox = dict.getArray("BBox");
-    bbox =
-      Array.isArray(bbox) && bbox.length === 4
-        ? Util.normalizeRect(bbox)
-        : null;
+    const matrix = lookupMatrix(dict.getArray("Matrix"), null);
+    const bbox = lookupNormalRect(dict.getArray("BBox"), null);
 
     let optionalContent, groupOptions;
     if (dict.has("OC")) {
@@ -802,29 +799,41 @@ class PartialEvaluator {
     args = [objId, w, h];
     operatorList.addImageOps(OPS.paintImageXObject, args, optionalContent);
 
-    // For large (at least 500x500) or more complex images that we'll cache
-    // globally, check if the image is still cached locally on the main-thread
-    // to avoid having to re-parse the image (since that can be slow).
-    if (
-      cacheGlobally &&
-      (w * h > 250000 || dict.has("SMask") || dict.has("Mask"))
-    ) {
-      const localLength = await this.handler.sendWithPromise("commonobj", [
-        objId,
-        "CopyLocalImage",
-        { imageRef },
-      ]);
-
-      if (localLength) {
+    if (cacheGlobally) {
+      if (this.globalImageCache.hasDecodeFailed(imageRef)) {
         this.globalImageCache.setData(imageRef, {
           objId,
           fn: OPS.paintImageXObject,
           args,
           optionalContent,
-          byteSize: 0, // Temporary entry, to avoid `setData` returning early.
+          byteSize: 0, // Data is `null`, since decoding failed previously.
         });
-        this.globalImageCache.addByteSize(imageRef, localLength);
+
+        this._sendImgData(objId, /* imgData = */ null, cacheGlobally);
         return;
+      }
+
+      // For large (at least 500x500) or more complex images that we'll cache
+      // globally, check if the image is still cached locally on the main-thread
+      // to avoid having to re-parse the image (since that can be slow).
+      if (w * h > 250000 || dict.has("SMask") || dict.has("Mask")) {
+        const localLength = await this.handler.sendWithPromise("commonobj", [
+          objId,
+          "CopyLocalImage",
+          { imageRef },
+        ]);
+
+        if (localLength) {
+          this.globalImageCache.setData(imageRef, {
+            objId,
+            fn: OPS.paintImageXObject,
+            args,
+            optionalContent,
+            byteSize: 0, // Temporary entry, to avoid `setData` returning early.
+          });
+          this.globalImageCache.addByteSize(imageRef, localLength);
+          return;
+        }
       }
     }
 
@@ -855,6 +864,9 @@ class PartialEvaluator {
       .catch(reason => {
         warn(`Unable to decode image "${objId}": "${reason}".`);
 
+        if (imageRef) {
+          this.globalImageCache.addDecodeFailed(imageRef);
+        }
         return this._sendImgData(objId, /* imgData = */ null, cacheGlobally);
       });
 
@@ -1583,7 +1595,7 @@ class PartialEvaluator {
             localShadingPatternCache,
           });
           if (objId) {
-            const matrix = dict.getArray("Matrix");
+            const matrix = lookupMatrix(dict.getArray("Matrix"), null);
             operatorList.addOp(fn, ["Shading", objId, matrix]);
           }
           return undefined;
@@ -2316,6 +2328,7 @@ class PartialEvaluator {
     sink,
     seenStyles = new Set(),
     viewBox,
+    lang = null,
     markedContentData = null,
     disableNormalization = false,
     keepWhiteSpace = false,
@@ -2332,6 +2345,7 @@ class PartialEvaluator {
     const textContent = {
       items: [],
       styles: Object.create(null),
+      lang,
     };
     const textContentItem = {
       initialized: false,
@@ -3270,8 +3284,8 @@ class PartialEvaluator {
                 const currentState = stateManager.state.clone();
                 const xObjStateManager = new StateManager(currentState);
 
-                const matrix = xobj.dict.getArray("Matrix");
-                if (Array.isArray(matrix) && matrix.length === 6) {
+                const matrix = lookupMatrix(xobj.dict.getArray("Matrix"), null);
+                if (matrix) {
                   xObjStateManager.transform(matrix);
                 }
 
@@ -3305,6 +3319,7 @@ class PartialEvaluator {
                     sink: sinkWrapper,
                     seenStyles,
                     viewBox,
+                    lang,
                     markedContentData,
                     disableNormalization,
                     keepWhiteSpace,
@@ -3897,66 +3912,97 @@ class PartialEvaluator {
     let defaultWidth = 0;
     const glyphsVMetrics = [];
     let defaultVMetrics;
-    let i, ii, j, jj, start, code, widths;
     if (properties.composite) {
-      defaultWidth = dict.has("DW") ? dict.get("DW") : 1000;
+      const dw = dict.get("DW");
+      defaultWidth = Number.isInteger(dw) ? dw : 1000;
 
-      widths = dict.get("W");
-      if (widths) {
-        for (i = 0, ii = widths.length; i < ii; i++) {
-          start = xref.fetchIfRef(widths[i++]);
-          code = xref.fetchIfRef(widths[i]);
+      const widths = dict.get("W");
+      if (Array.isArray(widths)) {
+        for (let i = 0, ii = widths.length; i < ii; i++) {
+          let start = xref.fetchIfRef(widths[i++]);
+          if (!Number.isInteger(start)) {
+            break; // Invalid /W data.
+          }
+          const code = xref.fetchIfRef(widths[i]);
+
           if (Array.isArray(code)) {
-            for (j = 0, jj = code.length; j < jj; j++) {
-              glyphsWidths[start++] = xref.fetchIfRef(code[j]);
+            for (const c of code) {
+              const width = xref.fetchIfRef(c);
+              if (typeof width === "number") {
+                glyphsWidths[start] = width;
+              }
+              start++;
             }
-          } else {
+          } else if (Number.isInteger(code)) {
             const width = xref.fetchIfRef(widths[++i]);
-            for (j = start; j <= code; j++) {
+            if (typeof width !== "number") {
+              continue;
+            }
+            for (let j = start; j <= code; j++) {
               glyphsWidths[j] = width;
             }
+          } else {
+            break; // Invalid /W data.
           }
         }
       }
 
       if (properties.vertical) {
-        let vmetrics = dict.getArray("DW2") || [880, -1000];
+        const dw2 = dict.getArray("DW2");
+        let vmetrics = isNumberArray(dw2, 2) ? dw2 : [880, -1000];
         defaultVMetrics = [vmetrics[1], defaultWidth * 0.5, vmetrics[0]];
         vmetrics = dict.get("W2");
-        if (vmetrics) {
-          for (i = 0, ii = vmetrics.length; i < ii; i++) {
-            start = xref.fetchIfRef(vmetrics[i++]);
-            code = xref.fetchIfRef(vmetrics[i]);
+        if (Array.isArray(vmetrics)) {
+          for (let i = 0, ii = vmetrics.length; i < ii; i++) {
+            let start = xref.fetchIfRef(vmetrics[i++]);
+            if (!Number.isInteger(start)) {
+              break; // Invalid /W2 data.
+            }
+            const code = xref.fetchIfRef(vmetrics[i]);
+
             if (Array.isArray(code)) {
-              for (j = 0, jj = code.length; j < jj; j++) {
-                glyphsVMetrics[start++] = [
+              for (let j = 0, jj = code.length; j < jj; j++) {
+                const vmetric = [
                   xref.fetchIfRef(code[j++]),
                   xref.fetchIfRef(code[j++]),
                   xref.fetchIfRef(code[j]),
                 ];
+                if (isNumberArray(vmetric, null)) {
+                  glyphsVMetrics[start] = vmetric;
+                }
+                start++;
               }
-            } else {
+            } else if (Number.isInteger(code)) {
               const vmetric = [
                 xref.fetchIfRef(vmetrics[++i]),
                 xref.fetchIfRef(vmetrics[++i]),
                 xref.fetchIfRef(vmetrics[++i]),
               ];
-              for (j = start; j <= code; j++) {
+              if (!isNumberArray(vmetric, null)) {
+                continue;
+              }
+              for (let j = start; j <= code; j++) {
                 glyphsVMetrics[j] = vmetric;
               }
+            } else {
+              break; // Invalid /W2 data.
             }
           }
         }
       }
     } else {
-      const firstChar = properties.firstChar;
-      widths = dict.get("Widths");
-      if (widths) {
-        j = firstChar;
-        for (i = 0, ii = widths.length; i < ii; i++) {
-          glyphsWidths[j++] = xref.fetchIfRef(widths[i]);
+      const widths = dict.get("Widths");
+      if (Array.isArray(widths)) {
+        let j = properties.firstChar;
+        for (const w of widths) {
+          const width = xref.fetchIfRef(w);
+          if (typeof width === "number") {
+            glyphsWidths[j] = width;
+          }
+          j++;
         }
-        defaultWidth = parseFloat(descriptor.get("MissingWidth")) || 0;
+        const missingWidth = descriptor.get("MissingWidth");
+        defaultWidth = typeof missingWidth === "number" ? missingWidth : 0;
       } else {
         // Trying get the BaseFont metrics (see comment above).
         const baseFontName = dict.get("BaseFont");
@@ -4083,8 +4129,14 @@ class PartialEvaluator {
       composite = true;
     }
 
-    const firstChar = dict.get("FirstChar") || 0,
-      lastChar = dict.get("LastChar") || (composite ? 0xffff : 0xff);
+    let firstChar = dict.get("FirstChar");
+    if (!Number.isInteger(firstChar)) {
+      firstChar = 0;
+    }
+    let lastChar = dict.get("LastChar");
+    if (!Number.isInteger(lastChar)) {
+      lastChar = composite ? 0xffff : 0xff;
+    }
     const descriptor = dict.get("FontDescriptor");
     const toUnicode = dict.get("ToUnicode") || baseDict.get("ToUnicode");
 
@@ -4212,11 +4264,12 @@ class PartialEvaluator {
 
     if (!descriptor) {
       if (isType3Font) {
+        const bbox = lookupNormalRect(dict.getArray("FontBBox"), [0, 0, 0, 0]);
         // FontDescriptor is only required for Type3 fonts when the document
         // is a tagged pdf. Create a barbebones one to get by.
         descriptor = new Dict(null);
         descriptor.set("FontName", Name.get(type));
-        descriptor.set("FontBBox", dict.getArray("FontBBox") || [0, 0, 0, 0]);
+        descriptor.set("FontBBox", bbox);
       } else {
         // Before PDF 1.5 if the font was one of the base 14 fonts, having a
         // FontDescriptor was not required.
@@ -4279,11 +4332,15 @@ class PartialEvaluator {
           dict,
           properties
         );
-        if (widths) {
+        if (Array.isArray(widths)) {
           const glyphWidths = [];
           let j = firstChar;
-          for (const width of widths) {
-            glyphWidths[j++] = this.xref.fetchIfRef(width);
+          for (const w of widths) {
+            const width = this.xref.fetchIfRef(w);
+            if (typeof width === "number") {
+              glyphWidths[j] = width;
+            }
+            j++;
           }
           newProperties.widths = glyphWidths;
         } else {
@@ -4397,6 +4454,39 @@ class PartialEvaluator {
       }
     }
 
+    const fontMatrix = lookupMatrix(
+      dict.getArray("FontMatrix"),
+      FONT_IDENTITY_MATRIX
+    );
+    const bbox = lookupNormalRect(
+      descriptor.getArray("FontBBox") || dict.getArray("FontBBox"),
+      undefined
+    );
+    let ascent = descriptor.get("Ascent");
+    if (typeof ascent !== "number") {
+      ascent = undefined;
+    }
+    let descent = descriptor.get("Descent");
+    if (typeof descent !== "number") {
+      descent = undefined;
+    }
+    let xHeight = descriptor.get("XHeight");
+    if (typeof xHeight !== "number") {
+      xHeight = 0;
+    }
+    let capHeight = descriptor.get("CapHeight");
+    if (typeof capHeight !== "number") {
+      capHeight = 0;
+    }
+    let flags = descriptor.get("Flags");
+    if (!Number.isInteger(flags)) {
+      flags = 0;
+    }
+    let italicAngle = descriptor.get("ItalicAngle");
+    if (typeof italicAngle !== "number") {
+      italicAngle = 0;
+    }
+
     const properties = {
       type,
       name: fontName.name,
@@ -4409,17 +4499,17 @@ class PartialEvaluator {
       loadedName: baseDict.loadedName,
       composite,
       fixedPitch: false,
-      fontMatrix: dict.getArray("FontMatrix") || FONT_IDENTITY_MATRIX,
+      fontMatrix,
       firstChar,
       lastChar,
       toUnicode,
-      bbox: descriptor.getArray("FontBBox") || dict.getArray("FontBBox"),
-      ascent: descriptor.get("Ascent"),
-      descent: descriptor.get("Descent"),
-      xHeight: descriptor.get("XHeight") || 0,
-      capHeight: descriptor.get("CapHeight") || 0,
-      flags: descriptor.get("Flags"),
-      italicAngle: descriptor.get("ItalicAngle") || 0,
+      bbox,
+      ascent,
+      descent,
+      xHeight,
+      capHeight,
+      flags,
+      italicAngle,
       isType3Font,
       cssFontInfo,
       scaleFactors: glyphScaleFactors,

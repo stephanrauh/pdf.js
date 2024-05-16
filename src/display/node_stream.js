@@ -13,16 +13,12 @@
  * limitations under the License.
  */
 
-import {
-  AbortException,
-  assert,
-  isNodeJS,
-  MissingPDFException,
-} from "../shared/util.js";
+import { AbortException, assert, MissingPDFException } from "../shared/util.js";
 import {
   extractFilenameFromHeader,
   validateRangeRequestCapabilities,
 } from "./network_utils.js";
+import { NodePackages } from "./node_utils.js";
 
 if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
   throw new Error(
@@ -30,23 +26,10 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
   );
 }
 
-let fs, http, https, url;
-// #1976 modified by ngx-extended-pdf-viewer - removed because this code
-// confuses Vite
-/**
-if (isNodeJS) {
-  // Native packages.
-  fs = await __non_webpack_import__("fs");
-  http = await __non_webpack_import__("http");
-  https = await __non_webpack_import__("https");
-  url = await __non_webpack_import__("url");
-}
-*/
-// #1976 end of modification by ngx-extended-pdf-viewer
-
 const fileUriRegex = /^file:\/\/\/[a-zA-Z]:\//;
 
 function parseUrl(sourceUrl) {
+  const url = NodePackages.get("url");
   const parsedUrl = url.parse(sourceUrl);
   if (parsedUrl.protocol === "file:" || parsedUrl.host) {
     return parsedUrl;
@@ -354,11 +337,13 @@ class PDFNodeStreamFullReader extends BaseFullReader {
 
     this._request = null;
     if (this._url.protocol === "http:") {
+      const http = NodePackages.get("http");
       this._request = http.request(
         createRequestOptions(this._url, stream.httpHeaders),
         handleResponse
       );
     } else {
+      const https = NodePackages.get("https");
       this._request = https.request(
         createRequestOptions(this._url, stream.httpHeaders),
         handleResponse
@@ -401,11 +386,13 @@ class PDFNodeStreamRangeReader extends BaseRangeReader {
 
     this._request = null;
     if (this._url.protocol === "http:") {
+      const http = NodePackages.get("http");
       this._request = http.request(
         createRequestOptions(this._url, this._httpHeaders),
         handleResponse
       );
     } else {
+      const https = NodePackages.get("https");
       this._request = https.request(
         createRequestOptions(this._url, this._httpHeaders),
         handleResponse
@@ -430,6 +417,7 @@ class PDFNodeStreamFsFullReader extends BaseFullReader {
       path = path.replace(/^\//, "");
     }
 
+    const fs = NodePackages.get("fs");
     fs.promises.lstat(path).then(
       stat => {
         // Setting right content length.
@@ -460,6 +448,7 @@ class PDFNodeStreamFsRangeReader extends BaseRangeReader {
       path = path.replace(/^\//, "");
     }
 
+    const fs = NodePackages.get("fs");
     this._setReadableStream(fs.createReadStream(path, { start, end: end - 1 }));
   }
 }
