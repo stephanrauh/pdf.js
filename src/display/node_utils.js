@@ -27,7 +27,6 @@ if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
   );
 }
 
-let fs, canvas, path2d;
 // #1976 modified by ngx-extended-pdf-viewer - removed because this code
 // confuses Vite
 /*
@@ -57,8 +56,6 @@ if (isNodeJS) {
 
     return new Map(Object.entries({ fs, http, https, url, canvas, path2d }));
   };
-*/
-// #1976 end of modification by ngx-extended-pdf-viewer
 
   loadPackages().then(
     map => {
@@ -104,14 +101,16 @@ if (isNodeJS) {
     }
   );
 }
+*/
+// #1976 end of modification by ngx-extended-pdf-viewer
 
 class NodePackages {
   static get promise() {
-    return packageCapability.promise;
+    return undefined; // #1976 modification by ngx-extended-pdf-viewer
   }
 
   static get(name) {
-    return packageMap?.get(name);
+    return undefined; // #1976 modification by ngx-extended-pdf-viewer
   }
 }
 

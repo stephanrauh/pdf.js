@@ -492,7 +492,7 @@ function getDocument(src) {
   return task;
 }
 
-function getUrlProp(val) {
+function getUrlProp(val, baseHref) {
   if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
     return null; // The 'url' is unused with `PDFDataRangeTransport`.
   }
