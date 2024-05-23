@@ -20,6 +20,15 @@
 import { binarySearchFirstItem, scrollIntoView } from "./ui_utils.js";
 import { getCharacterType, getNormalizeWithNFKC } from "./pdf_find_utils.js";
 
+/**
+ * Search and replacements for ngx-extended-pdf-viewer
+ * 
+ * `#convertToRegExpString` -> `_convertToRegExpString`
+ * `#calculateMatch` -> `_calculateMatch`
+ * `#calculateRegExpMatch` -> `_calculateRegExpMatch`
+ * 
+ */
+
 const FindState = {
   FOUND: 0,
   NOT_FOUND: 1,
@@ -679,7 +688,7 @@ class PDFFindController {
     return true;
   }
 
-  #calculateRegExpMatch(query, entireWord, pageIndex, pageContent) {
+  _calculateRegExpMatch(query, entireWord, pageIndex, pageContent) {
     const matches = (this._pageMatches[pageIndex] = []);
     const matchesLength = (this._pageMatchesLength[pageIndex] = []);
     if (!query) {
@@ -710,7 +719,7 @@ class PDFFindController {
     }
   }
 
-  #convertToRegExpString(query, hasDiacritics) {
+  _convertToRegExpString(query, hasDiacritics) {
     const { matchDiacritics } = this.#state;
     let isUnicode = false;
     query = query.replaceAll(
@@ -780,7 +789,7 @@ class PDFFindController {
     return [isUnicode, query];
   }
 
-  #calculateMatch(pageIndex) {
+  _calculateMatch(pageIndex) {
     let query = this.#query;
     if (query.length === 0) {
       return; // Do nothing: the matches should be wiped out already.
@@ -791,7 +800,7 @@ class PDFFindController {
 
     let isUnicode = false;
     if (typeof query === "string") {
-      [isUnicode, query] = this.#convertToRegExpString(query, hasDiacritics);
+      [isUnicode, query] = this._convertToRegExpString(query, hasDiacritics);
     } else {
       // Words are sorted in reverse order to be sure that "foobar" is matched
       // before "foo" in case the query is "foobar foo".
@@ -799,7 +808,7 @@ class PDFFindController {
         .sort()
         .reverse()
         .map(q => {
-          const [isUnicodePart, queryPart] = this.#convertToRegExpString(
+          const [isUnicodePart, queryPart] = this._convertToRegExpString(
             q,
             hasDiacritics
           );
@@ -812,7 +821,7 @@ class PDFFindController {
     const flags = `g${isUnicode ? "u" : ""}${caseSensitive ? "" : "i"}`;
     query = query ? new RegExp(query, flags) : null;
 
-    this.#calculateRegExpMatch(query, entireWord, pageIndex, pageContent);
+    this._calculateRegExpMatch(query, entireWord, pageIndex, pageContent);
 
     // When `highlightAll` is set, ensure that the matches on previously
     // rendered (and still active) pages are correctly highlighted.
@@ -941,7 +950,7 @@ class PDFFindController {
         this._pendingFindMatches.add(i);
         this._extractTextPromises[i].then(() => {
           this._pendingFindMatches.delete(i);
-          this.#calculateMatch(i);
+          this._calculateMatch(i);
         });
       }
     }
