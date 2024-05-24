@@ -460,7 +460,6 @@ class PDFPageView {
     this.eventBus.dispatch("textlayerrendered", {
       source: this,
       pageNumber: this.id,
-      numTextDivs: textLayer.numTextDivs,
       error,
     });
 

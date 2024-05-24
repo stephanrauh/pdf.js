@@ -368,6 +368,12 @@ const PDFViewerApplication = {
           params.get("highlighteditorcolors")
         );
       }
+      if (params.has("maxcanvaspixels")) {
+        AppOptions.set(
+          "maxCanvasPixels",
+          Number(params.get("maxcanvaspixels"))
+        );
+      }
       if (params.has("supportscaretbrowsingmode")) {
         AppOptions.set(
           "supportsCaretBrowsingMode",
@@ -1032,6 +1038,7 @@ const PDFViewerApplication = {
       }
       // Set the necessary global worker parameters, using the available options.
       const workerParams = AppOptions.getAll(OptionKind.WORKER);
+
       if (workerParams.workerSrc.constructor.name === "Function") {
         workerParams.workerSrc = workerParams.workerSrc();
       }
