@@ -1643,7 +1643,7 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
     });
 
     // #1737 modified by ngx-extended-pdf-viewer
-    window.registerAcroformField(id, element, value ? data.exportValue : false, undefined, this.data.fieldValue);
+    window.registerAcroformField(id, element, value ? data.exportValue : undefined, undefined, this.data.fieldValue);
     element.addEventListener("updateFromAngular", newvalue => storage.setValue(id, { value: newvalue.detail }));
     // #1887 end of modification by ngx-extended-pdf-viewer
     if (updateAngularValueNecessary) {
