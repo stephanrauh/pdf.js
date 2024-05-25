@@ -1213,6 +1213,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
       const storedData = angularData.value ? angularData : formData;
       if (angularData !== formData) {
         storage.setValue(id, { value: angularData.value });
+        storedData.formattedValue = angularData.value;
       }
       // #1737 + #1887 end of modification by ngx-extended-pdf-viewer
       let textContent = storedData.value || "";
