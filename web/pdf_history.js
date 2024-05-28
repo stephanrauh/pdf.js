@@ -655,7 +655,9 @@ class PDFHistory {
     if (destination.dest) {
       this.linkService.goToDestination(destination.dest);
     } else if (destination.hash) {
-      this.linkService.setHash(destination.hash);
+      // #2329 modified by ngx-extended-pdf-viewer
+      if (this.linkService.setHash) { this.linkService.setHash(destination.hash); }
+      // #2329 end of modification by ngx-extended-pdf-viewer
     } else if (destination.page) {
       // Fallback case; shouldn't be necessary, but better safe than sorry.
       this.linkService.page = destination.page;
