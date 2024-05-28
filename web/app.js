@@ -1822,12 +1822,16 @@ const PDFViewerApplication = {
       setRotation(this.initialRotation);
       delete this.initialRotation;
 
-      this.pdfLinkService.setHash(this.initialBookmark);
+      // #2329 modified by ngx-extended-pdf-viewer
+      if (this.pdfLinkService.setHash) { this.pdfLinkService.setHash(this.initialBookmark); }
+      // #2329 end of modification by ngx-extended-pdf-viewer
       this.initialBookmark = null;
     } else if (storedHash) {
       setRotation(rotation);
 
-      this.pdfLinkService.setHash(storedHash);
+      // #2329 modified by ngx-extended-pdf-viewer
+      if (this.pdfLinkService.setHash) { this.pdfLinkService.setHash(storedHash); }
+      // #2329 end of modification by ngx-extended-pdf-viewer
     }
 
     // Ensure that the correct page number is displayed in the UI,
@@ -2602,7 +2606,10 @@ function webViewerHashchange(evt) {
   if (!PDFViewerApplication.isInitialViewSet) {
     PDFViewerApplication.initialBookmark = hash;
   } else if (!PDFViewerApplication.pdfHistory?.popStateInProgress) {
-    PDFViewerApplication.pdfLinkService.setHash(hash);
+    // #2329 modified by ngx-extended-pdf-viewer
+    if (PDFViewerApplication.pdfLinkService.setHash) { PDFViewerApplication.pdfLinkService.setHash(hash); }
+    // #2329 end of modification by ngx-extended-pdf-viewer
+
   }
 }
 
