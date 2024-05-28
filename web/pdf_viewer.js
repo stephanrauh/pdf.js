@@ -1475,7 +1475,7 @@ class PDFViewer {
   #setScaleUpdatePages(
     newScale,
     newValue,
-    { noScroll = false, preset = false, drawingDelay = -1 }
+    { noScroll = false, preset = false, drawingDelay = -1, origin = null }
   ) {
     const previousScale = isNaN(Number(this.currentScale)) ? undefined : Number(this.currentScale);
     const previousScaleValue = this.currentScaleValue;
@@ -1536,6 +1536,15 @@ class PDFViewer {
         destArray: dest,
         allowNegativeOffset: true,
       });
+      if (Array.isArray(origin)) {
+        // If the origin of the scaling transform is specified, preserve its
+        // location on screen. If not specified, scaling will fix the top-left
+        // corner of the visible PDF area.
+        const scaleDiff = newScale / previousScale - 1;
+        const [top, left] = this.containerTopLeft;
+        this.container.scrollLeft += (origin[0] - left) * scaleDiff;
+        this.container.scrollTop += (origin[1] - top) * scaleDiff;
+      }
     }
 
     this.eventBus.dispatch("scalechanging", {
@@ -2435,66 +2444,63 @@ class PDFViewer {
    * @property {number} [drawingDelay]
    * @property {number} [scaleFactor]
    * @property {number} [steps]
+   * @property {Array} [origin] x and y coordinates of the scale
+   *                            transformation origin.
    */
 
   /**
-   * Increase the current zoom level one, or more, times.
+   * Changes the current zoom level by the specified amount.
    * @param {ChangeScaleOptions} [options]
    */
-  increaseScale({ drawingDelay, scaleFactor, steps } = {}) {
+  updateScale({ drawingDelay, scaleFactor = null, steps = null, origin }) {
+    if (steps === null && scaleFactor === null) {
+      throw new Error(
+        "Invalid updateScale options: either `steps` or `scaleFactor` must be provided."
+      );
+    }
     if (!this.pdfDocument) {
       return;
     }
     let newScale = this._currentScale;
-    if (scaleFactor > 1) {
+    if (scaleFactor > 0 && scaleFactor !== 1) {
       newScale = Math.round(newScale * scaleFactor * 100) / 100;
-    } else {
-      steps ??= 1;
+    } else if (steps) {
+      const delta = steps > 0 ? DEFAULT_SCALE_DELTA : 1 / DEFAULT_SCALE_DELTA;
+      const round = steps > 0 ? Math.ceil : Math.floor;
+      steps = Math.abs(steps);
       do {
-        newScale =
-          Math.ceil((newScale * DEFAULT_SCALE_DELTA).toFixed(2) * 10) / 10;
-      } while (--steps > 0 && newScale < MAX_SCALE);
-    }
-    // modified by ngx-extended-pdf-viewer #367
-    let maxScale = Number(PDFViewerApplicationOptions.get("maxZoom"));
-    if (!maxScale) {
-      maxScale = MAX_SCALE;
-    }
-    this.#setScale(Math.min(maxScale, newScale), {
-      noScroll: false,
-      drawingDelay,
-    });
-    // #367 end of modification by ngx-extended-pdf-viewer
-  }
-
-  /**
-   * Decrease the current zoom level one, or more, times.
-   * @param {ChangeScaleOptions} [options]
-   */
-  decreaseScale({ drawingDelay, scaleFactor, steps } = {}) {
-    if (!this.pdfDocument) {
-      return;
-    }
-    let newScale = this._currentScale;
-    if (scaleFactor > 0 && scaleFactor < 1) {
-      newScale = Math.round(newScale * scaleFactor * 100) / 100;
-    } else {
-      steps ??= 1;
-      do {
-        newScale =
-          Math.floor((newScale / DEFAULT_SCALE_DELTA).toFixed(2) * 10) / 10;
-      } while (--steps > 0 && newScale > MIN_SCALE);
+        newScale = round((newScale * delta).toFixed(2) * 10) / 10;
+      } while (--steps > 0);
     }
     // modified by ngx-extended-pdf-viewer #367
     let minScale = Number(PDFViewerApplicationOptions.get("minZoom"));
     if (!minScale) {
       minScale = MIN_SCALE;
     }
-    this.#setScale(Math.max(minScale, newScale), {
-      noScroll: false,
-      drawingDelay,
-    });
+    newScale = Math.max(minScale, newScale);
+    let maxScale = Number(PDFViewerApplicationOptions.get("maxZoom"));
+    if (!maxScale) {
+      maxScale = MAX_SCALE;
+    }
+    newScale = Math.min(maxScale, newScale);
+    this.#setScale(newScale, { noScroll: false, drawingDelay, origin });
     // #367 end of modification by ngx-extended-pdf-viewer
+  }
+
+  /**
+   * Increase the current zoom level one, or more, times.
+   * @param {ChangeScaleOptions} [options]
+   */
+  increaseScale(options = {}) {
+    this.updateScale({ ...options, steps: options.steps ?? 1 });
+  }
+
+  /**
+   * Decrease the current zoom level one, or more, times.
+   * @param {ChangeScaleOptions} [options]
+   */
+  decreaseScale(options = {}) {
+    this.updateScale({ ...options, steps: -(options.steps ?? 1) });
   }
 
   #updateContainerHeightCss(height = this.container.clientHeight) {

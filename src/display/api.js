@@ -402,11 +402,13 @@ function getDocument(src) {
   const transportParams = {
     disableFontFace,
     fontExtraProperties,
-    enableXfa,
     ownerDocument,
-    disableAutoFetch,
     pdfBug,
     styleElement,
+    loadingParams: {
+      disableAutoFetch,
+      enableXfa,
+    },
   };
 
   worker.promise
@@ -2401,6 +2403,7 @@ class WorkerTransport {
       ownerDocument: params.ownerDocument,
       styleElement: params.styleElement,
     });
+    this.loadingParams = params.loadingParams;
     this._params = params;
 
     this.canvasFactory = factory.canvasFactory;
@@ -3131,14 +3134,6 @@ class WorkerTransport {
     }
     const refStr = ref.gen === 0 ? `${ref.num}R` : `${ref.num}R${ref.gen}`;
     return this.#pageRefCache.get(refStr) ?? null;
-  }
-
-  get loadingParams() {
-    const { disableAutoFetch, enableXfa } = this._params;
-    return shadow(this, "loadingParams", {
-      disableAutoFetch,
-      enableXfa,
-    });
   }
 }
 
