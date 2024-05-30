@@ -221,6 +221,12 @@ class TextLayerBuilder {
           this.#textLayers.forEach(reset);
           return;
         }
+        // #2349 modified by ngx-extended-pdf-viewer
+        if (this.#textLayers.size === 0) {
+          // prevent exceptions if there's no text layer
+          return;
+        }
+        // #2349 end of modification by ngx-extended-pdf-viewer
 
         // Even though the spec says that .rangeCount should be 0 or 1, Firefox
         // creates multiple ranges when selecting across multiple pages.
