@@ -41,14 +41,24 @@ class JpxStream extends DecodeStream {
     // directly insert all of its data into `this.buffer`.
   }
 
-  readBlock(ignoreColorSpace) {
-    if (this.eof) {
-      return;
-    }
+  readBlock(decoderOptions) {
+    this.decodeImage(null, decoderOptions);
+  }
 
-    this.buffer = JpxImage.decode(this.bytes, ignoreColorSpace);
+  decodeImage(bytes, decoderOptions) {
+    if (this.eof) {
+      return this.buffer;
+    }
+    bytes ||= this.bytes;
+    this.buffer = JpxImage.decode(bytes, decoderOptions);
     this.bufferLength = this.buffer.length;
     this.eof = true;
+
+    return this.buffer;
+  }
+
+  get canAsyncDecodeImageFromBuffer() {
+    return this.stream.isAsync;
   }
 }
 

@@ -44,6 +44,27 @@ class BaseStream {
     unreachable("Abstract method `getBytes` called");
   }
 
+  /**
+   * NOTE: This method can only be used to get image-data that is guaranteed
+   *       to be fully loaded, since otherwise intermittent errors may occur;
+   *       note the `ObjectLoader` class.
+   */
+  async getImageData(length, decoderOptions) {
+    return this.getBytes(length, decoderOptions);
+  }
+
+  async asyncGetBytes() {
+    unreachable("Abstract method `asyncGetBytes` called");
+  }
+
+  get isAsync() {
+    return false;
+  }
+
+  get canAsyncDecodeImageFromBuffer() {
+    return false;
+  }
+
   peekByte() {
     const peekedByte = this.getByte();
     if (peekedByte !== -1) {
