@@ -608,6 +608,10 @@ class AnnotationEditorUIManager {
 
   #boundCut = this.cut.bind(this);
 
+  #boundDragOver = this.dragOver.bind(this);
+
+  #boundDrop = this.drop.bind(this);
+
   #boundPaste = this.paste.bind(this);
 
   #boundKeydown = this.keydown.bind(this);
@@ -798,6 +802,7 @@ class AnnotationEditorUIManager {
     this._eventBus._on("scalechanging", this.#boundOnScaleChanging);
     this._eventBus._on("rotationchanging", this.#boundOnRotationChanging);
     this.#addSelectionListener();
+    this.#addDragAndDropListeners();
     this.#addKeyboardManager();
     this.#annotationStorage = pdfDocument.annotationStorage;
     this.#filterFactory = pdfDocument.filterFactory;
@@ -823,6 +828,7 @@ class AnnotationEditorUIManager {
   }
 
   destroy() {
+    this.#removeDragAndDropListeners();
     this.#removeKeyboardManager();
     this.#removeFocusManager();
     this._eventBus._off("editingaction", this.#boundOnEditingAction);
@@ -1191,6 +1197,16 @@ class AnnotationEditorUIManager {
     document.removeEventListener("paste", this.#boundPaste);
   }
 
+  #addDragAndDropListeners() {
+    document.addEventListener("dragover", this.#boundDragOver);
+    document.addEventListener("drop", this.#boundDrop);
+  }
+
+  #removeDragAndDropListeners() {
+    document.removeEventListener("dragover", this.#boundDragOver);
+    document.removeEventListener("drop", this.#boundDrop);
+  }
+
   addEditListeners() {
     this.#addKeyboardManager();
     this.#addCopyPasteListeners();
@@ -1199,6 +1215,34 @@ class AnnotationEditorUIManager {
   removeEditListeners() {
     this.#removeKeyboardManager();
     this.#removeCopyPasteListeners();
+  }
+
+  dragOver(event) {
+    for (const { type } of event.dataTransfer.items) {
+      for (const editorType of this.#editorTypes) {
+        if (editorType.isHandlingMimeForPasting(type)) {
+          event.dataTransfer.dropEffect = "copy";
+          event.preventDefault();
+          return;
+        }
+      }
+    }
+  }
+
+  /**
+   * Drop callback.
+   * @param {DragEvent} event
+   */
+  drop(event) {
+    for (const item of event.dataTransfer.items) {
+      for (const editorType of this.#editorTypes) {
+        if (editorType.isHandlingMimeForPasting(item.type)) {
+          editorType.paste(item, this.currentLayer);
+          event.preventDefault();
+          return;
+        }
+      }
+    }
   }
 
   /**
