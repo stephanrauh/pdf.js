@@ -596,7 +596,7 @@ class PDFViewer {
             renderAsynchronously = this.adjacentPagesRenderer(null, pageIndex);
           }
         } catch (exception) {
-          console.log("Exception during pre-rendering page " + pageIndex, exception);
+          console.log("Exception during pre-rendering page %s", pageIndex, exception);
         }
       }
     }
