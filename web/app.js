@@ -1097,6 +1097,11 @@ const PDFViewerApplication = {
 
       return loadingTask.promise.then(
         pdfDocument => {
+          // #171 modified by ngx-extended-pdf-viewer
+          if (globalThis.ServiceWorkerOptions) {
+            pdfDocument._transport.messageHandler.send('showUnverifiedSignatures', globalThis.ServiceWorkerOptions.showUnverifiedSignatures);
+          }
+          // #171 end of modification by ngx-extended-pdf-viewer
           this.load(pdfDocument);
         },
         reason => {
