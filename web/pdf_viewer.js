@@ -124,6 +124,8 @@ function isValidAnnotationEditorMode(mode) {
  * @property {Object} [pageColors] - Overwrites background and foreground colors
  *   with user defined ones in order to improve readability in high contrast
  *   mode.
+ * @property {boolean} [enableHWA] - Enables hardware acceleration for
+ *   rendering. The default value is `false`.
  */
 
 class PDFPageViewBuffer {
@@ -211,6 +213,8 @@ class PDFViewer {
   #annotationMode = AnnotationMode.ENABLE_FORMS;
 
   #containerTopLeft = null;
+
+  #enableHWA = false;
 
   #enableHighlightFloatingButton = false;
 
@@ -308,6 +312,7 @@ class PDFViewer {
     this.#enablePermissions = options.enablePermissions || false;
     this.pageColors = options.pageColors || null;
     this.#mlManager = options.mlManager || null;
+    this.#enableHWA = options.enableHWA || false;
 
     this.defaultRenderingQueue = !options.renderingQueue;
     if (
@@ -939,12 +944,15 @@ class PDFViewer {
       // getAllText and we could just get text from the Selection object.
 
       // Select all the document.
-      const savedCursor = this.container.style.cursor;
-      this.container.style.cursor = "wait";
+      const { classList } = this.viewer;
+      classList.add("copyAll");
 
-      const interruptCopy = ev =>
-        (this.#interruptCopyCondition = ev.key === "Escape");
-      window.addEventListener("keydown", interruptCopy);
+      const ac = new AbortController();
+      window.addEventListener(
+        "keydown",
+        ev => (this.#interruptCopyCondition = ev.key === "Escape"),
+        { signal: ac.signal }
+      );
 
       this.getAllText()
         .then(async text => {
@@ -960,8 +968,8 @@ class PDFViewer {
         .finally(() => {
           this.#getAllTextInProgress = false;
           this.#interruptCopyCondition = false;
-          window.removeEventListener("keydown", interruptCopy);
-          this.container.style.cursor = savedCursor;
+          ac.abort();
+          classList.remove("copyAll");
         });
 
       event.preventDefault();
@@ -1147,6 +1155,7 @@ class PDFViewer {
             pageColors,
             l10n: this.l10n,
             layerProperties: this._layerProperties,
+            enableHWA: this.#enableHWA,
           });
           this._pages.push(pageView);
         }

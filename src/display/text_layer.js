@@ -450,10 +450,10 @@ class TextLayer {
       canvas.className = "hiddenCanvasElement";
       canvas.lang = lang;
       document.body.append(canvas);
-      // #1659 modified by ngx-extended-pdf-viewer
-      const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
-      canvasContext = canvas.getContext("2d", options);
-      // #1659 end of modification by ngx-extended-pdf-viewer      
+      canvasContext = canvas.getContext("2d", {
+        alpha: false,
+        willReadFrequently: true,
+      });
       this.#canvasContexts.set(lang, canvasContext);
     }
     return canvasContext;

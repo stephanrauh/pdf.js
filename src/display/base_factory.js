@@ -46,10 +46,13 @@ class BaseFilterFactory {
 }
 
 class BaseCanvasFactory {
-  constructor() {
+  #enableHWA = false;
+
+  constructor({ enableHWA = false } = {}) {
     if (this.constructor === BaseCanvasFactory) {
       unreachable("Cannot initialize BaseCanvasFactory.");
     }
+    this.#enableHWA = enableHWA;
   }
 
   create(width, height) {
@@ -57,13 +60,11 @@ class BaseCanvasFactory {
       throw new Error("Invalid canvas size");
     }
     const canvas = this._createCanvas(width, height);
-    // #1659 modified by ngx-extended-pdf-viewer
-    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
-    const context = canvas.getContext("2d", options);
-    // #1659 end of modification by ngx-extended-pdf-viewer
     return {
       canvas,
-      context, // #1659 modified by ngx-extended-pdf-viewer
+      context: canvas.getContext("2d", {
+        willReadFrequently: !this.#enableHWA,
+      }),
     };
   }
 

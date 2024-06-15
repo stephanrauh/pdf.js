@@ -451,6 +451,7 @@ const PDFViewerApplication = {
         )
       : null;
 
+    const enableHWA = AppOptions.get("enableHWA");
     const pdfViewer = new PDFViewer({
       container,
       viewer,
@@ -481,6 +482,7 @@ const PDFViewerApplication = {
       pageColors,
       mlManager: this.mlManager,
       abortSignal: this._globalAbortController.signal,
+      enableHWA,
     });
     this.pdfViewer = pdfViewer;
 
@@ -496,6 +498,7 @@ const PDFViewerApplication = {
         linkService: pdfLinkService,
         pageColors,
         abortSignal: this._globalAbortController.signal,
+        enableHWA,
       });
       pdfRenderingQueue.setThumbnailViewer(this.pdfThumbnailViewer);
     }
@@ -1150,18 +1153,21 @@ const PDFViewerApplication = {
   },
 
   async download(options = {}) {
-    const url = this._downloadUrl,
-      filename = this._docFilename;
+    let data;
     try {
       this._ensureDownloadComplete();
 
-      const data = await this.pdfDocument.getData();
-      this.downloadManager.download(data, url, filename, options);
+      data = await this.pdfDocument.getData();
     } catch {
       // When the PDF document isn't ready, or the PDF file is still
       // downloading, simply download using the URL.
-      this.downloadManager.downloadUrl(url, filename, options);
     }
+    this.downloadManager.download(
+      data,
+      this._downloadUrl,
+      this._docFilename,
+      options
+    );
   },
 
   async save(options = {}) {
@@ -1171,13 +1177,16 @@ const PDFViewerApplication = {
     this._saveInProgress = true;
     await this.pdfScriptingManager.dispatchWillSave();
 
-    const url = this._downloadUrl,
-      filename = this._docFilename;
     try {
       this._ensureDownloadComplete();
 
       const data = await this.pdfDocument.saveDocument();
-      this.downloadManager.download(data, url, filename, options);
+      this.downloadManager.download(
+        data,
+        this._downloadUrl,
+        this._docFilename,
+        options
+      );
     } catch (reason) {
       // When the PDF document isn't ready, or the PDF file is still
       // downloading, simply fallback to a "regular" download.
@@ -1199,12 +1208,19 @@ const PDFViewerApplication = {
     }
   },
 
-  downloadOrSave(options = {}) {
-    if (this.pdfDocument?.annotationStorage.size > 0) {
-      this.save(options);
-    } else {
-      this.download(options);
-    }
+  async downloadOrSave(options = {}) {
+    // In the Firefox case, this method MUST always trigger a download.
+    // When the user is closing a modified and unsaved document, we display a
+    // prompt asking for saving or not. In case they save, we must wait for
+    // saving to complete before closing the tab.
+    // So in case this function does not trigger a download, we must trigger a
+    // a message and change PdfjsChild.sys.mjs to take it into account.
+    const { classList } = this.appConfig.appContainer;
+    classList.add("wait");
+    await (this.pdfDocument?.annotationStorage.size > 0
+      ? this.save(options)
+      : this.download(options));
+    classList.remove("wait");
   },
 
   // #1685 modified by ngx-extended-pdf-viewer

@@ -44,6 +44,8 @@ const THUMBNAIL_WIDTH = 98; // px
  * @property {Object} [pageColors] - Overwrites background and foreground colors
  *   with user defined ones in order to improve readability in high contrast
  *   mode.
+ * @property {boolean} [enableHWA] - Enables hardware acceleration for
+ *   rendering. The default value is `false`.
  */
 
 class TempImageFactory {
@@ -56,17 +58,12 @@ class TempImageFactory {
 
     // Since this is a temporary canvas, we need to fill it with a white
     // background ourselves. `#getPageDrawContext` uses CSS rules for this.
-
-    // #1659 modified by ngx-extended-pdf-viewer
-    const options1 = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
-    const options2 = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true } : undefined;
-    const ctx = tempCanvas.getContext("2d", options1);
-    // #1659 end of modification by ngx-extended-pdf-viewer
+    const ctx = tempCanvas.getContext("2d", { alpha: false });
     ctx.save();
     ctx.fillStyle = "rgb(255, 255, 255)";
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
-    return [tempCanvas, tempCanvas.getContext("2d", options2)];
+    return [tempCanvas, tempCanvas.getContext("2d")];
   }
 
   static destroyCanvas() {
@@ -97,6 +94,7 @@ class PDFThumbnailView {
     linkService,
     renderingQueue,
     pageColors,
+    enableHWA,
   }) {
     this.id = id;
     this.renderingId = "thumbnail" + id;
@@ -108,6 +106,7 @@ class PDFThumbnailView {
     this.pdfPageRotate = defaultViewport.rotation;
     this._optionalContentConfigPromise = optionalContentConfigPromise || null;
     this.pageColors = pageColors || null;
+    this.enableHWA = enableHWA || false;
 
     this.eventBus = eventBus;
     this.linkService = linkService;
@@ -213,14 +212,14 @@ class PDFThumbnailView {
     this.resume = null;
   }
 
-  #getPageDrawContext(upscaleFactor = 1) {
+  #getPageDrawContext(upscaleFactor = 1, enableHWA = this.enableHWA) {
     // Keep the no-thumbnail outline visible, i.e. `data-loaded === false`,
     // until rendering/image conversion is complete, to avoid display issues.
     const canvas = document.createElement("canvas");
-    // #1659 modified by ngx-extended-pdf-viewer
-    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
-    const ctx = canvas.getContext("2d", options);
-    // #1659 end of modification by ngx-extended-pdf-viewer
+    const ctx = canvas.getContext("2d", {
+      alpha: false,
+      willReadFrequently: !enableHWA,
+    });
     const outputScale = new OutputScale();
 
     canvas.width = (upscaleFactor * this.canvasWidth * outputScale.sx) | 0;
@@ -362,7 +361,7 @@ class PDFThumbnailView {
   }
 
   #reduceImage(img) {
-    const { ctx, canvas } = this.#getPageDrawContext();
+    const { ctx, canvas } = this.#getPageDrawContext(1, true);
 
     if (img.width <= 2 * canvas.width) {
       ctx.drawImage(

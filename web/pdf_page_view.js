@@ -83,6 +83,8 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  * @property {IL10n} [l10n] - Localization service.
  * @property {Object} [layerProperties] - The object that is used to lookup
  *   the necessary layer-properties.
+ * @property {boolean} [enableHWA] - Enables hardware acceleration for
+ *   rendering. The default value is `false`.
  */
 
 const DEFAULT_LAYER_PROPERTIES =
@@ -114,6 +116,8 @@ const LAYERS_ORDER = new Map([
  */
 class PDFPageView {
   #annotationMode = AnnotationMode.ENABLE_FORMS;
+
+  #enableHWA = false;
 
   #hasRestrictedScaling = false;
 
@@ -165,6 +169,7 @@ class PDFPageView {
     this.maxCanvasPixels =
       options.maxCanvasPixels ?? AppOptions.get("maxCanvasPixels");
     this.pageColors = options.pageColors || null;
+    this.#enableHWA = options.enableHWA || false;
 
     this.eventBus = options.eventBus;
     this.renderingQueue = options.renderingQueue;
@@ -983,10 +988,10 @@ class PDFPageView {
     canvasWrapper.append(canvas);
     this.canvas = canvas;
 
-    // #1659 modified by ngx-extended-pdf-viewer
-    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true, alpha: false } : { alpha: false };
-    const ctx = canvas.getContext("2d", options);
-    // #1659 end of modification by ngx-extended-pdf-viewer
+    const ctx = canvas.getContext("2d", {
+      alpha: false,
+      willReadFrequently: !this.#enableHWA,
+    });
     const outputScale = (this.outputScale = new OutputScale());
 
     if (

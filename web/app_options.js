@@ -315,6 +315,11 @@ const defaultOptions = {
     value: "",
     kind: OptionKind.API,
   },
+  enableHWA: {
+    /** @type {boolean} */
+    value: false,
+    kind: OptionKind.API + OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
   enableXfa: {
     /** @type {boolean} */
     value: true,
