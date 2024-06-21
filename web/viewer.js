@@ -242,10 +242,4 @@ function webViewerLoad() {
 // works in Firefox; see https://bugzilla.mozilla.org/show_bug.cgi?id=1618553
 document.blockUnblockOnload?.(true);
 
-window.webViewerLoad = webViewerLoad;
-
-export {
-  PDFViewerApplication,
-  AppConstants as PDFViewerApplicationConstants,
-  AppOptions as PDFViewerApplicationOptions,
-};
+export { PDFViewerApplication, AppConstants as PDFViewerApplicationConstants, AppOptions as PDFViewerApplicationOptions, webViewerLoad };
