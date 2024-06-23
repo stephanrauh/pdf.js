@@ -1464,6 +1464,7 @@ class Render {
         // detect safari
         const regex = new RegExp('Version\\/[\\d\\.]+.*Safari/');
         this.safari = regex.exec(window.navigator.userAgent) !== null;
+        this.ngxZone = setting.ngxZone; // #2387 modified by ngx-extended-pdf-viewer
     }
     /**
      * Executed when requestAnimationFrame is called. Performs the current animation process and call drawFrame()
@@ -1491,12 +1492,12 @@ class Render {
     start() {
         this.update();
         const loop = (timer) => {
-          window.ngxZone.runOutsideAngular(() => {
+          this.ngxZone?.runOutsideAngular(() => { // #2387 modified by ngx-extended-pdf-viewer
             this.render(timer);
             requestAnimationFrame(loop);
           });
         };
-        window.ngxZone.runOutsideAngular(() => {
+        this.ngxZone?.runOutsideAngular(() => { // #2387 modified by ngx-extended-pdf-viewer
           requestAnimationFrame(loop);
         });
     }
@@ -2664,7 +2665,9 @@ class PageFlip extends EventObject {
      * Destructor. Remove a root HTML element and all event handlers
      */
     destroy() {
+        this.render.ngxZone = undefined; // #2387 modified by ngx-extended-pdf-viewer
         this.ui.destroy();
+        this.render = undefined; // #2387 modified by ngx-extended-pdf-viewer
         // #1415 modified by ngx-extended-pdf-viewer
         // this.block.remove(); // this would remove the viewer div
         // #1415 end of modification by ngx-extended-pdf-viewer
