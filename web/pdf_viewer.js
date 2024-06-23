@@ -474,6 +474,7 @@ class PDFViewer {
               height: page1.clientHeight,
               showCover: true,
               size: "fixed",
+              ngxZone: globalThis.ngxZone, // #2387 modified by ngx-extended-pdf-viewer
             });
             this.pageFlip.loadFromHTML(document.querySelectorAll(".page"));
             // triggered by page turning
