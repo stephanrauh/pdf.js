@@ -765,6 +765,31 @@ const PDFViewerApplication = {
     } else {
       throw new Error("Not implemented: run");
     }
+
+    // #2374 modified by ngx-extended-pdf-viewer
+    const event = new CustomEvent("webviewerinitialized", {
+      bubbles: true,
+      cancelable: true,
+      detail: {
+        source: window,
+      },
+    });
+    try {
+      // Attempt to dispatch the event at the embedding `document`,
+      // in order to support cases where the viewer is embedded in
+      // a *dynamically* created <iframe> element.
+      // #2070 modified by ngx-extended-pdf-viewer:
+      // send the event to the document by default instead to the parent
+      document.dispatchEvent(event);
+    } catch (ex) {
+      // The viewer could be in e.g. a cross-origin <iframe> element,
+      // fallback to dispatching the event at the current `document`.
+      console.error(`webviewerinitialized: ${ex}`);
+      parent.document.dispatchEvent(event);
+      // #2070 end of modification
+    }
+    // #2374 end of modification by ngx-extended-pdf-viewer
+
   },
 
   get externalServices() {
