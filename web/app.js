@@ -673,6 +673,7 @@ const PDFViewerApplication = {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
       const fileInput = (this._openFileInput = document.createElement("input"));
       fileInput.id = "fileInput";
+      fileInput.className = "ngx-extended-pdf-viewer-file-input";
       fileInput.hidden = true;
       fileInput.type = "file";
       fileInput.value = null;
