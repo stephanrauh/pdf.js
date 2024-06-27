@@ -18,7 +18,7 @@ import {
   babelPluginPDFJSPreprocessor,
   preprocessPDFJSCode,
 } from "./external/builder/babel-plugin-pdfjs-preprocessor.mjs";
-import { exec, spawn, spawnSync } from "child_process";
+import { exec, execSync, spawn, spawnSync } from "child_process";
 import autoprefixer from "autoprefixer";
 import babel from "@babel/core";
 import crypto from "crypto";
@@ -452,21 +452,10 @@ function checkChromePreferencesFile(chromePrefsPath, webPrefs) {
 }
 
 function tweakWebpackOutput(jsName) {
-  const replacer = [
-    " __webpack_exports__ = {};", // Normal builds.
-    ",__webpack_exports__={};", // Minified builds.
-  ];
-  const regex = new RegExp(`(${replacer.join("|")})`, "gm");
-
-  return replace(regex, match => {
-    switch (match) {
-      case " __webpack_exports__ = {};":
-        return ` __webpack_exports__ = globalThis.${jsName} = {};`;
-      case ",__webpack_exports__={};":
-        return `,__webpack_exports__=globalThis.${jsName}={};`;
-    }
-    return match;
-  });
+  return replace(
+    /((?:\s|,)__webpack_exports__)(?:\s?)=(?:\s?)({};)/gm,
+    (match, p1, p2) => `${p1} = globalThis.${jsName} = ${p2}`
+  );
 }
 
 function createMainBundle(defines) {
@@ -1549,18 +1538,10 @@ gulp.task("jsdoc", function (done) {
   console.log();
   console.log("### Generating documentation (JSDoc)");
 
-  const JSDOC_FILES = ["src/display/api.js"];
-
   fs.rmSync(JSDOC_BUILD_DIR, { recursive: true, force: true });
   fs.mkdirSync(JSDOC_BUILD_DIR, { recursive: true });
 
-  const command =
-    '"node_modules/.bin/jsdoc" -d ' +
-    JSDOC_BUILD_DIR +
-    " " +
-    JSDOC_FILES.join(" ");
-
-  exec(command, done);
+  exec('"node_modules/.bin/jsdoc" -c jsdoc.json', done);
 });
 
 gulp.task("types", function (done) {
@@ -1713,13 +1694,13 @@ gulp.task(
   )
 );
 
-function compressPublish(targetName, dir) {
+function compressPublish({ sourceDirectory, targetFile, modifiedTime }) {
   return gulp
-    .src(dir + "**", { encoding: false })
-    .pipe(zip(targetName))
+    .src(`${sourceDirectory}**`, { encoding: false })
+    .pipe(zip(targetFile, { modifiedTime }))
     .pipe(gulp.dest(BUILD_DIR))
     .on("end", function () {
-      console.log("Built distribution file: " + targetName);
+      console.log(`Built distribution file: ${targetFile}`);
     });
 }
 
@@ -1732,15 +1713,34 @@ gulp.task(
 
     config.stableVersion = version;
 
+    // ZIP files record the modification date of the source files, so if files
+    // are generated during the build process the output is not reproducible.
+    // To avoid this, the modification dates should be replaced with a fixed
+    // date, in our case the last Git commit date, so that builds from identical
+    // source code result in bit-by-bit identical output. The `gulp-zip` library
+    // supports providing a different modification date to enable reproducible
+    // builds. Note that the Git command below outputs the last Git commit date
+    // as a Unix timestamp (in seconds since epoch), but the `Date` constructor
+    // in JavaScript requires millisecond input, so we have to multiply by 1000.
+    const lastCommitTimestamp = execSync('git log --format="%at" -n 1')
+      .toString()
+      .replace("\n", "");
+    const lastCommitDate = new Date(parseInt(lastCommitTimestamp, 10) * 1000);
+
     return ordered([
       createStringSource(CONFIG_FILE, JSON.stringify(config, null, 2)).pipe(
         gulp.dest(".")
       ),
-      compressPublish("pdfjs-" + version + "-dist.zip", GENERIC_DIR),
-      compressPublish(
-        "pdfjs-" + version + "-legacy-dist.zip",
-        GENERIC_LEGACY_DIR
-      ),
+      compressPublish({
+        sourceDirectory: GENERIC_DIR,
+        targetFile: `pdfjs-${version}-dist.zip`,
+        modifiedTime: lastCommitDate,
+      }),
+      compressPublish({
+        sourceDirectory: GENERIC_LEGACY_DIR,
+        targetFile: `pdfjs-${version}-legacy-dist.zip`,
+        modifiedTime: lastCommitDate,
+      }),
     ]);
   })
 );
@@ -2099,8 +2099,19 @@ gulp.task(
       console.log();
       console.log("### Starting local server");
 
+      let port = 8888;
+      const i = process.argv.indexOf("--port");
+      if (i >= 0 && i + 1 < process.argv.length) {
+        const p = parseInt(process.argv[i + 1], 10);
+        if (!isNaN(p)) {
+          port = p;
+        } else {
+          console.error("Invalid port number: using default (8888)");
+        }
+      }
+
       const { WebServer } = await import("./test/webserver.mjs");
-      const server = new WebServer({ port: 8888 });
+      const server = new WebServer({ port });
       server.start();
     }
   )

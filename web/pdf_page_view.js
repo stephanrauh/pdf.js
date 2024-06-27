@@ -34,9 +34,9 @@ import {
 import {
   approximateFraction,
   DEFAULT_SCALE,
+  floorToDivide,
   OutputScale,
   RenderingStates,
-  roundToDivide,
   TextLayerMode,
 } from "./ui_utils.js";
 import { AnnotationEditorLayerBuilder } from "./annotation_editor_layer_builder.js";
@@ -1019,8 +1019,8 @@ class PDFPageView {
     const sfy = approximateFraction(outputScale.sy);
 
     // modified by ngx-extended-pdf-viewer #387, #1095
-    width = roundToDivide(width * outputScale.sx, sfx[0]);
-    height = roundToDivide(height * outputScale.sy, sfy[0]);
+    width = floorToDivide(width * outputScale.sx, sfx[0]);
+    height = floorToDivide(height * outputScale.sy, sfy[0]);
     let divisor = 1;
     if (width >= 4096 || height >= 4096) {
       if (!!this.maxWidth || !canvasSize.test({ width, height })) {
@@ -1039,11 +1039,11 @@ class PDFPageView {
       }
     }
     // end of modification
-    canvas.width = roundToDivide(viewport.width * outputScale.sx, sfx[0]);
-    canvas.height = roundToDivide(viewport.height * outputScale.sy, sfy[0]);
+    canvas.width = floorToDivide(viewport.width * outputScale.sx, sfx[0]);
+    canvas.height = floorToDivide(viewport.height * outputScale.sy, sfy[0]);
     const { style } = canvas;
-    style.width = roundToDivide(viewport.width, sfx[1]) + "px";
-    style.height = roundToDivide(viewport.height, sfy[1]) + "px";
+    style.width = floorToDivide(viewport.width, sfx[1]) + "px";
+    style.height = floorToDivide(viewport.height, sfy[1]) + "px";
 
     // Add the viewport so it's known what it was originally drawn with.
     this.#viewportMap.set(canvas, viewport);

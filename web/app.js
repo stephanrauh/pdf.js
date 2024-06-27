@@ -58,7 +58,7 @@ import {
 } from "pdfjs-lib";
 import { ngxExtendedPdfViewerVersion } from "./ngx-extended-pdf-viewer-version.js";
 import { AppOptions, OptionKind } from "./app_options.js";
-import { AutomationEventBus, EventBus } from "./event_utils.js";
+import { EventBus, FirefoxEventBus } from "./event_utils.js";
 import { ExternalServices, initCom, MLManager } from "web-external_services";
 import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
 import { AltTextManager } from "web-alt_text_manager";
@@ -157,6 +157,7 @@ const PDFViewerApplication = {
   isViewerEmbedded: window.parent !== window,
   url: "",
   baseUrl: "",
+  _allowedGlobalEventsPromise: null,
   _downloadUrl: "",
   _eventBusAbortController: null,
   _windowAbortController: null,
@@ -187,6 +188,10 @@ const PDFViewerApplication = {
     // initialize the `L10n`-instance as soon as possible.
     if (typeof PDFJSDev !== "undefined" && !PDFJSDev.test("GENERIC")) {
       l10nPromise = this.externalServices.createL10n();
+      if (PDFJSDev.test("MOZCENTRAL")) {
+        this._allowedGlobalEventsPromise =
+          this.externalServices.getGlobalEventNames();
+      }
     }
     this.appConfig = appConfig;
 
@@ -381,6 +386,12 @@ const PDFViewerApplication = {
           params.get("supportscaretbrowsingmode") === "true"
         );
       }
+      if (params.has("spreadmodeonload")) {
+        AppOptions.set(
+          "spreadModeOnLoad",
+          parseInt(params.get("spreadmodeonload"))
+        );
+      }
     }
   },
 
@@ -389,10 +400,17 @@ const PDFViewerApplication = {
    */
   async _initializeViewerComponents() {
     const { appConfig, externalServices, l10n } = this;
-
-    const eventBus = AppOptions.get("isInAutomation")
-      ? new AutomationEventBus()
-      : new EventBus();
+    let eventBus;
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+      eventBus = new FirefoxEventBus(
+        await this._allowedGlobalEventsPromise,
+        externalServices,
+        AppOptions.get("isInAutomation")
+      );
+      this._allowedGlobalEventsPromise = null;
+    } else {
+      eventBus = new EventBus();
+    }
     this.eventBus = eventBus;
 
     this.overlayManager = new OverlayManager();
@@ -998,7 +1016,8 @@ const PDFViewerApplication = {
       return;
     }
     if (
-      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+      (typeof PDFJSDev === "undefined" ||
+        PDFJSDev.test("GENERIC && !TESTING")) &&
       this.pdfDocument?.annotationStorage.size > 0 &&
       this._annotationStorageModified
     ) {
@@ -1173,22 +1192,12 @@ const PDFViewerApplication = {
     });
   },
 
-  /**
-   * @private
-   */
-  _ensureDownloadComplete() {
-    if (this.pdfDocument && this.downloadComplete) {
-      return;
-    }
-    throw new Error("PDF document not downloaded.");
-  },
-
   async download(options = {}) {
     let data;
     try {
-      this._ensureDownloadComplete();
-
-      data = await this.pdfDocument.getData();
+      if (this.downloadComplete) {
+        data = await this.pdfDocument.getData();
+      }
     } catch {
       // When the PDF document isn't ready, or the PDF file is still
       // downloading, simply download using the URL.
@@ -1209,8 +1218,6 @@ const PDFViewerApplication = {
     await this.pdfScriptingManager.dispatchWillSave();
 
     try {
-      this._ensureDownloadComplete();
-
       const data = await this.pdfDocument.saveDocument();
       this.downloadManager.download(
         data,
@@ -1219,8 +1226,7 @@ const PDFViewerApplication = {
         options
       );
     } catch (reason) {
-      // When the PDF document isn't ready, or the PDF file is still
-      // downloading, simply fallback to a "regular" download.
+      // When the PDF document isn't ready, fallback to a "regular" download.
       globalThis.ngxConsole.error(`Error when saving the document: ${reason.message}`);
       await this.download(options);
     } finally {
@@ -2286,10 +2292,21 @@ const PDFViewerApplication = {
   unbindWindowEvents() {
     this._windowAbortController?.abort();
     this._windowAbortController = null;
-    if (AppOptions.get("isInAutomation")) {
-      this._globalAbortController?.abort();
-      this._globalAbortController = null;
-    }
+  },
+
+  /**
+   * @ignore
+   */
+  async testingClose() {
+    this.unbindEvents();
+    this.unbindWindowEvents();
+
+    this._globalAbortController?.abort();
+    this._globalAbortController = null;
+
+    this.findBar?.close();
+
+    await Promise.all([this.l10n?.destroy(), this.close()]);
   },
 
   _accumulateTicks(ticks, prop) {
@@ -2707,6 +2724,7 @@ function webViewerUpdateFindMatchesCount({ matchesCount }) {
 function webViewerUpdateFindControlState({
   state,
   previous,
+  entireWord,
   matchesCount,
   rawQuery,
 }) {
@@ -2714,6 +2732,7 @@ function webViewerUpdateFindControlState({
     PDFViewerApplication.externalServices.updateFindControlState({
       result: state,
       findPrevious: previous,
+      entireWord,
       matchesCount,
       rawQuery,
     });
