@@ -324,7 +324,7 @@ class PDFPrintService {
 }
 
 const print = window.print;
-window.printPDF = function printPdf() {
+function printPdf() {
   if (!PDFViewerApplication.enablePrint) {
     return;
   }
@@ -376,7 +376,7 @@ window.printPDF = function printPdf() {
         }
       });
   }
-};
+}
 
 function dispatchEvent(eventType) {
   const event = new CustomEvent(eventType, {
@@ -493,4 +493,4 @@ class PDFPrintServiceFactory {
   }
 }
 
-export { PDFPrintServiceFactory };
+export { PDFPrintServiceFactory, printPdf };

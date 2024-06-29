@@ -3433,15 +3433,13 @@ class InternalRenderTask {
   }
 
   _scheduleNext() {
-    window.ngxZone.runOutsideAngular(() => {
-      if (this._useRequestAnimationFrame) {
-        window.requestAnimationFrame(() => {
-          this._nextBound().catch(this._cancelBound);
-        });
-      } else {
-        Promise.resolve().then(this._nextBound).catch(this._cancelBound);
-      }
-    });
+    if (this._useRequestAnimationFrame) {
+      window.requestAnimationFrame(() => {
+        this._nextBound().catch(this._cancelBound);
+      });
+    } else {
+      Promise.resolve().then(this._nextBound).catch(this._cancelBound);
+    }
   }
 
   async _next() {
