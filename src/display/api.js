@@ -3432,7 +3432,6 @@ class InternalRenderTask {
   }
 
   _scheduleNext() {
-  	window.ngxZone.runOutsideAngular(() => {
 	    if (this._useRequestAnimationFrame) {
 	      this.#rAF = window.requestAnimationFrame(() => {
 	        this.#rAF = null;
@@ -3441,7 +3440,6 @@ class InternalRenderTask {
 	    } else {
 	      Promise.resolve().then(this._nextBound).catch(this._cancelBound);
 	    }
-	});    
   }
 
   async _next() {

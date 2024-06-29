@@ -720,9 +720,7 @@ const animationStarted = new Promise(function (resolve) {
     setTimeout(resolve, 20);
     return;
   }
-  window.ngxZone.runOutsideAngular(() => {
-    window.requestAnimationFrame(resolve);
-  });
+  window.requestAnimationFrame(resolve);
 });
 
 const docStyle =

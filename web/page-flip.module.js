@@ -1464,7 +1464,6 @@ class Render {
         // detect safari
         const regex = new RegExp('Version\\/[\\d\\.]+.*Safari/');
         this.safari = regex.exec(window.navigator.userAgent) !== null;
-        this.ngxZone = setting.ngxZone; // #2387 modified by ngx-extended-pdf-viewer
     }
     /**
      * Executed when requestAnimationFrame is called. Performs the current animation process and call drawFrame()
@@ -1486,20 +1485,17 @@ class Render {
         this.timer = timer; // modified by ngx-extended-pdf-viewer
         this.drawFrame(); // modified by ngx-extended-pdf-viewer
     }
+
     /**
      * Running requestAnimationFrame, and rendering process
      */
     start() {
-        this.update();
-        const loop = (timer) => {
-          this.ngxZone?.runOutsideAngular(() => { // #2387 modified by ngx-extended-pdf-viewer
-            this.render(timer);
-            requestAnimationFrame(loop);
-          });
-        };
-        this.ngxZone?.runOutsideAngular(() => { // #2387 modified by ngx-extended-pdf-viewer
+      this.update();
+      const loop = (timer) => {
+          this.render(timer);
           requestAnimationFrame(loop);
-        });
+      };
+      requestAnimationFrame(loop);
     }
     /**
      * Start a new animation process
@@ -2661,17 +2657,18 @@ class PageFlip extends EventObject {
         this.setting = new Settings().getSettings(setting);
         this.block = inBlock;
     }
+
     /**
      * Destructor. Remove a root HTML element and all event handlers
      */
     destroy() {
-        this.render.ngxZone = undefined; // #2387 modified by ngx-extended-pdf-viewer
         this.ui.destroy();
         this.render = undefined; // #2387 modified by ngx-extended-pdf-viewer
         // #1415 modified by ngx-extended-pdf-viewer
         // this.block.remove(); // this would remove the viewer div
         // #1415 end of modification by ngx-extended-pdf-viewer
     }
+
     /**
      * Update the render area. Re-show current page.
      */
