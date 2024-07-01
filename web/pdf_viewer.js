@@ -371,6 +371,13 @@ class PDFViewer {
     }
   }
 
+  // #2337 modified by ngx-extended-pdf-viewer:
+  // allow textlayer to be activated in an existing viewer
+  setTextLayerMode(mode) {
+    this.#textLayerMode = mode;
+  }
+  // #2337 end of modification by ngx-extended-pdf-viewer
+
   // #1989 modified by ngx-extended-pdf-viewer
   // to ensure rendering in infinite-scroll-mode
 
