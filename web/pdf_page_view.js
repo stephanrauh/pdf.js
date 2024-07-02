@@ -121,6 +121,8 @@ class PDFPageView {
 
   #hasRestrictedScaling = false;
 
+  #isEditing = false;
+
   #layerProperties = null;
 
   #loadingId = null;
@@ -356,6 +358,10 @@ class PDFPageView {
     this.pdfPage?.cleanup();
   }
 
+  hasEditableAnnotations() {
+    return !!this.annotationLayer?.hasEditableAnnotations();
+  }
+
   get _textHighlighter() {
     return shadow(
       this,
@@ -582,6 +588,20 @@ class PDFPageView {
       }
       this._resetZoomLayer();
     }
+  }
+
+  toggleEditingMode(isEditing) {
+    if (!this.hasEditableAnnotations()) {
+      return;
+    }
+    this.#isEditing = isEditing;
+    this.reset({
+      keepZoomLayer: true,
+      keepAnnotationLayer: true,
+      keepAnnotationEditorLayer: true,
+      keepXfaLayer: true,
+      keepTextLayer: true,
+    });
   }
 
   /**
@@ -1060,6 +1080,7 @@ class PDFPageView {
       optionalContentConfigPromise: this._optionalContentConfigPromise,
       annotationCanvasMap: this._annotationCanvasMap,
       pageColors,
+      isEditing: this.#isEditing,
     };
     const renderTask = (this.renderTask = pdfPage.render(renderContext));
     renderTask.onContinue = renderContinueCallback;

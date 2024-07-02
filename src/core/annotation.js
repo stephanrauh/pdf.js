@@ -688,6 +688,7 @@ class Annotation {
       hasOwnCanvas: false,
       noRotate: !!(this.flags & AnnotationFlag.NOROTATE),
       noHTML: isLocked && isContentLocked,
+      isEditable: false,
     };
 
     if (params.collectFields) {
@@ -782,6 +783,10 @@ class Annotation {
       return !noPrint;
     }
     return this.printable;
+  }
+
+  mustBeViewedWhenEditing() {
+    return !this.data.isEditable;
   }
 
   /**
@@ -3825,7 +3830,8 @@ class FreeTextAnnotation extends MarkupAnnotation {
     // It uses its own canvas in order to be hidden if edited.
     // But if it has the noHTML flag, it means that we don't want to be able
     // to modify it so we can just draw it on the main canvas.
-    this.data.hasOwnCanvas = !this.data.noHTML;
+    this.data.hasOwnCanvas = this.data.noRotate;
+    this.data.isEditable = !this.data.noHTML;
     // We want to be able to add mouse listeners to the annotation.
     this.data.noHTML = false;
 

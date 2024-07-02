@@ -198,6 +198,10 @@ class AnnotationElement {
     return !!(titleObj?.str || contentsObj?.str || richText?.str);
   }
 
+  get _isEditable() {
+    return this.data.isEditable;
+  }
+
   get hasPopupData() {
     return AnnotationElement._hasPopupData(this.data);
   }
@@ -732,10 +736,6 @@ class AnnotationElement {
     } else {
       triggers.classList.add("highlightArea");
     }
-  }
-
-  get _isEditable() {
-    return false;
   }
 
   _editOnDoubleClick() {
@@ -2662,10 +2662,6 @@ class FreeTextAnnotationElement extends AnnotationElement {
 
     return this.container;
   }
-
-  get _isEditable() {
-    return this.data.hasOwnCanvas;
-  }
 }
 
 class LineAnnotationElement extends AnnotationElement {
@@ -3239,6 +3235,10 @@ class AnnotationLayer {
     }
   }
 
+  hasEditableAnnotations() {
+    return this.#editableAnnotations.size > 0;
+  }
+
   #appendElement(element, id) {
     const contentElement = element.firstChild || element;
     contentElement.id = `${AnnotationPrefix}${id}`;
@@ -3320,7 +3320,7 @@ class AnnotationLayer {
       }
       this.#appendElement(rendered, data.id);
 
-      if (element.annotationEditorType > 0) {
+      if (element._isEditable) {
         this.#editableAnnotations.set(element.data.id, element);
         this._annotationEditorUIManager?.renderAnnotationElement(element);
       }
