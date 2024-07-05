@@ -194,6 +194,7 @@ function createWebpackAlias(defines) {
     "pdfjs-lib": "web/pdfjs",
     "fluent-bundle": "node_modules/@fluent/bundle/esm/index.js",
     "fluent-dom": "node_modules/@fluent/dom/esm/index.js",
+    "canvas-size": "node_modules/canvas-size/dist/canvas-size.esm",
   };
   const libraryAlias = {
     "display-fetch_stream": "src/display/stubs.js",
@@ -339,6 +340,7 @@ function createWebpackConfig(
 
   // Required to expose e.g., the `window` object.
   output.globalObject = "globalThis";
+  console.log("Aliases: ", alias);
 
   return {
     mode: "production",
@@ -1587,6 +1589,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       "display-node_utils": "./node_utils.js",
       "fluent-bundle": "../../../node_modules/@fluent/bundle/esm/index.js",
       "fluent-dom": "../../../node_modules/@fluent/dom/esm/index.js",
+      "canvas-size": "../../../node_modules/canvas-size/dist/canvas-size.esm",
       "web-null_l10n": "../web/genericl10n.js",
     },
   };
