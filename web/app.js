@@ -1970,7 +1970,7 @@ const PDFViewerApplication = {
     if (this.printService) {
       // There is no way to suppress beforePrint/afterPrint events,
       // but PDFPrintService may generate double events -- this will ignore
-      // the second event that will be coming from native window.printPDF().
+      // the second event that will be coming from native this.printPDF().
       return;
     }
 
@@ -2047,7 +2047,9 @@ const PDFViewerApplication = {
     if (!this.supportsPrinting) {
       return;
     }
-    window.printPDF();
+    // #2337 modified by ngx-extended-pdf-viewer
+    this.printPdf();
+    // #2337 end of modification by ngx-extended-pdf-viewer
   },
 
   bindEvents() {
@@ -2825,10 +2827,11 @@ function webViewerWheel(evt) {
     (evt.shiftKey ? 4 : 0) |
     (evt.metaKey ? 8 : 0);
 
-  if (window.isKeyIgnored && window.isKeyIgnored(cmd, "WHEEL")) {
+  // #1302 / #2337 modified by ngx-extended-pdf-viewer
+  if (PDFViewerApplication?.isKeyIgnored && PDFViewerApplication.isKeyIgnored(cmd, "WHEEL")) {
     return;
   }
-
+  // #1302 / #2337 end of modification by ngx-extended-pdf-viewer
 
   // Pinch-to-zoom on a trackpad maps to a wheel event with ctrlKey set to true
   // https://developer.mozilla.org/en-US/docs/Web/API/WheelEvent#browser_compatibility
@@ -3103,8 +3106,10 @@ function webViewerKeyDown(evt) {
     (evt.metaKey ? 8 : 0);
 
   // modified by ngx-extended-pdf-viewer
-  if (window.isKeyIgnored && window.isKeyIgnored(cmd, evt.keyCode)) {
-    return;
+  if (PDFViewerApplication.ngxKeyboardManager) {
+    if (PDFViewerApplication.ngxKeyboardManager.isKeyIgnored.bind(PDFViewerApplication.ngxKeyboardManager)(cmd, evt.keyCode)) {
+      return;
+    }
   }
   // end of modification by ngx-extended-pdf-viewer
 
