@@ -42,6 +42,15 @@ class OverlayManager {
     });
   }
 
+  // #2337 modified by ngx-extended-pdf-viewer
+  unregister(dialog) {
+    if (!this.#overlays.has(dialog)) {
+      throw new Error("The overlay does not exist.");
+    }
+    this.#overlays.delete(dialog);
+  }
+  // #2337 end of modification by ngx-extended-pdf-viewer
+
   /**
    * @param {HTMLDialogElement} dialog - The overlay's DOM element.
    * @returns {Promise} A promise that is resolved when the overlay has been

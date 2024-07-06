@@ -200,6 +200,10 @@ class PDFPrintService {
     ensureOverlay().then(function () {
       if (overlayManager.active === dialog) {
         overlayManager.close(dialog);
+        // #2337 modified by ngx-extended-pdf-viewer
+        overlayManager.unregister(dialog);
+        overlayPromise = undefined;
+        // #2337 end of modification by ngx-extended-pdf-viewer
       }
     });
   }
@@ -329,7 +333,7 @@ function printPdf() {
     return;
   }
   if (activeService) {
-    globalThis.ngxConsole.warn("Ignored window.printPDF() because of a pending print job.");
+    globalThis.ngxConsole.warn("Ignored this.printPDF() because of a pending print job.");
     return;
   }
   ensureOverlay().then(function () {

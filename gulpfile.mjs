@@ -340,7 +340,6 @@ function createWebpackConfig(
 
   // Required to expose e.g., the `window` object.
   output.globalObject = "globalThis";
-  console.log("Aliases: ", alias);
 
   return {
     mode: "production",
