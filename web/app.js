@@ -762,9 +762,9 @@ const PDFViewerApplication = {
 
     if (!this.supportsFullscreen) {
       appConfig.toolbar.presentationModeButton.classList.add("hidden"); // #1807 modified by ngx-extended-pdf-viewer
-      appConfig.secondaryToolbar?.presentationModeButton.classList.add(
+      appConfig.secondaryToolbar?.presentationModeButton?.classList.add(
         "hidden"
-      );
+      ); // modified by ngx-extended-pdf-viewer
     }
 
     if (this.supportsIntegratedFind) {
@@ -998,7 +998,7 @@ const PDFViewerApplication = {
     secondaryToolbar?.viewBookmarkButton.classList.add("hidden");
 
     // Avoid displaying multiple consecutive separators in the secondaryToolbar.
-    if (secondaryToolbar?.presentationModeButton.classList.contains("hidden")) {
+    if (secondaryToolbar?.presentationModeButton?.classList.contains("hidden")) {
       document.getElementById("viewBookmarkSeparator")?.classList.add("hidden");
     }
   },

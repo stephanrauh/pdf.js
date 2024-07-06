@@ -456,10 +456,12 @@ function createValidAbsoluteUrl(url, baseUrl = null, options = null) {
 
 function shadow(obj, prop, value, nonSerializable = false) {
   if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-    assert(
-      prop in obj,
-      `shadow: Property "${prop && prop.toString()}" not found in object.`
-    );
+    if (!globalThis.STANDALONE_VIEWER) {
+      assert(
+        prop in obj,
+        `shadow: Property "${prop && prop.toString()}" not found in object.`
+      );
+    }
   }
   Object.defineProperty(obj, prop, {
     value,
