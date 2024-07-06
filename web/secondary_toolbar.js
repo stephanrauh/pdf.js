@@ -211,6 +211,8 @@ class SecondaryToolbar {
 
     // All items within the secondary toolbar.
     for (const { element, eventName, close, eventDetails } of buttons) {
+      // modified by ngx-extended-pdf-viewer
+      if (!element) continue;
       element.addEventListener("click", evt => {
         if (eventName !== null) {
           eventBus.dispatch(eventName, { source: this, ...eventDetails });

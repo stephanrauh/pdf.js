@@ -242,4 +242,16 @@ function webViewerLoad() {
 // works in Firefox; see https://bugzilla.mozilla.org/show_bug.cgi?id=1618553
 document.blockUnblockOnload?.(true);
 
+//  modified by ngx-extended-pdf-viewer
+if (globalThis.STANDALONE_VIEWER) {
+  if (
+    document.readyState === "interactive" ||
+    document.readyState === "complete"
+  ) {
+    webViewerLoad();
+  } else {
+    document.addEventListener("DOMContentLoaded", webViewerLoad, true);
+  }
+}
+
 export { PDFViewerApplication, AppConstants as PDFViewerApplicationConstants, AppOptions as PDFViewerApplicationOptions, webViewerLoad };

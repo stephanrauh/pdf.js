@@ -57,6 +57,7 @@ See https://github.com/adobe-type-tools/cmap-resources
           "pdfjs/": "../src/",
           "pdfjs-lib": "../src/pdf.js",
           "pdfjs-web/": "./",
+          "canvas-size": "../node_modules/canvas-size/dist/canvas-size.esm.js",
 
           "fluent-bundle": "../node_modules/@fluent/bundle/esm/index.js",
           "fluent-dom": "../node_modules/@fluent/dom/esm/index.js",
@@ -87,6 +88,11 @@ See https://github.com/adobe-type-tools/cmap-resources
           "web-toolbar": "./toolbar.js"
         }
       }
+    </script>
+    <!-- modified by ngx-extended-pdf-viewer -->
+    <script>
+      this.STANDALONE_VIEWER = true;
+      this.ngxConsole = console;
     </script>
     <script src="viewer.js" type="module"></script>
 <!--#endif-->
