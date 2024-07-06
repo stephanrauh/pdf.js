@@ -197,15 +197,17 @@ class PDFPrintService {
     this.scratchCanvas.width = this.scratchCanvas.height = 0;
     this.scratchCanvas = null;
     activeService = null;
-    ensureOverlay().then(function () {
-      if (overlayManager.active === dialog) {
+    // #2337 modified by ngx-extended-pdf-viewer
+    // ensureOverlay().then(function () {
+    if (overlayManager.active === dialog) {
+        // #2337 end of modification by ngx-extended-pdf-viewer
         overlayManager.close(dialog);
         // #2337 modified by ngx-extended-pdf-viewer
         overlayManager.unregister(dialog);
         overlayPromise = undefined;
-        // #2337 end of modification by ngx-extended-pdf-viewer
-      }
-    });
+       }
+    // });
+    // #2337 end of modification by ngx-extended-pdf-viewer
   }
 
   renderPages() {
