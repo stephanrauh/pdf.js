@@ -253,5 +253,6 @@ if (globalThis.STANDALONE_VIEWER) {
     document.addEventListener("DOMContentLoaded", webViewerLoad, true);
   }
 }
+// end of modification by ngx-extended-pdf-viewer
 
 export { PDFViewerApplication, AppConstants as PDFViewerApplicationConstants, AppOptions as PDFViewerApplicationOptions, webViewerLoad };
