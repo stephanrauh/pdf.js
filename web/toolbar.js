@@ -206,7 +206,10 @@ class Toolbar {
     // The buttons within the toolbar.
     for (const { element, eventName, eventDetails } of buttons) {
       // modified by ngx-extended-pdf-viewer
-      if (!element) continue;
+      if (!element) {
+        continue;
+      }
+      // end of modification by ngx-extended-pdf-viewer
       element.addEventListener("click", evt => {
         if (eventName !== null) {
           eventBus.dispatch(eventName, {

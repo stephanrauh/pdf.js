@@ -456,12 +456,14 @@ function createValidAbsoluteUrl(url, baseUrl = null, options = null) {
 
 function shadow(obj, prop, value, nonSerializable = false) {
   if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+    // modified by ngx-extended-pdf-viewer
     if (!globalThis.STANDALONE_VIEWER) {
       assert(
         prop in obj,
         `shadow: Property "${prop && prop.toString()}" not found in object.`
       );
     }
+    // end of modification by ngx-extended-pdf-viewer
   }
   Object.defineProperty(obj, prop, {
     value,
