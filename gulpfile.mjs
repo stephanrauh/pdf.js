@@ -194,7 +194,9 @@ function createWebpackAlias(defines) {
     "pdfjs-lib": "web/pdfjs",
     "fluent-bundle": "node_modules/@fluent/bundle/esm/index.js",
     "fluent-dom": "node_modules/@fluent/dom/esm/index.js",
-    "canvas-size": "node_modules/canvas-size/dist/canvas-size.esm",
+    // modified by ngx-extended-pdf-viewer
+    "canvas-size": "node_modules/canvas-size/dist/canvas-size.esm.js",
+    // end of modification by ngx-extended-pdf-viewer
   };
   const libraryAlias = {
     "display-fetch_stream": "src/display/stubs.js",
@@ -220,7 +222,7 @@ function createWebpackAlias(defines) {
     "web-preferences": "",
     "web-print_service": "",
     "web-secondary_toolbar": "web/secondary_toolbar.js",
-    "web-toolbar": "web/toolbar.js",
+    "web-toolbar": "web/toolbar.js"
   };
 
   if (defines.CHROME) {
@@ -1588,7 +1590,9 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       "display-node_utils": "./node_utils.js",
       "fluent-bundle": "../../../node_modules/@fluent/bundle/esm/index.js",
       "fluent-dom": "../../../node_modules/@fluent/dom/esm/index.js",
-      "canvas-size": "../../../node_modules/canvas-size/dist/canvas-size.esm",
+      // modified by ngx-extended-pdf-viewer
+      "canvas-size": "../../../node_modules/canvas-size/dist/canvas-size.esm.js",
+      // end of modification by ngx-extended-pdf-viewer
       "web-null_l10n": "../web/genericl10n.js",
     },
   };
