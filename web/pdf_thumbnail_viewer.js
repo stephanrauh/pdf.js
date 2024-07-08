@@ -73,13 +73,13 @@ class PDFThumbnailViewer {
 
     this.scroll = watchScroll(
       this.container,
-      this.__scrollUpdated.bind(this),
+      this.#scrollUpdated.bind(this),
       abortSignal
     );
-    this.__resetView();
+    this.#resetView();
   }
 
-  __scrollUpdated() {
+  #scrollUpdated() {
     this.renderingQueue.renderHighestPriority();
   }
 
@@ -87,7 +87,7 @@ class PDFThumbnailViewer {
     return this._thumbnails[index];
   }
 
-  __getVisibleThumbs() {
+  #getVisibleThumbs() {
     return getVisibleElements({
       scrollEl: this.container,
       views: this._thumbnails,
@@ -112,7 +112,7 @@ class PDFThumbnailViewer {
       // ... and add the highlight to the new thumbnail.
       thumbnailView.div.classList.add(THUMBNAIL_SELECTED_CLASS);
     }
-    const { first, last, views } = this.__getVisibleThumbs();
+    const { first, last, views } = this.#getVisibleThumbs();
 
     // If the thumbnail isn't currently visible, scroll it into view.
     if (views.length > 0) {
@@ -167,7 +167,7 @@ class PDFThumbnailViewer {
     TempImageFactory.destroyCanvas();
   }
 
-  __resetView() {
+  #resetView() {
     this._thumbnails = [];
     this._currentPageNumber = 1;
     this._pageLabels = null;
@@ -183,8 +183,8 @@ class PDFThumbnailViewer {
   setDocument(pdfDocument) {
     this.initialized = false; // #1055 ngx-extended-pdf-viewer
     if (this.pdfDocument) {
-      this.__cancelRendering();
-      this.__resetView();
+      this.#cancelRendering();
+      this.#resetView();
     }
 
     this.pdfDocument = pdfDocument;
@@ -234,7 +234,7 @@ class PDFThumbnailViewer {
       });
   }
 
-  __cancelRendering() {
+  #cancelRendering() {
     for (const thumbnail of this._thumbnails) {
       thumbnail.cancelRendering();
     }
@@ -267,7 +267,7 @@ class PDFThumbnailViewer {
    * @param {PDFThumbnailView} thumbView
    * @returns {Promise<PDFPageProxy | null>}
    */
-  async __ensurePdfPageLoaded(thumbView) {
+  async #ensurePdfPageLoaded(thumbView) {
     if (thumbView.pdfPage) {
       return thumbView.pdfPage;
     }
@@ -283,7 +283,7 @@ class PDFThumbnailViewer {
     }
   }
 
-  __getScrollAhead(visible) {
+  #getScrollAhead(visible) {
     if (visible.first?.id === 1) {
       return true;
     } else if (visible.last?.id === this._thumbnails.length) {
@@ -293,15 +293,15 @@ class PDFThumbnailViewer {
   }
 
   forceRendering() {
-    const visibleThumbs = this.__getVisibleThumbs();
-    const scrollAhead = this.__getScrollAhead(visibleThumbs);
+    const visibleThumbs = this.#getVisibleThumbs();
+    const scrollAhead = this.#getScrollAhead(visibleThumbs);
     const thumbView = this.renderingQueue.getHighestPriority(
       visibleThumbs,
       this._thumbnails,
       scrollAhead
     );
     if (thumbView) {
-      this.__ensurePdfPageLoaded(thumbView).then(() => {
+      this.#ensurePdfPageLoaded(thumbView).then(() => {
         this.renderingQueue.renderView(thumbView);
       });
       return true;
@@ -312,7 +312,7 @@ class PDFThumbnailViewer {
   // #1415 modified by ngx-extended-pdf-viewer
   stopRendering() {
     // this.renderingQueue._stop();
-    this.__cancelRendering();
+    this.#cancelRendering();
   }
   // #1415 end of modification by ngx-extended-pdf-viewer
 }

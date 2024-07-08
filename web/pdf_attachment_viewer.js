@@ -43,7 +43,7 @@ class PDFAttachmentViewer extends BaseTreeViewer {
 
     this.eventBus._on(
       "fileattachmentannotation",
-      this.__appendAttachment.bind(this)
+      this.#appendAttachment.bind(this)
     );
   }
 
@@ -141,7 +141,7 @@ class PDFAttachmentViewer extends BaseTreeViewer {
   /**
    * Used to append FileAttachment annotations to the sidebar.
    */
-  __appendAttachment(item) {
+  #appendAttachment(item) {
     const renderedPromise = this._renderedCapability.promise;
 
     renderedPromise.then(() => {

@@ -40,15 +40,15 @@ import { GenericL10n } from "web-null_l10n";
  */
 
 class AnnotationEditorLayerBuilder {
-  __annotationLayer = null;
+  #annotationLayer = null;
 
-  __drawLayer = null;
+  #drawLayer = null;
 
-  __onAppend = null;
+  #onAppend = null;
 
-  __textLayer = null;
+  #textLayer = null;
 
-  __uiManager;
+  #uiManager;
 
   /**
    * @param {AnnotationEditorLayerBuilderOptions} options
@@ -63,11 +63,11 @@ class AnnotationEditorLayerBuilder {
     this.annotationEditorLayer = null;
     this.div = null;
     this._cancelled = false;
-    this.__uiManager = options.uiManager;
-    this.__annotationLayer = options.annotationLayer || null;
-    this.__textLayer = options.textLayer || null;
-    this.__drawLayer = options.drawLayer || null;
-    this.__onAppend = options.onAppend || null;
+    this.#uiManager = options.uiManager;
+    this.#annotationLayer = options.annotationLayer || null;
+    this.#textLayer = options.textLayer || null;
+    this.#drawLayer = options.drawLayer || null;
+    this.#onAppend = options.onAppend || null;
     this.eventBus = options.eventBus; // #2256 modified by ngx-extended-pdf-viewer
   }
 
@@ -95,19 +95,19 @@ class AnnotationEditorLayerBuilder {
     const div = (this.div = document.createElement("div"));
     div.className = "annotationEditorLayer";
     div.hidden = true;
-    div.dir = this.__uiManager.direction;
-    this.__onAppend?.(div);
+    div.dir = this.#uiManager.direction;
+    this.#onAppend?.(div);
 
     this.annotationEditorLayer = new AnnotationEditorLayer({
-      uiManager: this.__uiManager,
+      uiManager: this.#uiManager,
       div,
       accessibilityManager: this.accessibilityManager,
       pageIndex: this.pdfPage.pageNumber - 1,
       l10n: this.l10n,
       viewport: clonedViewport,
-      annotationLayer: this.__annotationLayer,
-      textLayer: this.__textLayer,
-      drawLayer: this.__drawLayer,
+      annotationLayer: this.#annotationLayer,
+      textLayer: this.#textLayer,
+      drawLayer: this.#drawLayer,
       eventBus: this.eventBus, // modified by ngx-extended-pdf-viewer #2256
     });
 

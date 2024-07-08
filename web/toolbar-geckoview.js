@@ -21,9 +21,9 @@
  */
 
 class Toolbar {
-  __buttons;
+  #buttons;
 
-  __eventBus;
+  #eventBus;
 
   /**
    * @param {ToolbarOptions} options
@@ -31,7 +31,7 @@ class Toolbar {
    * @param {Object} nimbusData - Nimbus configuration.
    */
   constructor(options, eventBus, nimbusData) {
-    this.__eventBus = eventBus;
+    this.#eventBus = eventBus;
     const buttons = [
       {
         element: options.download,
@@ -41,15 +41,15 @@ class Toolbar {
     ];
 
     if (nimbusData) {
-      this.__buttons = [];
+      this.#buttons = [];
       for (const button of buttons) {
         if (nimbusData[button.nimbusName]) {
-          this.__buttons.push(button);
+          this.#buttons.push(button);
         } else {
           button.element.remove();
         }
       }
-      if (this.__buttons.length > 0) {
+      if (this.#buttons.length > 0) {
         options.container.classList.add("show");
       } else {
         options.container.remove();
@@ -57,11 +57,11 @@ class Toolbar {
       }
     } else {
       options.container.classList.add("show");
-      this.__buttons = buttons;
+      this.#buttons = buttons;
     }
 
     // Bind the event listeners for click and various other actions.
-    this.__bindListeners(options);
+    this.#bindListeners(options);
   }
 
   setPageNumber(pageNumber, pageLabel) {}
@@ -72,9 +72,9 @@ class Toolbar {
 
   reset() {}
 
-  __bindListeners(options) {
+  #bindListeners(options) {
     // The buttons within the toolbar.
-    for (const { element, eventName, eventDetails } of this.__buttons) {
+    for (const { element, eventName, eventDetails } of this.#buttons) {
       // modified by ngx-extended-pdf-viewer
       if (!element) {
         continue;
@@ -82,8 +82,8 @@ class Toolbar {
       // end of modification by ngx-extended-pdf-viewer
       element.addEventListener("click", evt => {
         if (eventName !== null) {
-          this.__eventBus.dispatch(eventName, { source: this, ...eventDetails });
-          this.__eventBus.dispatch("reporttelemetry", {
+          this.#eventBus.dispatch(eventName, { source: this, ...eventDetails });
+          this.#eventBus.dispatch("reporttelemetry", {
             source: this,
             details: {
               type: "gv-buttons",

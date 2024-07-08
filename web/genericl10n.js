@@ -38,11 +38,11 @@ class GenericL10n extends L10n {
     super({ lang });
 
     const generateBundles = !lang
-      ? GenericL10n.__generateBundlesFallback.bind(
+      ? GenericL10n.#generateBundlesFallback.bind(
           GenericL10n,
           this.getLanguage()
         )
-      : GenericL10n.__generateBundles.bind(
+      : GenericL10n.#generateBundles.bind(
           GenericL10n,
           "en-us",
           this.getLanguage()
@@ -56,8 +56,8 @@ class GenericL10n extends L10n {
    *   translations.
    * @param {String} baseLang - The base language to use for translations.
    */
-  static async *__generateBundles(defaultLang, baseLang) {
-    const { baseURL, paths } = await this.__getPaths();
+  static async *#generateBundles(defaultLang, baseLang) {
+    const { baseURL, paths } = await this.#getPaths();
 
     const langs = [baseLang];
     if (defaultLang !== baseLang) {
@@ -71,16 +71,16 @@ class GenericL10n extends L10n {
       langs.push(defaultLang);
     }
     for (const lang of langs) {
-      const bundle = await this.__createBundle(lang, baseURL, paths);
+      const bundle = await this.#createBundle(lang, baseURL, paths);
       if (bundle) {
         yield bundle;
       } else if (lang === "en-us") {
-        yield this.__createBundleFallback(lang);
+        yield this.#createBundleFallback(lang);
       }
     }
   }
 
-  static async __createBundle(lang, baseURL, paths) {
+  static async #createBundle(lang, baseURL, paths) {
     const path = paths[lang];
     if (!path) {
       return null;
@@ -91,7 +91,7 @@ class GenericL10n extends L10n {
     return createBundle(lang, text);
   }
 
-  static async __getPaths() {
+  static async #getPaths() {
     try {
       const { href } = document.querySelector(`link[type="application/l10n"]`);
       const paths = await fetchData(href, /* type = */ "json");
@@ -101,11 +101,11 @@ class GenericL10n extends L10n {
     return { baseURL: "./", paths: Object.create(null) };
   }
 
-  static async *__generateBundlesFallback(lang) {
-    yield this.__createBundleFallback(lang);
+  static async *#generateBundlesFallback(lang) {
+    yield this.#createBundleFallback(lang);
   }
 
-  static async __createBundleFallback(lang) {
+  static async #createBundleFallback(lang) {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
       throw new Error("Not implemented: #createBundleFallback");
     }

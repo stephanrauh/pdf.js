@@ -48,9 +48,9 @@ import { PresentationModeState } from "./ui_utils.js";
  */
 
 class AnnotationLayerBuilder {
-  __onAppend = null;
+  #onAppend = null;
 
-  __eventAbortController = null;
+  #eventAbortController = null;
 
   /**
    * @param {AnnotationLayerBuilderOptions} options
@@ -82,7 +82,7 @@ class AnnotationLayerBuilder {
     this._annotationCanvasMap = annotationCanvasMap;
     this._accessibilityManager = accessibilityManager;
     this._annotationEditorUIManager = annotationEditorUIManager;
-    this.__onAppend = onAppend;
+    this.#onAppend = onAppend;
 
     this.annotationLayer = null;
     this.div = null;
@@ -122,7 +122,7 @@ class AnnotationLayerBuilder {
     // if there is at least one annotation.
     const div = (this.div = document.createElement("div"));
     div.className = "annotationLayer";
-    this.__onAppend?.(div);
+    this.#onAppend?.(div);
 
     if (annotations.length === 0) {
       this.hide();
@@ -153,17 +153,17 @@ class AnnotationLayerBuilder {
     // Ensure that interactive form elements in the annotationLayer are
     // disabled while PresentationMode is active (see issue 12232).
     if (this.linkService.isInPresentationMode) {
-      this.__updatePresentationModeState(PresentationModeState.FULLSCREEN);
+      this.#updatePresentationModeState(PresentationModeState.FULLSCREEN);
     }
-    if (!this.__eventAbortController) {
-      this.__eventAbortController = new AbortController();
+    if (!this.#eventAbortController) {
+      this.#eventAbortController = new AbortController();
 
       this._eventBus?._on(
         "presentationmodechanged",
         evt => {
-          this.__updatePresentationModeState(evt.state);
+          this.#updatePresentationModeState(evt.state);
         },
-        { signal: this.__eventAbortController.signal }
+        { signal: this.#eventAbortController.signal }
       );
     }
   }
@@ -171,8 +171,8 @@ class AnnotationLayerBuilder {
   cancel() {
     this._cancelled = true;
 
-    this.__eventAbortController?.abort();
-    this.__eventAbortController = null;
+    this.#eventAbortController?.abort();
+    this.#eventAbortController = null;
   }
 
   hide() {
@@ -189,7 +189,7 @@ class AnnotationLayerBuilder {
     return !!this.annotationLayer?.hasEditableAnnotations();
   }
 
-  __updatePresentationModeState(state) {
+  #updatePresentationModeState(state) {
     if (!this.div) {
       return;
     }

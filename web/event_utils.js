@@ -68,7 +68,7 @@ async function waitOnEventOrTimeout({ target, name, delay = 0 }) {
  * and `off` methods. To raise an event, the `dispatch` method shall be used.
  */
 class EventBus {
-  __listeners = Object.create(null);
+  #listeners = Object.create(null);
 
   /**
    * @param {string} eventName
@@ -97,7 +97,7 @@ class EventBus {
    * @param {Object} data
    */
   dispatch(eventName, data) {
-    const eventListeners = this.__listeners[eventName];
+    const eventListeners = this.#listeners[eventName];
     if (!eventListeners || eventListeners.length === 0) {
       return;
     }
@@ -141,7 +141,7 @@ class EventBus {
       signal.addEventListener("abort", onAbort);
     }
 
-    const eventListeners = (this.__listeners[eventName] ||= []);
+    const eventListeners = (this.#listeners[eventName] ||= []);
     eventListeners.push({
       listener,
       external: options?.external === true,
@@ -154,7 +154,7 @@ class EventBus {
    * @ignore
    */
   _off(eventName, listener, options = null) {
-    const eventListeners = this.__listeners[eventName];
+    const eventListeners = this.#listeners[eventName];
     if (!eventListeners) {
       return;
     }
@@ -171,8 +171,8 @@ class EventBus {
   destroy() {
     // #2329 modified by ngx-extended-pdf-viewer
     let eventName;
-    for (eventName in this.__listeners) {
-      this.__listeners[eventName].length = 0;
+    for (eventName in this.#listeners) {
+      this.#listeners[eventName].length = 0;
     }
     // #2329 end of modification by ngx-extended-pdf-viewer
   }
@@ -182,17 +182,17 @@ class EventBus {
  * NOTE: Only used in the Firefox build-in pdf viewer.
  */
 class FirefoxEventBus extends EventBus {
-  __externalServices;
+  #externalServices;
 
-  __globalEventNames;
+  #globalEventNames;
 
-  __isInAutomation;
+  #isInAutomation;
 
   constructor(globalEventNames, externalServices, isInAutomation) {
     super();
-    this.__globalEventNames = globalEventNames;
-    this.__externalServices = externalServices;
-    this.__isInAutomation = isInAutomation;
+    this.#globalEventNames = globalEventNames;
+    this.#externalServices = externalServices;
+    this.#isInAutomation = isInAutomation;
   }
 
   dispatch(eventName, data) {
@@ -201,7 +201,7 @@ class FirefoxEventBus extends EventBus {
     }
     super.dispatch(eventName, data);
 
-    if (this.__isInAutomation) {
+    if (this.#isInAutomation) {
       const detail = Object.create(null);
       if (data) {
         for (const key in data) {
@@ -223,8 +223,8 @@ class FirefoxEventBus extends EventBus {
       document.dispatchEvent(event);
     }
 
-    if (this.__globalEventNames?.has(eventName)) {
-      this.__externalServices.dispatchGlobalEvent({
+    if (this.#globalEventNames?.has(eventName)) {
+      this.#externalServices.dispatchGlobalEvent({
         eventName,
         detail: data,
       });

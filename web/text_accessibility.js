@@ -23,16 +23,16 @@ import { binarySearchFirstItem } from "./ui_utils.js";
  *    where the annotations are in the text flow.
  */
 class TextAccessibilityManager {
-  __enabled = false;
+  #enabled = false;
 
-  __textChildren = null;
+  #textChildren = null;
 
-  __textNodes = new Map();
+  #textNodes = new Map();
 
-  __waitingElements = new Map();
+  #waitingElements = new Map();
 
   setTextMapping(textDivs) {
-    this.__textChildren = textDivs;
+    this.#textChildren = textDivs;
   }
 
   /**
@@ -43,7 +43,7 @@ class TextAccessibilityManager {
    * @param {HTMLElement} e2
    * @returns {number}
    */
-  static __compareElementPositions(e1, e2) {
+  static #compareElementPositions(e1, e2) {
     const rect1 = e1.getBoundingClientRect();
     const rect2 = e2.getBoundingClientRect();
 
@@ -81,50 +81,50 @@ class TextAccessibilityManager {
    * Function called when the text layer has finished rendering.
    */
   enable() {
-    if (this.__enabled) {
+    if (this.#enabled) {
       throw new Error("TextAccessibilityManager is already enabled.");
     }
-    if (!this.__textChildren) {
+    if (!this.#textChildren) {
       throw new Error("Text divs and strings have not been set.");
     }
 
-    this.__enabled = true;
-    this.__textChildren = this.__textChildren.slice();
-    this.__textChildren.sort(TextAccessibilityManager.__compareElementPositions);
+    this.#enabled = true;
+    this.#textChildren = this.#textChildren.slice();
+    this.#textChildren.sort(TextAccessibilityManager.#compareElementPositions);
 
-    if (this.__textNodes.size > 0) {
+    if (this.#textNodes.size > 0) {
       // Some links have been made before this manager has been disabled, hence
       // we restore them.
-      const textChildren = this.__textChildren;
-      for (const [id, nodeIndex] of this.__textNodes) {
+      const textChildren = this.#textChildren;
+      for (const [id, nodeIndex] of this.#textNodes) {
         const element = document.getElementById(id);
         if (!element) {
           // If the page was *fully* reset the element no longer exists, and it
           // will be re-inserted later (i.e. when the annotationLayer renders).
-          this.__textNodes.delete(id);
+          this.#textNodes.delete(id);
           continue;
         }
-        this.__addIdToAriaOwns(id, textChildren[nodeIndex]);
+        this.#addIdToAriaOwns(id, textChildren[nodeIndex]);
       }
     }
 
-    for (const [element, isRemovable] of this.__waitingElements) {
+    for (const [element, isRemovable] of this.#waitingElements) {
       this.addPointerInTextLayer(element, isRemovable);
     }
-    this.__waitingElements.clear();
+    this.#waitingElements.clear();
   }
 
   disable() {
-    if (!this.__enabled) {
+    if (!this.#enabled) {
       return;
     }
 
     // Don't clear this.#textNodes which is used to rebuild the aria-owns
     // in case it's re-enabled at some point.
 
-    this.__waitingElements.clear();
-    this.__textChildren = null;
-    this.__enabled = false;
+    this.#waitingElements.clear();
+    this.#textChildren = null;
+    this.#enabled = false;
   }
 
   /**
@@ -132,25 +132,25 @@ class TextAccessibilityManager {
    * @param {HTMLElement} element
    */
   removePointerInTextLayer(element) {
-    if (!this.__enabled) {
-      this.__waitingElements.delete(element);
+    if (!this.#enabled) {
+      this.#waitingElements.delete(element);
       return;
     }
 
-    const children = this.__textChildren;
+    const children = this.#textChildren;
     if (!children || children.length === 0) {
       return;
     }
 
     const { id } = element;
-    const nodeIndex = this.__textNodes.get(id);
+    const nodeIndex = this.#textNodes.get(id);
     if (nodeIndex === undefined) {
       return;
     }
 
     const node = children[nodeIndex];
 
-    this.__textNodes.delete(id);
+    this.#textNodes.delete(id);
     let owns = node.getAttribute("aria-owns");
     if (owns?.includes(id)) {
       owns = owns
@@ -166,7 +166,7 @@ class TextAccessibilityManager {
     }
   }
 
-  __addIdToAriaOwns(id, node) {
+  #addIdToAriaOwns(id, node) {
     const owns = node.getAttribute("aria-owns");
     if (!owns?.includes(id)) {
       node.setAttribute("aria-owns", owns ? `${owns} ${id}` : id);
@@ -187,9 +187,9 @@ class TextAccessibilityManager {
       return null;
     }
 
-    if (!this.__enabled) {
+    if (!this.#enabled) {
       // The text layer needs to be there, so we postpone the association.
-      this.__waitingElements.set(element, isRemovable);
+      this.#waitingElements.set(element, isRemovable);
       return null;
     }
 
@@ -197,7 +197,7 @@ class TextAccessibilityManager {
       this.removePointerInTextLayer(element);
     }
 
-    const children = this.__textChildren;
+    const children = this.#textChildren;
     if (!children || children.length === 0) {
       return null;
     }
@@ -205,13 +205,13 @@ class TextAccessibilityManager {
     const index = binarySearchFirstItem(
       children,
       node =>
-        TextAccessibilityManager.__compareElementPositions(element, node) < 0
+        TextAccessibilityManager.#compareElementPositions(element, node) < 0
     );
 
     const nodeIndex = Math.max(0, index - 1);
     const child = children[nodeIndex];
-    this.__addIdToAriaOwns(id, child);
-    this.__textNodes.set(id, nodeIndex);
+    this.#addIdToAriaOwns(id, child);
+    this.#textNodes.set(id, nodeIndex);
 
     const parent = child.parentNode;
     return parent?.classList.contains("markedContent") ? parent.id : null;
@@ -242,7 +242,7 @@ class TextAccessibilityManager {
     const index = binarySearchFirstItem(
       children,
       node =>
-        TextAccessibilityManager.__compareElementPositions(
+        TextAccessibilityManager.#compareElementPositions(
           elementToCompare,
           node
         ) < 0

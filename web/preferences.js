@@ -21,21 +21,21 @@ import { AppOptions, OptionKind } from "./app_options.js";
  *   or every time the viewer is loaded.
  */
 class BasePreferences {
-  __browserDefaults = Object.freeze(
+  #browserDefaults = Object.freeze(
     typeof PDFJSDev === "undefined"
       ? AppOptions.getAll(OptionKind.BROWSER, /* defaultOnly = */ true)
       : PDFJSDev.eval("BROWSER_PREFERENCES")
   );
 
-  __defaults = Object.freeze(
+  #defaults = Object.freeze(
     typeof PDFJSDev === "undefined"
       ? AppOptions.getAll(OptionKind.PREFERENCE, /* defaultOnly = */ true)
       : PDFJSDev.eval("DEFAULT_PREFERENCES")
   );
 
-  __prefs = Object.create(null);
+  #prefs = Object.create(null);
 
-  __initializedPromise = null;
+  #initializedPromise = null;
 
   constructor() {
     if (this.constructor === BasePreferences) {
@@ -45,30 +45,30 @@ class BasePreferences {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("CHROME")) {
       Object.defineProperty(this, "defaults", {
         get() {
-          return this.__defaults;
+          return this.#defaults;
         },
       });
     }
 
-    this.__initializedPromise = this._readFromStorage(this.__defaults).then(
+    this.#initializedPromise = this._readFromStorage(this.#defaults).then(
       ({ browserPrefs, prefs }) => {
         const options = Object.create(null);
 
-        for (const [name, val] of Object.entries(this.__browserDefaults)) {
+        for (const [name, val] of Object.entries(this.#browserDefaults)) {
           const prefVal = browserPrefs?.[name];
           options[name] = typeof prefVal === typeof val ? prefVal : val;
         }
-        for (const [name, val] of Object.entries(this.__defaults)) {
+        for (const [name, val] of Object.entries(this.#defaults)) {
           const prefVal = prefs?.[name];
           // Ignore preferences whose types don't match the default values.
-          options[name] = this.__prefs[name] =
+          options[name] = this.#prefs[name] =
             typeof prefVal === typeof val ? prefVal : val;
         }
         AppOptions.setAll(options, /* init = */ true);
 
         if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
           window.addEventListener("updatedPreference", evt => {
-            this.__updatePref(evt.detail);
+            this.#updatePref(evt.detail);
           });
         }
       }
@@ -95,20 +95,20 @@ class BasePreferences {
     throw new Error("Not implemented: _readFromStorage");
   }
 
-  __updatePref({ name, value }) {
+  #updatePref({ name, value }) {
     if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
       throw new Error("Not implemented: #updatePref");
     }
 
-    if (name in this.__browserDefaults) {
-      if (typeof value !== typeof this.__browserDefaults[name]) {
+    if (name in this.#browserDefaults) {
+      if (typeof value !== typeof this.#browserDefaults[name]) {
         return; // Invalid preference value.
       }
-    } else if (name in this.__defaults) {
-      if (typeof value !== typeof this.__defaults[name]) {
+    } else if (name in this.#defaults) {
+      if (typeof value !== typeof this.#defaults[name]) {
         return; // Invalid preference value.
       }
-      this.__prefs[name] = value;
+      this.#prefs[name] = value;
     } else {
       return; // Invalid preference.
     }
@@ -124,15 +124,15 @@ class BasePreferences {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
       throw new Error("Please use `about:config` to change preferences.");
     }
-    await this.__initializedPromise;
-    const oldPrefs = structuredClone(this.__prefs);
+    await this.#initializedPromise;
+    const oldPrefs = structuredClone(this.#prefs);
 
-    this.__prefs = Object.create(null);
+    this.#prefs = Object.create(null);
     try {
-      await this._writeToStorage(this.__defaults);
+      await this._writeToStorage(this.#defaults);
     } catch (reason) {
       // Revert all preference values, since writing to storage failed.
-      this.__prefs = oldPrefs;
+      this.#prefs = oldPrefs;
       throw reason;
     }
   }
@@ -148,9 +148,9 @@ class BasePreferences {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
       throw new Error("Please use `about:config` to change preferences.");
     }
-    await this.__initializedPromise;
-    const defaultValue = this.__defaults[name],
-      oldPrefs = structuredClone(this.__prefs);
+    await this.#initializedPromise;
+    const defaultValue = this.#defaults[name],
+      oldPrefs = structuredClone(this.#prefs);
 
     if (defaultValue === undefined) {
       throw new Error(`Set preference: "${name}" is undefined.`);
@@ -172,12 +172,12 @@ class BasePreferences {
       throw new Error(`Set preference: "${value}" must be an integer.`);
     }
 
-    this.__prefs[name] = value;
+    this.#prefs[name] = value;
     try {
-      await this._writeToStorage(this.__prefs);
+      await this._writeToStorage(this.#prefs);
     } catch (reason) {
       // Revert all preference values, since writing to storage failed.
-      this.__prefs = oldPrefs;
+      this.#prefs = oldPrefs;
       throw reason;
     }
   }
@@ -192,17 +192,17 @@ class BasePreferences {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
       throw new Error("Not implemented: get");
     }
-    await this.__initializedPromise;
-    const defaultValue = this.__defaults[name];
+    await this.#initializedPromise;
+    const defaultValue = this.#defaults[name];
 
     if (defaultValue === undefined) {
       throw new Error(`Get preference: "${name}" is undefined.`);
     }
-    return this.__prefs[name] ?? defaultValue;
+    return this.#prefs[name] ?? defaultValue;
   }
 
   get initializedPromise() {
-    return this.__initializedPromise;
+    return this.#initializedPromise;
   }
 }
 

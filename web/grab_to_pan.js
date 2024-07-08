@@ -36,9 +36,9 @@ class GrabToPan {
     this.activate = this.activate.bind(this);
     this.deactivate = this.deactivate.bind(this);
     this.toggle = this.toggle.bind(this);
-    this._onMouseDown = this.__onMouseDown.bind(this);
-    this._onMouseMove = this.__onMouseMove.bind(this);
-    this._endPan = this.__endPan.bind(this);
+    this._onMouseDown = this.#onMouseDown.bind(this);
+    this._onMouseMove = this.#onMouseMove.bind(this);
+    this._endPan = this.#endPan.bind(this);
 
     // This overlay will be inserted in the document when the mouse moves during
     // a grab operation, to ensure that the cursor has the desired appearance.
@@ -97,7 +97,7 @@ class GrabToPan {
     );
   }
 
-  __onMouseDown(event) {
+  #onMouseDown(event) {
     if (event.button !== 0 || this.ignoreTarget(event.target)) {
       return;
     }
@@ -140,7 +140,7 @@ class GrabToPan {
     }
   }
 
-  __onMouseMove(event) {
+  #onMouseMove(event) {
     this.element.removeEventListener("scroll", this._endPan, true);
     if (!(event.buttons & 1)) {
       // The left mouse button is released.
@@ -160,7 +160,7 @@ class GrabToPan {
     }
   }
 
-  __endPan() {
+  #endPan() {
     this.element.removeEventListener("scroll", this._endPan, true);
     this.document.removeEventListener("mousemove", this._onMouseMove, true);
     this.document.removeEventListener("mouseup", this._endPan, true);

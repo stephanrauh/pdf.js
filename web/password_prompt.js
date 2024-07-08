@@ -30,11 +30,11 @@ import { PasswordResponses } from "pdfjs-lib";
  */
 
 class PasswordPrompt {
-  __activeCapability = null;
+  #activeCapability = null;
 
-  __updateCallback = null;
+  #updateCallback = null;
 
-  __reason = null;
+  #reason = null;
 
   /**
    * @param {PasswordPromptOptions} options
@@ -52,22 +52,22 @@ class PasswordPrompt {
     this._isViewerEmbedded = isViewerEmbedded;
 
     // Attach the event listeners.
-    this.submitButton.addEventListener("click", this.__verify.bind(this));
+    this.submitButton.addEventListener("click", this.#verify.bind(this));
     this.cancelButton.addEventListener("click", this.close.bind(this));
     this.input.addEventListener("keydown", e => {
       if (e.keyCode === /* Enter = */ 13) {
-        this.__verify();
+        this.#verify();
       }
     });
 
     this.overlayManager.register(this.dialog, /* canForceClose = */ true);
 
-    this.dialog.addEventListener("close", this.__cancel.bind(this));
+    this.dialog.addEventListener("close", this.#cancel.bind(this));
   }
 
   async open() {
-    await this.__activeCapability?.promise;
-    this.__activeCapability = Promise.withResolvers();
+    await this.#activeCapability?.promise;
+    this.#activeCapability = Promise.withResolvers();
 
     try {
       await this.overlayManager.open(this.dialog);
@@ -76,12 +76,12 @@ class PasswordPrompt {
       this.input.focus();
       // end of modification by ngx-extended-pdf-viewer
     } catch (ex) {
-      this.__activeCapability.resolve();
+      this.#activeCapability.resolve();
       throw ex;
     }
 
     const passwordIncorrect =
-      this.__reason === PasswordResponses.INCORRECT_PASSWORD;
+      this.#reason === PasswordResponses.INCORRECT_PASSWORD;
 
     if (!this._isViewerEmbedded || passwordIncorrect) {
       this.input.focus();
@@ -100,35 +100,35 @@ class PasswordPrompt {
     }
   }
 
-  __verify() {
+  #verify() {
     const password = this.input.value;
     if (password?.length > 0) {
-      this.__invokeCallback(password);
+      this.#invokeCallback(password);
     }
   }
 
-  __cancel() {
-    this.__invokeCallback(new Error("PasswordPrompt cancelled."));
-    this.__activeCapability.resolve();
+  #cancel() {
+    this.#invokeCallback(new Error("PasswordPrompt cancelled."));
+    this.#activeCapability.resolve();
   }
 
-  __invokeCallback(password) {
-    if (!this.__updateCallback) {
+  #invokeCallback(password) {
+    if (!this.#updateCallback) {
       return; // Ensure that the callback is only invoked once.
     }
     this.close();
     this.input.value = "";
 
-    this.__updateCallback(password);
-    this.__updateCallback = null;
+    this.#updateCallback(password);
+    this.#updateCallback = null;
   }
 
   async setUpdateCallback(updateCallback, reason) {
-    if (this.__activeCapability) {
-      await this.__activeCapability.promise;
+    if (this.#activeCapability) {
+      await this.#activeCapability.promise;
     }
-    this.__updateCallback = updateCallback;
-    this.__reason = reason;
+    this.#updateCallback = updateCallback;
+    this.#reason = reason;
   }
 }
 

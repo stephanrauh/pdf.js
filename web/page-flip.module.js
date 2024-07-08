@@ -2477,7 +2477,7 @@ class HTMLRender extends Render {
         if (this.bottomPage === null)
             return;
         const tempDensity = this.flippingPage != null ? this.flippingPage.getDrawingDensity() : null;
-        if (!((this.orientation === "portrait" /* PORTRAIT */ && this.direction === 1) /* BACK */)) {
+        if (!(this.orientation === "portrait" /* PORTRAIT */ && this.direction === 1 /* BACK */)) {
             this.bottomPage.getElement().style.zIndex = (this.getSettings().startZIndex + 3).toString(10);
             this.bottomPage.draw(tempDensity);
         }

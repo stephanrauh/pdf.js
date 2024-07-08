@@ -47,7 +47,7 @@ function download(blobUrl, filename) {
  * @implements {IDownloadManager}
  */
 class DownloadManager {
-  __openBlobUrls = new WeakMap();
+  #openBlobUrls = new WeakMap();
 
   downloadData(data, filename, contentType) {
     const blobUrl = URL.createObjectURL(
@@ -67,10 +67,10 @@ class DownloadManager {
       (typeof PDFJSDev === "undefined" || !PDFJSDev.test("COMPONENTS")) &&
       isPdfData
     ) {
-      let blobUrl = this.__openBlobUrls.get(data);
+      let blobUrl = this.#openBlobUrls.get(data);
       if (!blobUrl) {
         blobUrl = URL.createObjectURL(new Blob([data], { type: contentType }));
-        this.__openBlobUrls.set(data, blobUrl);
+        this.#openBlobUrls.set(data, blobUrl);
       }
       // #1657 modified by ngx-extended-pdf-viewer
       // The lines below try to open the PDF file in the viewer.
@@ -108,7 +108,7 @@ class DownloadManager {
         // Release the `blobUrl`, since opening it failed, and fallback to
         // downloading the PDF file.
         URL.revokeObjectURL(blobUrl);
-        this.__openBlobUrls.delete(data);
+        this.#openBlobUrls.delete(data);
       }
     }
 

@@ -38,17 +38,17 @@ import { removeNullCharacters } from "./ui_utils.js";
  * contain text that matches the PDF text they are overlaying.
  */
 class TextLayerBuilder {
-  __enablePermissions = false;
+  #enablePermissions = false;
 
-  __onAppend = null;
+  #onAppend = null;
 
-  __renderingDone = false;
+  #renderingDone = false;
 
-  __textLayer = null;
+  #textLayer = null;
 
-  static __textLayers = new Map();
+  static #textLayers = new Map();
 
-  static __selectionChangeAbortController = null;
+  static #selectionChangeAbortController = null;
 
   constructor({
     pdfPage,
@@ -60,8 +60,8 @@ class TextLayerBuilder {
     this.pdfPage = pdfPage;
     this.highlighter = highlighter;
     this.accessibilityManager = accessibilityManager;
-    this.__enablePermissions = enablePermissions === true;
-    this.__onAppend = onAppend;
+    this.#enablePermissions = enablePermissions === true;
+    this.#onAppend = onAppend;
 
     this.div = document.createElement("div");
     this.div.tabIndex = 0;
@@ -74,8 +74,8 @@ class TextLayerBuilder {
    * @param {Object} [textContentParams]
    */
   async render(viewport, textContentParams = null) {
-    if (this.__renderingDone && this.__textLayer) {
-      this.__textLayer.update({
+    if (this.#renderingDone && this.#textLayer) {
+      this.#textLayer.update({
         viewport,
         onBefore: this.hide.bind(this),
       });
@@ -84,7 +84,7 @@ class TextLayerBuilder {
     }
 
     this.cancel();
-    this.__textLayer = new TextLayer({
+    this.#textLayer = new TextLayer({
       textContentSource: this.pdfPage.streamTextContent(
         textContentParams || {
           includeMarkedContent: true,
@@ -95,27 +95,27 @@ class TextLayerBuilder {
       viewport,
     });
 
-    const { textDivs, textContentItemsStr } = this.__textLayer;
+    const { textDivs, textContentItemsStr } = this.#textLayer;
     this.highlighter?.setTextMapping(textDivs, textContentItemsStr);
     this.accessibilityManager?.setTextMapping(textDivs);
 
-    await this.__textLayer.render();
-    this.__renderingDone = true;
+    await this.#textLayer.render();
+    this.#renderingDone = true;
 
     const endOfContent = document.createElement("div");
     endOfContent.className = "endOfContent";
     this.div.append(endOfContent);
 
-    this.__bindMouse(endOfContent);
+    this.#bindMouse(endOfContent);
     // Ensure that the textLayer is appended to the DOM *before* handling
     // e.g. a pending search operation.
-    this.__onAppend?.(this.div);
+    this.#onAppend?.(this.div);
     this.highlighter?.enable();
     this.accessibilityManager?.enable();
   }
 
   hide() {
-    if (!this.div.hidden && this.__renderingDone) {
+    if (!this.div.hidden && this.#renderingDone) {
       // We turn off the highlighter in order to avoid to scroll into view an
       // element of the text layer which could be hidden.
       this.highlighter?.disable();
@@ -124,7 +124,7 @@ class TextLayerBuilder {
   }
 
   show() {
-    if (this.div.hidden && this.__renderingDone) {
+    if (this.div.hidden && this.#renderingDone) {
       this.div.hidden = false;
       this.highlighter?.enable();
     }
@@ -134,12 +134,12 @@ class TextLayerBuilder {
    * Cancel rendering of the text layer.
    */
   cancel() {
-    this.__textLayer?.cancel();
-    this.__textLayer = null;
+    this.#textLayer?.cancel();
+    this.#textLayer = null;
 
     this.highlighter?.disable();
     this.accessibilityManager?.disable();
-    TextLayerBuilder.__removeGlobalSelectionListener(this.div);
+    TextLayerBuilder.#removeGlobalSelectionListener(this.div);
   }
 
   /**
@@ -147,7 +147,7 @@ class TextLayerBuilder {
    * clicked. This reduces flickering of the content if the mouse is slowly
    * dragged up or down.
    */
-  __bindMouse(end) {
+  #bindMouse(end) {
     const { div } = this;
 
     div.addEventListener("mousedown", evt => {
@@ -155,7 +155,7 @@ class TextLayerBuilder {
     });
 
     div.addEventListener("copy", event => {
-      if (!this.__enablePermissions) {
+      if (!this.#enablePermissions) {
         const selection = document.getSelection();
         event.clipboardData.setData(
           "text/plain",
@@ -166,26 +166,26 @@ class TextLayerBuilder {
       event.stopPropagation();
     });
 
-    TextLayerBuilder.__textLayers.set(div, end);
-    TextLayerBuilder.__enableGlobalSelectionListener();
+    TextLayerBuilder.#textLayers.set(div, end);
+    TextLayerBuilder.#enableGlobalSelectionListener();
   }
 
-  static __removeGlobalSelectionListener(textLayerDiv) {
-    this.__textLayers.delete(textLayerDiv);
+  static #removeGlobalSelectionListener(textLayerDiv) {
+    this.#textLayers.delete(textLayerDiv);
 
-    if (this.__textLayers.size === 0) {
-      this.__selectionChangeAbortController?.abort();
-      this.__selectionChangeAbortController = null;
+    if (this.#textLayers.size === 0) {
+      this.#selectionChangeAbortController?.abort();
+      this.#selectionChangeAbortController = null;
     }
   }
 
-  static __enableGlobalSelectionListener() {
-    if (this.__selectionChangeAbortController) {
+  static #enableGlobalSelectionListener() {
+    if (this.#selectionChangeAbortController) {
       // document-level event listeners already installed
       return;
     }
-    this.__selectionChangeAbortController = new AbortController();
-    const { signal } = this.__selectionChangeAbortController;
+    this.#selectionChangeAbortController = new AbortController();
+    const { signal } = this.#selectionChangeAbortController;
 
     const reset = (end, textLayer) => {
       if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
@@ -199,7 +199,7 @@ class TextLayerBuilder {
     document.addEventListener(
       "pointerup",
       () => {
-        this.__textLayers.forEach(reset);
+        this.#textLayers.forEach(reset);
       },
       { signal }
     );
@@ -214,11 +214,11 @@ class TextLayerBuilder {
       () => {
         const selection = document.getSelection();
         if (selection.rangeCount === 0) {
-          this.__textLayers.forEach(reset);
+          this.#textLayers.forEach(reset);
           return;
         }
         // #2349 modified by ngx-extended-pdf-viewer
-        if (this.__textLayers.size === 0) {
+        if (this.#textLayers.size === 0) {
           // prevent exceptions if there's no text layer
           return;
         }
@@ -231,7 +231,7 @@ class TextLayerBuilder {
         const activeTextLayers = new Set();
         for (let i = 0; i < selection.rangeCount; i++) {
           const range = selection.getRangeAt(i);
-          for (const textLayerDiv of this.__textLayers.keys()) {
+          for (const textLayerDiv of this.#textLayers.keys()) {
             if (
               !activeTextLayers.has(textLayerDiv) &&
               range.intersectsNode(textLayerDiv)
@@ -241,7 +241,7 @@ class TextLayerBuilder {
           }
         }
 
-        for (const [textLayerDiv, endDiv] of this.__textLayers) {
+        for (const [textLayerDiv, endDiv] of this.#textLayers) {
           if (activeTextLayers.has(textLayerDiv)) {
             endDiv.classList.add("active");
           } else {
@@ -255,7 +255,7 @@ class TextLayerBuilder {
         if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("CHROME")) {
           isFirefox ??=
             getComputedStyle(
-              this.__textLayers.values().next().value
+              this.#textLayers.values().next().value
             ).getPropertyValue("-moz-user-select") === "none";
 
           if (isFirefox) {
@@ -280,7 +280,7 @@ class TextLayerBuilder {
         }
 
         const parentTextLayer = anchor.parentElement.closest(".textLayer");
-        const endDiv = this.__textLayers.get(parentTextLayer);
+        const endDiv = this.#textLayers.get(parentTextLayer);
         if (endDiv) {
           endDiv.style.width = parentTextLayer.style.width;
           endDiv.style.height = parentTextLayer.style.height;

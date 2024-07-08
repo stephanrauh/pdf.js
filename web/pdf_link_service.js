@@ -431,7 +431,7 @@ class PDFLinkService {
       }
     } catch {}
 
-    if (typeof dest === "string" || PDFLinkService.__isValidExplicitDest(dest)) {
+    if (typeof dest === "string" || PDFLinkService.#isValidExplicitDest(dest)) {
       this.goToDestination(dest);
       return;
     }
@@ -503,7 +503,7 @@ class PDFLinkService {
     );
   }
 
-  static __isValidExplicitDest(dest) {
+  static #isValidExplicitDest(dest) {
     if (!Array.isArray(dest) || dest.length < 2) {
       return false;
     }

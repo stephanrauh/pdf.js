@@ -54,14 +54,14 @@ import { PagesCountLimit } from "./pdf_viewer.js";
  */
 
 class SecondaryToolbar {
-  __opts;
+  #opts;
 
   /**
    * @param {SecondaryToolbarOptions} options
    * @param {EventBus} eventBus
    */
   constructor(options, eventBus) {
-    this.__opts = options;
+    this.#opts = options;
     const buttons = [
       {
         element: options.presentationModeButton,
@@ -156,7 +156,7 @@ class SecondaryToolbar {
 
     // Bind the event listeners for click, cursor tool, and scroll/spread mode
     // actions.
-    this.__bindListeners(buttons);
+    this.#bindListeners(buttons);
 
     this.reset();
   }
@@ -170,32 +170,32 @@ class SecondaryToolbar {
 
   setPageNumber(pageNumber) {
     this.pageNumber = pageNumber;
-    this.__updateUIState();
+    this.#updateUIState();
   }
 
   setPagesCount(pagesCount) {
     this.pagesCount = pagesCount;
-    this.__updateUIState();
+    this.#updateUIState();
   }
 
   reset() {
     this.pageNumber = 0;
     this.pagesCount = 0;
-    this.__updateUIState();
+    this.#updateUIState();
 
     // Reset the Scroll/Spread buttons too, since they're document specific.
     this.eventBus.dispatch("switchcursortool", { source: this, reset: true });
-    this.__scrollModeChanged({ mode: ScrollMode.VERTICAL });
-    this.__spreadModeChanged({ mode: SpreadMode.NONE });
+    this.#scrollModeChanged({ mode: ScrollMode.VERTICAL });
+    this.#spreadModeChanged({ mode: SpreadMode.NONE });
   }
 
-  __updateUIState() {
+  #updateUIState() {
     const {
       firstPageButton,
       lastPageButton,
       pageRotateCwButton,
       pageRotateCcwButton,
-    } = this.__opts;
+    } = this.#opts;
 
     firstPageButton.disabled = this.pageNumber <= 1;
     lastPageButton.disabled = this.pageNumber >= this.pagesCount;
@@ -203,9 +203,9 @@ class SecondaryToolbar {
     pageRotateCcwButton.disabled = this.pagesCount === 0;
   }
 
-  __bindListeners(buttons) {
+  #bindListeners(buttons) {
     const { eventBus } = this;
-    const { toggleButton } = this.__opts;
+    const { toggleButton } = this.#opts;
     // Button to toggle the visibility of the secondary toolbar.
     toggleButton.addEventListener("click", this.toggle.bind(this));
 
@@ -233,19 +233,19 @@ class SecondaryToolbar {
       });
     }
 
-    eventBus._on("cursortoolchanged", this.__cursorToolChanged.bind(this));
-    eventBus._on("scrollmodechanged", this.__scrollModeChanged.bind(this));
-    eventBus._on("spreadmodechanged", this.__spreadModeChanged.bind(this));
+    eventBus._on("cursortoolchanged", this.#cursorToolChanged.bind(this));
+    eventBus._on("scrollmodechanged", this.#scrollModeChanged.bind(this));
+    eventBus._on("spreadmodechanged", this.#spreadModeChanged.bind(this));
   }
 
-  __cursorToolChanged({ tool }) {
-    const { cursorSelectToolButton, cursorHandToolButton } = this.__opts;
+  #cursorToolChanged({ tool }) {
+    const { cursorSelectToolButton, cursorHandToolButton } = this.#opts;
 
     toggleCheckedBtn(cursorSelectToolButton, tool === CursorTool.SELECT);
     toggleCheckedBtn(cursorHandToolButton, tool === CursorTool.HAND);
   }
 
-  __scrollModeChanged({ mode }) {
+  #scrollModeChanged({ mode }) {
     const {
       scrollPageButton,
       scrollVerticalButton,
@@ -254,7 +254,7 @@ class SecondaryToolbar {
       spreadNoneButton,
       spreadOddButton,
       spreadEvenButton,
-    } = this.__opts;
+    } = this.#opts;
 
     toggleCheckedBtn(scrollPageButton, mode === ScrollMode.PAGE);
     toggleCheckedBtn(scrollVerticalButton, mode === ScrollMode.VERTICAL);
@@ -278,8 +278,8 @@ class SecondaryToolbar {
     spreadEvenButton.disabled = isHorizontal;
   }
 
-  __spreadModeChanged({ mode }) {
-    const { spreadNoneButton, spreadOddButton, spreadEvenButton } = this.__opts;
+  #spreadModeChanged({ mode }) {
+    const { spreadNoneButton, spreadOddButton, spreadEvenButton } = this.#opts;
 
     toggleCheckedBtn(spreadNoneButton, mode === SpreadMode.NONE);
     toggleCheckedBtn(spreadOddButton, mode === SpreadMode.ODD);
@@ -292,7 +292,7 @@ class SecondaryToolbar {
     }
     this.opened = true;
 
-    const { toggleButton, toolbar } = this.__opts;
+    const { toggleButton, toolbar } = this.#opts;
     toggleExpandedBtn(toggleButton, true, toolbar);
   }
 
@@ -302,7 +302,7 @@ class SecondaryToolbar {
     }
     this.opened = false;
 
-    const { toggleButton, toolbar } = this.__opts;
+    const { toggleButton, toolbar } = this.#opts;
     toggleExpandedBtn(toggleButton, false, toolbar);
   }
 

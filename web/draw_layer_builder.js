@@ -21,7 +21,7 @@ import { DrawLayer } from "pdfjs-lib";
  */
 
 class DrawLayerBuilder {
-  __drawLayer = null;
+  #drawLayer = null;
 
   /**
    * @param {DrawLayerBuilderOptions} options
@@ -34,10 +34,10 @@ class DrawLayerBuilder {
    * @param {string} intent (default value is 'display')
    */
   async render(intent = "display") {
-    if (intent !== "display" || this.__drawLayer || this._cancelled) {
+    if (intent !== "display" || this.#drawLayer || this._cancelled) {
       return;
     }
-    this.__drawLayer = new DrawLayer({
+    this.#drawLayer = new DrawLayer({
       pageIndex: this.pageIndex,
     });
   }
@@ -45,19 +45,19 @@ class DrawLayerBuilder {
   cancel() {
     this._cancelled = true;
 
-    if (!this.__drawLayer) {
+    if (!this.#drawLayer) {
       return;
     }
-    this.__drawLayer.destroy();
-    this.__drawLayer = null;
+    this.#drawLayer.destroy();
+    this.#drawLayer = null;
   }
 
   setParent(parent) {
-    this.__drawLayer?.setParent(parent);
+    this.#drawLayer?.setParent(parent);
   }
 
   getDrawLayer() {
-    return this.__drawLayer;
+    return this.#drawLayer;
   }
 }
 
