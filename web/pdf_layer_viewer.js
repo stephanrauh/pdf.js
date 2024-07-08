@@ -39,10 +39,10 @@ class PDFLayerViewer extends BaseTreeViewer {
     super(options);
 
     this.eventBus._on("optionalcontentconfigchanged", evt => {
-      this.#updateLayers(evt.promise);
+      this.__updateLayers(evt.promise);
     });
     this.eventBus._on("resetlayers", () => {
-      this.#updateLayers();
+      this.__updateLayers();
     });
     this.eventBus._on("togglelayerstree", this._toggleAllTreeItems.bind(this));
   }
@@ -182,7 +182,7 @@ class PDFLayerViewer extends BaseTreeViewer {
     this._finishRendering(fragment, layersCount, hasAnyNesting);
   }
 
-  async #updateLayers(promise = null) {
+  async __updateLayers(promise = null) {
     if (!this._optionalContentConfig) {
       return;
     }

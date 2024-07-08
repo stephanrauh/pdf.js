@@ -54,7 +54,7 @@ function getPageName(size, isPortrait, pageNames) {
  */
 
 class PDFDocumentProperties {
-  #fieldData = null;
+  __fieldData = null;
 
   /**
    * @param {PDFDocumentPropertiesOptions} options
@@ -78,7 +78,7 @@ class PDFDocumentProperties {
     this._fileNameLookup = fileNameLookup;
     this.eventBus = eventBus; // #1773 modified by ngx-extended-pdf-vieweer
 
-    this.#reset();
+    this.__reset();
     // Bind the event listener for the Close button.
     closeButton.addEventListener("click", this.close.bind(this));
 
@@ -109,11 +109,11 @@ class PDFDocumentProperties {
     // If the document properties were previously fetched (for this PDF file),
     // just update the dialog immediately to avoid redundant lookups.
     if (
-      this.#fieldData &&
-      currentPageNumber === this.#fieldData._currentPageNumber &&
-      pagesRotation === this.#fieldData._pagesRotation
+      this.__fieldData &&
+      currentPageNumber === this.__fieldData._currentPageNumber &&
+      pagesRotation === this.__fieldData._pagesRotation
     ) {
-      this.#updateUI();
+      this.__updateUI();
       return;
     }
 
@@ -134,17 +134,17 @@ class PDFDocumentProperties {
       isLinearized,
     ] = await Promise.all([
       this._fileNameLookup(),
-      this.#parseFileSize(contentLength),
-      this.#parseDate(info.CreationDate),
-      this.#parseDate(info.ModDate),
+      this.__parseFileSize(contentLength),
+      this.__parseDate(info.CreationDate),
+      this.__parseDate(info.ModDate),
       // eslint-disable-next-line arrow-body-style
       this.pdfDocument.getPage(currentPageNumber).then(pdfPage => {
-        return this.#parsePageSize(getPageSizeInches(pdfPage), pagesRotation);
+        return this.__parsePageSize(getPageSizeInches(pdfPage), pagesRotation);
       }),
-      this.#parseLinearization(info.IsLinearized),
+      this.__parseLinearization(info.IsLinearized),
     ]);
 
-    this.#fieldData = Object.freeze({
+    this.__fieldData = Object.freeze({
       fileName,
       fileSize,
       title: info.Title,
@@ -162,7 +162,7 @@ class PDFDocumentProperties {
       _currentPageNumber: currentPageNumber,
       _pagesRotation: pagesRotation,
     });
-    this.#updateUI();
+    this.__updateUI();
 
     // Get the correct fileSize, since it may not have been available
     // or could potentially be wrong.
@@ -170,11 +170,11 @@ class PDFDocumentProperties {
     if (contentLength === length) {
       return; // The fileSize has already been correctly set.
     }
-    const data = Object.assign(Object.create(null), this.#fieldData);
-    data.fileSize = await this.#parseFileSize(length);
+    const data = Object.assign(Object.create(null), this.__fieldData);
+    data.fileSize = await this.__parseFileSize(length);
 
-    this.#fieldData = Object.freeze(data);
-    this.#updateUI();
+    this.__fieldData = Object.freeze(data);
+    this.__updateUI();
   }
 
   /**
@@ -194,8 +194,8 @@ class PDFDocumentProperties {
    */
   setDocument(pdfDocument) {
     if (this.pdfDocument) {
-      this.#reset();
-      this.#updateUI(true);
+      this.__reset();
+      this.__updateUI(true);
     }
     if (!pdfDocument) {
       return;
@@ -205,10 +205,10 @@ class PDFDocumentProperties {
     this._dataAvailableCapability.resolve();
   }
 
-  #reset() {
+  __reset() {
     this.pdfDocument = null;
 
-    this.#fieldData = null;
+    this.__fieldData = null;
     this._dataAvailableCapability = Promise.withResolvers();
     this._currentPageNumber = 1;
     this._pagesRotation = 0;
@@ -219,8 +219,8 @@ class PDFDocumentProperties {
    * NOTE: If the contents of a particular field is neither a non-empty string,
    *       nor a number, it will fall back to `DEFAULT_FIELD_CONTENT`.
    */
-  #updateUI(reset = false) {
-    if (reset || !this.#fieldData) {
+  __updateUI(reset = false) {
+    if (reset || !this.__fieldData) {
       for (const id in this.fields) {
         this.fields[id].textContent = DEFAULT_FIELD_CONTENT;
       }
@@ -232,13 +232,13 @@ class PDFDocumentProperties {
       return;
     }
     for (const id in this.fields) {
-      const content = this.#fieldData[id];
+      const content = this.__fieldData[id];
       this.fields[id].textContent =
         content || content === 0 ? content : DEFAULT_FIELD_CONTENT;
     }
   }
 
-  async #parseFileSize(fileSize = 0) {
+  async __parseFileSize(fileSize = 0) {
     const kb = fileSize / 1024,
       mb = kb / 1024;
     if (!kb) {
@@ -251,7 +251,7 @@ class PDFDocumentProperties {
     });
   }
 
-  async #parsePageSize(pageSizeInches, pagesRotation) {
+  async __parsePageSize(pageSizeInches, pagesRotation) {
     if (!pageSizeInches) {
       return undefined;
     }
@@ -345,7 +345,7 @@ class PDFDocumentProperties {
     );
   }
 
-  async #parseDate(inputDate) {
+  async __parseDate(inputDate) {
     const dateObject = PDFDateString.toDateObject(inputDate);
     if (!dateObject) {
       return undefined;
@@ -356,7 +356,7 @@ class PDFDocumentProperties {
     });
   }
 
-  #parseLinearization(isLinearized) {
+  __parseLinearization(isLinearized) {
     return this.l10n.get(
       `pdfjs-document-properties-linearized-${isLinearized ? "yes" : "no"}`
     );

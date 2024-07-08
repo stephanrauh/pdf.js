@@ -49,14 +49,14 @@ import {
  */
 
 class Toolbar {
-  #opts;
+  __opts;
 
   /**
    * @param {ToolbarOptions} options
    * @param {EventBus} eventBus
    */
   constructor(options, eventBus) {
-    this.#opts = options;
+    this.__opts = options;
     this.eventBus = eventBus;
     const buttons = [
       { element: options.previous, eventName: "previouspage" },
@@ -122,13 +122,13 @@ class Toolbar {
     ];
 
     // Bind the event listeners for click and various other actions.
-    this.#bindListeners(buttons);
+    this.__bindListeners(buttons);
 
     if (options.editorHighlightColorPicker) {
       eventBus._on(
         "annotationeditoruimanager",
         ({ uiManager }) => {
-          this.#setAnnotationEditorUIManager(
+          this.__setAnnotationEditorUIManager(
             uiManager,
             options.editorHighlightColorPicker
           );
@@ -149,7 +149,7 @@ class Toolbar {
     this.reset();
   }
 
-  #setAnnotationEditorUIManager(uiManager, parentContainer) {
+  __setAnnotationEditorUIManager(uiManager, parentContainer) {
     const colorPicker = new ColorPicker({ uiManager });
     uiManager.setMainHighlightColorPicker(colorPicker);
     parentContainer.append(colorPicker.renderMainDropdown());
@@ -158,19 +158,19 @@ class Toolbar {
   setPageNumber(pageNumber, pageLabel) {
     this.pageNumber = pageNumber;
     this.pageLabel = pageLabel;
-    this.#updateUIState(false);
+    this.__updateUIState(false);
   }
 
   setPagesCount(pagesCount, hasPageLabels) {
     this.pagesCount = pagesCount;
     this.hasPageLabels = hasPageLabels;
-    this.#updateUIState(true);
+    this.__updateUIState(true);
   }
 
   setPageScale(pageScaleValue, pageScale) {
     this.pageScaleValue = (pageScaleValue || pageScale).toString();
     this.pageScale = pageScale;
-    this.#updateUIState(false);
+    this.__updateUIState(false);
   }
 
   reset() {
@@ -191,16 +191,16 @@ class Toolbar {
     }
     // #556 #543 end of modification
 
-    this.#updateUIState(true);
+    this.__updateUIState(true);
     this.updateLoadingIndicatorState();
 
     // Reset the Editor buttons too, since they're document specific.
-    this.#editorModeChanged({ mode: AnnotationEditorType.DISABLE });
+    this.__editorModeChanged({ mode: AnnotationEditorType.DISABLE });
   }
 
-  #bindListeners(buttons) {
+  __bindListeners(buttons) {
     const { eventBus } = this;
-    const { pageNumber, scaleSelect } = this.#opts;
+    const { pageNumber, scaleSelect } = this.__opts;
     const self = this;
 
     // The buttons within the toolbar.
@@ -258,11 +258,11 @@ class Toolbar {
 
     eventBus._on(
       "annotationeditormodechanged",
-      this.#editorModeChanged.bind(this)
+      this.__editorModeChanged.bind(this)
     );
   }
 
-  #editorModeChanged({ mode }) {
+  __editorModeChanged({ mode }) {
     const {
       editorFreeTextButton,
       editorFreeTextParamsToolbar,
@@ -272,7 +272,7 @@ class Toolbar {
       editorInkParamsToolbar,
       editorStampButton,
       editorStampParamsToolbar,
-    } = this.#opts;
+    } = this.__opts;
 
     toggleCheckedBtn(
       editorFreeTextButton,
@@ -302,9 +302,9 @@ class Toolbar {
     editorStampButton.disabled = isDisable;
   }
 
-  #updateUIState(resetNumPages = false) {
+  __updateUIState(resetNumPages = false) {
     const { pageNumber, pagesCount, pageScaleValue, pageScale } = this;
-    const opts = this.#opts;
+    const opts = this.__opts;
 
     if (resetNumPages) {
       if (this.hasPageLabels) {
@@ -374,7 +374,7 @@ class Toolbar {
   }
 
   updateLoadingIndicatorState(loading = false) {
-    const { pageNumber } = this.#opts;
+    const { pageNumber } = this.__opts;
     pageNumber.classList.toggle("loading", loading);
   }
 }

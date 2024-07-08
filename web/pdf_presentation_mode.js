@@ -45,13 +45,13 @@ const SWIPE_ANGLE_THRESHOLD = Math.PI / 6;
  */
 
 class PDFPresentationMode {
-  #state = PresentationModeState.UNKNOWN;
+  __state = PresentationModeState.UNKNOWN;
 
-  #args = null;
+  __args = null;
 
-  #fullscreenChangeAbortController = null;
+  __fullscreenChangeAbortController = null;
 
-  #windowAbortController = null;
+  __windowAbortController = null;
 
   /**
    * @param {PDFPresentationModeOptions} options
@@ -77,12 +77,12 @@ class PDFPresentationMode {
     if (this.active || !pdfViewer.pagesCount || !container.requestFullscreen) {
       return false;
     }
-    this.#addFullscreenChangeListeners();
-    this.#notifyStateChange(PresentationModeState.CHANGING);
+    this.__addFullscreenChangeListeners();
+    this.__notifyStateChange(PresentationModeState.CHANGING);
 
     const promise = container.requestFullscreen();
 
-    this.#args = {
+    this.__args = {
       pageNumber: pdfViewer.currentPageNumber,
       scaleValue: pdfViewer.currentScaleValue,
       scrollMode: pdfViewer.scrollMode,
@@ -98,10 +98,10 @@ class PDFPresentationMode {
         "Ignoring Spread modes when entering PresentationMode, " +
           "since the document may contain varying page sizes."
       );
-      this.#args.spreadMode = pdfViewer.spreadMode;
+      this.__args.spreadMode = pdfViewer.spreadMode;
     }
     if (pdfViewer.annotationEditorMode !== AnnotationEditorType.DISABLE) {
-      this.#args.annotationEditorMode = pdfViewer.annotationEditorMode;
+      this.__args.annotationEditorMode = pdfViewer.annotationEditorMode;
     }
 
     try {
@@ -109,20 +109,17 @@ class PDFPresentationMode {
       pdfViewer.focus(); // Fixes bug 1787456.
       return true;
     } catch {
-      this.#removeFullscreenChangeListeners();
-      this.#notifyStateChange(PresentationModeState.NORMAL);
+      this.__removeFullscreenChangeListeners();
+      this.__notifyStateChange(PresentationModeState.NORMAL);
     }
     return false;
   }
 
   get active() {
-    return (
-      this.#state === PresentationModeState.CHANGING ||
-      this.#state === PresentationModeState.FULLSCREEN
-    );
+    return (this.__state === PresentationModeState.CHANGING || this.__state === PresentationModeState.FULLSCREEN);
   }
 
-  #mouseWheel(evt) {
+  __mouseWheel(evt) {
     if (!this.active) {
       return;
     }
@@ -144,13 +141,13 @@ class PDFPresentationMode {
       (this.mouseScrollDelta > 0 && delta < 0) ||
       (this.mouseScrollDelta < 0 && delta > 0)
     ) {
-      this.#resetMouseScrollState();
+      this.__resetMouseScrollState();
     }
     this.mouseScrollDelta += delta;
 
     if (Math.abs(this.mouseScrollDelta) >= PAGE_SWITCH_THRESHOLD) {
       const totalDelta = this.mouseScrollDelta;
-      this.#resetMouseScrollState();
+      this.__resetMouseScrollState();
       const success =
         totalDelta > 0
           ? this.pdfViewer.previousPage()
@@ -161,35 +158,35 @@ class PDFPresentationMode {
     }
   }
 
-  #notifyStateChange(state) {
-    this.#state = state;
+  __notifyStateChange(state) {
+    this.__state = state;
 
     this.eventBus.dispatch("presentationmodechanged", { source: this, state });
   }
 
-  #enter() {
-    this.#notifyStateChange(PresentationModeState.FULLSCREEN);
+  __enter() {
+    this.__notifyStateChange(PresentationModeState.FULLSCREEN);
     this.container.classList.add(ACTIVE_SELECTOR);
 
     // Ensure that the correct page is scrolled into view when entering
     // Presentation Mode, by waiting until fullscreen mode in enabled.
     setTimeout(() => {
       this.pdfViewer.scrollMode = ScrollMode.PAGE;
-      if (this.#args.spreadMode !== null) {
+      if (this.__args.spreadMode !== null) {
         this.pdfViewer.spreadMode = SpreadMode.NONE;
       }
-      this.pdfViewer.currentPageNumber = this.#args.pageNumber;
+      this.pdfViewer.currentPageNumber = this.__args.pageNumber;
       this.pdfViewer.currentScaleValue = "page-fit";
 
-      if (this.#args.annotationEditorMode !== null) {
+      if (this.__args.annotationEditorMode !== null) {
         this.pdfViewer.annotationEditorMode = {
           mode: AnnotationEditorType.NONE,
         };
       }
     }, 0);
 
-    this.#addWindowListeners();
-    this.#showControls();
+    this.__addWindowListeners();
+    this.__showControls();
     this.contextMenuOpen = false;
 
     // Text selection is disabled in Presentation Mode, thus it's not possible
@@ -198,34 +195,34 @@ class PDFPresentationMode {
     document.getSelection().empty();
   }
 
-  #exit() {
+  __exit() {
     const pageNumber = this.pdfViewer.currentPageNumber;
     this.container.classList.remove(ACTIVE_SELECTOR);
 
     // Ensure that the correct page is scrolled into view when exiting
     // Presentation Mode, by waiting until fullscreen mode is disabled.
     setTimeout(() => {
-      this.#removeFullscreenChangeListeners();
-      this.#notifyStateChange(PresentationModeState.NORMAL);
+      this.__removeFullscreenChangeListeners();
+      this.__notifyStateChange(PresentationModeState.NORMAL);
 
-      this.pdfViewer.scrollMode = this.#args.scrollMode;
-      if (this.#args.spreadMode !== null) {
-        this.pdfViewer.spreadMode = this.#args.spreadMode;
+      this.pdfViewer.scrollMode = this.__args.scrollMode;
+      if (this.__args.spreadMode !== null) {
+        this.pdfViewer.spreadMode = this.__args.spreadMode;
       }
-      this.pdfViewer.currentScaleValue = this.#args.scaleValue;
+      this.pdfViewer.currentScaleValue = this.__args.scaleValue;
       this.pdfViewer.currentPageNumber = pageNumber;
 
-      if (this.#args.annotationEditorMode !== null) {
+      if (this.__args.annotationEditorMode !== null) {
         this.pdfViewer.annotationEditorMode = {
-          mode: this.#args.annotationEditorMode,
+          mode: this.__args.annotationEditorMode,
         };
       }
-      this.#args = null;
+      this.__args = null;
     }, 0);
 
-    this.#removeWindowListeners();
-    this.#hideControls();
-    this.#resetMouseScrollState();
+    this.__removeWindowListeners();
+    this.__hideControls();
+    this.__resetMouseScrollState();
     this.contextMenuOpen = false;
   }
 
@@ -281,7 +278,7 @@ class PDFPresentationMode {
   /**
    * @private
    */
-  #mouseDown(evt) {
+  __mouseDown(evt) {
     if (this.contextMenuOpen) {
       this.contextMenuOpen = false;
       evt.preventDefault();
@@ -308,11 +305,11 @@ class PDFPresentationMode {
     }
   }
 
-  #contextMenu() {
+  __contextMenu() {
     this.contextMenuOpen = true;
   }
 
-  #showControls() {
+  __showControls() {
     if (this.controlsTimeout) {
       clearTimeout(this.controlsTimeout);
     } else {
@@ -324,7 +321,7 @@ class PDFPresentationMode {
     }, DELAY_BEFORE_HIDING_CONTROLS);
   }
 
-  #hideControls() {
+  __hideControls() {
     if (!this.controlsTimeout) {
       return;
     }
@@ -336,12 +333,12 @@ class PDFPresentationMode {
   /**
    * Resets the properties used for tracking mouse scrolling events.
    */
-  #resetMouseScrollState() {
+  __resetMouseScrollState() {
     this.mouseScrollTimeStamp = 0;
     this.mouseScrollDelta = 0;
   }
 
-  #touchSwipe(evt) {
+  __touchSwipe(evt) {
     if (!this.active) {
       return;
     }
@@ -401,29 +398,29 @@ class PDFPresentationMode {
     }
   }
 
-  #addWindowListeners() {
-    if (this.#windowAbortController) {
+  __addWindowListeners() {
+    if (this.__windowAbortController) {
       return;
     }
-    this.#windowAbortController = new AbortController();
-    const { signal } = this.#windowAbortController;
+    this.__windowAbortController = new AbortController();
+    const { signal } = this.__windowAbortController;
 
-    const touchSwipeBind = this.#touchSwipe.bind(this);
+    const touchSwipeBind = this.__touchSwipe.bind(this);
 
-    window.addEventListener("mousemove", this.#showControls.bind(this), {
+    window.addEventListener("mousemove", this.__showControls.bind(this), {
       signal,
     });
-    window.addEventListener("mousedown", this.#mouseDown.bind(this), {
+    window.addEventListener("mousedown", this.__mouseDown.bind(this), {
       signal,
     });
-    window.addEventListener("wheel", this.#mouseWheel.bind(this), {
+    window.addEventListener("wheel", this.__mouseWheel.bind(this), {
       passive: false,
       signal,
     });
-    window.addEventListener("keydown", this.#resetMouseScrollState.bind(this), {
+    window.addEventListener("keydown", this.__resetMouseScrollState.bind(this), {
       signal,
     });
-    window.addEventListener("contextmenu", this.#contextMenu.bind(this), {
+    window.addEventListener("contextmenu", this.__contextMenu.bind(this), {
       signal,
     });
     window.addEventListener("touchstart", touchSwipeBind, { signal });
@@ -431,33 +428,33 @@ class PDFPresentationMode {
     window.addEventListener("touchend", touchSwipeBind, { signal });
   }
 
-  #removeWindowListeners() {
-    this.#windowAbortController?.abort();
-    this.#windowAbortController = null;
+  __removeWindowListeners() {
+    this.__windowAbortController?.abort();
+    this.__windowAbortController = null;
   }
 
-  #addFullscreenChangeListeners() {
-    if (this.#fullscreenChangeAbortController) {
+  __addFullscreenChangeListeners() {
+    if (this.__fullscreenChangeAbortController) {
       return;
     }
-    this.#fullscreenChangeAbortController = new AbortController();
+    this.__fullscreenChangeAbortController = new AbortController();
 
     window.addEventListener(
       "fullscreenchange",
       () => {
         if (/* isFullscreen = */ document.fullscreenElement) {
-          this.#enter();
+          this.__enter();
         } else {
-          this.#exit();
+          this.__exit();
         }
       },
-      { signal: this.#fullscreenChangeAbortController.signal }
+      { signal: this.__fullscreenChangeAbortController.signal }
     );
   }
 
-  #removeFullscreenChangeListeners() {
-    this.#fullscreenChangeAbortController?.abort();
-    this.#fullscreenChangeAbortController = null;
+  __removeFullscreenChangeListeners() {
+    this.__fullscreenChangeAbortController?.abort();
+    this.__fullscreenChangeAbortController = null;
   }
 }
 

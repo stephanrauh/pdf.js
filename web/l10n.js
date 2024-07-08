@@ -21,22 +21,22 @@
  * @implements {IL10n}
  */
 class L10n {
-  #dir;
+  __dir;
 
-  #elements = new Set();
+  __elements = new Set();
 
-  #lang;
+  __lang;
 
-  #l10n;
+  __l10n;
 
   constructor({ lang, isRTL }, l10n = null) {
-    this.#lang = L10n.#fixupLangCode(lang);
-    this.#l10n = l10n;
-    this.#dir = isRTL ?? L10n.#isRTL(this.#lang) ? "rtl" : "ltr";
+    this.__lang = L10n.__fixupLangCode(lang);
+    this.__l10n = l10n;
+    this.__dir = isRTL ?? L10n.__isRTL(this.__lang) ? "rtl" : "ltr";
   }
 
   _setL10n(l10n) {
-    this.#l10n = l10n;
+    this.__l10n = l10n;
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
       document.l10n = l10n;
     }
@@ -44,23 +44,23 @@ class L10n {
 
   /** @inheritdoc */
   getLanguage() {
-    return this.#lang;
+    return this.__lang;
   }
 
   /** @inheritdoc */
   getDirection() {
-    return this.#dir;
+    return this.__dir;
   }
 
   /** @inheritdoc */
   async get(ids, args = null, fallback) {
     if (Array.isArray(ids)) {
       ids = ids.map(id => ({ id }));
-      const messages = await this.#l10n.formatMessages(ids);
+      const messages = await this.__l10n.formatMessages(ids);
       return messages.map(message => message.value);
     }
 
-    const messages = await this.#l10n.formatMessages([
+    const messages = await this.__l10n.formatMessages([
       {
         id: ids,
         args,
@@ -71,10 +71,10 @@ class L10n {
 
   /** @inheritdoc */
   async translate(element) {
-    this.#elements.add(element);
+    this.__elements.add(element);
     try {
-      this.#l10n.connectRoot(element);
-      await this.#l10n.translateRoots();
+      this.__l10n.connectRoot(element);
+      await this.__l10n.translateRoots();
     } catch {
       // Element is under an existing root, so there is no need to add it again.
     }
@@ -82,24 +82,24 @@ class L10n {
 
   /** @inheritdoc */
   async destroy() {
-    for (const element of this.#elements) {
-      this.#l10n.disconnectRoot(element);
+    for (const element of this.__elements) {
+      this.__l10n.disconnectRoot(element);
     }
-    this.#elements.clear();
-    this.#l10n.pauseObserving();
+    this.__elements.clear();
+    this.__l10n.pauseObserving();
   }
 
   /** @inheritdoc */
   pause() {
-    this.#l10n.pauseObserving();
+    this.__l10n.pauseObserving();
   }
 
   /** @inheritdoc */
   resume() {
-    this.#l10n.resumeObserving();
+    this.__l10n.resumeObserving();
   }
 
-  static #fixupLangCode(langCode) {
+  static __fixupLangCode(langCode) {
     // Use only lowercase language-codes internally, and fallback to English.
     langCode = langCode?.toLowerCase() || "en-us";
 
@@ -123,7 +123,7 @@ class L10n {
     return PARTIAL_LANG_CODES[langCode] || langCode;
   }
 
-  static #isRTL(lang) {
+  static __isRTL(lang) {
     const shortCode = lang.split("-", 1)[0];
     return ["ar", "he", "fa", "ps", "ur"].includes(shortCode);
   }

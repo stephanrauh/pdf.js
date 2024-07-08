@@ -74,34 +74,34 @@ const PDF_ROLE_TO_HTML_ROLE = {
 const HEADING_PATTERN = /^H(\d+)$/;
 
 class StructTreeLayerBuilder {
-  #treeDom = undefined;
+  __treeDom = undefined;
 
   get renderingDone() {
-    return this.#treeDom !== undefined;
+    return this.__treeDom !== undefined;
   }
 
   render(structTree) {
-    if (this.#treeDom !== undefined) {
-      return this.#treeDom;
+    if (this.__treeDom !== undefined) {
+      return this.__treeDom;
     }
-    const treeDom = this.#walk(structTree);
+    const treeDom = this.__walk(structTree);
     treeDom?.classList.add("structTree");
-    return (this.#treeDom = treeDom);
+    return (this.__treeDom = treeDom);
   }
 
   hide() {
-    if (this.#treeDom && !this.#treeDom.hidden) {
-      this.#treeDom.hidden = true;
+    if (this.__treeDom && !this.__treeDom.hidden) {
+      this.__treeDom.hidden = true;
     }
   }
 
   show() {
-    if (this.#treeDom?.hidden) {
-      this.#treeDom.hidden = false;
+    if (this.__treeDom?.hidden) {
+      this.__treeDom.hidden = false;
     }
   }
 
-  #setAttributes(structElement, htmlElement) {
+  __setAttributes(structElement, htmlElement) {
     const { alt, id, lang } = structElement;
     if (alt !== undefined) {
       htmlElement.setAttribute("aria-label", removeNullCharacters(alt));
@@ -117,7 +117,7 @@ class StructTreeLayerBuilder {
     }
   }
 
-  #walk(node) {
+  __walk(node) {
     if (!node) {
       return null;
     }
@@ -134,16 +134,16 @@ class StructTreeLayerBuilder {
       }
     }
 
-    this.#setAttributes(node, element);
+    this.__setAttributes(node, element);
 
     if (node.children) {
       if (node.children.length === 1 && "id" in node.children[0]) {
         // Often there is only one content node so just set the values on the
         // parent node to avoid creating an extra span.
-        this.#setAttributes(node.children[0], element);
+        this.__setAttributes(node.children[0], element);
       } else {
         for (const kid of node.children) {
-          element.append(this.#walk(kid));
+          element.append(this.__walk(kid));
         }
       }
     }

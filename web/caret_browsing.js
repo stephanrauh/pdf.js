@@ -17,16 +17,16 @@
 const PRECISION = 1e-1;
 
 class CaretBrowsingMode {
-  #mainContainer;
+  __mainContainer;
 
-  #toolBarHeight;
+  __toolBarHeight;
 
-  #viewerContainer;
+  __viewerContainer;
 
   constructor(mainContainer, viewerContainer, toolbarContainer) {
-    this.#mainContainer = mainContainer;
-    this.#viewerContainer = viewerContainer;
-    this.#toolBarHeight = toolbarContainer?.getBoundingClientRect().height ?? 0;
+    this.__mainContainer = mainContainer;
+    this.__viewerContainer = viewerContainer;
+    this.__toolBarHeight = toolbarContainer?.getBoundingClientRect().height ?? 0;
   }
 
   /**
@@ -35,7 +35,7 @@ class CaretBrowsingMode {
    * @param {DOMRect} rect2
    * @returns {boolean}
    */
-  #isOnSameLine(rect1, rect2) {
+  __isOnSameLine(rect1, rect2) {
     const top1 = rect1.y;
     const bot1 = rect1.bottom;
     const mid1 = rect1.y + rect1.height / 2;
@@ -57,7 +57,7 @@ class CaretBrowsingMode {
    * @param {boolean} isUp
    * @returns {boolean}
    */
-  #isUnderOver(rect, x, y, isUp) {
+  __isUnderOver(rect, x, y, isUp) {
     const midY = rect.y + rect.height / 2;
     return (
       (isUp ? y >= midY : y <= midY) &&
@@ -71,14 +71,11 @@ class CaretBrowsingMode {
    * @param {DOMRect} rect
    * @returns {boolean}
    */
-  #isVisible(rect) {
-    return (
-      rect.top >= this.#toolBarHeight &&
-      rect.left >= 0 &&
-      rect.bottom <=
-        (window.innerHeight || document.documentElement.clientHeight) &&
-      rect.right <= (window.innerWidth || document.documentElement.clientWidth)
-    );
+  __isVisible(rect) {
+    return (rect.top >= this.__toolBarHeight &&
+    rect.left >= 0 &&
+    rect.bottom <=
+      (window.innerHeight || document.documentElement.clientHeight) && rect.right <= (window.innerWidth || document.documentElement.clientWidth));
   }
 
   /**
@@ -87,7 +84,7 @@ class CaretBrowsingMode {
    * @param {boolean} isUp
    * @returns {Array<number>}
    */
-  #getCaretPosition(selection, isUp) {
+  __getCaretPosition(selection, isUp) {
     const { focusNode, focusOffset } = selection;
     const range = document.createRange();
     range.setStart(focusNode, focusOffset);
@@ -97,7 +94,7 @@ class CaretBrowsingMode {
     return [rect.x, isUp ? rect.top : rect.bottom];
   }
 
-  static #caretPositionFromPoint(x, y) {
+  static __caretPositionFromPoint(x, y) {
     if (
       (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
       !document.caretPositionFromPoint
@@ -109,7 +106,7 @@ class CaretBrowsingMode {
     return document.caretPositionFromPoint(x, y);
   }
 
-  #setCaretPositionHelper(selection, caretX, select, element, rect) {
+  __setCaretPositionHelper(selection, caretX, select, element, rect) {
     rect ||= element.getBoundingClientRect();
     if (caretX <= rect.x + PRECISION) {
       if (select) {
@@ -130,7 +127,7 @@ class CaretBrowsingMode {
     }
 
     const midY = rect.y + rect.height / 2;
-    let caretPosition = CaretBrowsingMode.#caretPositionFromPoint(caretX, midY);
+    let caretPosition = CaretBrowsingMode.__caretPositionFromPoint(caretX, midY);
     let parentElement = caretPosition.offsetNode?.parentElement;
     if (parentElement && parentElement !== element) {
       // There is an element on top of the one in the text layer, so we
@@ -146,7 +143,7 @@ class CaretBrowsingMode {
         savedVisibilities.push([el, style.visibility]);
         style.visibility = "hidden";
       }
-      caretPosition = CaretBrowsingMode.#caretPositionFromPoint(caretX, midY);
+      caretPosition = CaretBrowsingMode.__caretPositionFromPoint(caretX, midY);
       parentElement = caretPosition.offsetNode?.parentElement;
       for (const [el, visibility] of savedVisibilities) {
         el.style.visibility = visibility;
@@ -178,15 +175,15 @@ class CaretBrowsingMode {
    * @param {DOMRect} newLineElementRect
    * @param {number} caretX
    */
-  #setCaretPosition(
+  __setCaretPosition(
     select,
     selection,
     newLineElement,
     newLineElementRect,
     caretX
   ) {
-    if (this.#isVisible(newLineElementRect)) {
-      this.#setCaretPositionHelper(
+    if (this.__isVisible(newLineElementRect)) {
+      this.__setCaretPositionHelper(
         selection,
         caretX,
         select,
@@ -195,9 +192,9 @@ class CaretBrowsingMode {
       );
       return;
     }
-    this.#mainContainer.addEventListener(
+    this.__mainContainer.addEventListener(
       "scrollend",
-      this.#setCaretPositionHelper.bind(
+      this.__setCaretPositionHelper.bind(
         this,
         selection,
         caretX,
@@ -216,12 +213,12 @@ class CaretBrowsingMode {
    * @param {boolean} isUp
    * @returns {Node}
    */
-  #getNodeOnNextPage(textLayer, isUp) {
+  __getNodeOnNextPage(textLayer, isUp) {
     while (true) {
       const page = textLayer.closest(".page");
       const pageNumber = parseInt(page.getAttribute("data-page-number"));
       const nextPage = isUp ? pageNumber - 1 : pageNumber + 1;
-      textLayer = this.#viewerContainer.querySelector(
+      textLayer = this.__viewerContainer.querySelector(
         `.page[data-page-number="${nextPage}"] .textLayer`
       );
       if (!textLayer) {
@@ -266,7 +263,7 @@ class CaretBrowsingMode {
     ).bind(walker);
     while (nodeIterator()) {
       const element = walker.currentNode.parentElement;
-      if (!this.#isOnSameLine(focusRect, element.getBoundingClientRect())) {
+      if (!this.__isOnSameLine(focusRect, element.getBoundingClientRect())) {
         newLineElement = element;
         break;
       }
@@ -274,7 +271,7 @@ class CaretBrowsingMode {
 
     if (!newLineElement) {
       // Need to find the next line on the next page.
-      const node = this.#getNodeOnNextPage(root, isUp);
+      const node = this.__getNodeOnNextPage(root, isUp);
       if (!node) {
         return;
       }
@@ -288,9 +285,9 @@ class CaretBrowsingMode {
         selection.addRange(range);
         return;
       }
-      const [caretX] = this.#getCaretPosition(selection, isUp);
+      const [caretX] = this.__getCaretPosition(selection, isUp);
       const { parentElement } = node;
-      this.#setCaretPosition(
+      this.__setCaretPosition(
         select,
         selection,
         parentElement,
@@ -302,12 +299,12 @@ class CaretBrowsingMode {
 
     // We've a candidate for the next line now we want to find the first element
     // which is under/over the caret.
-    const [caretX, caretY] = this.#getCaretPosition(selection, isUp);
+    const [caretX, caretY] = this.__getCaretPosition(selection, isUp);
     const newLineElementRect = newLineElement.getBoundingClientRect();
 
     // Maybe the element on the new line is a valid candidate.
-    if (this.#isUnderOver(newLineElementRect, caretX, caretY, isUp)) {
-      this.#setCaretPosition(
+    if (this.__isUnderOver(newLineElementRect, caretX, caretY, isUp)) {
+      this.__setCaretPosition(
         select,
         selection,
         newLineElement,
@@ -322,19 +319,19 @@ class CaretBrowsingMode {
       // which could be under/over the caret.
       const element = walker.currentNode.parentElement;
       const elementRect = element.getBoundingClientRect();
-      if (!this.#isOnSameLine(newLineElementRect, elementRect)) {
+      if (!this.__isOnSameLine(newLineElementRect, elementRect)) {
         break;
       }
-      if (this.#isUnderOver(elementRect, caretX, caretY, isUp)) {
+      if (this.__isUnderOver(elementRect, caretX, caretY, isUp)) {
         // We found the element.
-        this.#setCaretPosition(select, selection, element, elementRect, caretX);
+        this.__setCaretPosition(select, selection, element, elementRect, caretX);
         return;
       }
     }
 
     // No element has been found so just put the caret on the element on the new
     // line.
-    this.#setCaretPosition(
+    this.__setCaretPosition(
       select,
       selection,
       newLineElement,

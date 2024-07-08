@@ -735,35 +735,35 @@ function clamp(v, min, max) {
 }
 
 class ProgressBar {
-  #classList = null;
+  __classList = null;
 
-  #disableAutoFetchTimeout = null;
+  __disableAutoFetchTimeout = null;
 
-  #percent = 0;
+  __percent = 0;
 
-  #style = null;
+  __style = null;
 
-  #visible = true;
+  __visible = true;
 
   constructor(bar) {
-    this.#classList = bar.classList;
-    this.#style = bar.style;
+    this.__classList = bar.classList;
+    this.__style = bar.style;
   }
 
   get percent() {
-    return this.#percent;
+    return this.__percent;
   }
 
   set percent(val) {
-    this.#percent = clamp(val, 0, 100);
+    this.__percent = clamp(val, 0, 100);
 
     if (isNaN(val)) {
-      this.#classList.add("indeterminate");
+      this.__classList.add("indeterminate");
       return;
     }
-    this.#classList.remove("indeterminate");
+    this.__classList.remove("indeterminate");
 
-    this.#style.setProperty("--progressBar-percent", `${this.#percent}%`);
+    this.__style.setProperty("--progressBar-percent", `${this.__percent}%`);
   }
 
   setWidth(viewer) {
@@ -773,7 +773,7 @@ class ProgressBar {
     const container = viewer.parentNode;
     const scrollbarWidth = container.offsetWidth - viewer.offsetWidth;
     if (scrollbarWidth > 0) {
-      this.#style.setProperty(
+      this.__style.setProperty(
         "--progressBar-end-offset",
         `${scrollbarWidth}px`
       );
@@ -781,34 +781,34 @@ class ProgressBar {
   }
 
   setDisableAutoFetch(delay = /* ms = */ 5000) {
-    if (isNaN(this.#percent)) {
+    if (isNaN(this.__percent)) {
       return;
     }
-    if (this.#disableAutoFetchTimeout) {
-      clearTimeout(this.#disableAutoFetchTimeout);
+    if (this.__disableAutoFetchTimeout) {
+      clearTimeout(this.__disableAutoFetchTimeout);
     }
     this.show();
 
-    this.#disableAutoFetchTimeout = setTimeout(() => {
-      this.#disableAutoFetchTimeout = null;
+    this.__disableAutoFetchTimeout = setTimeout(() => {
+      this.__disableAutoFetchTimeout = null;
       this.hide();
     }, delay);
   }
 
   hide() {
-    if (!this.#visible) {
+    if (!this.__visible) {
       return;
     }
-    this.#visible = false;
-    this.#classList.add("hidden");
+    this.__visible = false;
+    this.__classList.add("hidden");
   }
 
   show() {
-    if (this.#visible) {
+    if (this.__visible) {
       return;
     }
-    this.#visible = true;
-    this.#classList.remove("hidden");
+    this.__visible = true;
+    this.__classList.remove("hidden");
   }
 }
 

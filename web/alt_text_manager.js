@@ -16,43 +16,43 @@
 import { DOMSVGFactory, shadow } from "pdfjs-lib";
 
 class AltTextManager {
-  #boundUpdateUIState = this.#updateUIState.bind(this);
+  __boundUpdateUIState = this.__updateUIState.bind(this);
 
-  #boundSetPosition = this.#setPosition.bind(this);
+  __boundSetPosition = this.__setPosition.bind(this);
 
-  #boundOnClick = this.#onClick.bind(this);
+  __boundOnClick = this.__onClick.bind(this);
 
-  #currentEditor = null;
+  __currentEditor = null;
 
-  #cancelButton;
+  __cancelButton;
 
-  #dialog;
+  __dialog;
 
-  #eventBus;
+  __eventBus;
 
-  #hasUsedPointer = false;
+  __hasUsedPointer = false;
 
-  #optionDescription;
+  __optionDescription;
 
-  #optionDecorative;
+  __optionDecorative;
 
-  #overlayManager;
+  __overlayManager;
 
-  #saveButton;
+  __saveButton;
 
-  #textarea;
+  __textarea;
 
-  #uiManager;
+  __uiManager;
 
-  #previousAltText = null;
+  __previousAltText = null;
 
-  #svgElement = null;
+  __svgElement = null;
 
-  #rectElement = null;
+  __rectElement = null;
 
-  #container;
+  __container;
 
-  #telemetryData = null;
+  __telemetryData = null;
 
   constructor(
     {
@@ -67,42 +67,42 @@ class AltTextManager {
     overlayManager,
     eventBus
   ) {
-    this.#dialog = dialog;
-    this.#optionDescription = optionDescription;
-    this.#optionDecorative = optionDecorative;
-    this.#textarea = textarea;
-    this.#cancelButton = cancelButton;
-    this.#saveButton = saveButton;
-    this.#overlayManager = overlayManager;
-    this.#eventBus = eventBus;
-    this.#container = container;
+    this.__dialog = dialog;
+    this.__optionDescription = optionDescription;
+    this.__optionDecorative = optionDecorative;
+    this.__textarea = textarea;
+    this.__cancelButton = cancelButton;
+    this.__saveButton = saveButton;
+    this.__overlayManager = overlayManager;
+    this.__eventBus = eventBus;
+    this.__container = container;
 
-    dialog.addEventListener("close", this.#close.bind(this));
+    dialog.addEventListener("close", this.__close.bind(this));
     dialog.addEventListener("contextmenu", event => {
-      if (event.target !== this.#textarea) {
+      if (event.target !== this.__textarea) {
         event.preventDefault();
       }
     });
-    cancelButton.addEventListener("click", this.#finish.bind(this));
-    saveButton.addEventListener("click", this.#save.bind(this));
-    optionDescription.addEventListener("change", this.#boundUpdateUIState);
-    optionDecorative.addEventListener("change", this.#boundUpdateUIState);
+    cancelButton.addEventListener("click", this.__finish.bind(this));
+    saveButton.addEventListener("click", this.__save.bind(this));
+    optionDescription.addEventListener("change", this.__boundUpdateUIState);
+    optionDecorative.addEventListener("change", this.__boundUpdateUIState);
 
-    this.#overlayManager.register(dialog);
+    this.__overlayManager.register(dialog);
   }
 
   get _elements() {
     return shadow(this, "_elements", [
-      this.#optionDescription,
-      this.#optionDecorative,
-      this.#textarea,
-      this.#saveButton,
-      this.#cancelButton,
+      this.__optionDescription,
+      this.__optionDecorative,
+      this.__textarea,
+      this.__saveButton,
+      this.__cancelButton,
     ]);
   }
 
-  #createSVGElement() {
-    if (this.#svgElement) {
+  __createSVGElement() {
+    if (this.__svgElement) {
       return;
     }
 
@@ -111,7 +111,7 @@ class AltTextManager {
     // picture to describe.
 
     const svgFactory = new DOMSVGFactory();
-    const svg = (this.#svgElement = svgFactory.createElement("svg"));
+    const svg = (this.__svgElement = svgFactory.createElement("svg"));
     svg.setAttribute("width", "0");
     svg.setAttribute("height", "0");
     const defs = svgFactory.createElement("defs");
@@ -128,75 +128,75 @@ class AltTextManager {
     rect.setAttribute("x", "0");
     rect.setAttribute("y", "0");
 
-    rect = this.#rectElement = svgFactory.createElement("rect");
+    rect = this.__rectElement = svgFactory.createElement("rect");
     mask.append(rect);
     rect.setAttribute("fill", "black");
-    this.#dialog.append(svg);
+    this.__dialog.append(svg);
   }
 
   async editAltText(uiManager, editor) {
-    if (this.#currentEditor || !editor) {
+    if (this.__currentEditor || !editor) {
       return;
     }
 
-    this.#createSVGElement();
+    this.__createSVGElement();
 
-    this.#hasUsedPointer = false;
+    this.__hasUsedPointer = false;
     for (const element of this._elements) {
-      element.addEventListener("click", this.#boundOnClick);
+      element.addEventListener("click", this.__boundOnClick);
     }
 
     const { altText, decorative } = editor.altTextData;
     if (decorative === true) {
-      this.#optionDecorative.checked = true;
-      this.#optionDescription.checked = false;
+      this.__optionDecorative.checked = true;
+      this.__optionDescription.checked = false;
     } else {
-      this.#optionDecorative.checked = false;
-      this.#optionDescription.checked = true;
+      this.__optionDecorative.checked = false;
+      this.__optionDescription.checked = true;
     }
-    this.#previousAltText = this.#textarea.value = altText?.trim() || "";
-    this.#updateUIState();
+    this.__previousAltText = this.__textarea.value = altText?.trim() || "";
+    this.__updateUIState();
 
-    this.#currentEditor = editor;
-    this.#uiManager = uiManager;
-    this.#uiManager.removeEditListeners();
-    this.#eventBus._on("resize", this.#boundSetPosition);
+    this.__currentEditor = editor;
+    this.__uiManager = uiManager;
+    this.__uiManager.removeEditListeners();
+    this.__eventBus._on("resize", this.__boundSetPosition);
 
     try {
-      await this.#overlayManager.open(this.#dialog);
-      this.#setPosition();
+      await this.__overlayManager.open(this.__dialog);
+      this.__setPosition();
     } catch (ex) {
-      this.#close();
+      this.__close();
       throw ex;
     }
   }
 
-  #setPosition() {
-    if (!this.#currentEditor) {
+  __setPosition() {
+    if (!this.__currentEditor) {
       return;
     }
-    const dialog = this.#dialog;
+    const dialog = this.__dialog;
     const { style } = dialog;
     const {
       x: containerX,
       y: containerY,
       width: containerW,
       height: containerH,
-    } = this.#container.getBoundingClientRect();
+    } = this.__container.getBoundingClientRect();
     const { innerWidth: windowW, innerHeight: windowH } = window;
     const { width: dialogW, height: dialogH } = dialog.getBoundingClientRect();
-    const { x, y, width, height } = this.#currentEditor.getClientDimensions();
+    const { x, y, width, height } = this.__currentEditor.getClientDimensions();
     const MARGIN = 10;
-    const isLTR = this.#uiManager.direction === "ltr";
+    const isLTR = this.__uiManager.direction === "ltr";
 
     const xs = Math.max(x, containerX);
     const xe = Math.min(x + width, containerX + containerW);
     const ys = Math.max(y, containerY);
     const ye = Math.min(y + height, containerY + containerH);
-    this.#rectElement.setAttribute("width", `${(xe - xs) / windowW}`);
-    this.#rectElement.setAttribute("height", `${(ye - ys) / windowH}`);
-    this.#rectElement.setAttribute("x", `${xs / windowW}`);
-    this.#rectElement.setAttribute("y", `${ys / windowH}`);
+    this.__rectElement.setAttribute("width", `${(xe - xs) / windowW}`);
+    this.__rectElement.setAttribute("height", `${(ye - ys) / windowH}`);
+    this.__rectElement.setAttribute("x", `${xs / windowW}`);
+    this.__rectElement.setAttribute("y", `${ys / windowH}`);
 
     let left = null;
     let top = Math.max(y, 0);
@@ -241,70 +241,70 @@ class AltTextManager {
     }
   }
 
-  #finish() {
-    if (this.#overlayManager.active === this.#dialog) {
-      this.#overlayManager.close(this.#dialog);
+  __finish() {
+    if (this.__overlayManager.active === this.__dialog) {
+      this.__overlayManager.close(this.__dialog);
     }
   }
 
-  #close() {
-    this.#currentEditor._reportTelemetry(
-      this.#telemetryData || {
+  __close() {
+    this.__currentEditor._reportTelemetry(
+      this.__telemetryData || {
         action: "alt_text_cancel",
-        alt_text_keyboard: !this.#hasUsedPointer,
+        alt_text_keyboard: !this.__hasUsedPointer,
       }
     );
-    this.#telemetryData = null;
+    this.__telemetryData = null;
 
-    this.#removeOnClickListeners();
-    this.#uiManager?.addEditListeners();
-    this.#eventBus._off("resize", this.#boundSetPosition);
-    this.#currentEditor.altTextFinish();
-    this.#currentEditor = null;
-    this.#uiManager = null;
+    this.__removeOnClickListeners();
+    this.__uiManager?.addEditListeners();
+    this.__eventBus._off("resize", this.__boundSetPosition);
+    this.__currentEditor.altTextFinish();
+    this.__currentEditor = null;
+    this.__uiManager = null;
   }
 
-  #updateUIState() {
-    this.#textarea.disabled = this.#optionDecorative.checked;
+  __updateUIState() {
+    this.__textarea.disabled = this.__optionDecorative.checked;
   }
 
-  #save() {
-    const altText = this.#textarea.value.trim();
-    const decorative = this.#optionDecorative.checked;
-    this.#currentEditor.altTextData = {
+  __save() {
+    const altText = this.__textarea.value.trim();
+    const decorative = this.__optionDecorative.checked;
+    this.__currentEditor.altTextData = {
       altText,
       decorative,
     };
-    this.#telemetryData = {
+    this.__telemetryData = {
       action: "alt_text_save",
       alt_text_description: !!altText,
       alt_text_edit:
-        !!this.#previousAltText && this.#previousAltText !== altText,
+        !!this.__previousAltText && this.__previousAltText !== altText,
       alt_text_decorative: decorative,
-      alt_text_keyboard: !this.#hasUsedPointer,
+      alt_text_keyboard: !this.__hasUsedPointer,
     };
-    this.#finish();
+    this.__finish();
   }
 
-  #onClick(evt) {
+  __onClick(evt) {
     if (evt.detail === 0) {
       return; // The keyboard was used.
     }
-    this.#hasUsedPointer = true;
-    this.#removeOnClickListeners();
+    this.__hasUsedPointer = true;
+    this.__removeOnClickListeners();
   }
 
-  #removeOnClickListeners() {
+  __removeOnClickListeners() {
     for (const element of this._elements) {
-      element.removeEventListener("click", this.#boundOnClick);
+      element.removeEventListener("click", this.__boundOnClick);
     }
   }
 
   destroy() {
-    this.#uiManager = null; // Avoid re-adding the edit listeners.
-    this.#finish();
-    this.#svgElement?.remove();
-    this.#svgElement = this.#rectElement = null;
+    this.__uiManager = null; // Avoid re-adding the edit listeners.
+    this.__finish();
+    this.__svgElement?.remove();
+    this.__svgElement = this.__rectElement = null;
   }
 }
 

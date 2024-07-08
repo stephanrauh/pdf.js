@@ -130,23 +130,23 @@ function isValidAnnotationEditorMode(mode) {
 
 class PDFPageViewBuffer {
   // Here we rely on the fact that `Set`s preserve the insertion order.
-  #buf = new Set();
+  __buf = new Set();
 
-  #size = 0;
+  __size = 0;
 
   constructor(size) {
-    this.#size = size;
+    this.__size = size;
   }
 
   push(view) {
-    const buf = this.#buf;
+    const buf = this.__buf;
     if (buf.has(view)) {
       buf.delete(view); // Move the view to the "end" of the buffer.
     }
     buf.add(view);
 
-    if (buf.size > this.#size) {
-      this.#destroyFirstView();
+    if (buf.size > this.__size) {
+      this.__destroyFirstView();
     }
   }
 
@@ -158,9 +158,9 @@ class PDFPageViewBuffer {
    * is larger than `newSize`, some of those pages will be destroyed anyway.
    */
   resize(newSize, idsToKeep = null) {
-    this.#size = newSize;
+    this.__size = newSize;
 
-    const buf = this.#buf;
+    const buf = this.__buf;
     if (idsToKeep) {
       const ii = buf.size;
       let i = 1;
@@ -175,24 +175,24 @@ class PDFPageViewBuffer {
       }
     }
 
-    while (buf.size > this.#size) {
-      this.#destroyFirstView();
+    while (buf.size > this.__size) {
+      this.__destroyFirstView();
     }
   }
 
   has(view) {
-    return this.#buf.has(view);
+    return this.__buf.has(view);
   }
 
   [Symbol.iterator]() {
-    return this.#buf.keys();
+    return this.__buf.keys();
   }
 
-  #destroyFirstView() {
-    const firstView = this.#buf.keys().next().value;
+  __destroyFirstView() {
+    const firstView = this.__buf.keys().next().value;
 
     firstView?.destroy();
-    this.#buf.delete(firstView);
+    this.__buf.delete(firstView);
   }
 }
 
@@ -200,55 +200,55 @@ class PDFPageViewBuffer {
  * Simple viewer control to display PDF content/pages.
  */
 class PDFViewer {
-  #buffer = null;
+  __buffer = null;
 
-  #altTextManager = null;
+  __altTextManager = null;
 
-  #annotationEditorHighlightColors = null;
+  __annotationEditorHighlightColors = null;
 
-  #annotationEditorMode = AnnotationEditorType.NONE;
+  __annotationEditorMode = AnnotationEditorType.NONE;
 
-  #annotationEditorUIManager = null;
+  __annotationEditorUIManager = null;
 
-  #annotationMode = AnnotationMode.ENABLE_FORMS;
+  __annotationMode = AnnotationMode.ENABLE_FORMS;
 
-  #containerTopLeft = null;
+  __containerTopLeft = null;
 
-  #enableHWA = false;
+  __enableHWA = false;
 
-  #enableHighlightFloatingButton = false;
+  __enableHighlightFloatingButton = false;
 
-  #enablePermissions = false;
+  __enablePermissions = false;
 
-  #eventAbortController = null;
+  __eventAbortController = null;
 
-  #mlManager = null;
+  __mlManager = null;
 
-  #onPageRenderedCallback = null;
+  __onPageRenderedCallback = null;
 
-  #switchAnnotationEditorModeTimeoutId = null;
+  __switchAnnotationEditorModeTimeoutId = null;
 
-  #getAllTextInProgress = false;
+  __getAllTextInProgress = false;
 
-  #hiddenCopyElement = null;
+  __hiddenCopyElement = null;
 
-  #interruptCopyCondition = false;
+  __interruptCopyCondition = false;
 
-  #previousContainerHeight = 0;
+  __previousContainerHeight = 0;
 
-  #resizeObserver = new ResizeObserver(this.#resizeObserverCallback.bind(this));
+  __resizeObserver = new ResizeObserver(this.__resizeObserverCallback.bind(this));
 
-  #scrollModePageState = null;
+  __scrollModePageState = null;
 
-  #scaleTimeoutId = null;
+  __scaleTimeoutId = null;
 
-  #textLayerMode = TextLayerMode.ENABLE;
+  __textLayerMode = TextLayerMode.ENABLE;
 
   // #1989 modified by ngx-extended-pdf-viewer
   // to ensure rendering in infinite-scroll-mode
-  #outerScrollContainer = undefined;
+  __outerScrollContainer = undefined;
 
-  #pageViewMode = "multiple";
+  __pageViewMode = "multiple";
   // #1989 end of modification by ngx-extended-pdf-viewer
 
   /**
@@ -281,27 +281,27 @@ class PDFViewer {
         throw new Error("The `container` must be absolutely positioned.");
       }
     }
-    this.#resizeObserver.observe(this.container);
+    this.__resizeObserver.observe(this.container);
 
     this.eventBus = options.eventBus;
     this.linkService = options.linkService || new SimpleLinkService();
     this.downloadManager = options.downloadManager || null;
     this.findController = options.findController || null;
-    this.#altTextManager = options.altTextManager || null;
+    this.__altTextManager = options.altTextManager || null;
 
     if (this.findController) {
       this.findController.onIsPageVisible = pageNumber =>
         this._getVisiblePages().ids.has(pageNumber);
     }
     this._scriptingManager = options.scriptingManager || null;
-    this.#textLayerMode = options.textLayerMode ?? TextLayerMode.ENABLE;
-    this.#annotationMode =
+    this.__textLayerMode = options.textLayerMode ?? TextLayerMode.ENABLE;
+    this.__annotationMode =
       options.annotationMode ?? AnnotationMode.ENABLE_FORMS;
-    this.#annotationEditorMode =
+    this.__annotationEditorMode =
       options.annotationEditorMode ?? AnnotationEditorType.NONE;
-    this.#annotationEditorHighlightColors =
+    this.__annotationEditorHighlightColors =
       options.annotationEditorHighlightColors || null;
-    this.#enableHighlightFloatingButton =
+    this.__enableHighlightFloatingButton =
       options.enableHighlightFloatingButton === true;
     this.imageResourcesPath = options.imageResourcesPath || "";
     this.enablePrintAutoRotate = options.enablePrintAutoRotate || false;
@@ -313,10 +313,10 @@ class PDFViewer {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
       this.l10n ||= new GenericL10n();
     }
-    this.#enablePermissions = options.enablePermissions || false;
+    this.__enablePermissions = options.enablePermissions || false;
     this.pageColors = options.pageColors || null;
-    this.#mlManager = options.mlManager || null;
-    this.#enableHWA = options.enableHWA || false;
+    this.__mlManager = options.mlManager || null;
+    this.__enableHWA = options.enableHWA || false;
 
     this.defaultRenderingQueue = !options.renderingQueue;
     if (
@@ -334,8 +334,8 @@ class PDFViewer {
     abortSignal?.addEventListener(
       "abort",
       () => {
-        this.#resizeObserver.disconnect();
-        this.#resizeObserver = null;
+        this.__resizeObserver.disconnect();
+        this.__resizeObserver = null;
       },
       { once: true }
     );
@@ -355,13 +355,13 @@ class PDFViewer {
       this.viewer.classList.add("removePageBorders");
     }
 
-    this.#updateContainerHeightCss();
+    this.__updateContainerHeightCss();
 
     // Trigger API-cleanup, once thumbnail rendering has finished,
     // if the relevant pageView is *not* cached in the buffer.
     this.eventBus._on("thumbnailrendered", ({ pageNumber, pdfPage }) => {
       const pageView = this._pages[pageNumber - 1];
-      if (!this.#buffer.has(pageView)) {
+      if (!this.__buffer.has(pageView)) {
         pdfPage?.cleanup();
       }
     });
@@ -378,7 +378,7 @@ class PDFViewer {
   // #2337 modified by ngx-extended-pdf-viewer:
   // allow textlayer to be activated in an existing viewer
   setTextLayerMode(mode) {
-    this.#textLayerMode = mode;
+    this.__textLayerMode = mode;
   }
   // #2337 end of modification by ngx-extended-pdf-viewer
 
@@ -386,22 +386,22 @@ class PDFViewer {
   // to ensure rendering in infinite-scroll-mode
 
   get pageViewMode() {
-    return this.#pageViewMode;
+    return this.__pageViewMode;
   }
 
   set pageViewMode(viewMode) {
-    if (this.#pageViewMode !== viewMode) {
-      this.#pageViewMode = viewMode;
-      if (!this.#outerScrollContainer && viewMode === "infinite-scroll") {
-        this.#outerScrollContainer = this.#findParentWithScrollbar(this.container.offsetParent);
-        if (this.#outerScrollContainer) {
-          watchScroll(this.#outerScrollContainer, this._scrollUpdate.bind(this));
+    if (this.__pageViewMode !== viewMode) {
+      this.__pageViewMode = viewMode;
+      if (!this.__outerScrollContainer && viewMode === "infinite-scroll") {
+        this.__outerScrollContainer = this.__findParentWithScrollbar(this.container.offsetParent);
+        if (this.__outerScrollContainer) {
+          watchScroll(this.__outerScrollContainer, this._scrollUpdate.bind(this));
         }
       }
     }
   }
 
-  #findParentWithScrollbar(element) {
+  __findParentWithScrollbar(element) {
     while (element) {
       if (element.scrollHeight > element.clientHeight || element.scrollWidth > element.clientWidth) {
         return element;
@@ -422,7 +422,7 @@ class PDFViewer {
   }
 
   getCachedPageViews() {
-    return new Set(this.#buffer);
+    return new Set(this.__buffer);
   }
 
   /**
@@ -438,7 +438,7 @@ class PDFViewer {
    * @type {boolean}
    */
   get renderForms() {
-    return this.#annotationMode === AnnotationMode.ENABLE_FORMS;
+    return this.__annotationMode === AnnotationMode.ENABLE_FORMS;
   }
 
   /**
@@ -527,7 +527,7 @@ class PDFViewer {
   async _setCurrentPageNumber(val, resetCurrentPageView = false) {
     if (this._currentPageNumber === val) {
       if (resetCurrentPageView) {
-        this.#resetCurrentPageView();
+        this.__resetCurrentPageView();
       }
       return true;
     }
@@ -547,16 +547,16 @@ class PDFViewer {
         pageView.div.parentElement.childNodes.forEach(async div => {
           const pageNumber = Number(div.getAttribute("data-page-number"));
           const pv = this._pages[pageNumber - 1];
-          await this.#ensurePdfPageLoaded(pv);
+          await this.__ensurePdfPageLoaded(pv);
           this.renderingQueue.renderView(pv);
           div.style.display = "inline-block";
         });
       } else {
-        await this.#ensurePdfPageLoaded(pageView);
+        await this.__ensurePdfPageLoaded(pageView);
         this.renderingQueue.renderView(pageView);
 
         // #716 modified by ngx-extended-pdf-viewer
-        if (this.#pageViewMode === "book") {
+        if (this.__pageViewMode === "book") {
           this.ensureAdjacentPagesAreLoaded();
         }
         // #716 modified by ngx-extended-pdf-viewer
@@ -572,7 +572,7 @@ class PDFViewer {
     });
 
     if (resetCurrentPageView) {
-      this.#resetCurrentPageView();
+      this.__resetCurrentPageView();
     }
     return true;
   }
@@ -589,7 +589,7 @@ class PDFViewer {
       const pageView = this._pages[pageIndex];
       const isLoading = pageView.renderingState === RenderingStates.INITIAL;
       if (isLoading) {
-        this.#ensurePdfPageLoaded(pageView).then(() => {
+        this.__ensurePdfPageLoaded(pageView).then(() => {
           // todo: this cancels any rendering that's already in progress
           this.renderingQueue.renderView(pageView);
         });
@@ -613,7 +613,7 @@ class PDFViewer {
       if (pageIndex >= 0 && pageIndex < this._pages.length) {
         try {
           const pageView = this._pages[pageIndex];
-          await this.#ensurePdfPageLoaded(pageView);
+          await this.__ensurePdfPageLoaded(pageView);
 
           const isAlreadyRendering = this._pages.some(
             pv => pv.renderingState === RenderingStates.RUNNING || pv.renderingState === RenderingStates.PAUSED
@@ -710,7 +710,7 @@ class PDFViewer {
     if (!this.pdfDocument) {
       return;
     }
-    this.#setScale(val, { noScroll: false });
+    this.__setScale(val, { noScroll: false });
   }
 
   /**
@@ -727,7 +727,7 @@ class PDFViewer {
     if (!this.pdfDocument) {
       return;
     }
-    this.#setScale(val, { noScroll: false });
+    this.__setScale(val, { noScroll: false });
   }
 
   /**
@@ -764,7 +764,7 @@ class PDFViewer {
     // Prevent errors in case the rotation changes *before* the scale has been
     // set to a non-default value.
     if (this._currentScaleValue) {
-      this.#setScale(this._currentScaleValue, { noScroll: true });
+      this.__setScale(this._currentScaleValue, { noScroll: true });
     }
 
     this.eventBus.dispatch("rotationchanging", {
@@ -794,7 +794,7 @@ class PDFViewer {
     const self = this;
     return shadow(this, "_layerProperties", {
       get annotationEditorUIManager() {
-        return self.#annotationEditorUIManager;
+        return self.__annotationEditorUIManager;
       },
       get annotationStorage() {
         return self.pdfDocument?.annotationStorage;
@@ -824,11 +824,11 @@ class PDFViewer {
    * Currently only *some* permissions are supported.
    * @returns {Object}
    */
-  #initializePermissions(permissions) {
+  __initializePermissions(permissions) {
     const params = {
-      annotationEditorMode: this.#annotationEditorMode,
-      annotationMode: this.#annotationMode,
-      textLayerMode: this.#textLayerMode,
+      annotationEditorMode: this.__annotationEditorMode,
+      annotationMode: this.__annotationMode,
+      textLayerMode: this.__textLayerMode,
     };
     if (!permissions) {
       return params;
@@ -836,7 +836,7 @@ class PDFViewer {
 
     if (
       !permissions.includes(PermissionFlag.COPY) &&
-      this.#textLayerMode === TextLayerMode.ENABLE
+      this.__textLayerMode === TextLayerMode.ENABLE
     ) {
       params.textLayerMode = TextLayerMode.ENABLE_PERMISSIONS;
     }
@@ -848,7 +848,7 @@ class PDFViewer {
     if (
       !permissions.includes(PermissionFlag.MODIFY_ANNOTATIONS) &&
       !permissions.includes(PermissionFlag.FILL_INTERACTIVE_FORMS) &&
-      this.#annotationMode === AnnotationMode.ENABLE_FORMS
+      this.__annotationMode === AnnotationMode.ENABLE_FORMS
     ) {
       params.annotationMode = AnnotationMode.ENABLE;
     }
@@ -856,7 +856,7 @@ class PDFViewer {
     return params;
   }
 
-  async #onePageRenderedOrForceFetch(signal) {
+  async __onePageRenderedOrForceFetch(signal) {
     // Unless the viewer *and* its pages are visible, rendering won't start and
     // `this._onePageRenderedCapability` thus won't be resolved.
     // To ensure that automatic printing, on document load, still works even in
@@ -903,7 +903,7 @@ class PDFViewer {
       pageNum <= pagesCount;
       ++pageNum
     ) {
-      if (this.#interruptCopyCondition) {
+      if (this.__interruptCopyCondition) {
         return null;
       }
       buffer.length = 0;
@@ -925,13 +925,13 @@ class PDFViewer {
     return texts.join("\n");
   }
 
-  #copyCallback(textLayerMode, event) {
+  __copyCallback(textLayerMode, event) {
     const selection = document.getSelection();
     const { focusNode, anchorNode } = selection;
     if (
       anchorNode &&
       focusNode &&
-      selection.containsNode(this.#hiddenCopyElement)
+      selection.containsNode(this.__hiddenCopyElement)
     ) {
       // About the condition above:
       //  - having non-null anchorNode and focusNode are here to guaranty that
@@ -942,14 +942,14 @@ class PDFViewer {
       //    has been selected.
 
       if (
-        this.#getAllTextInProgress ||
+        this.__getAllTextInProgress ||
         textLayerMode === TextLayerMode.ENABLE_PERMISSIONS
       ) {
         event.preventDefault();
         event.stopPropagation();
         return;
       }
-      this.#getAllTextInProgress = true;
+      this.__getAllTextInProgress = true;
 
       // TODO: if all the pages are rendered we don't need to wait for
       // getAllText and we could just get text from the Selection object.
@@ -961,7 +961,7 @@ class PDFViewer {
       const ac = new AbortController();
       window.addEventListener(
         "keydown",
-        ev => (this.#interruptCopyCondition = ev.key === "Escape"),
+        ev => (this.__interruptCopyCondition = ev.key === "Escape"),
         { signal: ac.signal }
       );
 
@@ -977,8 +977,8 @@ class PDFViewer {
           );
         })
         .finally(() => {
-          this.#getAllTextInProgress = false;
-          this.#interruptCopyCondition = false;
+          this.__getAllTextInProgress = false;
+          this.__interruptCopyCondition = false;
           ac.abort();
           classList.remove("copyAll");
         });
@@ -1001,9 +1001,9 @@ class PDFViewer {
       this.findController?.setDocument(null);
       this._scriptingManager?.setDocument(null);
 
-      if (this.#annotationEditorUIManager) {
-        this.#annotationEditorUIManager.destroy();
-        this.#annotationEditorUIManager = null;
+      if (this.__annotationEditorUIManager) {
+        this.__annotationEditorUIManager.destroy();
+        this.__annotationEditorUIManager = null;
       }
     }
 
@@ -1017,14 +1017,14 @@ class PDFViewer {
     const optionalContentConfigPromise = pdfDocument.getOptionalContentConfig({
       intent: "display",
     });
-    const permissionsPromise = this.#enablePermissions
+    const permissionsPromise = this.__enablePermissions
       ? pdfDocument.getPermissions()
       : Promise.resolve();
 
     const { eventBus, pageColors, viewer } = this;
 
-    this.#eventAbortController = new AbortController();
-    const { signal } = this.#eventAbortController;
+    this.__eventAbortController = new AbortController();
+    const { signal } = this.__eventAbortController;
 
     // Given that browsers don't handle huge amounts of DOM-elements very well,
     // enforce usage of PAGE-scrolling when loading *very* long/large documents.
@@ -1052,7 +1052,7 @@ class PDFViewer {
       }
       // Add the page to the buffer at the start of drawing. That way it can be
       // evicted from the buffer and destroyed even if we pause its rendering.
-      this.#buffer.push(pageView);
+      this.__buffer.push(pageView);
     };
     eventBus._on("pagerender", onBeforeDraw, { signal });
 
@@ -1077,10 +1077,10 @@ class PDFViewer {
         this._optionalContentConfigPromise = optionalContentConfigPromise;
 
         const { annotationEditorMode, annotationMode, textLayerMode } =
-          this.#initializePermissions(permissions);
+          this.__initializePermissions(permissions);
 
         if (textLayerMode !== TextLayerMode.DISABLE) {
-          const element = (this.#hiddenCopyElement =
+          const element = (this.__hiddenCopyElement =
             document.createElement("div"));
           element.id = "hiddenCopyElement";
           viewer.before(element);
@@ -1092,23 +1092,23 @@ class PDFViewer {
           if (pdfDocument.isPureXfa) {
             console.warn("Warning: XFA-editing is not implemented.");
           } else if (isValidAnnotationEditorMode(mode)) {
-            this.#annotationEditorUIManager = new AnnotationEditorUIManager(
+            this.__annotationEditorUIManager = new AnnotationEditorUIManager(
               this.container,
               viewer,
-              this.#altTextManager,
+              this.__altTextManager,
               eventBus,
               pdfDocument,
               pageColors,
-              this.#annotationEditorHighlightColors,
-              this.#enableHighlightFloatingButton,
-              this.#mlManager
+              this.__annotationEditorHighlightColors,
+              this.__enableHighlightFloatingButton,
+              this.__mlManager
             );
             eventBus.dispatch("annotationeditoruimanager", {
               source: this,
-              uiManager: this.#annotationEditorUIManager,
+              uiManager: this.__annotationEditorUIManager,
             });
             if (mode !== AnnotationEditorType.NONE) {
-              this.#annotationEditorUIManager.updateMode(mode);
+              this.__annotationEditorUIManager.updateMode(mode);
             }
           } else {
             console.error(`Invalid AnnotationEditor mode: ${mode}`);
@@ -1166,7 +1166,7 @@ class PDFViewer {
             pageColors,
             l10n: this.l10n,
             layerProperties: this._layerProperties,
-            enableHWA: this.#enableHWA,
+            enableHWA: this.__enableHWA,
           });
           this._pages.push(pageView);
         }
@@ -1177,7 +1177,7 @@ class PDFViewer {
 
         if (this._scrollMode === ScrollMode.PAGE) {
           // Ensure that the current page becomes visible on document load.
-          this.#ensurePageViewVisible();
+          this.__ensurePageViewVisible();
         } else if (this._spreadMode !== SpreadMode.NONE) {
           this._updateSpreadMode();
         }
@@ -1185,26 +1185,26 @@ class PDFViewer {
         // Fetch all the pages since the viewport is needed before printing
         // starts to create the correct size canvas. Wait until one page is
         // rendered so we don't tie up too many resources early on.
-        this.#onePageRenderedOrForceFetch(signal).then(async () => {
+        this.__onePageRenderedOrForceFetch(signal).then(async () => {
           if (pdfDocument !== this.pdfDocument) {
             return; // The document was closed while the first page rendered.
           }
           this.findController?.setDocument(pdfDocument); // Enable searching.
           this._scriptingManager?.setDocument(pdfDocument); // Enable scripting.
 
-          if (this.#hiddenCopyElement) {
+          if (this.__hiddenCopyElement) {
             document.addEventListener(
               "copy",
-              this.#copyCallback.bind(this, textLayerMode),
+              this.__copyCallback.bind(this, textLayerMode),
               { signal }
             );
           }
 
-          if (this.#annotationEditorUIManager) {
+          if (this.__annotationEditorUIManager) {
             // Ensure that the Editor buttons, in the toolbar, are updated.
             eventBus.dispatch("annotationeditormodechanged", {
               source: this,
-              mode: this.#annotationEditorMode,
+              mode: this.__annotationEditorMode,
             });
           }
 
@@ -1226,7 +1226,7 @@ class PDFViewer {
           }
 
   		  // #716 modified by ngx-extended-pdf-viewer
-          if (this.#pageViewMode === "book") {
+          if (this.__pageViewMode === "book") {
             await this.ensureAdjacentPagesAreLoaded();
           }
           // #716 end of modification by ngx-extended-pdf-viewer
@@ -1316,7 +1316,7 @@ class PDFViewer {
     this._pageLabels = null;
     // #950 modified by ngx-extended-pdf-viewer
     const bufferSize = Number(PDFViewerApplicationOptions.get("defaultCacheSize")) || DEFAULT_CACHE_SIZE;
-    this.#buffer = new PDFPageViewBuffer(bufferSize);
+    this.__buffer = new PDFPageViewBuffer(bufferSize);
     // #950 end of modification by ngx-extended-pdf-viewer
     this._location = null;
     this._pagesRotation = 0;
@@ -1328,14 +1328,14 @@ class PDFViewer {
     this._previousScrollMode = ScrollMode.UNKNOWN;
     this._spreadMode = SpreadMode.NONE;
 
-    this.#scrollModePageState = {
+    this.__scrollModePageState = {
       previousPageNumber: 1,
       scrollDown: true,
       pages: [],
     };
 
-    this.#eventAbortController?.abort();
-    this.#eventAbortController = null;
+    this.__eventAbortController?.abort();
+    this.__eventAbortController = null;
 
     // Remove the pages from the DOM...
     this.viewer.textContent = "";
@@ -1344,18 +1344,18 @@ class PDFViewer {
 
     this.viewer.removeAttribute("lang");
 
-    this.#hiddenCopyElement?.remove();
-    this.#hiddenCopyElement = null;
+    this.__hiddenCopyElement?.remove();
+    this.__hiddenCopyElement = null;
 
-    this.#cleanupSwitchAnnotationEditorMode();
+    this.__cleanupSwitchAnnotationEditorMode();
   }
 
-  #ensurePageViewVisible() {
+  __ensurePageViewVisible() {
     if (this._scrollMode !== ScrollMode.PAGE) {
       throw new Error("#ensurePageViewVisible: Invalid scrollMode value.");
     }
     const pageNumber = this._currentPageNumber,
-      state = this.#scrollModePageState,
+      state = this.__scrollModePageState,
       viewer = this.viewer;
 
     // Temporarily remove all the pages from the DOM...
@@ -1445,14 +1445,14 @@ class PDFViewer {
           targetPageSpot.left = (percent * width) / 100;
         }
       }
-      this.#scrollIntoView({ div: pageDiv, id: pageNumber }, targetPageSpot);
+      this.__scrollIntoView({ div: pageDiv, id: pageNumber }, targetPageSpot);
     } else {
-      this.#scrollIntoView({ div: pageDiv, id: pageNumber });
+      this.__scrollIntoView({ div: pageDiv, id: pageNumber });
     }
   }
   // #1301 end of modification by ngx-extended-pdf-viewer
 
-  #scrollIntoView(pageView, pageSpot = null) {
+  __scrollIntoView(pageView, pageSpot = null) {
     // modified by ngx-extended-pdf-viewer
     // to fix a bug that's basically caused by the showcase demo
     if (!pageView) {
@@ -1467,7 +1467,7 @@ class PDFViewer {
       this._setCurrentPageNumber(id);
     }
     if (this._scrollMode === ScrollMode.PAGE) {
-      this.#ensurePageViewVisible();
+      this.__ensurePageViewVisible();
       // Ensure that rendering always occurs, to avoid showing a blank page,
       // even if the current position doesn't change when the page is scrolled.
       this.update();
@@ -1501,14 +1501,14 @@ class PDFViewer {
    * Prevent unnecessary re-rendering of all pages when the scale changes
    * only because of limited numerical precision.
    */
-  #isSameScale(newScale) {
+  __isSameScale(newScale) {
     return (
       newScale === this._currentScale ||
       Math.abs(newScale - this._currentScale) < 1e-15
     );
   }
 
-  #setScaleUpdatePages(
+  __setScaleUpdatePages(
     newScale,
     newValue,
     { noScroll = false, preset = false, drawingDelay = -1, origin = null }
@@ -1517,7 +1517,7 @@ class PDFViewer {
     const previousScaleValue = this.currentScaleValue;
     this._currentScaleValue = newValue.toString();
 
-    if (this.#isSameScale(newScale)) {
+    if (this.__isSameScale(newScale)) {
       if (preset) {
         this.eventBus.dispatch("scalechanging", {
           source: this,
@@ -1543,8 +1543,8 @@ class PDFViewer {
     });
 
     if (postponeDrawing) {
-      this.#scaleTimeoutId = setTimeout(() => {
-        this.#scaleTimeoutId = null;
+      this.__scaleTimeoutId = setTimeout(() => {
+        this.__scaleTimeoutId = null;
         this.refresh();
       }, drawingDelay);
     }
@@ -1607,7 +1607,7 @@ class PDFViewer {
     return 1;
   }
 
-  #setScale(value, options) {
+  __setScale(value, options) {
     // #90 modified by ngx-extended-pdf-viewer
     if (!value) {
       value = "auto";
@@ -1622,7 +1622,7 @@ class PDFViewer {
 
     if (scale > 0) {
       options.preset = false;
-      this.#setScaleUpdatePages(scale, value, options);
+      this.__setScaleUpdatePages(scale, value, options);
     } else {
       const currentPage = this._pages[this._currentPageNumber - 1];
       if (!currentPage) {
@@ -1681,21 +1681,21 @@ class PDFViewer {
           return;
       }
       options.preset = true;
-      this.#setScaleUpdatePages(scale, value, options);
+      this.__setScaleUpdatePages(scale, value, options);
     }
   }
 
   /**
    * Refreshes page view: scrolls to the current page and updates the scale.
    */
-  #resetCurrentPageView() {
+  __resetCurrentPageView() {
     const pageView = this._pages[this._currentPageNumber - 1];
 
     if (this.isInPresentationMode) {
       // Fixes the case when PDF has different page sizes.
-      this.#setScale(this._currentScaleValue, { noScroll: true });
+      this.__setScale(this._currentScaleValue, { noScroll: true });
     }
-    this.#scrollIntoView(pageView);
+    this.__scrollIntoView(pageView);
   }
 
   /**
@@ -1845,7 +1845,7 @@ class PDFViewer {
     }
 
     /** #495 modified by ngx-extended-pdf-viewer */
-    this.#ensurePdfPageLoaded(pageView).then(() => {
+    this.__ensurePdfPageLoaded(pageView).then(() => {
       this.renderingQueue.renderView(pageView);
       if (this.pageViewMode === "single") {
         if (this.currentPageNumber !== pageNumber) {
@@ -1856,7 +1856,7 @@ class PDFViewer {
     /** end of modification */
 
     if (scale === "page-fit" && !destArray[4]) {
-      this.#scrollIntoView(pageView);
+      this.__scrollIntoView(pageView);
       return;
     }
 
@@ -1874,7 +1874,7 @@ class PDFViewer {
       left = Math.max(left, 0);
       top = Math.max(top, 0);
     }
-    this.#scrollIntoView(pageView, /* pageSpot = */ { left, top });
+    this.__scrollIntoView(pageView, /* pageSpot = */ { left, top });
   }
 
   _updateLocation(firstPage) {
@@ -1930,7 +1930,7 @@ class PDFViewer {
     const bufferSize = Number(PDFViewerApplicationOptions.get("defaultCacheSize")) || DEFAULT_CACHE_SIZE;
     const newCacheSize = Math.max(bufferSize, 2 * numVisiblePages + 1);
     // #950 end of modification
-    this.#buffer.resize(newCacheSize, visible.ids);
+    this.__buffer.resize(newCacheSize, visible.ids);
 
     this.renderingQueue.renderHighestPriority(visible);
 
@@ -1969,7 +1969,7 @@ class PDFViewer {
     // #859 end of modification
   }
 
-  #switchToEditAnnotationMode() {
+  __switchToEditAnnotationMode() {
     const visible = this._getVisiblePages();
     const pagesToRefresh = [];
     const { ids, views } = visible;
@@ -2030,7 +2030,7 @@ class PDFViewer {
   _getVisiblePages() {
     const views =
         this._scrollMode === ScrollMode.PAGE
-          ? this.#scrollModePageState.pages
+          ? this.__scrollModePageState.pages
           : this._pages,
       horizontal = this._scrollMode === ScrollMode.HORIZONTAL,
       rtl = horizontal && this._isContainerRtl;
@@ -2065,7 +2065,7 @@ class PDFViewer {
    * @param {PDFPageView} pageView
    * @returns {Promise<PDFPageProxy | null>}
    */
-  async #ensurePdfPageLoaded(pageView) {
+  async __ensurePdfPageLoaded(pageView) {
     if (pageView.pdfPage) {
       return pageView.pdfPage;
     }
@@ -2081,7 +2081,7 @@ class PDFViewer {
     }
   }
 
-  #getScrollAhead(visible) {
+  __getScrollAhead(visible) {
     if (visible.first?.id === 1) {
       return true;
     } else if (visible.last?.id === this.pagesCount) {
@@ -2089,7 +2089,7 @@ class PDFViewer {
     }
     switch (this._scrollMode) {
       case ScrollMode.PAGE:
-        return this.#scrollModePageState.scrollDown;
+        return this.__scrollModePageState.scrollDown;
       case ScrollMode.HORIZONTAL:
         return this.scroll.right;
     }
@@ -2098,7 +2098,7 @@ class PDFViewer {
 
   forceRendering(currentlyVisiblePages) {
     const visiblePages = currentlyVisiblePages || this._getVisiblePages();
-    const scrollAhead = this.#getScrollAhead(visiblePages);
+    const scrollAhead = this.__getScrollAhead(visiblePages);
     const preRenderExtra =
       this._spreadMode !== SpreadMode.NONE &&
       this._scrollMode !== ScrollMode.HORIZONTAL;
@@ -2111,7 +2111,7 @@ class PDFViewer {
     );
 
     if (pageView) {
-      this.#ensurePdfPageLoaded(pageView).then(() => {
+      this.__ensurePdfPageLoaded(pageView).then(() => {
         this.renderingQueue.renderView(pageView);
       });
       return true;
@@ -2263,7 +2263,7 @@ class PDFViewer {
     }
 
     if (scrollMode === ScrollMode.PAGE) {
-      this.#ensurePageViewVisible();
+      this.__ensurePageViewVisible();
     } else if (this._previousScrollMode === ScrollMode.PAGE) {
       // Ensure that the current spreadMode is still applied correctly when
       // the *previous* scrollMode was `ScrollMode.PAGE`.
@@ -2273,7 +2273,7 @@ class PDFViewer {
     // Call this before re-scrolling to the current page, to ensure that any
     // changes in scale don't move the current page.
     if (this._currentScaleValue && isNaN(this._currentScaleValue)) {
-      this.#setScale(this._currentScaleValue, { noScroll: true });
+      this.__setScale(this._currentScaleValue, { noScroll: true });
     }
     this._setCurrentPageNumber(pageNumber, /* resetCurrentPageView = */ true);
     this.update();
@@ -2321,7 +2321,7 @@ class PDFViewer {
       pages = this._pages;
 
     if (this._scrollMode === ScrollMode.PAGE) {
-      this.#ensurePageViewVisible();
+      this.__ensurePageViewVisible();
     } else {
       // Temporarily remove all the pages from the DOM.
       viewer.textContent = "";
@@ -2358,7 +2358,7 @@ class PDFViewer {
     // Call this before re-scrolling to the current page, to ensure that any
     // changes in scale don't move the current page.
     if (this._currentScaleValue && isNaN(this._currentScaleValue)) {
-      this.#setScale(this._currentScaleValue, { noScroll: true });
+      this.__setScale(this._currentScaleValue, { noScroll: true });
     }
     this._setCurrentPageNumber(pageNumber, /* resetCurrentPageView = */ true);
     this.update();
@@ -2545,7 +2545,7 @@ class PDFViewer {
       maxScale = MAX_SCALE;
     }
     newScale = Math.min(maxScale, newScale);
-    this.#setScale(newScale, { noScroll: false, drawingDelay, origin });
+    this.__setScale(newScale, { noScroll: false, drawingDelay, origin });
     // #367 end of modification by ngx-extended-pdf-viewer
   }
 
@@ -2565,46 +2565,46 @@ class PDFViewer {
     this.updateScale({ ...options, steps: -(options.steps ?? 1) });
   }
 
-  #updateContainerHeightCss(height = this.container.clientHeight) {
-    if (height !== this.#previousContainerHeight) {
-      this.#previousContainerHeight = height;
+  __updateContainerHeightCss(height = this.container.clientHeight) {
+    if (height !== this.__previousContainerHeight) {
+      this.__previousContainerHeight = height;
       docStyle.setProperty("--viewer-container-height", `${height}px`);
     }
   }
 
-  #resizeObserverCallback(entries) {
+  __resizeObserverCallback(entries) {
     for (const entry of entries) {
       if (entry.target === this.container) {
-        this.#updateContainerHeightCss(
+        this.__updateContainerHeightCss(
           Math.floor(entry.borderBoxSize[0].blockSize)
         );
-        this.#containerTopLeft = null;
+        this.__containerTopLeft = null;
         break;
       }
     }
   }
 
   get containerTopLeft() {
-    return (this.#containerTopLeft ||= [
+    return (this.__containerTopLeft ||= [
       this.container.offsetTop,
       this.container.offsetLeft,
     ]);
   }
 
-  #cleanupSwitchAnnotationEditorMode() {
-    if (this.#onPageRenderedCallback) {
-      this.eventBus._off("pagerendered", this.#onPageRenderedCallback);
-      this.#onPageRenderedCallback = null;
+  __cleanupSwitchAnnotationEditorMode() {
+    if (this.__onPageRenderedCallback) {
+      this.eventBus._off("pagerendered", this.__onPageRenderedCallback);
+      this.__onPageRenderedCallback = null;
     }
-    if (this.#switchAnnotationEditorModeTimeoutId !== null) {
-      clearTimeout(this.#switchAnnotationEditorModeTimeoutId);
-      this.#switchAnnotationEditorModeTimeoutId = null;
+    if (this.__switchAnnotationEditorModeTimeoutId !== null) {
+      clearTimeout(this.__switchAnnotationEditorModeTimeoutId);
+      this.__switchAnnotationEditorModeTimeoutId = null;
     }
   }
 
   get annotationEditorMode() {
-    return this.#annotationEditorUIManager
-      ? this.#annotationEditorMode
+    return this.__annotationEditorUIManager
+      ? this.__annotationEditorMode
       : AnnotationEditorType.DISABLE;
   }
 
@@ -2620,10 +2620,10 @@ class PDFViewer {
    * @param {AnnotationEditorModeOptions} options
    */
   set annotationEditorMode({ mode, editId = null, isFromKeyboard = false }) {
-    if (!this.#annotationEditorUIManager) {
+    if (!this.__annotationEditorUIManager) {
       throw new Error(`The AnnotationEditor is not enabled.`);
     }
-    if (this.#annotationEditorMode === mode) {
+    if (this.__annotationEditorMode === mode) {
       return; // The AnnotationEditor mode didn't change.
     }
     if (!isValidAnnotationEditorMode(mode)) {
@@ -2635,18 +2635,18 @@ class PDFViewer {
 
     const { eventBus } = this;
     const updater = () => {
-      this.#cleanupSwitchAnnotationEditorMode();
-      this.#annotationEditorMode = mode;
+      this.__cleanupSwitchAnnotationEditorMode();
+      this.__annotationEditorMode = mode;
       eventBus.dispatch("annotationeditormodechanged", {
         source: this,
         mode,
       });
-      this.#annotationEditorUIManager.updateMode(mode, editId, isFromKeyboard);
+      this.__annotationEditorUIManager.updateMode(mode, editId, isFromKeyboard);
     };
 
     if (
       mode === AnnotationEditorType.NONE ||
-      this.#annotationEditorMode === AnnotationEditorType.NONE
+      this.__annotationEditorMode === AnnotationEditorType.NONE
     ) {
       const isEditing = mode !== AnnotationEditorType.NONE;
       if (!isEditing) {
@@ -2657,19 +2657,19 @@ class PDFViewer {
       }
       // We must call #switchToEditAnnotationMode unconditionally to ensure that
       // page is rendered if it's useful or not.
-      const idsToRefresh = this.#switchToEditAnnotationMode();
+      const idsToRefresh = this.__switchToEditAnnotationMode();
       if (isEditing && editId && idsToRefresh) {
         // We're editing an existing annotation so we must switch to editing
         // mode when the rendering is done.
-        this.#cleanupSwitchAnnotationEditorMode();
-        this.#onPageRenderedCallback = ({ pageNumber }) => {
+        this.__cleanupSwitchAnnotationEditorMode();
+        this.__onPageRenderedCallback = ({ pageNumber }) => {
           idsToRefresh.delete(pageNumber);
           if (idsToRefresh.size === 0) {
-            this.#switchAnnotationEditorModeTimeoutId = setTimeout(updater, 0);
+            this.__switchAnnotationEditorModeTimeoutId = setTimeout(updater, 0);
           }
         };
-        const { signal } = this.#eventAbortController;
-        eventBus._on("pagerendered", this.#onPageRenderedCallback, { signal });
+        const { signal } = this.__eventAbortController;
+        eventBus._on("pagerendered", this.__onPageRenderedCallback, { signal });
         return;
       }
     }
@@ -2678,10 +2678,10 @@ class PDFViewer {
 
   // eslint-disable-next-line accessor-pairs
   set annotationEditorParams({ type, value }) {
-    if (!this.#annotationEditorUIManager) {
+    if (!this.__annotationEditorUIManager) {
       throw new Error(`The AnnotationEditor is not enabled.`);
     }
-    this.#annotationEditorUIManager.updateParams(type, value);
+    this.__annotationEditorUIManager.updateParams(type, value);
   }
 
   refresh(noUpdate = false, updateArgs = Object.create(null)) {
@@ -2691,9 +2691,9 @@ class PDFViewer {
     for (const pageView of this._pages) {
       pageView.update(updateArgs);
     }
-    if (this.#scaleTimeoutId !== null) {
-      clearTimeout(this.#scaleTimeoutId);
-      this.#scaleTimeoutId = null;
+    if (this.__scaleTimeoutId !== null) {
+      clearTimeout(this.__scaleTimeoutId);
+      this.__scaleTimeoutId = null;
     }
     if (!noUpdate) {
       this.update();
@@ -2718,11 +2718,11 @@ class PDFViewer {
       data = [data];
     }
 
-    this.#annotationEditorUIManager.addSerializedEditor(data, true, true, false);
+    this.__annotationEditorUIManager.addSerializedEditor(data, true, true, false);
   }
 
   removeEditorAnnotations(filter = () => true) {
-    this.#annotationEditorUIManager.removeEditors(filter);
+    this.__annotationEditorUIManager.removeEditors(filter);
   }
   // #1783 end of modification by ngx-extended-pdf-viewer
 

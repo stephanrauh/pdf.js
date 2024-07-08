@@ -37,6 +37,7 @@
     "gulp-zip": "^6.0.0",
     "highlight.js": "^11.9.0",
     "jasmine": "^5.1.0",
+    "jscodeshift": "^0.16.1",
     "jsdoc": "^4.0.3",
     "jstransformer-nunjucks": "^1.2.0",
     "metalsmith": "^2.6.3",

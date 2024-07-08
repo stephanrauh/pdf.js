@@ -36,13 +36,13 @@ class AnnotationEditorParams {
    */
   constructor(options, eventBus) {
     this.eventBus = eventBus;
-    this.#bindListeners(options);
+    this.__bindListeners(options);
   }
 
   /**
    * @param {AnnotationEditorParamsOptions} options
    */
-  #bindListeners({
+  __bindListeners({
     editorFreeTextFontSize,
     editorFreeTextColor,
     editorInkColor,

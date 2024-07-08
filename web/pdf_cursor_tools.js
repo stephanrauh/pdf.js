@@ -29,9 +29,9 @@ import { GrabToPan } from "./grab_to_pan.js";
  */
 
 class PDFCursorTools {
-  #active = CursorTool.SELECT;
+  __active = CursorTool.SELECT;
 
-  #prevActive = null;
+  __prevActive = null;
 
   /**
    * @param {PDFCursorToolsOptions} options
@@ -40,7 +40,7 @@ class PDFCursorTools {
     this.container = container;
     this.eventBus = eventBus;
 
-    this.#addEventListeners();
+    this.__addEventListeners();
 
     // Defer the initial `switchTool` call, to give other viewer components
     // time to initialize *and* register 'cursortoolchanged' event listeners.
@@ -53,7 +53,7 @@ class PDFCursorTools {
    * @type {number} One of the values in {CursorTool}.
    */
   get activeTool() {
-    return this.#active;
+    return this.__active;
   }
 
   /**
@@ -61,16 +61,16 @@ class PDFCursorTools {
    *                        must be one of the values in {CursorTool}.
    */
   switchTool(tool) {
-    if (this.#prevActive !== null) {
+    if (this.__prevActive !== null) {
       // Cursor tools cannot be used in PresentationMode/AnnotationEditor.
       return;
     }
-    if (tool === this.#active) {
+    if (tool === this.__active) {
       return; // The requested tool is already active.
     }
 
     const disableActiveTool = () => {
-      switch (this.#active) {
+      switch (this.__active) {
         case CursorTool.SELECT:
           break;
         case CursorTool.HAND:
@@ -98,7 +98,7 @@ class PDFCursorTools {
     }
     // Update the active tool *after* it has been validated above,
     // in order to prevent setting it to an invalid state.
-    this.#active = tool;
+    this.__active = tool;
 
     this.eventBus.dispatch("cursortoolchanged", {
       source: this,
@@ -106,11 +106,11 @@ class PDFCursorTools {
     });
   }
 
-  #addEventListeners() {
+  __addEventListeners() {
     this.eventBus._on("switchcursortool", evt => {
       if (!evt.reset) {
         this.switchTool(evt.tool);
-      } else if (this.#prevActive !== null) {
+      } else if (this.__prevActive !== null) {
         annotationEditorMode = AnnotationEditorType.NONE;
         presentationModeState = PresentationModeState.NORMAL;
 
@@ -122,20 +122,20 @@ class PDFCursorTools {
       presentationModeState = PresentationModeState.NORMAL;
 
     const disableActive = () => {
-      const prevActive = this.#active;
+      const prevActive = this.__active;
 
       this.switchTool(CursorTool.SELECT);
-      this.#prevActive ??= prevActive; // Keep track of the first one.
+      this.__prevActive ??= prevActive; // Keep track of the first one.
     };
     const enableActive = () => {
-      const prevActive = this.#prevActive;
+      const prevActive = this.__prevActive;
 
       if (
         prevActive !== null &&
         annotationEditorMode === AnnotationEditorType.NONE &&
         presentationModeState === PresentationModeState.NORMAL
       ) {
-        this.#prevActive = null;
+        this.__prevActive = null;
         this.switchTool(prevActive);
       }
     };

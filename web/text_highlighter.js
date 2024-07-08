@@ -29,7 +29,7 @@
  * either the text layer or XFA layer depending on the type of document.
  */
 class TextHighlighter {
-  #eventAbortController = null;
+  __eventAbortController = null;
 
   /**
    * @param {TextHighlighterOptions} options
@@ -76,8 +76,8 @@ class TextHighlighter {
     }
     this.enabled = true;
 
-    if (!this.#eventAbortController) {
-      this.#eventAbortController = new AbortController();
+    if (!this.__eventAbortController) {
+      this.__eventAbortController = new AbortController();
 
       this.eventBus._on(
         "updatetextlayermatches",
@@ -86,7 +86,7 @@ class TextHighlighter {
             this._updateMatches();
           }
         },
-        { signal: this.#eventAbortController.signal }
+        { signal: this.__eventAbortController.signal }
       );
     }
     this._updateMatches();
@@ -98,8 +98,8 @@ class TextHighlighter {
     }
     this.enabled = false;
 
-    this.#eventAbortController?.abort();
-    this.#eventAbortController = null;
+    this.__eventAbortController?.abort();
+    this.__eventAbortController = null;
 
     this._updateMatches(/* reset = */ true);
   }
