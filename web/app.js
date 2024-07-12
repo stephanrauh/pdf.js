@@ -1278,6 +1278,15 @@ const PDFViewerApplication = {
     }
   },
 
+  // #2430 modified by ngx-extended-pdf-viewer
+  _ensureDownloadComplete() {
+    if (this.pdfDocument && this.downloadComplete) {
+      return;
+    }
+    throw new Error("PDF document not downloaded.");
+  },
+  // #2430 end of modification by ngx-extended-pdf-viewer
+
   async _exportWithoutAnnotations() {
     try {
       this._ensureDownloadComplete();
