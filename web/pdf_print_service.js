@@ -116,14 +116,18 @@ function renderPage(
 }
 
 class PDFPrintService {
-  constructor({
-    pdfDocument,
-    pagesOverview,
-    printContainer,
-    printResolution,
-    printAnnotationStoragePromise = null,
-    eventBus, // #588 modified by ngx-extended-pdf-viewer
-  }) {
+  constructor(
+    {
+      pdfDocument,
+      pagesOverview,
+      printContainer,
+      printResolution,
+      printAnnotationStoragePromise = null,
+      eventBus, // #588 modified by ngx-extended-pdf-viewer
+    },
+    isInPDFPrintRange,
+    filteredPageCount
+  ) {
     this.pdfDocument = pdfDocument;
     this.pagesOverview = pagesOverview;
     this.printContainer = printContainer;
@@ -139,6 +143,10 @@ class PDFPrintService {
       // #588 modified by ngx-extended-pdf-viewer
     this.eventBus = eventBus;
     // #588 end of modification
+    // #2377 modified by ngx-extended-pdf-viewer
+    this.filteredPageCount = filteredPageCount;
+    this.isInPDFPrintRange = isInPDFPrintRange;
+    // #2377 end of modification by ngx-extended-pdf-viewer
   }
 
   layout() {
@@ -226,10 +234,7 @@ class PDFPrintService {
           // #243
           break; // #243
         } // #243
-        if (
-          !window.isInPDFPrintRange ||
-          window.isInPDFPrintRange(this.currentPage)
-        ) {
+        if (!this.isInPDFPrintRange || this.isInPDFPrintRange(this.currentPage)) {
           // #243
           break; // #243
         } // #243
@@ -237,8 +242,8 @@ class PDFPrintService {
 
       if (this.currentPage >= pageCount) {
         renderProgress(
-          window.filteredPageCount | pageCount,
-          window.filteredPageCount | pageCount,
+          this.filteredPageCount ?? pageCount,
+          this.filteredPageCount ?? pageCount,
           this.eventBus // #588 modified by ngx-extended-pdf-viewer
         ); // #243
         resolve();
@@ -246,7 +251,7 @@ class PDFPrintService {
       }
 
       const index = this.currentPage;
-      renderProgress(index, window.filteredPageCount | pageCount, this.eventBus); // #243 and #588 modified by ngx-extended-pdf-viewer
+      renderProgress(index, this.filteredPageCount ?? pageCount, this.eventBus); // #243 and #588 modified by ngx-extended-pdf-viewer
       renderPage(
         this,
         this.pdfDocument,
@@ -331,9 +336,11 @@ class PDFPrintService {
 
 const print = window.print;
 function printPdf() {
+  // #277 modified by ngx-extended-pdf-viewer
   if (!PDFViewerApplication.enablePrint) {
     return;
   }
+  // #277 end of modification by ngx-extended-pdf-viewer
   if (activeService) {
     globalThis.ngxConsole.warn("Ignored this.printPDF() because of a pending print job.");
     return;
@@ -483,9 +490,18 @@ function ensureOverlay() {
  * @implements {IPDFPrintServiceFactory}
  */
 class PDFPrintServiceFactory {
+  static enablePrint = true;
+
   static initGlobals(app) {
     viewerApp = app;
   }
+
+  // #2377 modified by ngx-extended-pdf-viewer
+  // static filteredPageCount?: number
+  //    => number;
+  // static isInPDFPrintRange?: (pageIndex: number, printRange: PDFPrintRange)
+  //    => boolean;
+  // #2377 end of modification by ngx-extended-pdf-viewer
 
   static get supportsPrinting() {
     return shadow(this, "supportsPrinting", true);
@@ -495,7 +511,16 @@ class PDFPrintServiceFactory {
     if (activeService) {
       throw new Error("The print service is created and active.");
     }
-    return (activeService = new PDFPrintService(params));
+    // #2337 modified by ngx-extended-pdf-viewer
+    if (!PDFPrintServiceFactory.enablePrint) {
+      console.debug("The print service is disabled.");
+    }
+    return (activeService = new PDFPrintService(
+      params,
+      PDFPrintServiceFactory.isInPDFPrintRange,
+      PDFPrintServiceFactory.filteredPageCount
+    ));
+    // #2337 end of modification by ngx-extended-pdf-viewer
   }
 }
 
