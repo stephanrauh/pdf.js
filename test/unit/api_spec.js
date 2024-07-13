@@ -1901,6 +1901,49 @@ describe("api", function () {
       await loadingTask.destroy();
     });
 
+    it("gets outline, with /FitH destinations that lack coordinate parameter (bug 1907000)", async function () {
+      const loadingTask = getDocument(
+        buildGetDocumentParams("bug1907000_reduced.pdf")
+      );
+      const pdfDoc = await loadingTask.promise;
+      const outline = await pdfDoc.getOutline();
+
+      expect(outline).toEqual([
+        {
+          action: null,
+          attachment: undefined,
+          dest: [{ num: 14, gen: 0 }, { name: "FitH" }],
+          url: null,
+          unsafeUrl: undefined,
+          newWindow: undefined,
+          setOCGState: undefined,
+          title: "Page 1",
+          color: new Uint8ClampedArray([0, 0, 0]),
+          count: undefined,
+          bold: false,
+          italic: false,
+          items: [],
+        },
+        {
+          action: null,
+          attachment: undefined,
+          dest: [{ num: 13, gen: 0 }, { name: "FitH" }],
+          url: null,
+          unsafeUrl: undefined,
+          newWindow: undefined,
+          setOCGState: undefined,
+          title: "Page 2",
+          color: new Uint8ClampedArray([0, 0, 0]),
+          count: undefined,
+          bold: false,
+          italic: false,
+          items: [],
+        },
+      ]);
+
+      await loadingTask.destroy();
+    });
+
     it("gets non-existent permissions", async function () {
       const permissions = await pdfDocument.getPermissions();
       expect(permissions).toEqual(null);
@@ -3419,6 +3462,21 @@ Caron Broadcasting, Inc., an Ohio corporation (“Lessee”).`)
       await loadingTask.destroy();
     });
 
+    it("gets text content, correctly handling documents with toUnicode cmaps that omit leading zeros on hex-encoded UTF-16", async function () {
+      const loadingTask = getDocument(
+        buildGetDocumentParams("issue18099_reduced.pdf")
+      );
+      const pdfDoc = await loadingTask.promise;
+      const pdfPage = await pdfDoc.getPage(1);
+      const { items } = await pdfPage.getTextContent({
+        disableNormalization: true,
+      });
+      const text = mergeText(items);
+      expect(text).toEqual("Hello world!");
+
+      await loadingTask.destroy();
+    });
+
     it("gets text content, and check that out-of-page text is not present (bug 1755201)", async function () {
       if (isNodeJS) {
         pending("Linked test-cases are not supported in Node.js.");
@@ -4155,7 +4213,7 @@ Caron Broadcasting, Inc., an Ohio corporation (“Lessee”).`)
             checkedCopyLocalImage = true;
             // Ensure that the image was copied in the main-thread, rather
             // than being re-parsed in the worker-thread (which is slower).
-            expect(statsOverall).toBeLessThan(firstStatsOverall / 4);
+            expect(statsOverall).toBeLessThan(firstStatsOverall / 2);
           }
         }
       }

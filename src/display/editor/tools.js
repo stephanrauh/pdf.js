@@ -859,8 +859,8 @@ class AnnotationEditorUIManager {
     return this.#mlManager?.guess(data) || null;
   }
 
-  get hasMLManager() {
-    return !!this.#mlManager;
+  isMLEnabledFor(name) {
+    return !!this.#mlManager?.isEnabledFor(name);
   }
 
   get hcmFilter() {
@@ -975,6 +975,19 @@ class AnnotationEditorUIManager {
       : anchorNode;
   }
 
+  #getLayerForTextLayer(textLayer) {
+    const { currentLayer } = this;
+    if (currentLayer.hasTextLayer(textLayer)) {
+      return currentLayer;
+    }
+    for (const layer of this.#allLayers.values()) {
+      if (layer.hasTextLayer(textLayer)) {
+        return layer;
+      }
+    }
+    return null;
+  }
+
   highlightSelection(methodOfCreation = "") {
     const selection = document.getSelection();
     if (!selection || selection.isCollapsed) {
@@ -996,19 +1009,17 @@ class AnnotationEditorUIManager {
       });
       this.showAllEditors("highlight", true, /* updateButton = */ true);
     }
-    for (const layer of this.#allLayers.values()) {
-      if (layer.hasTextLayer(textLayer)) {
-        layer.createAndAddNewEditor({ x: 0, y: 0 }, false, {
-          methodOfCreation,
-          boxes,
-          anchorNode,
-          anchorOffset,
-          focusNode,
-          focusOffset,
-          text,
-        });
-        break;
-      }
+    const layer = this.#getLayerForTextLayer(textLayer);
+    if (layer) {
+      layer.createAndAddNewEditor({ x: 0, y: 0 }, false, {
+        methodOfCreation,
+        boxes,
+        anchorNode,
+        anchorOffset,
+        focusNode,
+        focusOffset,
+        text,
+      });
     }
   }
 
@@ -1070,6 +1081,7 @@ class AnnotationEditorUIManager {
       }
       return;
     }
+
     this.#highlightToolbar?.hide();
     this.#selectedTextNode = anchorNode;
     this.#dispatchUpdateStates({
@@ -1089,12 +1101,19 @@ class AnnotationEditorUIManager {
 
     this.#highlightWhenShiftUp = this.isShiftKeyDown;
     if (!this.isShiftKeyDown) {
+      const activeLayer =
+        this.#mode === AnnotationEditorType.HIGHLIGHT
+          ? this.#getLayerForTextLayer(textLayer)
+          : null;
+      activeLayer?.toggleDrawing();
+
       const signal = this._signal;
       const pointerup = e => {
         if (e.type === "pointerup" && e.button !== 0) {
           // Do nothing on right click.
           return;
         }
+        activeLayer?.toggleDrawing(true);
         window.removeEventListener("pointerup", pointerup);
         window.removeEventListener("blur", pointerup);
         if (e.type === "pointerup") {

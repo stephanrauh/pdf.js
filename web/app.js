@@ -400,9 +400,10 @@ const PDFViewerApplication = {
    */
   async _initializeViewerComponents() {
     const { appConfig, externalServices, l10n } = this;
+
     let eventBus;
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-      eventBus = new FirefoxEventBus(
+      eventBus = AppOptions.eventBus = new FirefoxEventBus(
         await this._allowedGlobalEventsPromise,
         externalServices,
         AppOptions.get("isInAutomation")
@@ -537,10 +538,6 @@ const PDFViewerApplication = {
 
     if (appConfig.annotationEditorParams) {
       if (annotationEditorMode !== AnnotationEditorType.DISABLE) {
-        if (AppOptions.get("enableStampEditor")) {
-          appConfig.toolbar?.editorStampButton?.classList.remove("hidden");
-        }
-
         const editorHighlightButton = appConfig.toolbar?.editorHighlightButton;
         if (editorHighlightButton && AppOptions.get("enableHighlightEditor")) {
           editorHighlightButton.hidden = false;
@@ -589,7 +586,11 @@ const PDFViewerApplication = {
           await this._nimbusDataPromise
         );
       } else {
-        this.toolbar = new Toolbar(appConfig.toolbar, eventBus);
+        this.toolbar = new Toolbar(
+          appConfig.toolbar,
+          eventBus,
+          AppOptions.get("toolbarDensity")
+        );
       }
     }
 
@@ -816,10 +817,11 @@ const PDFViewerApplication = {
   },
 
   get mlManager() {
+    const enableAltText = AppOptions.get("enableAltText");
     return shadow(
       this,
       "mlManager",
-      AppOptions.get("enableML") === true ? new MLManager() : null
+      enableAltText === true ? new MLManager({ enableAltText }) : null
     );
   },
 
@@ -2168,10 +2170,6 @@ const PDFViewerApplication = {
     }
     addWindowResolutionChange();
 
-    window.addEventListener("visibilitychange", webViewerVisibilityChange, {
-      signal,
-    });
-
     // #1830 modified by ngx-extended-pdf-viewer
     const viewerContainer  = document.getElementById("viewerContainer");
     viewerContainer?.addEventListener("wheel", webViewerWheel, {
@@ -2793,23 +2791,6 @@ function webViewerResolutionChange(evt) {
   PDFViewerApplication.pdfViewer.refresh();
 }
 
-function webViewerVisibilityChange(evt) {
-  if (document.visibilityState === "visible") {
-    // Ignore mouse wheel zooming during tab switches (bug 1503412).
-    setZoomDisabledTimeout();
-  }
-}
-
-let zoomDisabledTimeout = null;
-function setZoomDisabledTimeout() {
-  if (zoomDisabledTimeout) {
-    clearTimeout(zoomDisabledTimeout);
-  }
-  zoomDisabledTimeout = setTimeout(function () {
-    zoomDisabledTimeout = null;
-  }, WHEEL_ZOOM_DISABLED_TIMEOUT);
-}
-
 function webViewerWheel(evt) {
   // #1302 modified by ngx-extended-pdf-viewer
   const element = document.getElementById("viewerContainer");
@@ -2882,7 +2863,6 @@ function webViewerWheel(evt) {
     // NOTE: this check must be placed *after* preventDefault.
     if (
       PDFViewerApplication._isScrolling ||
-      zoomDisabledTimeout ||
       document.visibilityState === "hidden" ||
       PDFViewerApplication.overlayManager.active
     ) {

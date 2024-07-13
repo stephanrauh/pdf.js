@@ -135,7 +135,7 @@ function getSelector(id) {
 async function getRect(page, selector) {
   // In Chrome something is wrong when serializing a `DomRect`,
   // so we extract the values and return them ourselves.
-  await page.waitForSelector(selector);
+  await page.waitForSelector(selector, { visible: true });
   return page.$eval(selector, el => {
     const { x, y, width, height } = el.getBoundingClientRect();
     return { x, y, width, height };
@@ -511,6 +511,24 @@ async function hover(page, selector) {
   await page.mouse.move(rect.x + rect.width / 2, rect.y + rect.height / 2);
 }
 
+async function setCaretAt(page, pageNumber, text, position) {
+  await page.evaluate(
+    (pageN, string, pos) => {
+      for (const el of document.querySelectorAll(
+        `.page[data-page-number="${pageN}"] > .textLayer > span`
+      )) {
+        if (el.textContent === string) {
+          window.getSelection().setPosition(el.firstChild, pos);
+          break;
+        }
+      }
+    },
+    pageNumber,
+    text,
+    position
+  );
+}
+
 const modifier = isMac ? "Meta" : "Control";
 async function kbCopy(page) {
   await page.keyboard.down(modifier);
@@ -713,6 +731,7 @@ export {
   pasteFromClipboard,
   scrollIntoView,
   serializeBitmapDimensions,
+  setCaretAt,
   switchToEditor,
   waitForAnnotationEditorLayer,
   waitForAnnotationModeChanged,
