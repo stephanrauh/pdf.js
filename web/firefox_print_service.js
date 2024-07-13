@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import {
   AnnotationMode,
   PixelsPerInch,
@@ -93,7 +94,7 @@ function composePage(
         },
         function (reason) {
           if (!(reason instanceof RenderingCancelledException)) {
-            globalThis.ngxConsole.error(reason);
+            NgxConsole.error(reason);
           }
 
           if (currentRenderTask === thisRenderTask) {

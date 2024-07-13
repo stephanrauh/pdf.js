@@ -18,6 +18,7 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("./pdf_thumbnail_viewer").PDFThumbnailViewer} PDFThumbnailViewer */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { RenderingCancelledException } from "pdfjs-lib";
 import { RenderingStates } from "./ui_utils.js";
 
@@ -201,7 +202,7 @@ class PDFRenderingQueue {
             if (reason instanceof RenderingCancelledException) {
               return;
             }
-            globalThis.ngxConsole.error(`renderView: "${reason}"`);
+            NgxConsole.error(`renderView: "${reason}"`);
           });
         break;
     }

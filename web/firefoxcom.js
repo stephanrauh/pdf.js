@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { isPdfFile, PDFDataRangeTransport } from "pdfjs-lib";
 import { BaseExternalServices } from "./external_services.js";
 import { BasePreferences } from "./preferences.js";
@@ -120,7 +121,7 @@ class DownloadManager {
         window.open(viewerUrl);
         return true;
       } catch (ex) {
-        globalThis.ngxConsole.error(`openOrDownloadData: ${ex}`);
+        NgxConsole.error(`openOrDownloadData: ${ex}`);
         // Release the `blobUrl`, since opening it failed, and fallback to
         // downloading the PDF file.
         URL.revokeObjectURL(blobUrl);
@@ -323,7 +324,7 @@ class ExternalServices extends BaseExternalServices {
     window.addEventListener("message", function windowMessage(e) {
       if (e.source !== null) {
         // The message MUST originate from Chrome code.
-        globalThis.ngxConsole.warn("Rejected untrusted message from " + e.origin);
+        NgxConsole.warn("Rejected untrusted message from " + e.origin);
         return;
       }
       const args = e.data;

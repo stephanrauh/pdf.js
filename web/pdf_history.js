@@ -16,6 +16,7 @@
 /** @typedef {import("./event_utils").EventBus} EventBus */
 /** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { isValidRotation, parseQueryString } from "./ui_utils.js";
 import { waitOnEventOrTimeout } from "./event_utils.js";
 
@@ -88,7 +89,7 @@ class PDFHistory {
    */
   initialize({ fingerprint, resetHistory = false, updateUrl = false }) {
     if (!fingerprint || typeof fingerprint !== "string") {
-      globalThis.ngxConsole.error(
+      NgxConsole.error(
         'PDFHistory.initialize: The "fingerprint" must be a non-empty string.'
       );
       return;
@@ -189,13 +190,13 @@ class PDFHistory {
       return;
     }
     if (namedDest && typeof namedDest !== "string") {
-      globalThis.ngxConsole.error(
+      NgxConsole.error(
         "PDFHistory.push: " +
           `"${namedDest}" is not a valid namedDest parameter.`
       );
       return;
     } else if (!Array.isArray(explicitDest)) {
-      globalThis.ngxConsole.error(
+      NgxConsole.error(
         "PDFHistory.push: " +
           `"${explicitDest}" is not a valid explicitDest parameter.`
       );
@@ -204,7 +205,7 @@ class PDFHistory {
       // Allow an unset `pageNumber` if and only if the history is still empty;
       // please refer to the `this._destination.page = null;` comment above.
       if (pageNumber !== null || this._destination) {
-        globalThis.ngxConsole.error(
+        NgxConsole.error(
           "PDFHistory.push: " +
             `"${pageNumber}" is not a valid pageNumber parameter.`
         );
@@ -271,7 +272,7 @@ class PDFHistory {
       return;
     }
     if (!this.#isValidPage(pageNumber)) {
-      globalThis.ngxConsole.error(
+      NgxConsole.error(
         `PDFHistory.pushPage: "${pageNumber}" is not a valid page number.`
       );
       return;

@@ -14,6 +14,8 @@
  */
 /* globals process */
 
+import { NgxConsole } from "../../external/ngx-logger/ngx-console.js";
+
 // NW.js / Electron is a browser context, but copies some Node.js objects; see
 // http://docs.nwjs.io/en/latest/For%20Users/Advanced/JavaScript%20Contexts%20in%20NW.js/#access-nodejs-and-nwjs-api-in-browser-context
 // https://www.electronjs.org/docs/api/process#processversionselectron-readonly
@@ -365,8 +367,8 @@ function info(msg) {
   if (verbosity >= VerbosityLevel.INFOS) {
     if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) { // #804 ngx-extended-pdf-viewer
       console.log(`Info: ${msg}`);
-    } else if (Window && globalThis.ngxConsole) { // #804 ngx-extended-pdf-viewer
-      globalThis.ngxConsole.log(`Info: ${msg}`); // #804 ngx-extended-pdf-viewer
+    } else if (Window && NgxConsole) { // #804 ngx-extended-pdf-viewer
+      NgxConsole.log(`Info: ${msg}`); // #804 ngx-extended-pdf-viewer
     } else {
       console.log(`Info: ${msg}`);
     }
@@ -378,8 +380,8 @@ function warn(msg) {
   if (verbosity >= VerbosityLevel.WARNINGS) {
     if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) { // #804 ngx-extended-pdf-viewer
       console.log(`Warning: ${msg}`);
-    } else if (Window && globalThis.ngxConsole) { // #804 ngx-extended-pdf-viewer
-      globalThis.ngxConsole.log(`Warning: ${msg}`); // #804 ngx-extended-pdf-viewer
+    } else if (Window && NgxConsole) { // #804 ngx-extended-pdf-viewer
+      NgxConsole.log(`Warning: ${msg}`); // #804 ngx-extended-pdf-viewer
     } else {
       console.log(`Warning: ${msg}`);
     }
