@@ -20,6 +20,7 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/api.js").PDFDocumentLoadingTask} PDFDocumentLoadingTask */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import {
   animationStarted,
   apiPageLayoutToViewerModes,
@@ -1224,7 +1225,7 @@ const PDFViewerApplication = {
       );
     } catch (reason) {
       // When the PDF document isn't ready, fallback to a "regular" download.
-      globalThis.ngxConsole.error(`Error when saving the document: ${reason.message}`);
+      NgxConsole.error(`Error when saving the document: ${reason.message}`);
       await this.download(options);
     } finally {
       await this.pdfScriptingManager.dispatchDidSave();
@@ -1679,7 +1680,7 @@ const PDFViewerApplication = {
     let triggerAutoPrint = openAction?.action === "Print";
 
     if (jsActions) {
-      globalThis.ngxConsole.warn("Warning: JavaScript support is not enabled");
+      NgxConsole.warn("Warning: JavaScript support is not enabled");
 
       // Hack to support auto printing.
       for (const name in jsActions) {
@@ -1722,7 +1723,7 @@ const PDFViewerApplication = {
     // #1793 modified by ngx-extended-pdf-vieweer
     const options = window.PDFViewerApplicationOptions;
     if (!options || options.get("verbosity") > 0) {
-      globalThis.ngxConsole.log(
+      NgxConsole.log(
         `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
           `${(info.Producer || "-").trim()} / ${(info.Creator || "-").trim()}] ` +
           `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer ${ngxExtendedPdfViewerVersion}`
@@ -1759,9 +1760,9 @@ const PDFViewerApplication = {
       !pdfDocument.isPureXfa
     ) {
       if (pdfDocument.loadingParams.enableXfa) {
-        globalThis.ngxConsole.warn("Warning: XFA Foreground documents are not supported");
+        NgxConsole.warn("Warning: XFA Foreground documents are not supported");
       } else {
-        globalThis.ngxConsole.warn("Warning: XFA support is not enabled");
+        NgxConsole.warn("Warning: XFA support is not enabled");
       }
     } else if (
       (info.IsAcroFormPresent || info.IsXFAPresent) &&
@@ -2460,7 +2461,7 @@ function webViewerPageMode({ mode }) {
       view = SidebarView.NONE;
       break;
     default:
-      globalThis.ngxConsole.error('Invalid "pagemode" hash parameter: ' + mode);
+      NgxConsole.error('Invalid "pagemode" hash parameter: ' + mode);
       return;
   }
   PDFViewerApplication.pdfSidebar?.switchView(view, /* forceOpen = */ true);
@@ -3438,6 +3439,7 @@ function webViewerReportTelemetry({ details }) {
 // #2337 modified by ngx-extended-pdf-viewer
 PDFViewerApplication.printPdf = printPdf;
 PDFViewerApplication.PDFPrintServiceFactory = PDFPrintServiceFactory;
+PDFViewerApplication.ngxConsole = new NgxConsole();
 // #2337 end of modification by ngx-extended-pdf-viewer
 
 export { PDFViewerApplication };

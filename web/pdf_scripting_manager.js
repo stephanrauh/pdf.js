@@ -16,6 +16,7 @@
 /** @typedef {import("./event_utils").EventBus} EventBus */
 
 import { apiPageLayoutToViewerModes, RenderingStates } from "./ui_utils.js";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { shadow } from "pdfjs-lib";
 
 /**
@@ -105,7 +106,7 @@ class PDFScriptingManager {
     try {
       this.#scripting = this.#initScripting();
     } catch (error) {
-      globalThis.ngxConsole.error(`setDocument: "${error.message}".`);
+      NgxConsole.error(`setDocument: "${error.message}".`);
 
       await this.#destroyScripting();
       return;
@@ -192,7 +193,7 @@ class PDFScriptingManager {
 
       eventBus.dispatch("sandboxcreated", { source: this });
     } catch (error) {
-      globalThis.ngxConsole.error(`setDocument: "${error.message}".`);
+      NgxConsole.error(`setDocument: "${error.message}".`);
 
       await this.#destroyScripting();
       return;
@@ -299,10 +300,10 @@ class PDFScriptingManager {
 
       switch (command) {
         case "clear":
-          globalThis.ngxConsole.clear();
+          NgxConsole.clear();
           break;
         case "error":
-          globalThis.ngxConsole.error(value);
+          NgxConsole.error(value);
           break;
         case "layout":
           if (!isInPresentationMode) {
@@ -318,7 +319,7 @@ class PDFScriptingManager {
           this.#eventBus.dispatch("print", { source: this });
           break;
         case "println":
-          globalThis.ngxConsole.log(value);
+          NgxConsole.log(value);
           break;
         case "zoom":
           if (!isInPresentationMode) {

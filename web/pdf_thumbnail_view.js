@@ -24,6 +24,7 @@
 /** @typedef {import("./pdf_rendering_queue").PDFRenderingQueue} PDFRenderingQueue */
 
 import { OutputScale, RenderingStates } from "./ui_utils.js";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { RenderingCancelledException } from "pdfjs-lib";
 
 const DRAW_UPSCALE_FACTOR = 2; // See comment in `PDFThumbnailView.draw` below.
@@ -277,7 +278,7 @@ class PDFThumbnailView {
 
   async draw() {
     if (this.renderingState !== RenderingStates.INITIAL) {
-      globalThis.ngxConsole.error("Must be in new state before drawing");
+      NgxConsole.error("Must be in new state before drawing");
       return undefined;
     }
     const { pdfPage } = this;

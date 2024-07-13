@@ -13,6 +13,8 @@
  * limitations under the License.
  */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
+
 const DEFAULT_SCALE_VALUE = "auto";
 const DEFAULT_SCALE = 1.0;
 const DEFAULT_SCALE_DELTA = 1.1;
@@ -126,14 +128,14 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
     element.parentElement?.classList.contains("stf__item") ||
     element.parentElement?.parentElement?.classList.contains("stf__item")
   ) {
-    // globalThis.ngxConsole.log("don't scroll in book mode");
+    // NgxConsole.log("don't scroll in book mode");
     return;
   }
   // #716 end of modification
 
   let parent = element.offsetParent;
   if (!parent) {
-    globalThis.ngxConsole.error("offsetParent is not set -- cannot scroll");
+    NgxConsole.error("offsetParent is not set -- cannot scroll");
     return;
   }
   let offsetY = element.offsetTop + element.clientTop;

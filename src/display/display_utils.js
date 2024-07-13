@@ -13,6 +13,8 @@
  * limitations under the License.
  */
 
+import { NgxConsole } from "../../external/ngx-logger/ngx-console.js";
+
 import {
   BaseCanvasFactory,
   BaseCMapReaderFactory,
@@ -954,7 +956,7 @@ function noContextMenu(e) {
 
 // Deprecated API function -- display regardless of the `verbosity` setting.
 function deprecated(details) {
-  globalThis.ngxConsole.log("Deprecated API usage: " + details);
+  NgxConsole.log("Deprecated API usage: " + details);
 }
 
 let pdfDateStringRegex;

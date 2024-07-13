@@ -16,6 +16,7 @@
 /** @typedef {import("./event_utils").EventBus} EventBus */
 /** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { parseQueryString } from "./ui_utils.js";
 
 const DEFAULT_LINK_REL = "noopener noreferrer nofollow";
@@ -163,7 +164,7 @@ class PDFLinkService {
         try {
           pageNumber = (await this.pdfDocument.getPageIndex(destRef)) + 1;
         } catch {
-          globalThis.ngxConsole.error(
+          NgxConsole.error(
             `goToDestination: "${destRef}" is not a valid page reference, for dest="${dest}".`
           );
           return;
@@ -173,7 +174,7 @@ class PDFLinkService {
       pageNumber = destRef + 1;
     }
     if (!pageNumber || pageNumber < 1 || pageNumber > this.pagesCount) {
-      globalThis.ngxConsole.error(
+      NgxConsole.error(
         `goToDestination: "${pageNumber}" is not a valid page number, for dest="${dest}".`
       );
       return;
@@ -212,7 +213,7 @@ class PDFLinkService {
         pageNumber <= this.pagesCount
       )
     ) {
-      globalThis.ngxConsole.error(`PDFLinkService.goToPage: "${val}" is not a valid page.`);
+      NgxConsole.error(`PDFLinkService.goToPage: "${val}" is not a valid page.`);
       return;
     }
 
@@ -366,7 +367,7 @@ class PDFLinkService {
           ];
         } else if (zoomArg === "FitR") {
           if (zoomArgs.length !== 5) {
-            globalThis.ngxConsole.error(
+            NgxConsole.error(
               'PDFLinkService.setHash: Not enough parameters for "FitR".'
             );
           } else {
@@ -380,7 +381,7 @@ class PDFLinkService {
             ];
           }
         } else {
-          globalThis.ngxConsole.error(
+          NgxConsole.error(
             `PDFLinkService.setHash: "${zoomArg}" is not a valid zoom value.`
           );
         }

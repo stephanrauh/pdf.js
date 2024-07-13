@@ -15,6 +15,7 @@
 
 /** @typedef {import("./event_utils.js").EventBus} EventBus */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { AnnotationEditorType, shadow } from "pdfjs-lib";
 import { CursorTool, PresentationModeState } from "./ui_utils.js";
 import { GrabToPan } from "./grab_to_pan.js";
@@ -93,7 +94,7 @@ class PDFCursorTools {
       case CursorTool.ZOOM:
       /* falls through */
       default:
-        globalThis.ngxConsole.error(`switchTool: "${tool}" is an unsupported value.`);
+        NgxConsole.error(`switchTool: "${tool}" is an unsupported value.`);
         return;
     }
     // Update the active tool *after* it has been validated above,

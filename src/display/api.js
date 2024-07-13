@@ -1955,7 +1955,7 @@ class PDFPageProxy {
     intentState.streamReader
       .cancel(new AbortException(reason.message))
       .catch(() => {
-        // Avoid "Uncaught promise" messages in the globalThis.ngxConsole.
+        // Avoid "Uncaught promise" messages in the console.
       });
     intentState.streamReader = null;
 

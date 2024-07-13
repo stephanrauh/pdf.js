@@ -17,6 +17,8 @@
 
 'use strict';
 
+import { NgxConsole } from "../../external/ngx-logger/ngx-console.js";
+
 /*
  * The Type2 reader code below is only used for debugging purpose since Type2
  * is only a CharString format and is never used directly as a Font file.
@@ -262,7 +264,7 @@ var Type2Parser = function type2Parser(aFilePath) {
 
   function dump(aStr) {
     if (debug) {
-      globalThis.ngxConsole.log(aStr);
+      NgxConsole.log(aStr);
     }
   }
 

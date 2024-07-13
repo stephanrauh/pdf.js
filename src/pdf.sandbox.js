@@ -14,6 +14,7 @@
  */
 
 import ModuleLoader from "../external/quickjs/quickjs-eval.js";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { SandboxSupportBase } from "./pdf.sandbox.external.js";
 
 /* eslint-disable-next-line no-unused-vars */
@@ -49,7 +50,7 @@ class Sandbox {
 
     this._module = module;
 
-    // 0 to display error using globalThis.ngxConsole.error
+    // 0 to display error using NgxConsole.error
     // else display error using window.alert
     this._alertOnError = 0;
   }
@@ -84,7 +85,7 @@ class Sandbox {
         [buf, this._alertOnError]
       );
     } catch (error) {
-      globalThis.ngxConsole.error(error);
+      NgxConsole.error(error);
     } finally {
       if (buf) {
         this._module.ccall("free", "number", ["number"], [buf]);

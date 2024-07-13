@@ -24,6 +24,7 @@ import {
   shadow,
 } from "pdfjs-lib";
 import { getXfaHtmlForPrinting } from "./print_utils.js";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { warn } from "../src/shared/util.js";
 
 let activeService = null;
@@ -164,7 +165,7 @@ class PDFPrintService {
       size => size.width === width && size.height === height
     );
     if (!hasEqualPageSizes) {
-      globalThis.ngxConsole.warn(
+      NgxConsole.warn(
         "Not all pages have the same size. The printed result may be incorrect!"
       );
     }
@@ -342,7 +343,7 @@ function printPdf() {
   }
   // #277 end of modification by ngx-extended-pdf-viewer
   if (activeService) {
-    globalThis.ngxConsole.warn("Ignored this.printPDF() because of a pending print job.");
+    NgxConsole.warn("Ignored this.printPDF() because of a pending print job.");
     return;
   }
   ensureOverlay().then(function () {
@@ -355,7 +356,7 @@ function printPdf() {
     dispatchEvent("beforeprint");
   } finally {
     if (!activeService) {
-      globalThis.ngxConsole.error("Expected print service to be initialized.");
+      NgxConsole.error("Expected print service to be initialized.");
       ensureOverlay().then(function () {
         if (overlayManager.active === dialog) {
           overlayManager.close(dialog);

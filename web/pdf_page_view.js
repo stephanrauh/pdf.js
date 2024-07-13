@@ -44,6 +44,7 @@ import { AnnotationLayerBuilder } from "./annotation_layer_builder.js";
 import { AppOptions } from "./app_options.js";
 import { DrawLayerBuilder } from "./draw_layer_builder.js";
 import { GenericL10n } from "web-null_l10n";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { SimpleLinkService } from "./pdf_link_service.js";
 import { StructTreeLayerBuilder } from "./struct_tree_layer_builder.js";
 import { TextAccessibilityManager } from "./text_accessibility.js";
@@ -900,7 +901,7 @@ class PDFPageView {
 
   async draw() {
     if (this.renderingState !== RenderingStates.INITIAL) {
-      globalThis.ngxConsole.error("Must be in new state before drawing");
+      NgxConsole.error("Must be in new state before drawing");
       this.reset(); // Ensure that we reset all state to prevent issues.
     }
     const { div, l10n, pageColors, pdfPage, viewport } = this;

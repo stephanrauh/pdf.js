@@ -17,6 +17,8 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("./pdf_find_controller").PDFFindController} PDFFindController */
 
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
+
 /**
  * @typedef {Object} TextHighlighterOptions
  * @property {PDFFindController} findController
@@ -130,7 +132,7 @@ class TextHighlighter {
       }
 
       if (i === textContentItemsStr.length) {
-        globalThis.ngxConsole.error("Could not find a matching mapping");
+        NgxConsole.error("Could not find a matching mapping");
       }
 
       const match = {

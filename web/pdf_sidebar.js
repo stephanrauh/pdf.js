@@ -23,6 +23,7 @@ import {
   toggleCheckedBtn,
   toggleExpandedBtn,
 } from "./ui_utils.js";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 
 const SIDEBAR_WIDTH_VAR = "--sidebar-width";
 const SIDEBAR_MIN_WIDTH = 200; // pixels
@@ -203,7 +204,7 @@ class PDFSidebar {
         }
         break;
       default:
-        globalThis.ngxConsole.error(`PDFSidebar.switchView: "${view}" is not a valid view.`);
+        NgxConsole.error(`PDFSidebar.switchView: "${view}" is not a valid view.`);
         return;
     }
     // Update the active view *after* it has been validated above,
