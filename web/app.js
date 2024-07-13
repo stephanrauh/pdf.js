@@ -3455,6 +3455,9 @@ function webViewerReportTelemetry({ details }) {
   PDFViewerApplication.externalServices.reportTelemetry(details);
 }
 
+// #2337 modified by ngx-extended-pdf-viewer
 PDFViewerApplication.printPdf = printPdf;
+PDFViewerApplication.PDFPrintServiceFactory = PDFPrintServiceFactory;
+// #2337 end of modification by ngx-extended-pdf-viewer
 
 export { PDFViewerApplication };
