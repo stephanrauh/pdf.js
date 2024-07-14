@@ -119,8 +119,16 @@ class PDFThumbnailView {
     this.resume = null;
 
     // modified by ngx-extended-pdf-viewer
-    if (window.pdfThumbnailGenerator) {
-      this._placeholderImg = window.pdfThumbnailGenerator(this, linkService, id, container, this.#pageL10nArgs);
+    eventBus.dispatch("rendercustomthumbnail", {
+      pdfThumbnailView: this,
+      linkService,
+      id,
+      container,
+      thumbPageTitlePromiseOrPageL10nArgs: this.#pageL10nArgs,
+    });
+
+    if (container.querySelector(".thumbnailImage")) {
+      this._placeholderImg = container.querySelector(".thumbnailImage");
     } else {
       this.createThumbnail(this, linkService, id, container, this.#pageL10nArgs);
     }
