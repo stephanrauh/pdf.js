@@ -181,7 +181,7 @@ class PDFDocumentProperties {
    * Close the document properties overlay.
    */
   async close() {
-    this.overlayManager.close(this.dialog);
+    this.overlayManager.close(this.dialog, true); // #2377 modified by ngx-extended-pdf-viewer
     this.eventBus.dispatch("propertiesdialogclose", this); // #1773 modified by ngx-extended-pdf-vieweer
   }
 
