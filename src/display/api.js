@@ -2142,7 +2142,11 @@ class PDFWorker {
   // modified by ngx-extended-pdf-viewer #1512
   #generateTrustedURL(sourcePath) {
     if (window.trustedTypes) {
-      return window.pdfViewerSanitizer.createScriptURL(sourcePath);
+      const sanitizer = window.trustedTypes.createPolicy("pdf-viewer", {
+        createHTML: input => input,
+        createScriptURL: input => input,
+      });
+      return sanitizer.createScriptURL(sourcePath);
     }
     return sourcePath;
   }

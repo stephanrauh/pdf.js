@@ -2589,6 +2589,10 @@ class PopupElement {
       this.#container.hidden = false;
       this.#container.style.zIndex =
         parseInt(this.#container.style.zIndex) + 1000;
+      const page = this.#container.closest(".page");
+      if (page) {
+        page.style.overflow = "visible";
+      }
     } else if (this.#pinned) {
       this.#container.classList.add("focused");
     }
@@ -2605,6 +2609,10 @@ class PopupElement {
     this.#container.hidden = true;
     this.#container.style.zIndex =
       parseInt(this.#container.style.zIndex) - 1000;
+    const page = this.#container.closest(".page");
+    if (page) {
+      page.style.overflow = "";
+    }
   }
 
   forceHide() {
