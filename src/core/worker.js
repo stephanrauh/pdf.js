@@ -734,7 +734,7 @@ class WorkerMessageHandler {
             fileIds: xref.trailer.get("ID") || null,
             startXRef: linearization
               ? startXRef
-              : xref.lastXRefStreamPos ?? startXRef,
+              : (xref.lastXRefStreamPos ?? startXRef),
             filename,
           };
         }
