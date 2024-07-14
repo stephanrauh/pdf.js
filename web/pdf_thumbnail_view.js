@@ -127,8 +127,8 @@ class PDFThumbnailView {
       thumbPageTitlePromiseOrPageL10nArgs: this.#pageL10nArgs,
     });
 
-    if (container.querySelector(".thumbnailImage")) {
-      this._placeholderImg = container.querySelector(".thumbnailImage");
+    if (container.querySelector(`.${this.renderingId}`)) {
+      this._placeholderImg = container.querySelector(`.${this.renderingId} .thumbnailImage`);
     } else {
       this.createThumbnail(this, linkService, id, container, this.#pageL10nArgs);
     }
@@ -141,6 +141,7 @@ class PDFThumbnailView {
     anchor.href = linkService.getAnchorUrl("#page=" + id);
     anchor.setAttribute("data-l10n-id", "pdfjs-thumb-page-title");
     anchor.setAttribute("data-l10n-args", this.#pageL10nArgs);
+    anchor.className = this.renderingId;
     anchor.onclick = function () {
       linkService.goToPage(id);
       return false;
