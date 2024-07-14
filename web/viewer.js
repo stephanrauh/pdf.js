@@ -30,9 +30,11 @@ const AppConstants =
     ? { LinkTarget, RenderingStates, ScrollMode, SpreadMode }
     : null;
 
-window.PDFViewerApplication = PDFViewerApplication;
-window.PDFViewerApplicationConstants = AppConstants;
-window.PDFViewerApplicationOptions = AppOptions;
+// #2337 modified by ngx-extended-pdf-viewer
+// window.PDFViewerApplication = PDFViewerApplication;
+// window.PDFViewerApplicationConstants = AppConstants;
+// window.PDFViewerApplicationOptions = AppOptions;
+// #2337 end of modification by ngx-extended-pdf-viewer
 
 // modified by ngx-extended-pdf-viewer
 if (!HTMLCollection.prototype[Symbol.iterator]) {

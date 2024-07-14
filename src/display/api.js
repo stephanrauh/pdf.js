@@ -77,13 +77,6 @@ const DEFAULT_RANGE_CHUNK_SIZE = 65536; // 2^16 = 65536
 const RENDERING_CANCELLED_TIMEOUT = 100; // ms
 const DELAYED_CLEANUP_TIMEOUT = 5000; // ms
 
-// #171 receive options from ngx-extended-pdf-viewer
-const ServiceWorkerOptions = {
-  showUnverifiedSignatures: false,
-};
-window.ServiceWorkerOptions = ServiceWorkerOptions;
-// #171 end
-
 const DefaultCanvasFactory =
   typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC") && isNodeJS
     ? NodeCanvasFactory

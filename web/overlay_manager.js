@@ -78,12 +78,22 @@ class OverlayManager {
    * @returns {Promise} A promise that is resolved when the overlay has been
    *                    closed.
    */
-  async close(dialog = this.#active) {
+  // #2377 modified by ngx-extended-pdf-viewer - added silent parameter
+  async close(dialog = this.#active, silent = false) {
     if (!this.#overlays.has(dialog)) {
+      if (silent) {
+        return;
+      }
       throw new Error("The overlay does not exist.");
     } else if (!this.#active) {
+      if (silent) {
+        return;
+      }
       throw new Error("The overlay is currently not active.");
     } else if (this.#active !== dialog) {
+      if (silent) {
+        return;
+      }
       throw new Error("Another overlay is currently active.");
     }
     dialog.close();

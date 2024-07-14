@@ -982,7 +982,7 @@ const PDFViewerApplication = {
   get _docFilename() {
     // Use `this.url` instead of `this.baseUrl` to perform filename detection
     // based on the reference fragment as ultimate fallback if needed.
-    return this._contentDispositionFilename || getPdfFilenameFromUrl(this.url);
+    return this._contentDispositionFilename || getPdfFilenameFromUrl(this.url, PDFViewerApplication.appConfig.filenameForDownload);
   },
 
   /**
@@ -1152,12 +1152,11 @@ const PDFViewerApplication = {
         });
     };
 
+    const showUnverifiedSignatures = this.serviceWorkerOptions.showUnverifiedSignatures;
     return loadingTask.promise.then(
       pdfDocument => {
         // #171 modified by ngx-extended-pdf-viewer
-        if (globalThis.ServiceWorkerOptions) {
-          pdfDocument._transport.messageHandler.send('showUnverifiedSignatures', globalThis.ServiceWorkerOptions.showUnverifiedSignatures);
-        }
+        pdfDocument._transport.messageHandler.send('showUnverifiedSignatures', showUnverifiedSignatures);
         // #171 end of modification by ngx-extended-pdf-viewer
         this.load(pdfDocument);
       },
@@ -3460,6 +3459,13 @@ function webViewerReportTelemetry({ details }) {
 PDFViewerApplication.printPdf = printPdf;
 PDFViewerApplication.PDFPrintServiceFactory = PDFPrintServiceFactory;
 PDFViewerApplication.ngxConsole = new NgxConsole();
+
+// #171 receive options from ngx-extended-pdf-viewer
+const ServiceWorkerOptions = {
+  showUnverifiedSignatures: false,
+};
+// #171 end
+PDFViewerApplication.serviceWorkerOptions = ServiceWorkerOptions;
 // #2337 end of modification by ngx-extended-pdf-viewer
 
 export { PDFViewerApplication };
