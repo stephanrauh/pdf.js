@@ -491,6 +491,7 @@ const PDFViewerApplication = {
       enableHighlightFloatingButton: AppOptions.get(
         "enableHighlightFloatingButton"
       ),
+      enableUpdatedAddImage: AppOptions.get("enableUpdatedAddImage"),
       imageResourcesPath: AppOptions.get("imageResourcesPath"),
       removePageBorders: AppOptions.get("removePageBorders"), // #194
       enablePrintAutoRotate: AppOptions.get("enablePrintAutoRotate"),
