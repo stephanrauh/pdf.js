@@ -142,7 +142,7 @@ const PDFViewerApplication = {
   /** @type {OverlayManager} */
   overlayManager: null,
   /** @type {Preferences} */
-  preferences: null,
+  preferences: new Preferences(),
   /** @type {Toolbar} */
   toolbar: null,
   /** @type {SecondaryToolbar} */
@@ -154,10 +154,10 @@ const PDFViewerApplication = {
   /** @type {AnnotationEditorParams} */
   annotationEditorParams: null,
   isInitialViewSet: false,
-  downloadComplete: false,
   isViewerEmbedded: window.parent !== window,
   url: "",
   baseUrl: "",
+  mlManager: null,
   _downloadUrl: "",
   _eventBusAbortController: null,
   _windowAbortController: null,
@@ -208,6 +208,12 @@ const PDFViewerApplication = {
       if (mode) {
         document.documentElement.classList.add(mode);
       }
+    } else {
+      // We want to load the image-to-text AI engine as soon as possible.
+      this.mlManager = new MLManager({
+        enableAltText: AppOptions.get("enableAltText"),
+        altTextLearnMoreUrl: AppOptions.get("altTextLearnMoreUrl"),
+      });
     }
 
     // Ensure that the `L10n`-instance has been initialized before creating
@@ -381,11 +387,14 @@ const PDFViewerApplication = {
 
     let eventBus;
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-      eventBus = AppOptions.eventBus = new FirefoxEventBus(
-        AppOptions.get("allowedGlobalEvents"),
-        externalServices,
-        AppOptions.get("isInAutomation")
-      );
+      eventBus =
+        AppOptions.eventBus =
+        this.mlManager.eventBus =
+          new FirefoxEventBus(
+            AppOptions.get("allowedGlobalEvents"),
+            externalServices,
+            AppOptions.get("isInAutomation")
+          );
     } else {
       eventBus = new EventBus();
     }
@@ -656,7 +665,6 @@ const PDFViewerApplication = {
   },
 
   async run(config) {
-    this.preferences = new Preferences();
     await this.initialize(config);
 
     const { appConfig, eventBus } = this;
@@ -793,15 +801,6 @@ const PDFViewerApplication = {
     return shadow(this, "externalServices", new ExternalServices());
   },
 
-  get mlManager() {
-    const enableAltText = AppOptions.get("enableAltText");
-    return shadow(
-      this,
-      "mlManager",
-      enableAltText === true ? new MLManager({ enableAltText }) : null
-    );
-  },
-
   get initialized() {
     return this._initializedCapability.settled;
   },
@@ -933,14 +932,12 @@ const PDFViewerApplication = {
     let title = getPdfFilenameFromUrl(url, "");
     if (!title) {
       try {
-        title = decodeURIComponent(getFilenameFromUrl(url)) || url;
+        title = decodeURIComponent(getFilenameFromUrl(url));
       } catch {
-        // decodeURIComponent may throw URIError,
-        // fall back to using the unprocessed url in that case
-        title = url;
+        // decodeURIComponent may throw URIError.
       }
     }
-    this.setTitle(title);
+    this.setTitle(title || url);
     */
    // #1669 end of modification by ngx-extended-pdf-viewer
   },
@@ -1023,7 +1020,6 @@ const PDFViewerApplication = {
     this.pdfLinkService.externalLinkEnabled = true;
     this.store = null;
     this.isInitialViewSet = false;
-    this.downloadComplete = false;
     this.url = "";
     this.baseUrl = "";
     this._downloadUrl = "";
@@ -1072,8 +1068,8 @@ const PDFViewerApplication = {
     // Set the necessary global worker parameters, using the available options.
     const workerParams = AppOptions.getAll(OptionKind.WORKER);
 
-    if (workerParams.workerSrc.constructor.name === "Function") {
-      workerParams.workerSrc = workerParams.workerSrc();
+    if (args.workerSrc) {
+      workerParams.workerSrc = args.workerSrc;
     }
     Object.assign(GlobalWorkerOptions, workerParams);
 
@@ -1168,12 +1164,9 @@ const PDFViewerApplication = {
   async download(options = {}) {
     let data;
     try {
-      if (this.downloadComplete) {
-        data = await this.pdfDocument.getData();
-      }
+      data = await this.pdfDocument.getData();
     } catch {
-      // When the PDF document isn't ready, or the PDF file is still
-      // downloading, simply download using the URL.
+      // When the PDF document isn't ready, simply download using the URL.
     }
     this.downloadManager.download(
       data,
@@ -1340,17 +1333,12 @@ const PDFViewerApplication = {
   },
 
   progress(level) {
-    if (!this.loadingBar || this.downloadComplete) {
-      // Don't accidentally show the loading bar again when the entire file has
-      // already been fetched (only an issue when disableAutoFetch is enabled).
-      return;
-    }
     const percent = Math.round(level * 100);
     // When we transition from full request to range requests, it's possible
     // that we discard some of the loaded data. This can cause the loading
     // bar to move backwards. So prevent this by only updating the bar if it
     // increases.
-    if (percent <= this.loadingBar.percent) {
+    if (!this.loadingBar || percent <= this.loadingBar.percent) {
       return;
     }
     this.loadingBar.percent = percent;
@@ -1373,7 +1361,6 @@ const PDFViewerApplication = {
 
     pdfDocument.getDownloadInfo().then(({ length }) => {
       this._contentLength = length; // Ensure that the correct length is used.
-      this.downloadComplete = true;
       this.loadingBar?.hide();
 
       firstPagePromise.then(() => {
