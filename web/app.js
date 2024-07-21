@@ -1094,8 +1094,8 @@ const PDFViewerApplication = {
     // Set the necessary global worker parameters, using the available options.
     const workerParams = AppOptions.getAll(OptionKind.WORKER);
 
-    if (workerParams.workerSrc.constructor.name === "Function") {
-      workerParams.workerSrc = workerParams.workerSrc();
+    if (args.workerSrc) {
+      workerParams.workerSrc = args.workerSrc;
     }
     Object.assign(GlobalWorkerOptions, workerParams);
 

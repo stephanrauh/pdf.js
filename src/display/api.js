@@ -2334,11 +2334,6 @@ class PDFWorker {
    */
   static get workerSrc() {
     if (GlobalWorkerOptions.workerSrc) {
-      // modified by ngx-extended-pdf-viewer #376
-      if (GlobalWorkerOptions.workerSrc.constructor.name === "Function") {
-        return GlobalWorkerOptions.workerSrc();
-      }
-      // end of modification
       return GlobalWorkerOptions.workerSrc;
     }
     throw new Error('No "GlobalWorkerOptions.workerSrc" specified.');

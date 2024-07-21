@@ -62,6 +62,8 @@ const {
   XfaLayer,
 } = globalThis.pdfjsLib;
 
+delete globalThis.pdfjsLib;
+
 export {
   AbortException,
   AnnotationEditorLayer,
