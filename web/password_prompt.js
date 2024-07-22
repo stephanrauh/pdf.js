@@ -71,10 +71,10 @@ class PasswordPrompt {
 
     try {
       await this.overlayManager.open(this.dialog);
-      // modified by ngx-extended-pdf-viewer
+      // #8 modified by ngx-extended-pdf-viewer
       this.input.type = "password";
       this.input.focus();
-      // end of modification by ngx-extended-pdf-viewer
+      // #8 end of modification by ngx-extended-pdf-viewer
     } catch (ex) {
       this.#activeCapability.resolve();
       throw ex;
@@ -96,7 +96,7 @@ class PasswordPrompt {
     if (this.overlayManager.active === this.dialog) {
       this.overlayManager.close(this.dialog);
       this.input.value = ""; // modified by ngx-extended-pdf-viewer
-      this.input.type = "hidden"; // #8 modified by ngx-extended-pdf-viewer
+      this.input.type = "text"; // #8 modified by ngx-extended-pdf-viewer
     }
   }
 
