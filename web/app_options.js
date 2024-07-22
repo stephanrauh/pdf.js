@@ -55,8 +55,16 @@ const OptionKind = {
   API: 0x04,
   WORKER: 0x08,
   EVENT_DISPATCH: 0x10,
-  UNDEF_ALLOWED: 0x20,
   PREFERENCE: 0x80,
+};
+
+// Should only be used with options that allow multiple types.
+const Type = {
+  BOOLEAN: 0x01,
+  NUMBER: 0x02,
+  OBJECT: 0x04,
+  STRING: 0x08,
+  UNDEFINED: 0x10,
 };
 
 /**
@@ -350,7 +358,7 @@ const defaultOptions = {
   },
   docBaseUrl: {
     /** @type {string} */
-    value: "",
+    value: typeof PDFJSDev === "undefined" ? document.URL.split("#", 1)[0] : "",
     kind: OptionKind.API,
   },
   enableHWA: {
@@ -410,7 +418,8 @@ const defaultOptions = {
     )
       ? false
       : undefined,
-    kind: OptionKind.API + OptionKind.UNDEF_ALLOWED,
+    kind: OptionKind.API,
+    type: Type.BOOLEAN + Type.UNDEFINED,
   },
   verbosity: {
     /** @type {number} */
@@ -480,8 +489,7 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
 const userOptions = new Map();
 
 if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-  // Apply any compatibility-values to the user-options,
-  // see also `AppOptions.remove` below.
+  // Apply any compatibility-values to the user-options.
   for (const [name, value] of compatParams) {
     userOptions.set(name, value);
   }
@@ -496,7 +504,7 @@ if (globalThis.pdfDefaultOptions) {
 if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING || LIB")) {
   // Ensure that the `defaultOptions` are correctly specified.
   for (const name in defaultOptions) {
-    const { value, kind } = defaultOptions[name];
+    const { value, kind, type } = defaultOptions[name];
 
     if (kind & OptionKind.PREFERENCE) {
       if (kind === OptionKind.PREFERENCE) {
@@ -505,9 +513,9 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING || LIB")) {
       if (kind & OptionKind.BROWSER) {
         throw new Error(`Cannot mix "PREFERENCE" and "BROWSER" kind: ${name}`);
       }
-      if (kind & OptionKind.UNDEF_ALLOWED) {
+      if (type !== undefined) {
         throw new Error(
-          `Cannot allow \`undefined\` value for "PREFERENCE" kind: ${name}`
+          `Cannot have \`type\`-field for "PREFERENCE" kind: ${name}`
         );
       }
       if (typeof compatParams === "object" && compatParams.has(name)) {
@@ -524,9 +532,9 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING || LIB")) {
         throw new Error(`Invalid value for "PREFERENCE" kind: ${name}`);
       }
     } else if (kind & OptionKind.BROWSER) {
-      if (kind & OptionKind.UNDEF_ALLOWED) {
+      if (type !== undefined) {
         throw new Error(
-          `Cannot allow \`undefined\` value for "BROWSER" kind: ${name}`
+          `Cannot have \`type\`-field for "BROWSER" kind: ${name}`
         );
       }
       if (typeof compatParams === "object" && compatParams.has(name)) {
@@ -577,8 +585,7 @@ class AppOptions {
       !defaultOpt ||
       !(
         typeof value === typeof defaultOpt.value ||
-        (defaultOpt.kind & OptionKind.UNDEF_ALLOWED &&
-          (value === undefined || defaultOpt.value === undefined))
+        Type[(typeof value).toUpperCase()] & defaultOpt.type
       )
     ) {
       return;
@@ -597,8 +604,7 @@ class AppOptions {
         !defaultOpt ||
         !(
           typeof userOpt === typeof defaultOpt.value ||
-          (defaultOpt.kind & OptionKind.UNDEF_ALLOWED &&
-            (userOpt === undefined || defaultOpt.value === undefined))
+          Type[(typeof userOpt).toUpperCase()] & defaultOpt.type
         )
       ) {
         continue;
@@ -619,17 +625,6 @@ class AppOptions {
     if (events) {
       for (const [name, value] of events) {
         this.eventBus.dispatch(name.toLowerCase(), { source: this, value });
-      }
-    }
-  }
-
-  static remove(name) {
-    userOptions.delete(name);
-
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-      // Re-apply a compatibility-value, if it exists, to the user-options.
-      if (compatParams.has(name)) {
-        userOptions.set(name, compatParams.get(name));
       }
     }
   }

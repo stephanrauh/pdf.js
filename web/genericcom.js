@@ -65,6 +65,10 @@ class MLManager {
     return false;
   }
 
+  async deleteModel(_service) {
+    return null;
+  }
+
   async guess() {
     return null;
   }

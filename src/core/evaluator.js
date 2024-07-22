@@ -2013,9 +2013,8 @@ class PartialEvaluator {
                   localColorSpaceCache,
                 })
                 .then(function (colorSpace) {
-                  if (colorSpace) {
-                    stateManager.state.fillColorSpace = colorSpace;
-                  }
+                  stateManager.state.fillColorSpace =
+                    colorSpace || ColorSpace.singletons.gray;
                 })
             );
             return;
@@ -2039,9 +2038,8 @@ class PartialEvaluator {
                   localColorSpaceCache,
                 })
                 .then(function (colorSpace) {
-                  if (colorSpace) {
-                    stateManager.state.strokeColorSpace = colorSpace;
-                  }
+                  stateManager.state.strokeColorSpace =
+                    colorSpace || ColorSpace.singletons.gray;
                 })
             );
             return;
@@ -2085,7 +2083,12 @@ class PartialEvaluator {
             args = ColorSpace.singletons.rgb.getRgb(args, 0);
             break;
           case OPS.setFillColorN:
-            cs = stateManager.state.fillColorSpace;
+            cs = stateManager.state.patternFillColorSpace;
+            if (!cs) {
+              args = [];
+              fn = OPS.setFillTransparent;
+              break;
+            }
             if (cs.name === "Pattern") {
               next(
                 self.handleColorN(
@@ -2107,7 +2110,12 @@ class PartialEvaluator {
             fn = OPS.setFillRGBColor;
             break;
           case OPS.setStrokeColorN:
-            cs = stateManager.state.strokeColorSpace;
+            cs = stateManager.state.patternStrokeColorSpace;
+            if (!cs) {
+              args = [];
+              fn = OPS.setStrokeTransparent;
+              break;
+            }
             if (cs.name === "Pattern") {
               next(
                 self.handleColorN(
@@ -4879,8 +4887,26 @@ class EvalState {
     this.ctm = new Float32Array(IDENTITY_MATRIX);
     this.font = null;
     this.textRenderingMode = TextRenderingMode.FILL;
-    this.fillColorSpace = ColorSpace.singletons.gray;
-    this.strokeColorSpace = ColorSpace.singletons.gray;
+    this._fillColorSpace = ColorSpace.singletons.gray;
+    this._strokeColorSpace = ColorSpace.singletons.gray;
+    this.patternFillColorSpace = null;
+    this.patternStrokeColorSpace = null;
+  }
+
+  get fillColorSpace() {
+    return this._fillColorSpace;
+  }
+
+  set fillColorSpace(colorSpace) {
+    this._fillColorSpace = this.patternFillColorSpace = colorSpace;
+  }
+
+  get strokeColorSpace() {
+    return this._strokeColorSpace;
+  }
+
+  set strokeColorSpace(colorSpace) {
+    this._strokeColorSpace = this.patternStrokeColorSpace = colorSpace;
   }
 
   clone() {
