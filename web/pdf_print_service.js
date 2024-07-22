@@ -338,7 +338,8 @@ class PDFPrintService {
 const print = window.print;
 function printPdf() {
   // #277 modified by ngx-extended-pdf-viewer
-  if (!PDFViewerApplication.enablePrint) {
+  // important: this function must be bound to an instance of PDFViewerApplication!
+  if (!this.enablePrint) {
     return;
   }
   // #277 end of modification by ngx-extended-pdf-viewer
