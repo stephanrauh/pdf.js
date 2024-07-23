@@ -394,6 +394,18 @@ const defaultOptions = {
     value: true,
     kind: OptionKind.API,
   },
+  // #2458 modified by ngx-extended-pdf-viewer
+  maxZoom: {
+    /** @type {number | string} */
+    value: 10,
+    kind: OptionKind.VIEWER,
+  },
+  minZoom: {
+    /** @type {number | string} */
+    value: 0.1,
+    kind: OptionKind.VIEWER,
+  },
+  // #2458 end of modification by ngx-extended-pdf-viewer
   maxImageSize: {
     /** @type {number} */
     value: -1,
@@ -584,15 +596,19 @@ class AppOptions {
   static set(name, value) {
     const defaultOpt = defaultOptions[name];
 
-    if (
-      !defaultOpt ||
-      !(
-        typeof value === typeof defaultOpt.value ||
-        Type[(typeof value).toUpperCase()] & defaultOpt.type
-      )
-    ) {
+    // #2458 modified by ngx-extended-pdf-viewer
+    if (!defaultOpt) {
+      console.error("Invalid AppOptions value: " + name + " = " + value);
       return;
     }
+
+    if (!(typeof value === typeof defaultOpt.value || Type[(typeof value).toUpperCase()] & defaultOpt.type)) {
+      if (name !== "maxZoom" && name !== "minZoom") {
+        console.error("Invalid AppOptions value: " + name + " = " + value);
+        return;
+      }
+    }
+    // #2458 end of modification by ngx-extended-pdf-viewer
     userOptions.set(name, value);
   }
 
