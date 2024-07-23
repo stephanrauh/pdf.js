@@ -52,7 +52,7 @@ class Preferences extends BasePreferences {
 
 class ExternalServices extends BaseExternalServices {
   async createL10n() {
-    return new GenericL10n(AppOptions.get("locale"));
+    return new GenericL10n(AppOptions.get("localeProperties")?.lang);
   }
 
   createScripting() {
