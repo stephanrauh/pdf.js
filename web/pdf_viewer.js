@@ -1608,7 +1608,12 @@ class PDFViewer {
     if (!value) {
       value = "auto";
     }
-    // #90 end of modification
+    // #90 end of modification by ngx-extended-pdf-viewer
+    // #2458 modified by ngx-extended-pdf-viewer
+    if (PDFViewerApplicationOptions.get("maxZoom") && PDFViewerApplicationOptions.get("maxZoom") === PDFViewerApplicationOptions.get("minZoom")) {
+      value = PDFViewerApplicationOptions.get("maxZoom");
+    }
+    // #2458 end of modification by ngx-extended-pdf-viewer
     let scale = parseFloat(value);
     // #1095 modified by ngx-extended-pdf-viewer: prevent duplicate rendering
     if (this._currentScale === scale) {
