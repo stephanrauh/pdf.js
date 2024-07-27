@@ -616,22 +616,7 @@ class AppOptions {
   }
 
   static set(name, value) {
-    const defaultOpt = defaultOptions[name];
-
-    // #2458 modified by ngx-extended-pdf-viewer
-    if (!defaultOpt) {
-      console.error("Invalid AppOptions value: " + name + " = " + value);
-      return;
-    }
-
-    if (!(typeof value === typeof defaultOpt.value || Type[(typeof value).toUpperCase()] & defaultOpt.type)) {
-      if (name !== "maxZoom" && name !== "minZoom" && name !== "passwordPrompt" && name !== "defaultZoomValue") {
-        console.error("Invalid AppOptions value: " + name + " = " + value);
-        return;
-      }
-    }
-    // #2458 end of modification by ngx-extended-pdf-viewer
-    userOptions.set(name, value);
+    this.setAll({ [name]: value });
   }
 
   static setAll(options, prefs = false) {
@@ -648,17 +633,29 @@ class AppOptions {
           Type[(typeof userOpt).toUpperCase()] & defaultOpt.type
         )
       ) {
+      // #2459 modified by ngx-extended-pdf-viewer
+      if (!(typeof value === typeof defaultOpt.value || Type[(typeof value).toUpperCase()] & defaultOpt.type)) {
+        if (name !== "maxZoom" && name !== "minZoom" && name !== "passwordPrompt" && name !== "defaultZoomValue") {
+          console.error("Invalid AppOptions value: " + name + " = " + value);
+          return;
+        }
+      }
+      // #2459 end of modification by ngx-extended-pdf-viewer
         continue;
       }
-      if (prefs) {
-        const { kind } = defaultOpt;
+      const { kind } = defaultOpt;
 
-        if (!(kind & OptionKind.BROWSER || kind & OptionKind.PREFERENCE)) {
-          continue;
-        }
-        if (this.eventBus && kind & OptionKind.EVENT_DISPATCH) {
-          (events ||= new Map()).set(name, userOpt);
-        }
+      if (
+        prefs &&
+        !(kind & OptionKind.BROWSER || kind & OptionKind.PREFERENCE)
+      ) {
+        // #2459 modified by ngx-extended-pdf-viewer
+        console.error("Invalid AppOptions parameter: " + name + " = " + value);
+        // #2459 end of modification by ngx-extended-pdf-viewer
+        continue;
+      }
+      if (this.eventBus && kind & OptionKind.EVENT_DISPATCH) {
+        (events ||= new Map()).set(name, userOpt);
       }
       userOptions.set(name, userOpt);
     }
