@@ -101,101 +101,6 @@ class Page {
 }
 
 /**
- * Class representing a book page as an image on Canvas
- */
-class ImagePage extends Page {
-    constructor(render, href, density) {
-        super(render, density);
-        this.image = null;
-        this.isLoad = false;
-        this.loadingAngle = 0;
-        this.image = new Image();
-        this.image.src = href;
-    }
-    draw(tempDensity) {
-        // #1659 modified by ngx-extended-pdf-viewer
-        const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
-        const ctx = canvas.getContext("2d", options);
-        // #1659 end of modification by ngx-extended-pdf-viewer
-        const pagePos = this.render.convertToGlobal(this.state.position);
-        const pageWidth = this.render.getRect().pageWidth;
-        const pageHeight = this.render.getRect().height;
-        ctx.save();
-        ctx.translate(pagePos.x, pagePos.y);
-        ctx.beginPath();
-        for (let p of this.state.area) {
-            if (p !== null) {
-                p = this.render.convertToGlobal(p);
-                ctx.lineTo(p.x - pagePos.x, p.y - pagePos.y);
-            }
-        }
-        ctx.rotate(this.state.angle);
-        ctx.clip();
-        if (!this.isLoad) {
-            this.drawLoader(ctx, { x: 0, y: 0 }, pageWidth, pageHeight);
-        }
-        else {
-            ctx.drawImage(this.image, 0, 0, pageWidth, pageHeight);
-        }
-        ctx.restore();
-    }
-    simpleDraw(orient) {
-        const rect = this.render.getRect();
-        // #1659 modified by ngx-extended-pdf-viewer
-        const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
-        const ctx = canvas.getContext("2d", options);
-        // #1659 end of modification by ngx-extended-pdf-viewer
-        const pageWidth = rect.pageWidth;
-        const pageHeight = rect.height;
-        const x = orient === 1 /* RIGHT */ ? rect.left + rect.pageWidth : rect.left;
-        const y = rect.top;
-        if (!this.isLoad) {
-            this.drawLoader(ctx, { x, y }, pageWidth, pageHeight);
-        }
-        else {
-            ctx.drawImage(this.image, x, y, pageWidth, pageHeight);
-        }
-    }
-    drawLoader(ctx, shiftPos, pageWidth, pageHeight) {
-        ctx.beginPath();
-        ctx.strokeStyle = 'rgb(200, 200, 200)';
-        ctx.fillStyle = 'rgb(255, 255, 255)';
-        ctx.lineWidth = 1;
-        ctx.rect(shiftPos.x + 1, shiftPos.y + 1, pageWidth - 1, pageHeight - 1);
-        ctx.stroke();
-        ctx.fill();
-        const middlePoint = {
-            x: shiftPos.x + pageWidth / 2,
-            y: shiftPos.y + pageHeight / 2,
-        };
-        ctx.beginPath();
-        ctx.lineWidth = 10;
-        ctx.arc(middlePoint.x, middlePoint.y, 20, this.loadingAngle, (3 * Math.PI) / 2 + this.loadingAngle);
-        ctx.stroke();
-        ctx.closePath();
-        this.loadingAngle += 0.07;
-        if (this.loadingAngle >= 2 * Math.PI) {
-            this.loadingAngle = 0;
-        }
-    }
-    load() {
-        if (!this.isLoad)
-            this.image.onload = () => {
-                this.isLoad = true;
-            };
-    }
-    newTemporaryCopy() {
-        return this;
-    }
-    getTemporaryCopy() {
-        return this;
-    }
-    hideTemporaryCopy() {
-        return;
-    }
-}
-
-/**
  * Сlass representing a collection of pages
  */
 class PageCollection {
@@ -441,24 +346,6 @@ class PageCollection {
         }
         this.currentPageIndex = spread[0];
         this.app.updatePageIndex(this.currentPageIndex);
-    }
-}
-
-/**
- * Сlass representing a collection of pages as images on the canvas
- */
-class ImagePageCollection extends PageCollection {
-    constructor(app, render, imagesHref) {
-        super(app, render);
-        this.imagesHref = imagesHref;
-    }
-    load() {
-        for (const href of this.imagesHref) {
-            const page = new ImagePage(this.render, href, "soft" /* SOFT */);
-            page.load();
-            this.pages.push(page);
-        }
-        this.createSpread();
     }
 }
 
@@ -1794,10 +1681,7 @@ class CanvasRender extends Render {
     constructor(app, setting, inCanvas) {
         super(app, setting);
         this.canvas = inCanvas;
-        // #1659 modified by ngx-extended-pdf-viewer
-        const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
-        const ctx = canvas.getContext("2d", options);
-        // #1659 end of modification by ngx-extended-pdf-viewer
+        const ctx = canvas.getContext("2d");
     }
     getContext() {
         return this.ctx;
@@ -2676,29 +2560,7 @@ class PageFlip extends EventObject {
         this.render.update();
         this.pages.show();
     }
-    /**
-     * Load pages from images on the Canvas mode
-     *
-     * @param {string[]} imagesHref - List of paths to images
-     */
-    loadFromImages(imagesHref) {
-        this.ui = new CanvasUI(this.block, this, this.setting);
-        const canvas = this.ui.getCanvas();
-        this.render = new CanvasRender(this, this.setting, canvas);
-        this.flipController = new Flip(this.render, this);
-        this.pages = new ImagePageCollection(this, this.render, imagesHref);
-        this.pages.load();
-        this.render.start();
-        this.pages.show(this.setting.startPage);
-        // safari fix
-        setTimeout(() => {
-            this.ui.update();
-            this.trigger('init', this, {
-                page: this.setting.startPage,
-                mode: this.render.getOrientation(),
-            });
-        }, 1);
-    }
+
     /**
      * Load pages from HTML elements on the HTML mode
      *
@@ -2721,22 +2583,7 @@ class PageFlip extends EventObject {
             });
         }, 1);
     }
-    /**
-     * Update current pages from images
-     *
-     * @param {string[]} imagesHref - List of paths to images
-     */
-    updateFromImages(imagesHref) {
-        const current = this.pages.getCurrentPageIndex();
-        this.pages.destroy();
-        this.pages = new ImagePageCollection(this, this.render, imagesHref);
-        this.pages.load();
-        this.pages.show(current);
-        this.trigger('update', this, {
-            page: current,
-            mode: this.render.getOrientation(),
-        });
-    }
+
     /**
      * Update current pages from HTML
      *

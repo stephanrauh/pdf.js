@@ -790,10 +790,7 @@ class InkEditor extends AnnotationEditor {
     this.canvas.setAttribute("data-l10n-id", "pdfjs-ink-canvas");
 
     this.div.append(this.canvas);
-    // #1659 modified by ngx-extended-pdf-viewer
-    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true } : undefined;
-    this.ctx = this.canvas.getContext("2d", options);
-    // #1659 end of modification by ngx-extended-pdf-viewer
+    this.ctx = this.canvas.getContext("2d");
   }
 
   /**

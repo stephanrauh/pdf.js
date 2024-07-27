@@ -286,10 +286,7 @@ class FontLoader {
     const canvas = this._document.createElement("canvas");
     canvas.width = 1;
     canvas.height = 1;
-    // #1659 modified by ngx-extended-pdf-viewer
-    const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true} : undefined;
-    const ctx = canvas.getContext("2d", options);
-    // #1659 end of modification by ngx-extended-pdf-viewer
+    const ctx = canvas.getContext("2d");
 
     let called = 0;
     function isFontReady(name, callback) {

@@ -73,6 +73,28 @@ const Type = {
  *       primitive types and cannot rely on any imported types.
  */
 const defaultOptions = {
+  // #2459 modified by ngx-extended-pdf-viewer
+  defaultCacheSize: {
+    /** @type {number} */
+    value: 50,
+    kind: OptionKind.VIEWER,
+  },
+  passwordPrompt: {
+    /** @type {Object} */
+    value: null,
+    kind: OptionKind.VIEWER,
+  },
+  enableDragAndDrop: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.VIEWER,
+  },
+  pageViewMode: {
+    /** @type {'single' | 'book' | 'multiple' | 'infinite-scroll'} */
+    value: "multiple",
+    kind: OptionKind.VIEWER,
+  },
+  // #2459 end of modification by ngx-extended-pdf-viewer
   allowedGlobalEvents: {
     /** @type {Object} */
     value: null,
@@ -171,7 +193,7 @@ const defaultOptions = {
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   defaultZoomValue: {
-    /** @type {string} */
+    /** @type {string | number} */
     value: "",
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
@@ -603,7 +625,7 @@ class AppOptions {
     }
 
     if (!(typeof value === typeof defaultOpt.value || Type[(typeof value).toUpperCase()] & defaultOpt.type)) {
-      if (name !== "maxZoom" && name !== "minZoom") {
+      if (name !== "maxZoom" && name !== "minZoom" && name !== "passwordPrompt" && name !== "defaultZoomValue") {
         console.error("Invalid AppOptions value: " + name + " = " + value);
         return;
       }

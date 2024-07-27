@@ -65,10 +65,7 @@ function renderPage(
   scratchCanvas.width = Math.floor(size.width * PRINT_UNITS);
   scratchCanvas.height = Math.floor(size.height * PRINT_UNITS);
 
-  // #1659 modified by ngx-extended-pdf-viewer
-  const options = window.pdfDefaultOptions.activateWillReadFrequentlyFlag ? { willReadFrequently: true } : undefined;
-  const ctx = scratchCanvas.getContext("2d", options);
-  // #1659 end of modification by ngx-extended-pdf-viewer
+  const ctx = scratchCanvas.getContext("2d");
   ctx.save();
   ctx.fillStyle = "rgb(255, 255, 255)";
   ctx.fillRect(0, 0, scratchCanvas.width, scratchCanvas.height);
