@@ -1256,7 +1256,7 @@ const PDFViewerApplication = {
 
   // #2430 modified by ngx-extended-pdf-viewer
   _ensureDownloadComplete() {
-    if (this.pdfDocument && this.downloadComplete) {
+    if (this.pdfDocument) {
       return;
     }
     throw new Error("PDF document not downloaded.");
