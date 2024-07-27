@@ -489,6 +489,9 @@ const PDFViewerApplication = {
       mlManager: this.mlManager,
       abortSignal: this._globalAbortController.signal,
       enableHWA,
+      defaultCacheSize: AppOptions.get("defaultCacheSize"),
+      minZoom: AppOptions.get("minZoom"),
+      maxZoom: AppOptions.get("maxZoom"),
     });
     this.pdfViewer = pdfViewer;
 
@@ -570,11 +573,14 @@ const PDFViewerApplication = {
         const nimbusData = JSON.parse(
           AppOptions.get("nimbusDataStr") || "null"
         );
-        this.toolbar = new Toolbar(appConfig.toolbar, eventBus, nimbusData);
+        this.toolbar = new Toolbar(appConfig.toolbar, eventBus, AppOptions.get("defaultZoomValue"), AppOptions.get("minZoom"), AppOptions.get("maxZoom"), nimbusData);
       } else {
         this.toolbar = new Toolbar(
           appConfig.toolbar,
           eventBus,
+          AppOptions.get("defaultZoomValue"),
+          AppOptions.get("minZoom"),
+          AppOptions.get("maxZoom"),
           AppOptions.get("toolbarDensity")
         );
       }
@@ -1682,15 +1688,14 @@ const PDFViewerApplication = {
 
     // Provides some basic debug information
     // #1793 modified by ngx-extended-pdf-vieweer
-    const options = window.PDFViewerApplicationOptions;
-    if (!options || options.get("verbosity") > 0) {
+    if (AppOptions?.get("verbosity") > 0) {
       NgxConsole.log(
         `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
           `${(info.Producer || "-").trim()} / ${(info.Creator || "-").trim()}] ` +
           `(PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer ${ngxExtendedPdfViewerVersion}`
       );
     }
-     // #1793 end of modification by ngx-extended-pdf-viewer
+    // #1793 end of modification by ngx-extended-pdf-viewer
     let pdfTitle = info.Title;
 
     const metadataTitle = metadata?.get("dc:title");

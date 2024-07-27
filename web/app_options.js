@@ -194,7 +194,7 @@ const defaultOptions = {
   },
   defaultZoomValue: {
     /** @type {string | number} */
-    value: "",
+    value: "auto",
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   disableHistory: {

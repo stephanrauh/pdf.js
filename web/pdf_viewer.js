@@ -255,6 +255,12 @@ class PDFViewer {
   #pageViewMode = "multiple";
   // #1989 end of modification by ngx-extended-pdf-viewer
 
+  // #2459 modified by ngx-extended-pdf-viewer
+  #maxZoom = MAX_SCALE;
+
+  #minZoom = MIN_SCALE;
+  // #2459 end of modification by ngx-extended-pdf-viewer
+
   /**
    * @param {PDFViewerOptions} options
    */
@@ -272,6 +278,11 @@ class PDFViewer {
     /** #495 modified by ngx-extended-pdf-viewer */
     this.pageViewMode = options.pageViewMode || "multiple";
     /** end of modification */
+    // #2459 modified by ngx-extended-pdf-viewer
+    this.defaultCacheSize = options.defaultCacheSize;
+    this.#maxZoom = options.maxZoom;
+    this.#minZoom = options.minZoom;
+    // #2459 end of modification
 
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
       if (this.container?.tagName !== "DIV" || this.viewer?.tagName !== "DIV") {
@@ -379,6 +390,24 @@ class PDFViewer {
       this.l10n.translate(this.container);
     }
   }
+
+  // #2459 modified by ngx-extended-pdf-viewer
+  get maxZoom() {
+    return this.#maxZoom;
+  }
+
+  set maxZoom(value) {
+    this.#maxZoom = value;
+  }
+
+  get minZoom() {
+    return this.#minZoom;
+  }
+
+  set minZoom(value) {
+    this.#minZoom = value;
+  }
+  // #2459 end of modification by ngx-extended-pdf-viewer
 
   // #2337 modified by ngx-extended-pdf-viewer:
   // allow textlayer to be activated in an existing viewer
@@ -1321,7 +1350,7 @@ class PDFViewer {
     this._currentScaleValue = null;
     this._pageLabels = null;
     // #950 modified by ngx-extended-pdf-viewer
-    const bufferSize = Number(PDFViewerApplicationOptions.get("defaultCacheSize")) || DEFAULT_CACHE_SIZE;
+    const bufferSize = this.defaultCacheSize || DEFAULT_CACHE_SIZE;
     this.#buffer = new PDFPageViewBuffer(bufferSize);
     // #950 end of modification by ngx-extended-pdf-viewer
     this._location = null;
@@ -1620,8 +1649,8 @@ class PDFViewer {
     }
     // #90 end of modification by ngx-extended-pdf-viewer
     // #2458 modified by ngx-extended-pdf-viewer
-    if (PDFViewerApplicationOptions.get("maxZoom") && PDFViewerApplicationOptions.get("maxZoom") === PDFViewerApplicationOptions.get("minZoom")) {
-      value = PDFViewerApplicationOptions.get("maxZoom");
+    if (this.maxZoom && this.maxZoom === this.minZoom) {
+      value = this.maxZoom;
     }
     // #2458 end of modification by ngx-extended-pdf-viewer
     let scale = parseFloat(value);
@@ -1938,7 +1967,7 @@ class PDFViewer {
       return;
     }
     // #950 modified by ngx-extended-pdf-viewer
-    const bufferSize = Number(PDFViewerApplicationOptions.get("defaultCacheSize")) || DEFAULT_CACHE_SIZE;
+    const bufferSize = this.defaultCacheSize || DEFAULT_CACHE_SIZE;
     const newCacheSize = Math.max(bufferSize, 2 * numVisiblePages + 1);
     // #950 end of modification
     this.#buffer.resize(newCacheSize, visible.ids);
@@ -2546,15 +2575,9 @@ class PDFViewer {
       } while (--steps > 0);
     }
     // modified by ngx-extended-pdf-viewer #367
-    let minScale = Number(PDFViewerApplicationOptions.get("minZoom"));
-    if (!minScale) {
-      minScale = MIN_SCALE;
-    }
+    const minScale = Number(this.minZoom) ?? MIN_SCALE;
     newScale = Math.max(minScale, newScale);
-    let maxScale = Number(PDFViewerApplicationOptions.get("maxZoom"));
-    if (!maxScale) {
-      maxScale = MAX_SCALE;
-    }
+    const maxScale = Number(this.maxZoom) ?? MAX_SCALE;
     newScale = Math.min(maxScale, newScale);
     this.#setScale(newScale, { noScroll: false, drawingDelay, origin });
     // #367 end of modification by ngx-extended-pdf-viewer

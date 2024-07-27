@@ -51,6 +51,15 @@ import {
 class Toolbar {
   #opts;
 
+    // #2459 modified by ngx-extended-pdf-viewer
+
+    #defaultZoomValue = DEFAULT_SCALE_VALUE;
+    #maxZoom = MAX_SCALE;
+
+    #minZoom = MIN_SCALE;
+    // #2459 end of modification by ngx-extended-pdf-viewer
+
+
   /**
    * @param {ToolbarOptions} options
    * @param {EventBus} eventBus
@@ -60,8 +69,13 @@ class Toolbar {
    *    - 1 (compact) - The small toolbar size.
    *    - 2 (touch) - The large toolbar size.
    */
-  constructor(options, eventBus, toolbarDensity = 0) {
+  constructor(options, eventBus, defaultZoomValue, minZoom, maxZoom, toolbarDensity = 0) {
     this.#opts = options;
+    // #2459 modified by ngx-extended-pdf-viewer
+    this.#defaultZoomValue = defaultZoomValue;
+    this.#maxZoom = maxZoom;
+    this.#minZoom = minZoom;
+    // #2459 end of modification by ngx-extended-pdf-viewer
     this.eventBus = eventBus;
     const buttons = [
       { element: options.previous, eventName: "previouspage" },
@@ -157,6 +171,24 @@ class Toolbar {
     this.reset();
   }
 
+  // #2459 modified by ngx-extended-pdf-viewer
+  get maxZoom() {
+    return this.#maxZoom;
+  }
+
+  set maxZoom(value) {
+    this.#maxZoom = value;
+  }
+
+  get minZoom() {
+    return this.#minZoom;
+  }
+
+  set minZoom(value) {
+    this.#minZoom = value;
+  }
+  // #2459 end of modification by ngx-extended-pdf-viewer
+
   #updateToolbarDensity() {}
 
   #setAnnotationEditorUIManager(uiManager, parentContainer) {
@@ -188,16 +220,11 @@ class Toolbar {
     this.pageLabel = null;
     this.hasPageLabels = false;
     this.pagesCount = 0;
-    const defaultZoomOption = PDFViewerApplicationOptions.get('defaultZoomValue');
     // #556 #543 modified by ngx-extended-pdf-viewer
-    if (defaultZoomOption) {
-      this.pageScaleValue = defaultZoomOption;
-      if (!!Number(defaultZoomOption)) {
-        this.pageScale = Number(defaultZoomOption);
-      }
-    } else {
-      this.pageScaleValue = DEFAULT_SCALE_VALUE;
-      this.pageScale = DEFAULT_SCALE;
+    const defaultZoomOption = this.#defaultZoomValue || DEFAULT_SCALE_VALUE;
+    this.pageScaleValue = defaultZoomOption;
+    if (Number(defaultZoomOption)) {
+      this.pageScale = Number(defaultZoomOption);
     }
     // #556 #543 end of modification
 
@@ -347,8 +374,12 @@ class Toolbar {
     opts.previous.disabled = pageNumber <= 1;
     opts.next.disabled = pageNumber >= pagesCount;
 
-    opts.zoomOut.disabled = pageScale <= MIN_SCALE;
-    opts.zoomIn.disabled = pageScale >= MAX_SCALE;
+    // #2459 / #367 modified by ngx-extended-pdf-viewer
+    const minScale = Number(this.minZoom) ?? MIN_SCALE;
+    const maxScale = Number(this.maxZoom) ?? MAX_SCALE;
+    opts.zoomOut.disabled = pageScale <= minScale;
+    opts.zoomIn.disabled = pageScale >= maxScale;
+    // #2459 / #367 end of modification by ngx-extended-pdf-viewer
 
     let predefinedValueFound = false;
     // #1315 modified by ngx-extended-pdf-viewer
