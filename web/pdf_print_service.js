@@ -24,6 +24,7 @@ import {
   shadow,
 } from "pdfjs-lib";
 import { getXfaHtmlForPrinting } from "./print_utils.js";
+import { MaxCanvasSize } from "./max_canvas_size.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { warn } from "../src/shared/util.js";
 
@@ -34,7 +35,7 @@ let viewerApp = { initialized: false };
 
 // Renders the page to the canvas of the given print service, and returns
 // the suggested dimensions of the output page.
-function renderPage(
+async function renderPage( // modified by ngx-extended-pdf-viewer #530
   activeServiceOnEntry,
   pdfDocument,
   pageNumber,
@@ -49,19 +50,19 @@ function renderPage(
   let PRINT_UNITS = printResolution / PixelsPerInch.PDF;
 
   // modified by ngx-extended-pdf-viewer #530
-  let scale = 1;
-
   const canvasWidth = Math.floor(size.width * PRINT_UNITS);
   const canvasHeight = Math.floor(size.height * PRINT_UNITS);
-  if (canvasWidth >= 4096 || canvasHeight >= 4096) {
-    if (!canvasSize.test({ width: canvasWidth, height: canvasHeight })) {
-      const max = determineMaxDimensions();
-      scale = Math.min(max / canvasWidth, max / canvasHeight) * 0.95;
-    }
-    warn("Page " + pageNumber + ": Reduced the [printResolution] to " + Math.floor(printResolution * scale) + " because the browser can't render larger canvases. If you see blank page in the print preview, reduce [printResolution] manually to a lower value.");
+  const divisor = await MaxCanvasSize.reduceToMaxCanvasSize(canvasWidth, canvasHeight);
+  if (divisor > 1) {
+    const reduction = Math.round((divisor - 1) * 100);
+    PRINT_UNITS = Math.ceil((0.95 * PRINT_UNITS) / divisor);
+    const dpi = PRINT_UNITS * PixelsPerInch.PDF;
+    warn(
+      `Page ${pageNumber}: Reduced the maximum resolution by ${reduction}% because the browser can't render larger canvases. The resolution is now ${dpi} DPI.`
+    );
   }
+  // #530 end of modification by ngx-extended-pdf-viewer
 
-  PRINT_UNITS *= scale;
   scratchCanvas.width = Math.floor(size.width * PRINT_UNITS);
   scratchCanvas.height = Math.floor(size.height * PRINT_UNITS);
 
@@ -96,21 +97,30 @@ function renderPage(
 }
 
  // modified (added) by ngx-extended-pdf-viewer #530
- function determineMaxDimensions() {
-  const checklist = [4096, // iOS
+ async function determineMaxDimensions() {
+  debugger;
+  if (PDFPrintService.maxWidth) {
+    return PDFPrintService.maxWidth;
+  }
+  const checklist = [
+    4096, // iOS
     8192, // IE 9-10
     10836, // Android
-    11180, // Firefox
+    11180, // Firefox < 122, Android
     11402, // Android,
+    14188, // Android
     14188,
-    16384
+    16384,
+    23168, // Firefox 122+
   ];
-  for (let width of checklist) {
-    if (!canvasSize.test({width: width+1, height: width+1})) {
-      return width;
+  for (const width of checklist) {
+    const { success } = await canvasSize.test({ width, height: width });
+    if (!success) {
+      PDFPrintService.maxWidth = width;
+      return PDFPrintService.maxWidth;
     }
   }
-  return 16384;
+  return 23168;
 }
 
 class PDFPrintService {

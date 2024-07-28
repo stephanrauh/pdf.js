@@ -74,6 +74,6 @@
   },
   "license": "Apache-2.0",
   "dependencies": {
-    "canvas-size": "^1.2.6"
+    "canvas-size": "^2.0.0"
   }
 }
