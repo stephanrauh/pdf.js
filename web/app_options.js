@@ -623,34 +623,28 @@ class AppOptions {
     let events;
 
     for (const name in options) {
-      const defaultOpt = defaultOptions[name],
-        userOpt = options[name];
+      const defaultOpt = defaultOptions[name];
+      let userOpt = options[name];
 
-      if (
-        !defaultOpt ||
-        !(
-          typeof userOpt === typeof defaultOpt.value ||
-          Type[(typeof userOpt).toUpperCase()] & defaultOpt.type
-        )
-      ) {
-      // #2459 modified by ngx-extended-pdf-viewer
-      if (!(typeof value === typeof defaultOpt.value || Type[(typeof value).toUpperCase()] & defaultOpt.type)) {
-        if (name !== "maxZoom" && name !== "minZoom" && name !== "passwordPrompt" && name !== "defaultZoomValue") {
-          console.error("Invalid AppOptions value: " + name + " = " + value);
-          return;
+      if (!defaultOpt || !(typeof userOpt === typeof defaultOpt.value || Type[(typeof userOpt).toUpperCase()] & defaultOpt.type)) {
+        // #2459 modified by ngx-extended-pdf-viewer
+        if (typeof defaultOpt.value === "number" && typeof userOpt === "string") {
+          if (!Number.isNaN(Number(userOpt))) {
+            userOpt = Number(userOpt);
+          }
         }
-      }
-      // #2459 end of modification by ngx-extended-pdf-viewer
-        continue;
+        if (!(typeof userOpt === typeof defaultOpt.value || Type[(typeof userOpt).toUpperCase()] & defaultOpt.type)) {
+          if (name !== "maxZoom" && name !== "minZoom" && name !== "passwordPrompt" && name !== "defaultZoomValue") {
+            console.error("Invalid AppOptions value: " + name + " = " + userOpt);
+            continue;
+          }
+        }
       }
       const { kind } = defaultOpt;
 
-      if (
-        prefs &&
-        !(kind & OptionKind.BROWSER || kind & OptionKind.PREFERENCE)
-      ) {
+      if (prefs && !(kind & OptionKind.BROWSER || kind & OptionKind.PREFERENCE)) {
         // #2459 modified by ngx-extended-pdf-viewer
-        console.error("Invalid AppOptions parameter: " + name + " = " + value);
+        console.error("Invalid AppOptions parameter: " + name + " = " + userOpt);
         // #2459 end of modification by ngx-extended-pdf-viewer
         continue;
       }
