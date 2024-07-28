@@ -712,31 +712,33 @@ const PDFViewerApplication = {
         if (AppOptions.get("enableDragAndDrop")) { // #686 modified by ngx-extended-pdf-viewer
           evt.preventDefault();
 
-        evt.dataTransfer.dropEffect =
-          evt.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
-        } // #686 end of modification
+          evt.dataTransfer.dropEffect =
+            evt.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
 
-        for (const item of evt.dataTransfer.items) {
-          if (item.type === "application/pdf") {
-            evt.dataTransfer.dropEffect =
-              evt.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
-            evt.preventDefault();
-            evt.stopPropagation();
-            return;
-          }
-        }
+          for (const item of evt.dataTransfer.items) {
+            if (item.type === "application/pdf") {
+              evt.dataTransfer.dropEffect =
+                evt.dataTransfer.effectAllowed === "copy" ? "copy" : "move";
+              evt.preventDefault();
+              evt.stopPropagation();
+              return;
+            }
+        } // #686 end of modification
+      }
       });
       appConfig.mainContainer.addEventListener("drop", function (evt) {
-        if (evt.dataTransfer.files?.[0].type !== "application/pdf") {
-          return;
+        if (AppOptions.get("enableDragAndDrop")) { // #686 modified by ngx-extended-pdf-viewer
+            if (evt.dataTransfer.files?.[0].type !== "application/pdf") {
+            return;
+          }
+          evt.preventDefault();
+          evt.stopPropagation();
+          eventBus.dispatch("fileinputchange", {
+            source: this,
+            fileInput: evt.dataTransfer,
+            dropEvent: evt // #972 allowing users to read the drop coordinates
+          });
         }
-        evt.preventDefault();
-        evt.stopPropagation();
-        eventBus.dispatch("fileinputchange", {
-          source: this,
-          fileInput: evt.dataTransfer,
-          dropEvent: evt // #972 allowing users to read the drop coordinates
-        });
       });
     }
 
