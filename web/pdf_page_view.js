@@ -42,16 +42,17 @@ import {
 import { AnnotationEditorLayerBuilder } from "./annotation_editor_layer_builder.js";
 import { AnnotationLayerBuilder } from "./annotation_layer_builder.js";
 import { AppOptions } from "./app_options.js";
+import canvasSize from "canvas-size";
 import { DrawLayerBuilder } from "./draw_layer_builder.js";
 import { GenericL10n } from "web-null_l10n";
+import { MaxCanvasSize } from "./max_canvas_size.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { SimpleLinkService } from "./pdf_link_service.js";
 import { StructTreeLayerBuilder } from "./struct_tree_layer_builder.js";
 import { TextAccessibilityManager } from "./text_accessibility.js";
-import canvasSize from "canvas-size";
-import { warn } from "../src/shared/util.js";
 import { TextHighlighter } from "./text_highlighter.js";
 import { TextLayerBuilder } from "./text_layer_builder.js";
+import { warn } from "../src/shared/util.js";
 import { XfaLayerBuilder } from "./xfa_layer_builder.js";
 
 /**
@@ -1042,22 +1043,14 @@ class PDFPageView {
     // modified by ngx-extended-pdf-viewer #387, #1095
     width = floorToDivide(width * outputScale.sx, sfx[0]);
     height = floorToDivide(height * outputScale.sy, sfy[0]);
-    let divisor = 1;
-    if (width >= 4096 || height >= 4096) {
-      if (!!this.maxWidth || !canvasSize.test({ width, height })) {
-        const max = this.determineMaxDimensions();
-        divisor = Math.max(width / max, height / max);
-        if (divisor > 1) {
-          const newScale = Math.floor((100 * this.scale) / divisor) / 100; // round to integer percentages
-          divisor = this.scale / newScale; // re-calculate the divisor to reflect the rounding to percentages
-
-          viewport.width /= divisor;
-          viewport.height /= divisor;
-          warn(`Page ${this.id}: Reduced the maximum zoom to ${newScale} because the browser can't render larger canvases.`);
-        } else {
-          divisor = 1;
-        }
-      }
+    const divisor = await MaxCanvasSize.reduceToMaxCanvasSize(width, height);
+    if (divisor > 1) {
+      viewport.width /= divisor;
+      viewport.width *= 0.95; // add a small safety margin
+      viewport.height /= divisor;
+      viewport.width *= 0.95; // add a small safety margin
+      const reduction = Math.round((divisor / 0.95 - 1) * 100);
+      warn(`Page ${this.id}: Reduced the maximum resolution by ${reduction}% because the browser can't render larger canvases.`);
     }
     // end of modification
     canvas.width = floorToDivide(viewport.width * outputScale.sx, sfx[0]);
@@ -1176,30 +1169,6 @@ class PDFPageView {
       this.div.removeAttribute("data-page-label");
     }
   }
-
-  // modified (added) by ngx-extended-pdf-viewer #387
-  determineMaxDimensions() {
-    if (this.maxWidth) {
-      return this.maxWidth;
-    }
-    const checklist = [
-      4096, // iOS
-      8192, // IE 9-10
-      10836, // Android
-      11180, // Firefox
-      11402, // Android,
-      14188,
-      16384,
-    ];
-    for (const width of checklist) {
-      if (!canvasSize.test({width: width+1, height: width+1})) {
-        this.maxWidth = width;
-        return this.maxWidth;
-      }
-    }
-    return 16384;
-  }
-  // end of modification
 
   /**
    * For use by the `PDFThumbnailView.setImage`-method.

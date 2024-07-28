@@ -384,11 +384,11 @@ function info(msg) {
 function warn(msg) {
   if (verbosity >= VerbosityLevel.WARNINGS) {
     if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) { // #804 ngx-extended-pdf-viewer
-      console.log(`Warning: ${msg}`);
+      NgxConsole.log(`Warning: ${msg}`);
     } else if (Window && NgxConsole) { // #804 ngx-extended-pdf-viewer
       NgxConsole.log(`Warning: ${msg}`); // #804 ngx-extended-pdf-viewer
     } else {
-      console.log(`Warning: ${msg}`);
+      NgxConsole.log(`Warning: ${msg}`);
     }
   }
 }
