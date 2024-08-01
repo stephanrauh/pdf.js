@@ -38,7 +38,6 @@ import {
  * @property {HTMLButtonElement} next - Button to go to the next page.
  * @property {HTMLButtonElement} zoomIn - Button to zoom in the pages.
  * @property {HTMLButtonElement} zoomOut - Button to zoom out the pages.
- * @property {HTMLButtonElement} viewFind - Button to open find bar.
  * // #1807 modified by ngx-extended-pdf-viewer
  * @property {HTMLButtonElement} presentationModeButton - Button to switch to
  *   presentation mode.
@@ -143,31 +142,7 @@ class Toolbar {
     // Bind the event listeners for click and various other actions.
     this.#bindListeners(buttons);
 
-    if (options.editorHighlightColorPicker) {
-      eventBus._on(
-        "annotationeditoruimanager",
-        ({ uiManager }) => {
-          this.#setAnnotationEditorUIManager(
-            uiManager,
-            options.editorHighlightColorPicker
-          );
-        },
-        // Once the color picker has been added, we don't want to add it again.
-        { once: true }
-      );
-    }
-
-    eventBus._on("showannotationeditorui", ({ mode }) => {
-      switch (mode) {
-        case AnnotationEditorType.HIGHLIGHT:
-          options.editorHighlightButton.click();
-          break;
-      }
-    });
-
-    eventBus._on("toolbardensity", this.#updateToolbarDensity.bind(this));
     this.#updateToolbarDensity({ value: toolbarDensity });
-
     this.reset();
   }
 
@@ -237,7 +212,12 @@ class Toolbar {
 
   #bindListeners(buttons) {
     const { eventBus } = this;
-    const { pageNumber, scaleSelect } = this.#opts;
+    const {
+      editorHighlightColorPicker,
+      editorHighlightButton,
+      pageNumber,
+      scaleSelect,
+    } = this.#opts;
     const self = this;
 
     // The buttons within the toolbar.
@@ -297,6 +277,28 @@ class Toolbar {
       "annotationeditormodechanged",
       this.#editorModeChanged.bind(this)
     );
+    eventBus._on("showannotationeditorui", ({ mode }) => {
+      switch (mode) {
+        case AnnotationEditorType.HIGHLIGHT:
+          editorHighlightButton.click();
+          break;
+      }
+    });
+    eventBus._on("toolbardensity", this.#updateToolbarDensity.bind(this));
+
+    if (editorHighlightColorPicker) {
+      eventBus._on(
+        "annotationeditoruimanager",
+        ({ uiManager }) => {
+          this.#setAnnotationEditorUIManager(
+            uiManager,
+            editorHighlightColorPicker
+          );
+        },
+        // Once the color picker has been added, we don't want to add it again.
+        { once: true }
+      );
+    }
   }
 
   #editorModeChanged({ mode }) {

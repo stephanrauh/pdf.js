@@ -61,6 +61,10 @@ import { ngxExtendedPdfViewerVersion } from "./ngx-extended-pdf-viewer-version.j
 import { AppOptions, OptionKind } from "./app_options.js";
 import { EventBus, FirefoxEventBus } from "./event_utils.js";
 import { ExternalServices, initCom, MLManager } from "web-external_services";
+import {
+  ImageAltTextSettings,
+  NewAltTextManager,
+} from "web-new_alt_text_manager";
 import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
 import { AltTextManager } from "web-alt_text_manager";
 import { AnnotationEditorParams } from "web-annotation_editor_params";
@@ -153,6 +157,8 @@ const PDFViewerApplication = {
   l10n: null,
   /** @type {AnnotationEditorParams} */
   annotationEditorParams: null,
+  /** @type {ImageAltTextSettings} */
+  imageAltTextSettings: null,
   isInitialViewSet: false,
   isViewerEmbedded: window.parent !== window,
   url: "",
@@ -208,10 +214,24 @@ const PDFViewerApplication = {
       if (mode) {
         document.documentElement.classList.add(mode);
       }
+      if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+        if (AppOptions.get("enableFakeMLManager")) {
+          this.mlManager =
+            MLManager.getFakeMLManager?.({
+              enableGuessAltText: AppOptions.get("enableGuessAltText"),
+              enableAltTextModelDownload: AppOptions.get(
+                "enableAltTextModelDownload"
+              ),
+            }) || null;
+        }
+      }
     } else if (AppOptions.get("enableAltText")) {
       // We want to load the image-to-text AI engine as soon as possible.
       this.mlManager = new MLManager({
         enableGuessAltText: AppOptions.get("enableGuessAltText"),
+        enableAltTextModelDownload: AppOptions.get(
+          "enableAltTextModelDownload"
+        ),
         altTextLearnMoreUrl: AppOptions.get("altTextLearnMoreUrl"),
       });
     }
@@ -392,11 +412,11 @@ const PDFViewerApplication = {
         externalServices,
         AppOptions.get("isInAutomation")
       );
-      if (this.mlManager) {
-        this.mlManager.eventBus = eventBus;
-      }
     } else {
       eventBus = new EventBus();
+    }
+    if (this.mlManager) {
+      this.mlManager.eventBus = eventBus;
     }
     this.eventBus = eventBus;
 
@@ -447,14 +467,25 @@ const PDFViewerApplication = {
             foreground: AppOptions.get("pageColorsForeground"),
           }
         : null;
-    const altTextManager = appConfig.altTextDialog
-      ? new AltTextManager(
-          appConfig.altTextDialog,
-          container,
-          this.overlayManager,
-          eventBus
-        )
-      : null;
+    let altTextManager;
+    if (AppOptions.get("enableUpdatedAddImage")) {
+      altTextManager = appConfig.newAltTextDialog
+        ? new NewAltTextManager(
+            appConfig.newAltTextDialog,
+            this.overlayManager,
+            eventBus
+          )
+        : null;
+    } else {
+      altTextManager = appConfig.altTextDialog
+        ? new AltTextManager(
+            appConfig.altTextDialog,
+            container,
+            this.overlayManager,
+            eventBus
+          )
+        : null;
+    }
 
     const enableHWA = AppOptions.get("enableHWA");
     const pdfViewer = new PDFViewer({
@@ -477,6 +508,9 @@ const PDFViewerApplication = {
         "enableHighlightFloatingButton"
       ),
       enableUpdatedAddImage: AppOptions.get("enableUpdatedAddImage"),
+      enableNewAltTextWhenAddingImage: AppOptions.get(
+        "enableNewAltTextWhenAddingImage"
+      ),
       imageResourcesPath: AppOptions.get("imageResourcesPath"),
       removePageBorders: AppOptions.get("removePageBorders"), // #194
       enablePrintAutoRotate: AppOptions.get("enablePrintAutoRotate"),
@@ -544,6 +578,15 @@ const PDFViewerApplication = {
       }
     }
 
+    if (appConfig.secondaryToolbar?.imageAltTextSettingsButton) {
+      this.imageAltTextSettings = new ImageAltTextSettings(
+        appConfig.altTextSettingsDialog,
+        this.overlayManager,
+        eventBus,
+        this.mlManager
+      );
+    }
+
     if (appConfig.documentProperties) {
       this.pdfDocumentProperties = new PDFDocumentProperties(
         appConfig.documentProperties,
@@ -587,6 +630,15 @@ const PDFViewerApplication = {
     }
 
     if (appConfig.secondaryToolbar) {
+      if (AppOptions.get("enableAltText")) {
+        appConfig.secondaryToolbar.imageAltTextSettingsButton?.classList.remove(
+          "hidden"
+        );
+        appConfig.secondaryToolbar.imageAltTextSettingsSeparator?.classList.remove(
+          "hidden"
+        );
+      }
+
       this.secondaryToolbar = new SecondaryToolbar(
         appConfig.secondaryToolbar,
         eventBus
@@ -762,7 +814,7 @@ const PDFViewerApplication = {
     }
 
     if (this.supportsIntegratedFind) {
-      appConfig.toolbar?.viewFind?.classList.add("hidden");
+      appConfig.findBar?.toggleButton?.classList.add("hidden");
     }
 
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
@@ -2090,6 +2142,9 @@ const PDFViewerApplication = {
     eventBus._on("scrollmodechanged", webViewerScrollModeChanged, { signal });
     eventBus._on("switchspreadmode", webViewerSwitchSpreadMode, { signal });
     eventBus._on("spreadmodechanged", webViewerSpreadModeChanged, { signal });
+    eventBus._on("imagealttextsettings", webViewerImageAltTextSettings, {
+      signal,
+    });
     eventBus._on("documentproperties", webViewerDocumentProperties, { signal });
     eventBus._on("findfromurlhash", webViewerFindFromUrlHash, { signal });
     eventBus._on("updatefindmatchescount", webViewerUpdateFindMatchesCount, {
@@ -2110,6 +2165,11 @@ const PDFViewerApplication = {
         { signal }
       );
       eventBus._on("reporttelemetry", webViewerReportTelemetry, { signal });
+    }
+    if (
+      typeof PDFJSDev === "undefined" ||
+      PDFJSDev.test("TESTING || MOZCENTRAL")
+    ) {
       eventBus._on("setpreference", webViewerSetPreference, { signal });
     }
   },
@@ -2673,6 +2733,15 @@ function webViewerSwitchSpreadMode(evt) {
 }
 function webViewerDocumentProperties() {
   PDFViewerApplication.pdfDocumentProperties?.open();
+}
+
+function webViewerImageAltTextSettings() {
+  PDFViewerApplication.imageAltTextSettings?.open({
+    enableGuessAltText: AppOptions.get("enableGuessAltText"),
+    enableNewAltTextWhenAddingImage: AppOptions.get(
+      "enableNewAltTextWhenAddingImage"
+    ),
+  });
 }
 
 function webViewerFindFromUrlHash(evt) {

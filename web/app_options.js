@@ -212,6 +212,11 @@ const defaultOptions = {
     value: false,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  enableAltTextModelDownload: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
   enableGuessAltText: {
     /** @type {boolean} */
     value: true,
@@ -231,6 +236,11 @@ const defaultOptions = {
     // TODO: remove it when unnecessary.
     /** @type {boolean} */
     value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
+  enableNewAltTextWhenAddingImage: {
+    /** @type {boolean} */
+    value: true,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   enablePermissions: {
@@ -507,6 +517,11 @@ if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
     /** @type {number} */
     value: typeof PDFJSDev !== "undefined" && PDFJSDev.test("CHROME") ? 2 : 0,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  };
+  defaultOptions.enableFakeMLManager = {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.VIEWER,
   };
 }
 if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {

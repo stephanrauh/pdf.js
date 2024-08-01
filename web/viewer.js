@@ -77,7 +77,6 @@ function getViewerConfiguration() {
       next: document.getElementById("next"),
       zoomIn: document.getElementById("zoomIn"),
       zoomOut: document.getElementById("zoomOut"),
-      viewFind: document.getElementById("viewFind"),
       print: document.getElementById("print"),
       editorFreeTextButton: document.getElementById("editorFreeText"),
       editorFreeTextParamsToolbar: document.getElementById(
@@ -123,6 +122,12 @@ function getViewerConfiguration() {
       spreadNoneButton: document.getElementById("spreadNone"),
       spreadOddButton: document.getElementById("spreadOdd"),
       spreadEvenButton: document.getElementById("spreadEven"),
+      imageAltTextSettingsButton: document.getElementById(
+        "imageAltTextSettings"
+      ),
+      imageAltTextSettingsSeparator: document.getElementById(
+        "imageAltTextSettingsSeparator"
+      ),
       documentPropertiesButton: document.getElementById("documentProperties"),
     },
     sidebar: {
@@ -191,6 +196,47 @@ function getViewerConfiguration() {
       textarea: document.getElementById("descriptionTextarea"),
       cancelButton: document.getElementById("altTextCancel"),
       saveButton: document.getElementById("altTextSave"),
+    },
+    newAltTextDialog: {
+      dialog: document.getElementById("newAltTextDialog"),
+      title: document.getElementById("newAltTextTitle"),
+      descriptionContainer: document.getElementById(
+        "newAltTextDescriptionContainer"
+      ),
+      textarea: document.getElementById("newAltTextDescriptionTextarea"),
+      disclaimer: document.getElementById("newAltTextDisclaimer"),
+      learnMore: document.getElementById("newAltTextLearnMore"),
+      imagePreview: document.getElementById("newAltTextImagePreview"),
+      createAutomatically: document.getElementById(
+        "newAltTextCreateAutomatically"
+      ),
+      createAutomaticallyButton: document.getElementById(
+        "newAltTextCreateAutomaticallyButton"
+      ),
+      downloadModel: document.getElementById("newAltTextDownloadModel"),
+      downloadModelDescription: document.getElementById(
+        "newAltTextDownloadModelDescription"
+      ),
+      error: document.getElementById("newAltTextError"),
+      errorCloseButton: document.getElementById("newAltTextCloseButton"),
+      cancelButton: document.getElementById("newAltTextCancel"),
+      notNowButton: document.getElementById("newAltTextNotNow"),
+      saveButton: document.getElementById("newAltTextSave"),
+    },
+    altTextSettingsDialog: {
+      dialog: document.getElementById("altTextSettingsDialog"),
+      createModelButton: document.getElementById("createModelButton"),
+      aiModelSettings: document.getElementById("aiModelSettings"),
+      learnMore: document.getElementById("altTextSettingsLearnMore"),
+      deleteModelButton: document.getElementById("deleteModelButton"),
+      downloadModelButton: document.getElementById("downloadModelButton"),
+      showAltTextDialogButton: document.getElementById(
+        "showAltTextDialogButton"
+      ),
+      altTextSettingsCloseButton: document.getElementById(
+        "altTextSettingsCloseButton"
+      ),
+      closeButton: document.getElementById("altTextSettingsCloseButton"),
     },
     annotationEditorParams: {
       editorFreeTextFontSize: document.getElementById("editorFreeTextFontSize"),
