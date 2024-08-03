@@ -578,7 +578,10 @@ const PDFViewerApplication = {
       }
     }
 
-    if (appConfig.secondaryToolbar?.imageAltTextSettingsButton) {
+    if (
+      this.mlManager &&
+      appConfig.secondaryToolbar?.imageAltTextSettingsButton
+    ) {
       this.imageAltTextSettings = new ImageAltTextSettings(
         appConfig.altTextSettingsDialog,
         this.overlayManager,
@@ -2076,12 +2079,11 @@ const PDFViewerApplication = {
   },
 
   triggerPrinting() {
-    if (!this.supportsPrinting) {
-      return;
+    if (this.supportsPrinting) {
+      // #2337 modified by ngx-extended-pdf-viewer
+      this.printPdf();
+      // #2337 end of modification by ngx-extended-pdf-viewer
     }
-    // #2337 modified by ngx-extended-pdf-viewer
-    this.printPdf();
-    // #2337 end of modification by ngx-extended-pdf-viewer
   },
 
   bindEvents() {
@@ -2092,6 +2094,10 @@ const PDFViewerApplication = {
 
     const {
       eventBus,
+      externalServices,
+      pdfDocumentProperties,
+      pdfViewer,
+      preferences,
       _eventBusAbortController: { signal },
     } = this;
 
@@ -2108,44 +2114,60 @@ const PDFViewerApplication = {
     eventBus._on("sidebarviewchanged", webViewerSidebarViewChanged, { signal });
     eventBus._on("pagemode", webViewerPageMode, { signal });
     eventBus._on("namedaction", webViewerNamedAction, { signal });
-    eventBus._on("presentationmodechanged", webViewerPresentationModeChanged, {
+    eventBus._on(
+      "presentationmodechanged",
+      evt => (pdfViewer.presentationModeState = evt.state),
+      { signal }
+    );
+    eventBus._on("presentationmode", this.requestPresentationMode.bind(this), {
       signal,
     });
-    eventBus._on("presentationmode", webViewerPresentationMode, { signal });
     eventBus._on(
       "switchannotationeditormode",
-      webViewerSwitchAnnotationEditorMode,
+      evt => (pdfViewer.annotationEditorMode = evt),
       { signal }
     );
     eventBus._on(
       "switchannotationeditorparams",
-      webViewerSwitchAnnotationEditorParams,
+      evt => (pdfViewer.annotationEditorParams = evt),
       { signal }
     );
-    eventBus._on("print", webViewerPrint, { signal });
-    eventBus._on("download", webViewerDownload, { signal });
-    eventBus._on("firstpage", webViewerFirstPage, { signal });
-    eventBus._on("lastpage", webViewerLastPage, { signal });
-    eventBus._on("nextpage", webViewerNextPage, { signal });
-    eventBus._on("previouspage", webViewerPreviousPage, { signal });
-    eventBus._on("zoomin", webViewerZoomIn, { signal });
-    eventBus._on("zoomout", webViewerZoomOut, { signal });
-    eventBus._on("zoomreset", webViewerZoomReset, { signal });
+    eventBus._on("print", this.triggerPrinting.bind(this), { signal });
+    eventBus._on("download", this.downloadOrSave.bind(this), { signal });
+    eventBus._on("firstpage", () => (this.page = 1), { signal });
+    eventBus._on("lastpage", () => (this.page = this.pagesCount), { signal });
+    eventBus._on("nextpage", () => pdfViewer.nextPage(), { signal });
+    eventBus._on("previouspage", () => pdfViewer.previousPage(), { signal });
+    eventBus._on("zoomin", this.zoomIn.bind(this), { signal });
+    eventBus._on("zoomout", this.zoomOut.bind(this), { signal });
+    eventBus._on("zoomreset", this.zoomReset.bind(this), { signal });
     eventBus._on("pagenumberchanged", webViewerPageNumberChanged, { signal });
-    eventBus._on("scalechanged", webViewerScaleChanged, { signal });
-    eventBus._on("rotatecw", webViewerRotateCw, { signal });
-    eventBus._on("rotateccw", webViewerRotateCcw, { signal });
-    eventBus._on("optionalcontentconfig", webViewerOptionalContentConfig, {
+    eventBus._on(
+      "scalechanged",
+      evt => (pdfViewer.currentScaleValue = evt.value),
+      { signal }
+    );
+    eventBus._on("rotatecw", this.rotatePages.bind(this, 90), { signal });
+    eventBus._on("rotateccw", this.rotatePages.bind(this, -90), { signal });
+    eventBus._on(
+      "optionalcontentconfig",
+      evt => (pdfViewer.optionalContentConfigPromise = evt.promise),
+      { signal }
+    );
+    eventBus._on("switchscrollmode", evt => (pdfViewer.scrollMode = evt.mode), {
       signal,
     });
-    eventBus._on("switchscrollmode", webViewerSwitchScrollMode, { signal });
     eventBus._on("scrollmodechanged", webViewerScrollModeChanged, { signal });
-    eventBus._on("switchspreadmode", webViewerSwitchSpreadMode, { signal });
+    eventBus._on("switchspreadmode", evt => (pdfViewer.spreadMode = evt.mode), {
+      signal,
+    });
     eventBus._on("spreadmodechanged", webViewerSpreadModeChanged, { signal });
     eventBus._on("imagealttextsettings", webViewerImageAltTextSettings, {
       signal,
     });
-    eventBus._on("documentproperties", webViewerDocumentProperties, { signal });
+    eventBus._on("documentproperties", () => pdfDocumentProperties?.open(), {
+      signal,
+    });
     eventBus._on("findfromurlhash", webViewerFindFromUrlHash, { signal });
     eventBus._on("updatefindmatchescount", webViewerUpdateFindMatchesCount, {
       signal,
@@ -2161,16 +2183,24 @@ const PDFViewerApplication = {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
       eventBus._on(
         "annotationeditorstateschanged",
-        webViewerAnnotationEditorStatesChanged,
+        evt => externalServices.updateEditorStates(evt),
         { signal }
       );
-      eventBus._on("reporttelemetry", webViewerReportTelemetry, { signal });
+      eventBus._on(
+        "reporttelemetry",
+        evt => externalServices.reportTelemetry(evt.details),
+        { signal }
+      );
     }
     if (
       typeof PDFJSDev === "undefined" ||
       PDFJSDev.test("TESTING || MOZCENTRAL")
     ) {
-      eventBus._on("setpreference", webViewerSetPreference, { signal });
+      eventBus._on(
+        "setpreference",
+        evt => preferences.set(evt.name, evt.value),
+        { signal }
+      );
     }
   },
 
@@ -2183,12 +2213,13 @@ const PDFViewerApplication = {
     const {
       eventBus,
       appConfig: { mainContainer },
+      pdfViewer,
       _windowAbortController: { signal },
     } = this;
 
     function addWindowResolutionChange(evt = null) {
       if (evt) {
-        webViewerResolutionChange(evt);
+        pdfViewer.refresh();
       }
       const mediaQueryList = window.matchMedia(
         `(resolution: ${window.devicePixelRatio || 1}dppx)`
@@ -2227,9 +2258,7 @@ const PDFViewerApplication = {
     window.addEventListener("keyup", webViewerKeyUp, { signal });
     window.addEventListener(
       "resize",
-      () => {
-        eventBus.dispatch("resize", { source: window });
-      },
+      () => eventBus.dispatch("resize", { source: window }),
       { signal }
     );
     window.addEventListener(
@@ -2244,24 +2273,20 @@ const PDFViewerApplication = {
     );
     window.addEventListener(
       "beforeprint",
-      () => {
-        eventBus.dispatch("beforeprint", { source: window });
-      },
+      () => eventBus.dispatch("beforeprint", { source: window }),
       { signal }
     );
     window.addEventListener(
       "afterprint",
-      () => {
-        eventBus.dispatch("afterprint", { source: window });
-      },
+      () => eventBus.dispatch("afterprint", { source: window }),
       { signal }
     );
     window.addEventListener(
       "updatefromsandbox",
-      event => {
+      evt => {
         eventBus.dispatch("updatefromsandbox", {
           source: window,
-          detail: event.detail,
+          detail: evt.detail,
         });
       },
       { signal }
@@ -2520,10 +2545,6 @@ function webViewerNamedAction(evt) {
   }
 }
 
-function webViewerPresentationModeChanged(evt) {
-  PDFViewerApplication.pdfViewer.presentationModeState = evt.state;
-}
-
 function webViewerSidebarViewChanged({ view }) {
   PDFViewerApplication.pdfRenderingQueue.isThumbnailViewEnabled =
     view === SidebarView.THUMBS;
@@ -2657,42 +2678,6 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
   };
 }
 
-function webViewerPresentationMode() {
-  PDFViewerApplication.requestPresentationMode();
-}
-function webViewerSwitchAnnotationEditorMode(evt) {
-  PDFViewerApplication.pdfViewer.annotationEditorMode = evt;
-}
-function webViewerSwitchAnnotationEditorParams(evt) {
-  PDFViewerApplication.pdfViewer.annotationEditorParams = evt;
-}
-function webViewerPrint() {
-  PDFViewerApplication.triggerPrinting();
-}
-function webViewerDownload() {
-  PDFViewerApplication.downloadOrSave();
-}
-function webViewerFirstPage() {
-  PDFViewerApplication.page = 1;
-}
-function webViewerLastPage() {
-  PDFViewerApplication.page = PDFViewerApplication.pagesCount;
-}
-function webViewerNextPage() {
-  PDFViewerApplication.pdfViewer.nextPage();
-}
-function webViewerPreviousPage() {
-  PDFViewerApplication.pdfViewer.previousPage();
-}
-function webViewerZoomIn() {
-  PDFViewerApplication.zoomIn();
-}
-function webViewerZoomOut() {
-  PDFViewerApplication.zoomOut();
-}
-function webViewerZoomReset() {
-  PDFViewerApplication.zoomReset();
-}
 function webViewerPageNumberChanged(evt) {
   const pdfViewer = PDFViewerApplication.pdfViewer;
   // Note that for `<input type="number">` HTML elements, an empty string will
@@ -2712,27 +2697,6 @@ function webViewerPageNumberChanged(evt) {
       pdfViewer.currentPageLabel
     );
   }
-}
-function webViewerScaleChanged(evt) {
-  PDFViewerApplication.pdfViewer.currentScaleValue = evt.value;
-}
-function webViewerRotateCw() {
-  PDFViewerApplication.rotatePages(90);
-}
-function webViewerRotateCcw() {
-  PDFViewerApplication.rotatePages(-90);
-}
-function webViewerOptionalContentConfig(evt) {
-  PDFViewerApplication.pdfViewer.optionalContentConfigPromise = evt.promise;
-}
-function webViewerSwitchScrollMode(evt) {
-  PDFViewerApplication.pdfViewer.scrollMode = evt.mode;
-}
-function webViewerSwitchSpreadMode(evt) {
-  PDFViewerApplication.pdfViewer.spreadMode = evt.mode;
-}
-function webViewerDocumentProperties() {
-  PDFViewerApplication.pdfDocumentProperties?.open();
 }
 
 function webViewerImageAltTextSettings() {
@@ -2824,10 +2788,6 @@ function webViewerPageChanging({ pageNumber, pageLabel }) {
     pageNumberInput.dispatchEvent(pageScrollEvent);
   }
   // end of modification by ngx-extended-pdf-viewer
-}
-
-function webViewerResolutionChange(evt) {
-  PDFViewerApplication.pdfViewer.refresh();
 }
 
 function webViewerWheel(evt) {
@@ -3466,13 +3426,6 @@ function beforeUnload(evt) {
   return false;
 }
 
-function webViewerAnnotationEditorStatesChanged(data) {
-  PDFViewerApplication.externalServices.updateEditorStates(data);
-}
-
-function webViewerReportTelemetry({ details }) {
-  PDFViewerApplication.externalServices.reportTelemetry(details);
-}
 
 // #2337 modified by ngx-extended-pdf-viewer
 PDFViewerApplication.printPdf = printPdf;
@@ -3486,9 +3439,5 @@ const ServiceWorkerOptions = {
 // #171 end
 PDFViewerApplication.serviceWorkerOptions = ServiceWorkerOptions;
 // #2337 end of modification by ngx-extended-pdf-viewer
-
-function webViewerSetPreference({ name, value }) {
-  PDFViewerApplication.preferences.set(name, value);
-}
 
 export { PDFViewerApplication };

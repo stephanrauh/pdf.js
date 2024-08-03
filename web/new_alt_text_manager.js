@@ -299,9 +299,13 @@ class NewAltTextManager {
       totalLoaded = Math.min(0.99 * total, totalLoaded);
 
       // Update the progress.
+      const totalSize = (this.#downloadModelDescription.ariaValueMax =
+        Math.round(total / ONE_MEGA_BYTES));
+      const downloadedSize = (this.#downloadModelDescription.ariaValueNow =
+        Math.round(totalLoaded / ONE_MEGA_BYTES));
       this.#downloadModelDescription.setAttribute(
         "data-l10n-args",
-        `{"totalSize": ${Math.round(total / ONE_MEGA_BYTES)}, "downloadedSize": ${Math.round(totalLoaded / ONE_MEGA_BYTES)}}`
+        JSON.stringify({ totalSize, downloadedSize })
       );
       if (!finished) {
         return;
@@ -464,8 +468,6 @@ class NewAltTextManager {
 class ImageAltTextSettings {
   #aiModelSettings;
 
-  #boundOnClickCreateModel;
-
   #createModelButton;
 
   #dialog;
@@ -500,17 +502,12 @@ class ImageAltTextSettings {
     this.#overlayManager = overlayManager;
     this.#eventBus = eventBus;
     this.#mlManager = mlManager;
-    this.#boundOnClickCreateModel = this.#togglePref.bind(
-      this,
-      "enableGuessAltText"
-    );
 
     const { altTextLearnMoreUrl } = mlManager;
     if (altTextLearnMoreUrl) {
       learnMore.href = altTextLearnMoreUrl;
     }
 
-    dialog.addEventListener("close", this.#close.bind(this));
     dialog.addEventListener("contextmenu", noContextMenu);
 
     createModelButton.addEventListener("click", async e => {
@@ -527,10 +524,7 @@ class ImageAltTextSettings {
       await mlManager.deleteModel("altText");
 
       aiModelSettings.classList.toggle("download", true);
-      createModelButton.removeEventListener(
-        "click",
-        this.#boundOnClickCreateModel
-      );
+      createModelButton.disabled = true;
       createModelButton.setAttribute("aria-pressed", false);
       this.#setPref("enableGuessAltText", false);
       this.#setPref("enableAltTextModelDownload", false);
@@ -550,10 +544,7 @@ class ImageAltTextSettings {
         "data-l10n-id",
         "pdfjs-editor-alt-text-settings-download-model-button"
       );
-      createModelButton.addEventListener(
-        "click",
-        this.#boundOnClickCreateModel
-      );
+      createModelButton.disabled = false;
       createModelButton.setAttribute("aria-pressed", true);
       this.#setPref("enableGuessAltText", true);
       mlManager.toggleService("altText", true);
@@ -581,12 +572,7 @@ class ImageAltTextSettings {
       !enableAltTextModelDownload
     );
 
-    try {
-      await this.#overlayManager.open(this.#dialog);
-    } catch (ex) {
-      this.#close();
-      throw ex;
-    }
+    await this.#overlayManager.open(this.#dialog);
   }
 
   #togglePref(name, { target }) {
@@ -608,13 +594,6 @@ class ImageAltTextSettings {
     if (this.#overlayManager.active === this.#dialog) {
       this.#overlayManager.close(this.#dialog);
     }
-  }
-
-  #close() {
-    this.#createModelButton.removeEventListener(
-      "click",
-      this.#boundOnClickCreateModel
-    );
   }
 }
 
