@@ -453,6 +453,20 @@ class PDFFindController {
     this._firstPageCapability.resolve();
   }
 
+  ngxFind(pdfFindParameters) {
+    this.#onFind(pdfFindParameters);
+  }
+
+  ngxFindNext() {
+    const state = { ...this.#state, type: "again", findPrevious: false };
+    this.#onFind(state);
+  }
+
+  ngxFindPrevious() {
+    const state = { ...this.#state, type: "again", findPrevious: true };
+    this.#onFind(state);
+  }
+
   #onFind(state) {
     if (!state) {
       return;
