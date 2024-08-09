@@ -558,6 +558,9 @@ class PDFFindController {
     pageIndex = -1,
     matchIndex = -1,
   }) {
+    if (this.#state?.dontScrollIntoView) {
+      return;
+    }
     if (!this._scrollMatches || !element) {
       return;
     } else if (matchIndex === -1 || matchIndex !== this._selected.matchIdx) {
@@ -918,7 +921,9 @@ class PDFFindController {
       // If the page is selected, scroll the page into view, which triggers
       // rendering the page, which adds the text layer. Once the text layer
       // is built, it will attempt to scroll the selected match into view.
-      this._linkService.page = index + 1;
+      if (!this.state.dontScrollIntoView) {
+        this._linkService.page = index + 1;
+      }
     }
 
     this._eventBus.dispatch("updatetextlayermatches", {
