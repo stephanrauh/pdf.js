@@ -71,7 +71,7 @@ class TextHighlighter {
     if (this.enabled) {
       // #1501 modified by ngx-extended-pdf-viewer
       // silently swallow the error message because calling this method doesn't
-      // seem to cause error, and sometime it does happen in the wild
+      // seem to cause error, and sometimes it does happen in the wild
       return;
       // throw new Error("TextHighlighter is already enabled.");
       // #1501 end of modification by ngx-extended-pdf-viewer
@@ -161,7 +161,7 @@ class TextHighlighter {
     return result;
   }
 
-  _renderMatches(matches) {
+  _renderMatches(matches, highlightClass = "highlight") { // #2482 modified by ngx-extended-pdf-viewer
     // Early exit if there is nothing to render.
     if (matches.length === 0) {
       return;
@@ -255,19 +255,19 @@ class TextHighlighter {
           begin.divIdx,
           begin.offset,
           end.offset,
-          "highlight" + highlightSuffix
+          highlightClass + highlightSuffix // #2482 modified by ngx-extended-pdf-viewer
         );
       } else {
         selectedLeft = appendTextToDiv(
           begin.divIdx,
           begin.offset,
           infinity.offset,
-          "highlight begin" + highlightSuffix
+          highlightClass + " begin" + highlightSuffix // #2482 modified by ngx-extended-pdf-viewer
         );
         for (let n0 = begin.divIdx + 1, n1 = end.divIdx; n0 < n1; n0++) {
-          textDivs[n0].className = "highlight middle" + highlightSuffix;
+          textDivs[n0].className = highlightClass + " middle" + highlightSuffix; // #2482 modified by ngx-extended-pdf-viewer
         }
-        beginText(end, "highlight end" + highlightSuffix);
+        beginText(end, highlightClass + " end" + highlightSuffix); // #2482 modified by ngx-extended-pdf-viewer
       }
       prevEnd = end;
 
@@ -280,6 +280,14 @@ class TextHighlighter {
           matchIndex: selectedMatchIdx,
         });
       }
+
+      // #2482 modified by ngx-extended-pdf-viewer
+      if (this.textDivs.length > 0) {
+        const textLayer = this.textDivs[0].closest(".textLayer");
+        const highlights = textLayer.querySelectorAll(`.${highlightClass}`);
+        this.eventBus.dispatch("renderedtextlayerhighlights", { pageIndex: pageIdx, highlights });
+      }
+      // #2482 end of modification by ngx-extended-pdf-viewer
     }
 
     if (prevEnd) {
