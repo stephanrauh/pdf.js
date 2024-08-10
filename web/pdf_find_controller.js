@@ -453,8 +453,17 @@ class PDFFindController {
     this._firstPageCapability.resolve();
   }
 
+  // #2482 modified by ngx-extended-pdf-viewer
   ngxFind(pdfFindParameters) {
+    const findResultPromises = [];
+    this._findResultResolvers = [];
+    for (let i = 0, ii = this._linkService.pagesCount; i < ii; i++) {
+      const { promise, resolve } = Promise.withResolvers();
+      findResultPromises[i] = promise;
+      this._findResultResolvers[i] = resolve;
+    }
     this.#onFind(pdfFindParameters);
+    return findResultPromises;
   }
 
   ngxFindNext() {
@@ -466,6 +475,8 @@ class PDFFindController {
     const state = { ...this.#state, type: "again", findPrevious: true };
     this.#onFind(state);
   }
+
+  // #2482 end of modification by ngx-extended-pdf-viewer
 
   #onFind(state) {
     if (!state) {
@@ -558,9 +569,11 @@ class PDFFindController {
     pageIndex = -1,
     matchIndex = -1,
   }) {
+    // #2482 modified by ngx-extended-pdf-viewer
     if (this.#state?.dontScrollIntoView) {
       return;
     }
+    // #2482 end of modification by ngx-extended-pdf-viewer
     if (!this._scrollMatches || !element) {
       return;
     } else if (matchIndex === -1 || matchIndex !== this._selected.matchIdx) {
@@ -599,6 +612,7 @@ class PDFFindController {
       wrapped: false,
     };
     this._extractTextPromises = [];
+    this._findResultResolvers = []; // #2482 modified by ngx-extended-pdf-viewer
     this._pageContents = []; // Stores the normalized text for each page.
     this._pageDiffs = [];
     this._hasDiacritics = [];
@@ -862,6 +876,12 @@ class PDFFindController {
       // the Java side provides only one object to update the counts.
       this.#updateUIResultsCount();
     }
+    // #2482 modified by ngx-extended-pdf-viewer
+    if (this._findResultResolvers && this._findResultResolvers[pageIndex]) {
+      this._findResultResolvers[pageIndex](pageMatchesCount);
+      this._findResultResolvers[pageIndex] = null;
+    }
+    // #2482 end of modification by ngx-extended-pdf-viewer
   }
 
   #extractText() {
@@ -921,9 +941,11 @@ class PDFFindController {
       // If the page is selected, scroll the page into view, which triggers
       // rendering the page, which adds the text layer. Once the text layer
       // is built, it will attempt to scroll the selected match into view.
+      // #2482 modified by ngx-extended-pdf-viewer
       if (!this.state.dontScrollIntoView) {
         this._linkService.page = index + 1;
       }
+      // #2482 end of modification by ngx-extended-pdf-viewer
     }
 
     this._eventBus.dispatch("updatetextlayermatches", {
