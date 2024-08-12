@@ -372,6 +372,7 @@ class PDFPageView {
         pageIndex: this.id - 1,
         eventBus: this.eventBus,
         findController: this.#layerProperties.findController,
+        customFindController: this.#layerProperties.customFindController, // #2488 modified by ngx-extended-pdf-viewer
       })
     );
   }

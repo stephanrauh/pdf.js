@@ -302,6 +302,7 @@ class PDFViewer {
     this.linkService = options.linkService || new SimpleLinkService();
     this.downloadManager = options.downloadManager || null;
     this.findController = options.findController || null;
+    this.customFindController = options.customFindController || null;
     this.#altTextManager = options.altTextManager || null;
 
     if (this.findController) {
@@ -845,6 +846,11 @@ class PDFViewer {
       get findController() {
         return self.findController;
       },
+      // #2488 modified by ngx-extended-pdf-viewer
+      get customFindController() {
+        return self.customFindController;
+      },
+      // #2488 end of modification by ngx-extended-pdf-viewer
       get hasJSActionsPromise() {
         return self.pdfDocument?.hasJSActions();
       },
@@ -1033,6 +1039,7 @@ class PDFViewer {
       this._resetView();
 
       this.findController?.setDocument(null);
+      this.customFindController?.setDocument(null); // #2488 modified by ngx-extended-pdf-viewer
       this._scriptingManager?.setDocument(null);
 
       if (this.#annotationEditorUIManager) {
@@ -1225,6 +1232,9 @@ class PDFViewer {
             return; // The document was closed while the first page rendered.
           }
           this.findController?.setDocument(pdfDocument); // Enable searching.
+          // #2488 modified by ngx-extended-pdf-viewer
+          this.customFindController?.setDocument(pdfDocument); // Enable programmatic searching.
+          // #2488 end of modification by ngx-extended-pdf-viewer
           this._scriptingManager?.setDocument(pdfDocument); // Enable scripting.
 
           if (this.#hiddenCopyElement) {
