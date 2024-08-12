@@ -36,8 +36,9 @@ class TextHighlighter {
   /**
    * @param {TextHighlighterOptions} options
    */
-  constructor({ findController, eventBus, pageIndex }) {
+  constructor({ findController, customFindController, eventBus, pageIndex }) { // #2488 modified by ngx-extended-pdf-viewers
     this.findController = findController;
+    this.customFindController = customFindController; // #2488 modified by ngx-extended-pdf-viewer
     this.matches = [];
     this.eventBus = eventBus;
     this.pageIdx = pageIndex;
@@ -108,7 +109,8 @@ class TextHighlighter {
 
   _convertMatches(
     matches,
-    matchesLength
+    matchesLength,
+    cssClass = "highlight"  // #2488 modified by ngx-extended-pdf-viewer
   ) {
     // Early exit if there is nothing to convert.
     if (!matches) {
@@ -140,6 +142,7 @@ class TextHighlighter {
           divIdx: i,
           offset: matchIdx - iIndex,
         },
+        cssClass, // #2488 modified by ngx-extended-pdf-viewer
       };
 
       // Calculate the end position.
@@ -161,17 +164,17 @@ class TextHighlighter {
     return result;
   }
 
-  _renderMatches(matches, highlightClass = "highlight") { // #2482 modified by ngx-extended-pdf-viewer
+  _renderMatches(matches, findController) { // #2482 modified by ngx-extended-pdf-viewer
     // Early exit if there is nothing to render.
     if (matches.length === 0) {
       return;
     }
-    const { findController, pageIdx } = this;
+    const { pageIdx } = this;
     const { textContentItemsStr, textDivs } = this;
 
     const isSelectedPage = pageIdx === findController.selected.pageIdx;
     const selectedMatchIdx = findController.selected.matchIdx;
-    const highlightAll = findController.state.highlightAll;
+    const highlightAll = findController?.state?.highlightAll;
     let prevEnd = null;
     const infinity = {
       divIdx: -1,
@@ -255,19 +258,19 @@ class TextHighlighter {
           begin.divIdx,
           begin.offset,
           end.offset,
-          highlightClass + highlightSuffix // #2482 modified by ngx-extended-pdf-viewer
+          match.cssClass + highlightSuffix // #2482 modified by ngx-extended-pdf-viewer
         );
       } else {
         selectedLeft = appendTextToDiv(
           begin.divIdx,
           begin.offset,
           infinity.offset,
-          highlightClass + " begin" + highlightSuffix // #2482 modified by ngx-extended-pdf-viewer
+          match.cssClass + " begin" + highlightSuffix // #2482 modified by ngx-extended-pdf-viewer
         );
         for (let n0 = begin.divIdx + 1, n1 = end.divIdx; n0 < n1; n0++) {
-          textDivs[n0].className = highlightClass + " middle" + highlightSuffix; // #2482 modified by ngx-extended-pdf-viewer
+          textDivs[n0].className = match.cssClass + " middle" + highlightSuffix; // #2482 modified by ngx-extended-pdf-viewer
         }
-        beginText(end, highlightClass + " end" + highlightSuffix); // #2482 modified by ngx-extended-pdf-viewer
+        beginText(end, match.cssClass + " end" + highlightSuffix); // #2482 modified by ngx-extended-pdf-viewer
       }
       prevEnd = end;
 
@@ -284,7 +287,7 @@ class TextHighlighter {
       // #2482 modified by ngx-extended-pdf-viewer
       if (this.textDivs.length > 0) {
         const textLayer = this.textDivs[0].closest(".textLayer");
-        const highlights = textLayer.querySelectorAll(`.${highlightClass}`);
+        const highlights = textLayer.querySelectorAll(`.${match.cssClass}`);
         this.eventBus.dispatch("renderedtextlayerhighlights", { pageIndex: pageIdx, highlights });
       }
       // #2482 end of modification by ngx-extended-pdf-viewer
@@ -299,7 +302,7 @@ class TextHighlighter {
     if (!this.enabled && !reset) {
       return;
     }
-    const { findController, matches, pageIdx } = this;
+    const { findController, customFindController, matches, pageIdx } = this;
     const { textContentItemsStr, textDivs } = this;
     let clearedUntilDivIdx = -1;
 
@@ -314,16 +317,58 @@ class TextHighlighter {
       clearedUntilDivIdx = match.end.divIdx + 1;
     }
 
-    if (!findController?.highlightMatches || reset) {
+    // #2488 modified by ngx-extended-pdf-viewer
+    if (reset) {
       return;
     }
     // Convert the matches on the `findController` into the match format
     // used for the textLayer.
+    const customPageMatches = customFindController.pageMatches[pageIdx] || null;
+    const customPageMatchesLength = customFindController.pageMatchesLength[pageIdx] || null;
     const pageMatches = findController.pageMatches[pageIdx] || null;
+    if (pageIdx === 7) {
+      console.log("page:", pageIdx, "customPageMatches", customPageMatches, "pageMatches", pageMatches);
+    }
+
+    const customMatches = this._convertMatches(customPageMatches, customPageMatchesLength, "customHighlight");
+    this.matches = [...customMatches];
+    // #2488 end of modification by ngx-extended-pdf-viewer
+
+    if (!findController?.highlightMatches || reset) {
+      // #2488 modified by ngx-extended-pdf-viewer
+      if (!reset) {
+        this._renderMatches(this.matches, this.customFindController);
+      }
+      // #2488 end of modification by ngx-extended-pdf-viewer
+      if (pageIdx === 7) {
+        console.log("highlightMatches is undefined or reset is ", reset);
+      }
+    }
+    // Convert the matches on the `findController` into the match format
+    // used for the textLayer.
+    // const pageMatches = findController.pageMatches[pageIdx] || null;
     const pageMatchesLength = findController.pageMatchesLength[pageIdx] || null;
 
-    this.matches = this._convertMatches(pageMatches, pageMatchesLength);
-    this._renderMatches(this.matches);
+    // #2488 modified by ngx-extended-pdf-viewer
+    const convertedMatches = this._convertMatches(pageMatches, pageMatchesLength, "highlight");
+    if (pageIdx === 7) {
+      console.log(customFindController.state?.query, findController.state?.query);
+      console.log(
+        "custom matches",
+        customMatches.length,
+        customMatches,
+        "user matches",
+        convertedMatches.length,
+        convertedMatches,
+        findController === customFindController
+      );
+    }
+    this.matches.push(...convertedMatches);
+    if (pageIdx === 7) {
+      console.log("combined matches", this.matches.length, this.matches);
+    }
+    this._renderMatches(this.matches, this.findController);
+    // #2488 end of modification by ngx-extended-pdf-viewer
   }
 }
 
