@@ -416,8 +416,15 @@ const PDFViewerApplication = {
 
     const downloadManager = (this.downloadManager = new DownloadManager());
 
+    // #2399 modified by ngx-extended-pdf-viewer
+    let FindControllerConstructor = PDFFindController;
+    if (AppOptions.get("findController")) {
+      FindControllerConstructor = AppOptions.get("findController");
+    }
+    // #2399 end of modification by ngx-extended-pdf-viewer
+
     // #2488 modified by ngx-extended-pdf-viewer
-    const customFindController = new PDFFindController({
+    const customFindController = new FindControllerConstructor({ // #2399 modified by ngx-extended-pdf-viewer
       linkService: pdfLinkService,
       eventBus,
       // #492 modified by ngx-extended-pdf-viewer
@@ -431,7 +438,7 @@ const PDFViewerApplication = {
     this.customFindController = customFindController;
     // #2488 end of modification by ngx-extended-pdf-viewer
 
-    const findController = new PDFFindController({
+    const findController = new FindControllerConstructor({ // #2399 modified by ngx-extended-pdf-viewer
       linkService: pdfLinkService,
       eventBus,
       // #492 modified by ngx-extended-pdf-viewer
