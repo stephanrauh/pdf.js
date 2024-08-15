@@ -95,13 +95,6 @@ const defaultOptions = {
     kind: OptionKind.VIEWER,
   },
   // #2459 end of modification by ngx-extended-pdf-viewer
-  // #2480 modified by ngx-extended-pdf-viewer
-  worker: {
-    /** @type {Object} */
-    value: null,
-    kind: OptionKind.WORKER,
-  },
-  // #2480 end of modification by ngx-extended-pdf-viewer
   // #2339 modified by ngx-extended-pdf-viewer
   findController: {
     /** @type {Object} */

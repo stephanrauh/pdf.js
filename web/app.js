@@ -135,6 +135,9 @@ const PDFViewerApplication = {
   pdfCursorTools: null,
   /** @type {PDFScriptingManager} */
   pdfScriptingManager: null,
+  // #2480 modified by ngx-extended-pdf-viewer
+  pdfWorker: null,
+  // #2480 end of modification by ngx-extended-pdf-viewer
   /** @type {ViewHistory} */
   store: null,
   /** @type {DownloadManager} */
@@ -1105,10 +1108,18 @@ const PDFViewerApplication = {
     // Set the necessary global worker parameters, using the available options.
     const workerParams = AppOptions.getAll(OptionKind.WORKER);
 
-    if (args.workerSrc) {
+    // #2480 modified by ngx-extended-pdf-viewer
+    if (args.workerSrc && (args.workerSrc !== workerParams.workerSrc)) {
       workerParams.workerSrc = args.workerSrc;
+      this.pdfWorker = null;
     }
+    // #2480 end of modification by ngx-extended-pdf-viewer
     Object.assign(GlobalWorkerOptions, workerParams);
+    // #2480 modified by ngx-extended-pdf-viewer
+    if (this.pdfWorker === null) {
+      this.pdfWorker = workerParams.port ? PDFWorker.fromPort(workerParams) : new PDFWorker(workerParams);
+    }
+    // #2480 end of modification by ngx-extended-pdf-viewer
 
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
       if (args.data && isPdfFile(args.filename)) {
@@ -1128,6 +1139,7 @@ const PDFViewerApplication = {
     const loadingTask = getDocument({
       ...apiParams,
       ...args,
+      worker: this.pdfWorker, // #2480 modified by ngx-extended-pdf-viewer
     });
     this.pdfLoadingTask = loadingTask;
 
