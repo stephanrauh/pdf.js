@@ -19,6 +19,7 @@
 
 import { binarySearchFirstItem, scrollIntoView } from "./ui_utils.js";
 import { getCharacterType, getNormalizeWithNFKC } from "./pdf_find_utils.js";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 
 /**
  * Search and replacements for ngx-extended-pdf-viewer
@@ -921,7 +922,7 @@ class PDFFindController {
               resolve();
             },
             reason => {
-              console.error(
+              NgxConsole.error(
                 `Unable to get text content for page ${i + 1}`,
                 reason
               );
@@ -1061,7 +1062,7 @@ class PDFFindController {
 
   #nextPageMatch() {
     if (this._resumePageIdx !== null) {
-      console.error("There can only be one pending page.");
+      NgxConsole.error("There can only be one pending page.");
     }
 
     let matches = null;
