@@ -155,6 +155,8 @@ function getViewerConfiguration() {
       findField: document.getElementById("findInput"),
       highlightAllCheckbox: document.getElementById("findHighlightAll"),
       caseSensitiveCheckbox: document.getElementById("findMatchCase"),
+      findMultipleCheckbox: document.getElementById("findMultiple"),
+      matchRegExpCheckbox: document.getElementById("matchRegExp"),
       matchDiacriticsCheckbox: document.getElementById("findMatchDiacritics"),
       entireWordCheckbox: document.getElementById("findEntireWord"),
       findMsg: document.getElementById("findMsg"),
