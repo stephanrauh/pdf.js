@@ -37,6 +37,8 @@ class PDFFindBar {
     this.currentPage = options.findCurrentPageCheckbox;
     this.pageRange = options.findPageRangeField;
     this.caseSensitive = options.caseSensitiveCheckbox;
+    this.findMultipleCheckbox = options.findMultipleCheckbox;
+    this.matchRegExpCheckbox = options.matchRegExpCheckbox;
     this.matchDiacritics = options.matchDiacriticsCheckbox;
     this.entireWord = options.entireWordCheckbox;
     this.findMsg = options.findMsg;
@@ -84,6 +86,26 @@ class PDFFindBar {
       this.dispatchEvent("casesensitivitychange");
     });
 
+    this.findMultipleCheckbox.addEventListener("click", () => {
+      this.dispatchEvent("findmultiplechange");
+    });
+
+    this.matchRegExpCheckbox.addEventListener("click", () => {
+      if (this.matchRegExpCheckbox.checked) {
+        this.findMultipleCheckbox.checked = false;
+        this.findMultipleCheckbox.disabled = true;
+        this.matchDiacritics.checked = false;
+        this.matchDiacritics.disabled = true;
+        this.entireWord.checked = false;
+        this.entireWord.disabled = true;
+      } else {
+        this.findMultipleCheckbox.disabled = false;
+        this.matchDiacritics.disabled = false;
+        this.entireWord.disabled = false;
+      }
+      this.dispatchEvent("findregexpchange");
+    });
+
     this.entireWord.addEventListener("click", () => {
       this.dispatchEvent("entirewordchange");
     });
@@ -103,6 +125,8 @@ class PDFFindBar {
       type,
       query: this.findField.value,
       caseSensitive: this.caseSensitive.checked,
+      findMultiple: this.findMultipleCheckbox.checked,
+      matchRegExp: this.matchRegExpCheckbox.checked,
       entireWord: this.entireWord.checked,
       highlightAll: this.highlightAll.checked,
       findPrevious: findPrev,
