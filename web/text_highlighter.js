@@ -110,7 +110,10 @@ class TextHighlighter {
   _convertMatches(
     matches,
     matchesLength,
-    cssClass = "highlight"  // #2488 modified by ngx-extended-pdf-viewer
+    cssClass = "highlight",       // #2488 modified by ngx-extended-pdf-viewer
+    highlightAll = false,         // #2488 modified by ngx-extended-pdf-viewer
+    isPageWithSelection = false,  // #2488 modified by ngx-extended-pdf-viewer
+    selectedMatchIdx = -1         // #2488 modified by ngx-extended-pdf-viewer
   ) {
     // Early exit if there is nothing to convert.
     if (!matches) {
@@ -143,6 +146,8 @@ class TextHighlighter {
           offset: matchIdx - iIndex,
         },
         cssClass, // #2488 modified by ngx-extended-pdf-viewer
+        highlightAll, // #2488 modified by ngx-extended-pdf-viewer
+        selected: isPageWithSelection && m === selectedMatchIdx, // #2488 modified by ngx-extended-pdf-viewer
       };
 
       // Calculate the end position.
@@ -172,9 +177,6 @@ class TextHighlighter {
     const { pageIdx } = this;
     const { textContentItemsStr, textDivs } = this;
 
-    const isSelectedPage = pageIdx === findController.selected.pageIdx;
-    const selectedMatchIdx = findController.selected.matchIdx;
-    const highlightAll = findController?.state?.highlightAll;
     let prevEnd = null;
     const infinity = {
       divIdx: -1,
@@ -212,20 +214,15 @@ class TextHighlighter {
       return 0;
     }
 
-    let i0 = selectedMatchIdx,
-      i1 = i0 + 1;
-    if (highlightAll) {
-      i0 = 0;
-      i1 = matches.length;
-    } else if (!isSelectedPage) {
-      // Not highlighting all and this isn't the selected page, so do nothing.
-      return;
-    }
-
     let lastDivIdx = -1;
     let lastOffset = -1;
-    for (let i = i0; i < i1; i++) {
+    for (let i = 0; i < matches.length; i++) { // #2488 modified by ngx-extended-pdf-viewer
       const match = matches[i];
+      // #2488 modified by ngx-extended-pdf-viewer
+      if (!match.selected && !match.highlightAll) {
+        continue;
+      }
+      // #2488 end of modification by ngx-extended-pdf-viewer
       const begin = match.begin;
       if (begin.divIdx === lastDivIdx && begin.offset === lastOffset) {
         // It's possible to be in this situation if we searched for a 'f' and we
@@ -237,8 +234,7 @@ class TextHighlighter {
       lastOffset = begin.offset;
 
       const end = match.end;
-      const isSelected = isSelectedPage && i === selectedMatchIdx;
-      const highlightSuffix = isSelected ? " selected" : "";
+      const highlightSuffix = match.selected ? " selected" : "";
       let selectedLeft = 0;
 
       // Match inside new div.
@@ -274,13 +270,13 @@ class TextHighlighter {
       }
       prevEnd = end;
 
-      if (isSelected) {
+      if (match.selected) { // #2488 modified by ngx-extended-pdf-viewer
         // Attempt to scroll the selected match into view.
         findController.scrollMatchIntoView({
           element: textDivs[begin.divIdx],
           selectedLeft,
           pageIndex: pageIdx,
-          matchIndex: selectedMatchIdx,
+          matchIndex: i, // #2488 modified by ngx-extended-pdf-viewer
         });
       }
 
@@ -326,11 +322,15 @@ class TextHighlighter {
     const customPageMatches = customFindController.pageMatches[pageIdx] || null;
     const customPageMatchesLength = customFindController.pageMatchesLength[pageIdx] || null;
     const pageMatches = findController.pageMatches[pageIdx] || null;
-    if (pageIdx === 7) {
-      console.log("page:", pageIdx, "customPageMatches", customPageMatches, "pageMatches", pageMatches);
-    }
 
-    const customMatches = this._convertMatches(customPageMatches, customPageMatchesLength, "customHighlight");
+    const customMatches = this._convertMatches(
+      customPageMatches,
+      customPageMatchesLength,
+      "customHighlight",
+      customFindController.highlightMatches,
+      pageIdx === customFindController.selected.pageIdx,
+      customFindController.selected.matchIdx
+    );
     this.matches = [...customMatches];
     // #2488 end of modification by ngx-extended-pdf-viewer
 
@@ -340,33 +340,25 @@ class TextHighlighter {
         this._renderMatches(this.matches, this.customFindController);
       }
       // #2488 end of modification by ngx-extended-pdf-viewer
-      if (pageIdx === 7) {
-        console.log("highlightMatches is undefined or reset is ", reset);
-      }
     }
     // Convert the matches on the `findController` into the match format
     // used for the textLayer.
-    // const pageMatches = findController.pageMatches[pageIdx] || null;
     const pageMatchesLength = findController.pageMatchesLength[pageIdx] || null;
 
     // #2488 modified by ngx-extended-pdf-viewer
-    const convertedMatches = this._convertMatches(pageMatches, pageMatchesLength, "highlight");
-    if (pageIdx === 7) {
-      console.log(customFindController.state?.query, findController.state?.query);
-      console.log(
-        "custom matches",
-        customMatches.length,
-        customMatches,
-        "user matches",
-        convertedMatches.length,
-        convertedMatches,
-        findController === customFindController
-      );
-    }
+    const convertedMatches = this._convertMatches(
+      pageMatches,
+      pageMatchesLength,
+      "highlight",
+      findController.highlightMatches,
+      pageIdx === findController.selected.pageIdx,
+      findController.selected.matchIdx
+    );
     this.matches.push(...convertedMatches);
-    if (pageIdx === 7) {
-      console.log("combined matches", this.matches.length, this.matches);
-    }
+    this.matches.sort((a, b) => {
+      const cmp = a.begin.divIdx - b.begin.divIdx;
+      return cmp === 0 ? a.begin.offset - b.begin.offset : cmp;
+    });
     this._renderMatches(this.matches, this.findController);
     // #2488 end of modification by ngx-extended-pdf-viewer
   }
