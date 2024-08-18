@@ -3373,11 +3373,17 @@ function webViewerKeyDown(evt) {
       turnPage !== 0 &&
       (!turnOnlyIfPageFit || pdfViewer.currentScaleValue === "page-fit")
     ) {
-      if (turnPage > 0) {
-        pdfViewer.nextPage();
-      } else {
-        pdfViewer.previousPage();
+      const { mainContainer } = PDFViewerApplication.appConfig;
+
+      // #2463 modified by ngx-extended-pdf-viewer
+      if (viewerIsAllowedToCaptureKeyEvent(mainContainer)) {
+        if (turnPage > 0) {
+          pdfViewer.nextPage();
+        } else {
+          pdfViewer.previousPage();
+        }
       }
+      // #2463 end of modification by ngx-extended-pdf-viewer
       handled = true;
     }
   }
@@ -3424,6 +3430,30 @@ function webViewerKeyDown(evt) {
   if (handled) {
     evt.preventDefault();
   }
+}
+
+/**
+ * Checks if the viewer can capture the keyboard event without
+ * ruining the user experience of the browser. In particular,
+ * it's still possible to navigate with the arrow keys through
+ * tabs.
+ * @param {the main container of the viewer} mainContainer
+ * @returns true if there's no reason to prevent the viewer from capturing the
+ * event
+ */
+function viewerIsAllowedToCaptureKeyEvent(mainContainer) {
+  let elementInFocus = document.activeElement;
+  const ngxExtendedPdfViewer = mainContainer.closest('ngx-extended-pdf-viewer');
+  while (elementInFocus && elementInFocus !== document.body) {
+    if (elementInFocus === ngxExtendedPdfViewer) {
+      return true;
+    }
+    if (elementInFocus.tabIndex !== -1) {
+      return false;
+    }
+    elementInFocus = elementInFocus.parentElement;
+  }
+  return true;
 }
 
 function beforeUnload(evt) {
