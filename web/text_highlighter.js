@@ -327,7 +327,7 @@ class TextHighlighter {
       customPageMatches,
       customPageMatchesLength,
       "customHighlight",
-      customFindController.highlightMatches,
+      customFindController.state?.highlightMatches,
       pageIdx === customFindController.selected.pageIdx,
       customFindController.selected.matchIdx
     );
@@ -350,7 +350,7 @@ class TextHighlighter {
       pageMatches,
       pageMatchesLength,
       "highlight",
-      findController.highlightMatches,
+      findController.state?.highlightMatches,
       pageIdx === findController.selected.pageIdx,
       findController.selected.matchIdx
     );
