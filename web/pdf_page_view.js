@@ -377,11 +377,12 @@ class PDFPageView {
     );
   }
 
-  #dispatchLayerRendered(name, error) {
+  #dispatchLayerRendered(name, error, layer) {
     this.eventBus.dispatch(name, {
       source: this,
       pageNumber: this.id,
       error,
+      layer
     });
   }
 
@@ -393,7 +394,7 @@ class PDFPageView {
       console.error(`#renderAnnotationLayer: "${ex}".`);
       error = ex;
     } finally {
-      this.#dispatchLayerRendered("annotationlayerrendered", error);
+      this.#dispatchLayerRendered("annotationlayerrendered", error, this.annotationLayer);
     }
   }
 
@@ -405,7 +406,7 @@ class PDFPageView {
       console.error(`#renderAnnotationEditorLayer: "${ex}".`);
       error = ex;
     } finally {
-      this.#dispatchLayerRendered("annotationeditorlayerrendered", error);
+      this.#dispatchLayerRendered("annotationeditorlayerrendered", error, this.annotationEditorLayer);
     }
   }
 
@@ -438,7 +439,7 @@ class PDFPageView {
         this.#addLayer(this.xfaLayer.div, "xfaLayer");
         this.l10n.resume();
       }
-      this.#dispatchLayerRendered("xfalayerrendered", error);
+      this.#dispatchLayerRendered("xfalayerrendered", error, this.xfaLayer);
     }
   }
 
@@ -457,7 +458,7 @@ class PDFPageView {
       console.error(`#renderTextLayer: "${ex}".`);
       error = ex;
     }
-    this.#dispatchLayerRendered("textlayerrendered", error);
+    this.#dispatchLayerRendered("textlayerrendered", error, this.textLayer);
 
     this.#renderStructTreeLayer();
   }
