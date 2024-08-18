@@ -7,7 +7,6 @@
   "plugins": [
     "import",
     "json",
-    "mozilla",
     "no-unsanitized",
     "sort-exports",
     "unicorn",
@@ -44,8 +43,6 @@
     "import/no-unresolved": ["error", {
       "ignore": ["display", "pdfjs", "pdfjs-lib", "pdfjs-web", "web", "fluent-bundle", "fluent-dom"],
     }],
-    "mozilla/avoid-removeChild": "error",
-    "mozilla/use-includes-instead-of-indexOf": "error",
     "no-unsanitized/method": "error",
     "no-unsanitized/property": "error",
     "sort-exports/sort-exports": ["error", {
@@ -70,6 +67,7 @@
     "unicorn/prefer-date-now": "error",
     "unicorn/prefer-dom-node-append": "error",
     "unicorn/prefer-dom-node-remove": "error",
+    "unicorn/prefer-includes": "error",
     "unicorn/prefer-logical-operator-over-ternary": "error",
     "unicorn/prefer-modern-dom-apis": "error",
     "unicorn/prefer-modern-math-apis": "error",
@@ -79,6 +77,7 @@
     "unicorn/prefer-string-replace-all": "error",
     "unicorn/prefer-string-starts-ends-with": "error",
     "unicorn/prefer-ternary": ["error", "only-single-line"],
+    "unicorn/throw-new-error": "error",
 
     // Possible errors
     "for-direction": "error",

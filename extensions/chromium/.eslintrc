@@ -1,0 +1,17 @@
+{
+  "extends": [
+    ../../.eslintrc
+  ],
+
+  "env": {
+    "webextensions": true
+  },
+
+  "parserOptions": {
+    "sourceType": "script"
+  },
+
+  "rules": {
+    "no-var": "off",
+  },
+}

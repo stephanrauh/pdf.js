@@ -134,7 +134,7 @@ class DownloadManager {
     return false;
   }
 
-  download(data, url, filename, options = {}) {
+  download(data, url, filename) {
     const blobUrl = data
       ? URL.createObjectURL(new Blob([data], { type: "application/pdf" }))
       : null;
@@ -143,7 +143,6 @@ class DownloadManager {
       blobUrl,
       originalUrl: url,
       filename,
-      options,
     });
   }
 }
@@ -309,11 +308,15 @@ class FirefoxScripting {
 }
 
 class MLManager {
+  #abortSignal = null;
+
   #enabled = null;
+
+  #eventBus = null;
 
   #ready = null;
 
-  eventBus = null;
+  #requestResolvers = null;
 
   hasProgress = false;
 
@@ -330,10 +333,32 @@ class MLManager {
     this.altTextLearnMoreUrl = altTextLearnMoreUrl;
     this.enableAltTextModelDownload = enableAltTextModelDownload;
     this.enableGuessAltText = enableGuessAltText;
+  }
 
-    if (enableAltTextModelDownload) {
-      this.#loadAltTextEngine(false);
-    }
+  setEventBus(eventBus, abortSignal) {
+    this.#eventBus = eventBus;
+    this.#abortSignal = abortSignal;
+    eventBus._on(
+      "enablealttextmodeldownload",
+      ({ value }) => {
+        if (this.enableAltTextModelDownload === value) {
+          return;
+        }
+        if (value) {
+          this.downloadModel("altText");
+        } else {
+          this.deleteModel("altText");
+        }
+      },
+      { signal: abortSignal }
+    );
+    eventBus._on(
+      "enableguessalttext",
+      ({ value }) => {
+        this.toggleService("altText", value);
+      },
+      { signal: abortSignal }
+    );
   }
 
   async isEnabledFor(name) {
@@ -345,20 +370,27 @@ class MLManager {
   }
 
   async deleteModel(name) {
-    if (name !== "altText") {
+    if (name !== "altText" || !this.enableAltTextModelDownload) {
       return;
     }
     this.enableAltTextModelDownload = false;
     this.#ready?.delete(name);
     this.#enabled?.delete(name);
-    await Promise.all([
-      this.toggleService("altText", false),
-      FirefoxCom.requestAsync("mlDelete", MLManager.#AI_ALT_TEXT_MODEL_NAME),
-    ]);
+    await this.toggleService("altText", false);
+    await FirefoxCom.requestAsync(
+      "mlDelete",
+      MLManager.#AI_ALT_TEXT_MODEL_NAME
+    );
+  }
+
+  async loadModel(name) {
+    if (name === "altText" && this.enableAltTextModelDownload) {
+      await this.#loadAltTextEngine(false);
+    }
   }
 
   async downloadModel(name) {
-    if (name !== "altText") {
+    if (name !== "altText" || this.enableAltTextModelDownload) {
       return null;
     }
     this.enableAltTextModelDownload = true;
@@ -369,18 +401,52 @@ class MLManager {
     if (data?.name !== "altText") {
       return null;
     }
+    const resolvers = (this.#requestResolvers ||= new Set());
+    const resolver = Promise.withResolvers();
+    resolvers.add(resolver);
+
     data.service = MLManager.#AI_ALT_TEXT_MODEL_NAME;
-    return FirefoxCom.requestAsync("mlGuess", data);
+
+    FirefoxCom.requestAsync("mlGuess", data)
+      .then(response => {
+        if (resolvers.has(resolver)) {
+          resolver.resolve(response);
+          resolvers.delete(resolver);
+        }
+      })
+      .catch(reason => {
+        if (resolvers.has(resolver)) {
+          resolver.reject(reason);
+          resolvers.delete(resolver);
+        }
+      });
+
+    return resolver.promise;
+  }
+
+  async #cancelAllRequests() {
+    if (!this.#requestResolvers) {
+      return;
+    }
+    for (const resolver of this.#requestResolvers) {
+      resolver.resolve({ cancel: true });
+    }
+    this.#requestResolvers.clear();
+    this.#requestResolvers = null;
   }
 
   async toggleService(name, enabled) {
-    if (name !== "altText") {
+    if (name !== "altText" || this.enableGuessAltText === enabled) {
       return;
     }
 
     this.enableGuessAltText = enabled;
-    if (enabled && this.enableAltTextModelDownload) {
-      await this.#loadAltTextEngine(false);
+    if (enabled) {
+      if (this.enableAltTextModelDownload) {
+        await this.#loadAltTextEngine(false);
+      }
+    } else {
+      this.#cancelAllRequests();
     }
   }
 
@@ -401,22 +467,28 @@ class MLManager {
     });
     (this.#enabled ||= new Map()).set("altText", promise);
     if (listenToProgress) {
+      const ac = new AbortController();
+      const signal = AbortSignal.any([this.#abortSignal, ac.signal]);
+
       this.hasProgress = true;
-      const callback = ({ detail }) => {
-        this.eventBus.dispatch("loadaiengineprogress", {
-          source: this,
-          detail,
-        });
-        if (detail.finished) {
-          this.hasProgress = false;
-          window.removeEventListener("loadAIEngineProgress", callback);
-        }
-      };
-      window.addEventListener("loadAIEngineProgress", callback);
+      window.addEventListener(
+        "loadAIEngineProgress",
+        ({ detail }) => {
+          this.#eventBus.dispatch("loadaiengineprogress", {
+            source: this,
+            detail,
+          });
+          if (detail.finished) {
+            ac.abort();
+            this.hasProgress = false;
+          }
+        },
+        { signal }
+      );
       promise.then(ok => {
         if (!ok) {
+          ac.abort();
           this.hasProgress = false;
-          window.removeEventListener("loadAIEngineProgress", callback);
         }
       });
     }

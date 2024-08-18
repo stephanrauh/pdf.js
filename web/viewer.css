@@ -333,9 +333,8 @@ body {
   font: message-box;
 }
 
-:is(.toolbar, .editorParamsToolbar, .findbar, #sidebarContainer)
-  :is(input, button, select),
-.secondaryToolbar :is(input, button, a, select) {
+:is(.toolbar, .editorParamsToolbar, #sidebarContainer)
+  :is(input, button, select) {
   outline: none;
   font: message-box;
 }
@@ -362,8 +361,6 @@ body {
 }
 
 #toolbarContainer,
-.findbar,
-.secondaryToolbar,
 .editorParamsToolbar {
   position: relative;
   height: var(--toolbar-height);
@@ -448,86 +445,20 @@ body {
   transition-duration: 0s;
 }
 
-.findbar,
-.secondaryToolbar,
 .editorParamsToolbar {
+  background-color: var(--doorhanger-bg-color);
   top: var(--toolbar-height);
   position: absolute;
   z-index: 30000;
   height: auto;
-  padding: 0 4px;
+  inset-inline-end: 4px;
+  padding: 6px 0 10px;
   margin: 4px 2px;
   font: message-box;
   font-size: 12px;
   line-height: 14px;
   text-align: left;
   cursor: default;
-}
-
-.findbar {
-  inset-inline-start: 64px;
-  min-width: 300px;
-  background-color: var(--toolbar-bg-color);
-}
-.findbar > div {
-  height: var(--toolbar-height);
-}
-.findbar > div#findbarInputContainer {
-  margin-inline-end: 4px;
-}
-.findbar.wrapContainers > div,
-.findbar.wrapContainers > div#findbarMessageContainer > * {
-  clear: both;
-}
-.findbar.wrapContainers > div#findbarMessageContainer {
-  height: auto;
-}
-
-.findbar input[type="checkbox"] {
-  pointer-events: none;
-}
-
-.findbar label {
-  user-select: none;
-}
-
-.findbar label:hover,
-.findbar input:focus-visible + label {
-  color: var(--toggled-btn-color);
-  background-color: var(--button-hover-color);
-}
-
-.findbar .toolbarField[type="checkbox"]:checked + .toolbarLabel {
-  background-color: var(--toggled-btn-bg-color) !important;
-  color: var(--toggled-btn-color);
-}
-
-#findInput {
-  width: 200px;
-
-  /*#if !MOZCENTRAL*/
-  &::-webkit-input-placeholder {
-    color: rgb(191 191 191);
-  }
-  /*#endif*/
-  &::placeholder {
-    font-style: normal;
-  }
-  .loadingInput:has(> &[data-status="pending"])::after {
-    display: block;
-    visibility: visible;
-  }
-  &[data-status="notFound"] {
-    background-color: rgb(255 102 102);
-  }
-}
-
-.secondaryToolbar,
-.editorParamsToolbar {
-  padding: 6px 0 10px;
-  inset-inline-end: 4px;
-  height: auto;
-  background-color: var(--doorhanger-bg-color);
 }
 
 .editorParamsToolbarContainer {
@@ -582,14 +513,6 @@ body {
 /*#endif*/
 .editorParamsToolbarContainer .editorParamsSlider::-moz-range-thumb {
   background-color: white;
-}
-
-#secondaryToolbarButtonContainer {
-  max-width: 220px;
-  min-height: 26px;
-  max-height: calc(var(--viewer-container-height) - 40px);
-  overflow-y: auto;
-  margin-bottom: -4px;
 }
 
 #editorStampParamsToolbar {
@@ -654,22 +577,6 @@ body {
   margin-inline-end: -9px;
 }
 
-#findResultsCount {
-  background-color: rgb(217 217 217);
-  color: rgb(82 82 82);
-  text-align: center;
-  padding: 4px 5px;
-  margin: 5px;
-}
-
-#findMsg[data-status="notFound"] {
-  font-weight: bold;
-}
-
-:is(#findResultsCount, #findMsg):empty {
-  display: none;
-}
-
 #toolbarViewerMiddle {
   position: absolute;
   left: 50%;
@@ -689,8 +596,7 @@ body {
 #toolbarViewerMiddle > *,
 #toolbarViewerRight > *,
 #toolbarSidebarLeft *,
-#toolbarSidebarRight *,
-.findbar * {
+#toolbarSidebarRight * {
   position: relative;
   float: var(--inline-start);
 }
@@ -714,7 +620,6 @@ body {
 }
 
 .toolbarButton,
-.secondaryToolbarButton,
 .dialogButton {
   border: none;
   background: none;
@@ -738,7 +643,7 @@ body {
   overflow: hidden;
 }
 
-:is(.toolbarButton, .secondaryToolbarButton, .dialogButton)[disabled] {
+:is(.toolbarButton, .dialogButton)[disabled] {
   opacity: 0.5;
 }
 
@@ -764,7 +669,6 @@ body {
 
 .toolbarButton,
 .dropdownToolbarButton,
-.secondaryToolbarButton,
 .dialogButton {
   min-width: 16px;
   margin: 2px 1px;
@@ -782,27 +686,23 @@ body {
 .toolbarButton:is(:hover, :focus-visible) {
   background-color: var(--button-hover-color);
 }
-.secondaryToolbarButton:is(:hover, :focus-visible) {
-  background-color: var(--doorhanger-hover-bg-color);
-  color: var(--doorhanger-hover-color);
-}
 
-:is(.toolbarButton, .secondaryToolbarButton).toggled,
+.toolbarButton.toggled,
 .splitToolbarButton.toggled > .toolbarButton.toggled {
   background-color: var(--toggled-btn-bg-color);
   color: var(--toggled-btn-color);
 }
 
-:is(.toolbarButton, .secondaryToolbarButton).toggled:hover,
+.toolbarButton.toggled:hover,
 .splitToolbarButton.toggled > .toolbarButton.toggled:hover {
   outline: var(--toggled-hover-btn-outline) !important;
 }
 
-:is(.toolbarButton, .secondaryToolbarButton).toggled::before {
+.toolbarButton.toggled::before {
   background-color: var(--toggled-btn-color);
 }
 
-:is(.toolbarButton, .secondaryToolbarButton).toggled:hover:active,
+.toolbarButton.toggled:hover:active,
 .splitToolbarButton.toggled > .toolbarButton.toggled:hover:active {
   background-color: var(--toggled-hover-active-btn-color);
 }
@@ -850,7 +750,7 @@ body {
   height: 1px;
 }
 
-:is(.toolbarButton, .secondaryToolbarButton, .treeItemToggler)::before,
+:is(.toolbarButton, .treeItemToggler)::before,
 .dropdownToolbarButton::after {
   /* All matching images have a size of 16x16
    * All relevant containers have a size of 28x28 */
@@ -874,15 +774,8 @@ body {
   left: 6px;
 }
 
-.toolbarButton:is(:hover, :focus-visible)::before,
-.secondaryToolbarButton:is(:hover, :focus-visible)::before {
+.toolbarButton:is(:hover, :focus-visible)::before {
   background-color: var(--toolbar-icon-hover-bg-color);
-}
-
-.secondaryToolbarButton::before {
-  opacity: var(--doorhanger-icon-opacity);
-  top: 5px;
-  inset-inline-start: 12px;
 }
 
 #sidebarToggle::before {
@@ -893,14 +786,6 @@ body {
 #secondaryToolbarToggle::before {
   mask-image: var(--toolbarButton-secondaryToolbarToggle-icon);
   transform: scaleX(var(--dir-factor));
-}
-
-#findPrevious::before {
-  mask-image: var(--findbarButton-previous-icon);
-}
-
-#findNext::before {
-  mask-image: var(--findbarButton-next-icon);
 }
 
 #previous::before {
@@ -919,10 +804,6 @@ body {
   mask-image: var(--toolbarButton-zoomIn-icon);
 }
 
-#presentationMode::before {
-  mask-image: var(--toolbarButton-presentationMode-icon);
-}
-
 #editorFreeText::before {
   mask-image: var(--toolbarButton-editorFreeText-icon);
 }
@@ -939,31 +820,12 @@ body {
   mask-image: var(--toolbarButton-editorStamp-icon);
 }
 
-:is(#print, #secondaryPrint)::before {
+#print::before {
   mask-image: var(--toolbarButton-print-icon);
 }
 
-/*#if GENERIC*/
-#secondaryOpenFile::before {
-  mask-image: var(--toolbarButton-openFile-icon);
-}
-/*#endif*/
-
-:is(#download, #secondaryDownload)::before {
+#download::before {
   mask-image: var(--toolbarButton-download-icon);
-}
-
-a.secondaryToolbarButton {
-  padding-top: 5px;
-  text-decoration: none;
-}
-a:is(.toolbarButton, .secondaryToolbarButton)[href="#"] {
-  opacity: 0.5;
-  pointer-events: none;
-}
-
-#viewBookmark::before {
-  mask-image: var(--toolbarButton-bookmark-icon);
 }
 
 #viewThumbnail::before {
@@ -1003,85 +865,6 @@ a:is(.toolbarButton, .secondaryToolbarButton)[href="#"] {
   height: 9px;
   width: 9px;
   border-radius: 50%;
-}
-
-.secondaryToolbarButton {
-  position: relative;
-  margin: 0;
-  padding: 0 0 1px;
-  padding-inline-start: 36px;
-  height: auto;
-  min-height: 26px;
-  width: auto;
-  min-width: 100%;
-  text-align: start;
-  white-space: normal;
-  border-radius: 0;
-  box-sizing: border-box;
-  display: inline-block;
-}
-.secondaryToolbarButton > span {
-  padding-inline-end: 4px;
-}
-
-#firstPage::before {
-  mask-image: var(--secondaryToolbarButton-firstPage-icon);
-}
-
-#lastPage::before {
-  mask-image: var(--secondaryToolbarButton-lastPage-icon);
-}
-
-#pageRotateCcw::before {
-  mask-image: var(--secondaryToolbarButton-rotateCcw-icon);
-}
-
-#pageRotateCw::before {
-  mask-image: var(--secondaryToolbarButton-rotateCw-icon);
-}
-
-#cursorSelectTool::before {
-  mask-image: var(--secondaryToolbarButton-selectTool-icon);
-}
-
-#cursorHandTool::before {
-  mask-image: var(--secondaryToolbarButton-handTool-icon);
-}
-
-#scrollPage::before {
-  mask-image: var(--secondaryToolbarButton-scrollPage-icon);
-}
-
-#scrollVertical::before {
-  mask-image: var(--secondaryToolbarButton-scrollVertical-icon);
-}
-
-#scrollHorizontal::before {
-  mask-image: var(--secondaryToolbarButton-scrollHorizontal-icon);
-}
-
-#scrollWrapped::before {
-  mask-image: var(--secondaryToolbarButton-scrollWrapped-icon);
-}
-
-#spreadNone::before {
-  mask-image: var(--secondaryToolbarButton-spreadNone-icon);
-}
-
-#spreadOdd::before {
-  mask-image: var(--secondaryToolbarButton-spreadOdd-icon);
-}
-
-#spreadEven::before {
-  mask-image: var(--secondaryToolbarButton-spreadEven-icon);
-}
-
-#documentProperties::before {
-  mask-image: var(--secondaryToolbarButton-documentProperties-icon);
-}
-
-#imageAltTextSettings::before {
-  mask-image: var(--secondaryToolbarButton-imageAltTextSettings-icon);
 }
 
 .verticalToolbarSeparator {
@@ -1430,6 +1213,286 @@ dialog :link {
   z-index: 50000; /* should be higher than anything else in PDF.js! */
 }
 
+.toolbarButton {
+  &.labeled {
+    border-radius: 0;
+    display: inline-block;
+    height: auto;
+    margin: 0;
+    padding: 0 0 1px;
+    padding-inline-start: 36px;
+    position: relative;
+    min-height: 26px;
+    min-width: 100%;
+    text-align: start;
+    white-space: normal;
+    width: auto;
+
+    &:is(a) {
+      padding-top: 5px;
+      text-decoration: none;
+
+      &[href="#"] {
+        opacity: 0.5;
+        pointer-events: none;
+      }
+    }
+
+    &::before {
+      inset-inline-start: 12px;
+      opacity: var(--doorhanger-icon-opacity);
+      top: 5px;
+    }
+
+    &:not(.toggled):is(:hover, :focus-visible) {
+      background-color: var(--doorhanger-hover-bg-color);
+      color: var(--doorhanger-hover-color);
+    }
+
+    > span {
+      display: unset;
+      padding-inline-end: 4px;
+    }
+  }
+}
+
+#secondaryToolbar {
+  background-color: var(--doorhanger-bg-color);
+  cursor: default;
+  font: message-box;
+  font-size: 12px;
+  height: auto;
+  inset-inline-end: 4px;
+  line-height: 14px;
+  margin: 4px 2px;
+  padding: 6px 0 10px;
+  position: absolute;
+  text-align: left;
+  top: var(--toolbar-height);
+  z-index: 30000;
+
+  :is(button, a) {
+    font: message-box;
+    outline: none;
+  }
+
+  #secondaryToolbarButtonContainer {
+    margin-bottom: -4px;
+    max-height: calc(var(--viewer-container-height) - 40px);
+    max-width: 220px;
+    min-height: 26px;
+    overflow-y: auto;
+
+    /*#if GENERIC*/
+    #secondaryOpenFile::before {
+      mask-image: var(--toolbarButton-openFile-icon);
+    }
+    /*#endif*/
+
+    #secondaryPrint::before {
+      mask-image: var(--toolbarButton-print-icon);
+    }
+
+    #secondaryDownload::before {
+      mask-image: var(--toolbarButton-download-icon);
+    }
+
+    #presentationMode::before {
+      mask-image: var(--toolbarButton-presentationMode-icon);
+    }
+
+    #viewBookmark::before {
+      mask-image: var(--toolbarButton-bookmark-icon);
+    }
+
+    #firstPage::before {
+      mask-image: var(--secondaryToolbarButton-firstPage-icon);
+    }
+
+    #lastPage::before {
+      mask-image: var(--secondaryToolbarButton-lastPage-icon);
+    }
+
+    #pageRotateCcw::before {
+      mask-image: var(--secondaryToolbarButton-rotateCcw-icon);
+    }
+
+    #pageRotateCw::before {
+      mask-image: var(--secondaryToolbarButton-rotateCw-icon);
+    }
+
+    #cursorSelectTool::before {
+      mask-image: var(--secondaryToolbarButton-selectTool-icon);
+    }
+
+    #cursorHandTool::before {
+      mask-image: var(--secondaryToolbarButton-handTool-icon);
+    }
+
+    #scrollPage::before {
+      mask-image: var(--secondaryToolbarButton-scrollPage-icon);
+    }
+
+    #scrollVertical::before {
+      mask-image: var(--secondaryToolbarButton-scrollVertical-icon);
+    }
+
+    #scrollHorizontal::before {
+      mask-image: var(--secondaryToolbarButton-scrollHorizontal-icon);
+    }
+
+    #scrollWrapped::before {
+      mask-image: var(--secondaryToolbarButton-scrollWrapped-icon);
+    }
+
+    #spreadNone::before {
+      mask-image: var(--secondaryToolbarButton-spreadNone-icon);
+    }
+
+    #spreadOdd::before {
+      mask-image: var(--secondaryToolbarButton-spreadOdd-icon);
+    }
+
+    #spreadEven::before {
+      mask-image: var(--secondaryToolbarButton-spreadEven-icon);
+    }
+
+    #imageAltTextSettings::before {
+      mask-image: var(--secondaryToolbarButton-imageAltTextSettings-icon);
+    }
+
+    #documentProperties::before {
+      mask-image: var(--secondaryToolbarButton-documentProperties-icon);
+    }
+  }
+}
+
+#findbar {
+  background-color: var(--toolbar-bg-color);
+  cursor: default;
+  font: message-box;
+  font-size: 12px;
+  height: auto;
+  inset-inline-start: 64px;
+  line-height: 14px;
+  margin: 4px 2px;
+  min-width: 300px;
+  padding: 0 4px;
+  position: absolute;
+  text-align: left;
+  top: var(--toolbar-height);
+  z-index: 30000;
+
+  * {
+    float: var(--inline-start);
+    position: relative;
+  }
+
+  > div {
+    height: var(--toolbar-height);
+  }
+
+  :is(button, input) {
+    font: message-box;
+    outline: none;
+  }
+
+  input {
+    &[type="checkbox"] {
+      pointer-events: none;
+
+      &:checked + .toolbarLabel {
+        background-color: var(--toggled-btn-bg-color) !important;
+        color: var(--toggled-btn-color);
+      }
+    }
+  }
+
+  label {
+    user-select: none;
+  }
+
+  :is(label:hover, input:focus-visible + label) {
+    background-color: var(--button-hover-color);
+    color: var(--toggled-btn-color);
+  }
+
+  #findbarInputContainer {
+    margin-inline-end: 4px;
+
+    #findInput {
+      width: 200px;
+
+      /*#if !MOZCENTRAL*/
+      &::-webkit-input-placeholder {
+        color: rgb(191 191 191);
+      }
+      /*#endif*/
+
+      &::placeholder {
+        font-style: normal;
+      }
+
+      .loadingInput:has(> &[data-status="pending"])::after {
+        display: block;
+        visibility: visible;
+      }
+
+      &[data-status="notFound"] {
+        background-color: rgb(255 102 102);
+      }
+    }
+
+    #findPrevious::before {
+      mask-image: var(--findbarButton-previous-icon);
+    }
+
+    #findNext::before {
+      mask-image: var(--findbarButton-next-icon);
+    }
+  }
+
+  #findbarMessageContainer {
+    #findResultsCount {
+      background-color: rgb(217 217 217);
+      color: rgb(82 82 82);
+      margin: 5px;
+      padding: 4px 5px;
+      text-align: center;
+    }
+
+    #findMsg {
+      &[data-status="notFound"] {
+        font-weight: bold;
+      }
+    }
+
+    *:empty {
+      display: none;
+    }
+  }
+
+  &.wrapContainers {
+    > div {
+      clear: both;
+    }
+
+    > #findbarMessageContainer {
+      height: auto;
+
+      > * {
+        clear: both;
+      }
+    }
+  }
+
+  @media all and (max-width: 690px) {
+    & {
+      inset-inline-start: 34px;
+    }
+  }
+}
+
 @page {
   margin: 0;
 }
@@ -1489,7 +1552,7 @@ dialog :link {
 }
 
 .visibleMediumView {
-  display: none;
+  display: none !important;
 }
 
 @media all and (max-width: 900px) {
@@ -1516,23 +1579,20 @@ dialog :link {
     --editor-toolbar-base-offset: 40px;
   }
   #outerContainer .hiddenMediumView {
-    display: none;
+    display: none !important;
   }
   #outerContainer .visibleMediumView {
-    display: inherit;
+    display: inherit !important;
   }
 }
 
 @media all and (max-width: 690px) {
   .hiddenSmallView,
   .hiddenSmallView * {
-    display: none;
+    display: none !important;
   }
   .toolbarButtonSpacer {
     width: 0;
-  }
-  .findbar {
-    inset-inline-start: 34px;
   }
 }
 

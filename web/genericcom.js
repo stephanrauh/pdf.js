@@ -92,6 +92,10 @@ class FakeMLManager {
     this.enableAltTextModelDownload = enableAltTextModelDownload;
   }
 
+  setEventBus(eventBus, abortSignal) {
+    this.eventBus = eventBus;
+  }
+
   async isEnabledFor(_name) {
     return this.enableGuessAltText;
   }
@@ -100,6 +104,8 @@ class FakeMLManager {
     this.enableAltTextModelDownload = false;
     return null;
   }
+
+  async loadModel(_name) {}
 
   async downloadModel(_name) {
     // Simulate downloading the model but with progress.

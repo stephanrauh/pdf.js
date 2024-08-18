@@ -227,20 +227,12 @@ const defaultOptions = {
   enableAltTextModelDownload: {
     /** @type {boolean} */
     value: true,
-    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE + OptionKind.EVENT_DISPATCH,
   },
   enableGuessAltText: {
     /** @type {boolean} */
     value: true,
-    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
-  },
-  enableHighlightEditor: {
-    // We'll probably want to make some experiments before enabling this
-    // in Firefox release, but it has to be temporary.
-    // TODO: remove it when unnecessary.
-    /** @type {boolean} */
-    value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
-    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE + OptionKind.EVENT_DISPATCH,
   },
   enableHighlightFloatingButton: {
     // We'll probably want to make some experiments before enabling this
@@ -634,7 +626,9 @@ class AppOptions {
   }
 
   constructor() {
-    throw new Error("Cannot initialize AppOptions.");
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+      throw new Error("Cannot initialize AppOptions.");
+    }
   }
 
   static get(name) {

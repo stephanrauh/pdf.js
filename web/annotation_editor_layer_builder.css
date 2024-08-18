@@ -857,6 +857,17 @@
 .dialog.newAltText {
   --new-alt-text-ai-disclaimer-icon: url(images/altText_disclaimer.svg);
   --new-alt-text-spinner-icon: url(images/altText_spinner.svg);
+  --preview-image-bg-color: #f0f0f4;
+  --preview-image-border: none;
+
+  @media (prefers-color-scheme: dark) {
+    --preview-image-bg-color: #2b2a33;
+  }
+
+  @media screen and (forced-colors: active) {
+    --preview-image-bg-color: ButtonFace;
+    --preview-image-border: 1px solid ButtonText;
+  }
 
   width: 80%;
   max-width: 570px;
@@ -902,6 +913,7 @@
     align-items: flex-start;
     gap: 12px;
     flex: 0 1 auto;
+    line-height: normal;
 
     #mainContent {
       display: flex;
@@ -973,20 +985,20 @@
 
         #newAltTextDisclaimer {
           display: flex;
-          align-items: center;
+          flex-direction: row;
+          align-items: flex-start;
           gap: 4px;
-          align-self: stretch;
-          flex-wrap: wrap;
           font-size: 11px;
 
           &::before {
             content: "";
             display: inline-block;
-            width: 16px;
+            width: 17px;
             height: 16px;
             mask-image: var(--new-alt-text-ai-disclaimer-icon);
             mask-size: cover;
             background-color: var(--text-secondary-color);
+            flex: 1 0 auto;
           }
         }
       }
@@ -1015,6 +1027,8 @@
         justify-content: center;
         align-items: center;
         flex: 0 0 auto;
+        background-color: var(--preview-image-bg-color);
+        border: var(--preview-image-border);
 
         > canvas {
           max-width: 100%;

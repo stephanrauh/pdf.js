@@ -2198,20 +2198,13 @@ describe("Interaction", () => {
 
   describe("Textfield with a Blur callback", () => {
     let pages;
-    let otherPages;
 
     beforeAll(async () => {
-      otherPages = await Promise.all(
-        global.integrationSessions.map(async session =>
-          session.browser.newPage()
-        )
-      );
       pages = await loadAndWait("bug1863910.pdf", getSelector("25R"));
     });
 
     afterAll(async () => {
       await closePages(pages);
-      await Promise.all(otherPages.map(page => page.close()));
     });
 
     it("must check that blur callback is called", async () => {
@@ -2237,20 +2230,13 @@ describe("Interaction", () => {
 
   describe("Radio button without T value", () => {
     let pages;
-    let otherPages;
 
     beforeAll(async () => {
-      otherPages = await Promise.all(
-        global.integrationSessions.map(async session =>
-          session.browser.newPage()
-        )
-      );
       pages = await loadAndWait("bug1860602.pdf", getSelector("22R"));
     });
 
     afterAll(async () => {
       await closePages(pages);
-      await Promise.all(otherPages.map(page => page.close()));
     });
 
     it("must check that only one radio is selected", async () => {
@@ -2301,20 +2287,13 @@ describe("Interaction", () => {
 
   describe("Textfield with a number and some decimals", () => {
     let pages;
-    let otherPages;
 
     beforeAll(async () => {
-      otherPages = await Promise.all(
-        global.integrationSessions.map(async session =>
-          session.browser.newPage()
-        )
-      );
       pages = await loadAndWait("issue17540.pdf", getSelector("15R"));
     });
 
     afterAll(async () => {
       await closePages(pages);
-      await Promise.all(otherPages.map(page => page.close()));
     });
 
     it("must check the number has the correct number of decimals", async () => {
@@ -2341,20 +2320,13 @@ describe("Interaction", () => {
 
   describe("Textfield with a zip code starting with 0", () => {
     let pages;
-    let otherPages;
 
     beforeAll(async () => {
-      otherPages = await Promise.all(
-        global.integrationSessions.map(async session =>
-          session.browser.newPage()
-        )
-      );
       pages = await loadAndWait("bug1889122.pdf", getSelector("24R"));
     });
 
     afterAll(async () => {
       await closePages(pages);
-      await Promise.all(otherPages.map(page => page.close()));
     });
 
     it("must check the zip code is correctly formatted", async () => {
@@ -2376,20 +2348,13 @@ describe("Interaction", () => {
 
   describe("Value of event.change when a choice list is modified", () => {
     let pages;
-    let otherPages;
 
     beforeAll(async () => {
-      otherPages = await Promise.all(
-        global.integrationSessions.map(async session =>
-          session.browser.newPage()
-        )
-      );
       pages = await loadAndWait("issue17998.pdf", getSelector("7R"));
     });
 
     afterAll(async () => {
       await closePages(pages);
-      await Promise.all(otherPages.map(page => page.close()));
     });
 
     it("must check the properties of the event", async () => {
@@ -2417,20 +2382,13 @@ describe("Interaction", () => {
 
   describe("PageOpen and PageClose actions in fields", () => {
     let pages;
-    let otherPages;
 
     beforeAll(async () => {
-      otherPages = await Promise.all(
-        global.integrationSessions.map(async session =>
-          session.browser.newPage()
-        )
-      );
       pages = await loadAndWait("issue18305.pdf", getSelector("7R"));
     });
 
     afterAll(async () => {
       await closePages(pages);
-      await Promise.all(otherPages.map(page => page.close()));
     });
 
     it("must check that PageOpen/PageClose actions are correctly executed", async () => {
@@ -2462,6 +2420,71 @@ describe("Interaction", () => {
             false
           );
           expect(text).withContext(`In ${browserName}`).toEqual("PageClose");
+        })
+      );
+    });
+  });
+
+  describe("Compute product of different fields", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("issue18536.pdf", getSelector("34R"));
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the product are null", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page], i) => {
+          await waitForScripting(page);
+
+          const inputSelector = getSelector("34R");
+          await page.click(inputSelector);
+          await page.type(inputSelector, "123");
+          await page.click(getSelector("28R"));
+          await page.waitForFunction(
+            `${getQuerySelector("36R")}.value !== "0"`
+          );
+
+          let text = await page.$eval(getSelector("30R"), el => el.value);
+          expect(text).withContext(`In ${browserName}`).toEqual("0");
+
+          text = await page.$eval(getSelector("35R"), el => el.value);
+          expect(text).withContext(`In ${browserName}`).toEqual("0");
+
+          text = await page.$eval(getSelector("36R"), el => el.value);
+          expect(text).withContext(`In ${browserName}`).toEqual("123");
+        })
+      );
+    });
+  });
+
+  describe("Calculate field value even if one callback throws", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("issue18561.pdf", getSelector("24R"));
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the product is computed although a callback threw", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page], i) => {
+          await waitForScripting(page);
+
+          const inputSelector = getSelector("24R");
+          await page.click(inputSelector);
+          await page.type(inputSelector, "123");
+          await page.click(getSelector("25R"));
+          await page.waitForFunction(
+            `${getQuerySelector("28R")}.value === "12300"`
+          );
         })
       );
     });

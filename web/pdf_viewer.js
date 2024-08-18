@@ -1046,10 +1046,8 @@ class PDFViewer {
       this.customFindController?.setDocument(null); // #2488 modified by ngx-extended-pdf-viewer
       this._scriptingManager?.setDocument(null);
 
-      if (this.#annotationEditorUIManager) {
-        this.#annotationEditorUIManager.destroy();
-        this.#annotationEditorUIManager = null;
-      }
+      this.#annotationEditorUIManager?.destroy();
+      this.#annotationEditorUIManager = null;
     }
 
     this.pdfDocument = pdfDocument;
@@ -1131,7 +1129,11 @@ class PDFViewer {
           viewer.before(element);
         }
 
-        if (annotationEditorMode !== AnnotationEditorType.DISABLE) {
+        if (
+          ((typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
+            typeof AbortSignal.any === "function") &&
+          annotationEditorMode !== AnnotationEditorType.DISABLE
+        ) {
           const mode = annotationEditorMode;
 
           if (pdfDocument.isPureXfa) {
@@ -1155,6 +1157,9 @@ class PDFViewer {
               uiManager: this.#annotationEditorUIManager,
             });
             if (mode !== AnnotationEditorType.NONE) {
+              if (mode === AnnotationEditorType.STAMP) {
+                this.#mlManager?.loadModel("altText");
+              }
               this.#annotationEditorUIManager.updateMode(mode);
             }
           } else {
@@ -2681,6 +2686,9 @@ class PDFViewer {
     if (!this.pdfDocument) {
       return;
     }
+    if (mode === AnnotationEditorType.STAMP) {
+      this.#mlManager?.loadModel("altText");
+    }
 
     const { eventBus } = this;
     const updater = () => {
@@ -2723,14 +2731,6 @@ class PDFViewer {
       }
     }
     updater();
-  }
-
-  // eslint-disable-next-line accessor-pairs
-  set annotationEditorParams({ type, value }) {
-    if (!this.#annotationEditorUIManager) {
-      throw new Error(`The AnnotationEditor is not enabled.`);
-    }
-    this.#annotationEditorUIManager.updateParams(type, value);
   }
 
   refresh(noUpdate = false, updateArgs = Object.create(null)) {

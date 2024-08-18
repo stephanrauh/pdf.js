@@ -104,6 +104,22 @@ class StampEditor extends AnnotationEditor {
     super.altTextFinish();
   }
 
+  /** @inheritdoc */
+  get telemetryFinalData() {
+    return {
+      type: "stamp",
+      hasAltText: !!this.altTextData?.altText,
+    };
+  }
+
+  static computeTelemetryFinalData(data) {
+    const hasAltTextStats = data.get("hasAltText");
+    return {
+      hasAltText: hasAltTextStats.get(true) ?? 0,
+      hasNoAltText: hasAltTextStats.get(false) ?? 0,
+    };
+  }
+
   #getBitmapFetched(data, fromId = false) {
     if (!data) {
       this.remove();
@@ -133,9 +149,70 @@ class StampEditor extends AnnotationEditor {
     ) {
       this._editToolbar.hide();
       this._uiManager.editAltText(this, /* firstTime = */ true);
-    } else {
-      this.div.focus();
+      return;
     }
+
+    if (
+      !this._uiManager.useNewAltTextWhenAddingImage &&
+      this._uiManager.useNewAltTextFlow &&
+      this.#bitmap
+    ) {
+      this._reportTelemetry({
+        action: "pdfjs.image.image_added",
+        data: { alt_text_modal: false },
+      });
+      try {
+        // The alt-text dialog isn't opened but we still want to guess the alt
+        // text.
+        this.mlGuessAltText();
+      } catch {}
+    }
+
+    this.div.focus();
+  }
+
+  async mlGuessAltText(imageData = null, updateAltTextData = true) {
+    if (this.hasAltTextData()) {
+      return null;
+    }
+
+    const { mlManager } = this._uiManager;
+    if (!mlManager) {
+      throw new Error("No ML.");
+    }
+    if (!(await mlManager.isEnabledFor("altText"))) {
+      throw new Error("ML isn't enabled for alt text.");
+    }
+    const { data, width, height } =
+      imageData ||
+      this.copyCanvas(null, /* createImageData = */ true).imageData;
+    const response = await mlManager.guess({
+      name: "altText",
+      request: {
+        data,
+        width,
+        height,
+        channels: data.length / (width * height),
+      },
+    });
+    if (!response) {
+      throw new Error("No response from the AI service.");
+    }
+    if (response.error) {
+      throw new Error("Error from the AI service.");
+    }
+    if (response.cancel) {
+      return null;
+    }
+    if (!response.output) {
+      throw new Error("No valid response from the AI service.");
+    }
+    const altText = response.output;
+    await this.setGuessedAltText(altText);
+    if (updateAltTextData && !this.hasAltTextData()) {
+      this.altTextData = { alt: altText, decorative: false };
+    }
+    return altText;
   }
 
   #getBitmap() {
@@ -190,6 +267,10 @@ class StampEditor extends AnnotationEditor {
             const data = await this._uiManager.imageManager.getFromFile(
               input.files[0]
             );
+            this._reportTelemetry({
+              action: "pdfjs.image.image_selected",
+              data: { alt_text_modal: this._uiManager.useNewAltTextFlow },
+            });
             this.#getBitmapFetched(data);
           }
           if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
@@ -370,6 +451,13 @@ class StampEditor extends AnnotationEditor {
   }
 
   copyCanvas(maxDimension, createImageData = false) {
+    if (!maxDimension) {
+      // TODO: get this value from Firefox
+      //   (https://bugzilla.mozilla.org/show_bug.cgi?id=1908184)
+      // It's the maximum dimension that the AI can handle.
+      maxDimension = 224;
+    }
+
     const { width: bitmapWidth, height: bitmapHeight } = this.#bitmap;
     const canvas = document.createElement("canvas");
 
