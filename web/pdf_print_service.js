@@ -96,33 +96,6 @@ async function renderPage( // modified by ngx-extended-pdf-viewer #530
   });
 }
 
- // modified (added) by ngx-extended-pdf-viewer #530
- async function determineMaxDimensions() {
-  debugger;
-  if (PDFPrintService.maxWidth) {
-    return PDFPrintService.maxWidth;
-  }
-  const checklist = [
-    4096, // iOS
-    8192, // IE 9-10
-    10836, // Android
-    11180, // Firefox < 122, Android
-    11402, // Android,
-    14188, // Android
-    14188,
-    16384,
-    23168, // Firefox 122+
-  ];
-  for (const width of checklist) {
-    const { success } = await canvasSize.test({ width, height: width });
-    if (!success) {
-      PDFPrintService.maxWidth = width;
-      return PDFPrintService.maxWidth;
-    }
-  }
-  return 23168;
-}
-
 class PDFPrintService {
   constructor(
     {
