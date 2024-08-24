@@ -400,7 +400,13 @@ class PDFFindController {
   /**
    * @param {PDFFindControllerOptions} options
    */
-  constructor({ linkService, eventBus, updateMatchesCountOnProgress = true, pageViewMode }) {
+  constructor({
+    linkService,
+    eventBus,
+    updateMatchesCountOnProgress = true,
+    pageViewMode,
+    listenToEventBus, // #2339 modified by ngx-extended-pdf-viewer
+  }) {
     this._linkService = linkService;
     this._eventBus = eventBus;
     this.#updateMatchesCountOnProgress = updateMatchesCountOnProgress;
@@ -413,8 +419,10 @@ class PDFFindController {
     this.onIsPageVisible = null;
 
     this.#reset();
-    eventBus._on("find", this.#onFind.bind(this));
-    eventBus._on("findbarclose", this.#onFindBarClose.bind(this));
+    if (listenToEventBus) { // #2339 modified by ngx-extended-pdf-viewer
+      eventBus._on("find", this.#onFind.bind(this));
+      eventBus._on("findbarclose", this.#onFindBarClose.bind(this));
+    } // #2339 modified by ngx-extended-pdf-viewer
   }
 
   get highlightMatches() {
@@ -577,10 +585,13 @@ class PDFFindController {
     // #2482 end of modification by ngx-extended-pdf-viewer
     if (!this._scrollMatches || !element) {
       return;
-    } else if (matchIndex === -1 || matchIndex !== this._selected.matchIdx) {
-      return;
-    } else if (pageIndex === -1 || pageIndex !== this._selected.pageIdx) {
-      return;
+      // #2339 modified by ngx-extended-pdf-viewer: the method is only called
+      // on selected matches, and since adding the customFindController, the
+      // index is not always correct, let's skip the check
+      // } else if (matchIndex===-1 || matchIndex !== this._selected.matchIdx) {
+      //  return;
+      // } else if (pageIndex === -1 || pageIndex !== this._selected.pageIdx) {
+      //  return;
     }
     this._scrollMatches = false; // Ensure that scrolling only happens once.
 
