@@ -37,8 +37,8 @@ class PDFFindBar {
     this.currentPage = options.findCurrentPageCheckbox;
     this.pageRange = options.findPageRangeField;
     this.caseSensitive = options.caseSensitiveCheckbox;
-    this.findMultipleCheckbox = options.findMultipleCheckbox;
-    this.matchRegExpCheckbox = options.matchRegExpCheckbox;
+    this.findMultipleCheckbox = options.findMultipleCheckbox; // #2509 modified by ngx-extended-pdf-viewer
+    this.matchRegExpCheckbox = options.matchRegExpCheckbox; // #2509 modified by ngx-extended-pdf-viewer
     this.matchDiacritics = options.matchDiacriticsCheckbox;
     this.entireWord = options.entireWordCheckbox;
     this.findMsg = options.findMsg;
@@ -86,11 +86,12 @@ class PDFFindBar {
       this.dispatchEvent("casesensitivitychange");
     });
 
-    this.findMultipleCheckbox.addEventListener("click", () => {
+    // #2509 modified by ngx-extended-pdf-viewer
+    this.findMultipleCheckbox?.addEventListener("click", () => {
       this.dispatchEvent("findmultiplechange");
     });
 
-    this.matchRegExpCheckbox.addEventListener("click", () => {
+    this.matchRegExpCheckbox?.addEventListener("click", () => {
       if (this.matchRegExpCheckbox.checked) {
         this.findMultipleCheckbox.checked = false;
         this.findMultipleCheckbox.disabled = true;
@@ -105,6 +106,7 @@ class PDFFindBar {
       }
       this.dispatchEvent("findregexpchange");
     });
+    // #2509 end of modification by ngx-extended-pdf-viewer
 
     this.entireWord.addEventListener("click", () => {
       this.dispatchEvent("entirewordchange");
@@ -125,8 +127,8 @@ class PDFFindBar {
       type,
       query: this.findField.value,
       caseSensitive: this.caseSensitive.checked,
-      findMultiple: this.findMultipleCheckbox.checked,
-      matchRegExp: this.matchRegExpCheckbox.checked,
+      findMultiple: this.findMultipleCheckbox?.checked, // #2509 modified by ngx-extended-pdf-viewer
+      matchRegExp: this.matchRegExpCheckbox?.checked, // #2509 modified by ngx-extended-pdf-viewer
       entireWord: this.entireWord.checked,
       highlightAll: this.highlightAll.checked,
       findPrevious: findPrev,

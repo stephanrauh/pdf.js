@@ -418,15 +418,15 @@ const PDFViewerApplication = {
 
     const downloadManager = (this.downloadManager = new DownloadManager());
 
-    // #2399 modified by ngx-extended-pdf-viewer
+    // #2339 modified by ngx-extended-pdf-viewer
     let FindControllerConstructor = PDFFindController;
     if (AppOptions.get("findController")) {
       FindControllerConstructor = AppOptions.get("findController");
     }
-    // #2399 end of modification by ngx-extended-pdf-viewer
+    // #2339 end of modification by ngx-extended-pdf-viewer
 
     // #2488 modified by ngx-extended-pdf-viewer
-    const customFindController = new FindControllerConstructor({ // #2399 modified by ngx-extended-pdf-viewer
+    const customFindController = new FindControllerConstructor({ // #2339 modified by ngx-extended-pdf-viewer
       linkService: pdfLinkService,
       eventBus,
       // #492 modified by ngx-extended-pdf-viewer
@@ -436,11 +436,12 @@ const PDFViewerApplication = {
         typeof PDFJSDev === "undefined"
           ? !window.isGECKOVIEW
           : !PDFJSDev.test("GECKOVIEW"),
+      listenToEventBus: false,
     });
     this.customFindController = customFindController;
     // #2488 end of modification by ngx-extended-pdf-viewer
 
-    const findController = new FindControllerConstructor({ // #2399 modified by ngx-extended-pdf-viewer
+    const findController = new FindControllerConstructor({ // #2339 modified by ngx-extended-pdf-viewer
       linkService: pdfLinkService,
       eventBus,
       // #492 modified by ngx-extended-pdf-viewer
@@ -450,6 +451,7 @@ const PDFViewerApplication = {
         typeof PDFJSDev === "undefined"
           ? !window.isGECKOVIEW
           : !PDFJSDev.test("GECKOVIEW"),
+          listenToEventBus: true,
     });
     this.findController = findController;
 
