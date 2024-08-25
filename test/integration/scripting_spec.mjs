@@ -439,38 +439,40 @@ describe("Interaction", () => {
     let pages;
 
     beforeAll(async () => {
-      pages = await loadAndWait("doc_actions.pdf", getSelector("47R"));
+      pages = await loadAndWait("doc_actions.pdf", getSelector("47R"), null, {
+        earlySetup: () => {
+          // No need to trigger the print dialog.
+          window.print = () => {};
+        },
+      });
     });
 
     it("must execute WillPrint and DidPrint actions", async () => {
-      // Run the tests sequentially to avoid to use the same printer at the same
-      // time.
-      // And to make sure that a printer isn't locked by a process we close the
-      // page before running the next test.
-      for (const [browserName, page] of pages) {
-        await waitForScripting(page);
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await waitForScripting(page);
 
-        await clearInput(page, getSelector("47R"));
-        await page.evaluate(_ => {
-          window.document.activeElement.blur();
-        });
-        await page.waitForFunction(`${getQuerySelector("47R")}.value === ""`);
+          await clearInput(page, getSelector("47R"));
+          await page.evaluate(_ => {
+            window.document.activeElement.blur();
+          });
+          await page.waitForFunction(`${getQuerySelector("47R")}.value === ""`);
 
-        const text = await actAndWaitForInput(
-          page,
-          getSelector("47R"),
-          async () => {
-            await page.click("#print");
-          }
-        );
-        expect(text).withContext(`In ${browserName}`).toEqual("WillPrint");
-        await page.keyboard.press("Escape");
+          const text = await actAndWaitForInput(
+            page,
+            getSelector("47R"),
+            async () => {
+              await page.click("#print");
+            }
+          );
+          expect(text).withContext(`In ${browserName}`).toEqual("WillPrint");
 
-        await page.waitForFunction(
-          `${getQuerySelector("50R")}.value === "DidPrint"`
-        );
-        await closeSinglePage(page);
-      }
+          await page.waitForFunction(
+            `${getQuerySelector("50R")}.value === "DidPrint"`
+          );
+          await closeSinglePage(page);
+        })
+      );
     });
   });
 
@@ -1494,7 +1496,7 @@ describe("Interaction", () => {
       await closePages(pages);
     });
 
-    it("must check that a values is correctly updated on a field and its siblings", async () => {
+    it("must check that a value is correctly updated on a field and its siblings", async () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           await waitForScripting(page);
@@ -1502,28 +1504,17 @@ describe("Interaction", () => {
           await clearInput(page, getSelector("39R"));
           await page.type(getSelector("39R"), "123", { delay: 10 });
 
-          const prevTotal = await page.$eval(
-            getSelector("43R"),
-            el => el.value
-          );
-
           await clearInput(page, getSelector("42R"));
           await page.type(getSelector("42R"), "456", { delay: 10 });
 
           await page.click(getSelector("45R"));
 
           await page.waitForFunction(
-            `${getQuerySelector("43R")}.value !== "${prevTotal}"`
+            `${getQuerySelector("43R")}.value === "579.00"`
           );
           await page.waitForFunction(
-            `${getQuerySelector("46R")}.value !== "${prevTotal}"`
+            `${getQuerySelector("46R")}.value === "579.00"`
           );
-
-          let total = await page.$eval(getSelector("43R"), el => el.value);
-          expect(total).withContext(`In ${browserName}`).toEqual("579.00");
-
-          total = await page.$eval(getSelector("46R"), el => el.value);
-          expect(total).withContext(`In ${browserName}`).toEqual("579.00");
         })
       );
     });
@@ -1753,7 +1744,6 @@ describe("Interaction", () => {
 
   describe("in autoprint.pdf", () => {
     let pages;
-    const printHandles = new Map();
 
     beforeAll(async () => {
       // Autoprinting is triggered by the `Open` event, which is one of the
@@ -1764,43 +1754,28 @@ describe("Interaction", () => {
       // it is usually very fast and therefore activating the selector check
       // too late will cause it to never resolve because printing is already
       // done (and the printed page div removed) before we even get to it.
-      pages = await loadAndWait(
-        "autoprint.pdf",
-        "",
-        null /* zoom = */,
-        async page => {
-          printHandles.set(
-            page,
-            page.evaluateHandle(() => [
-              new Promise(resolve => {
-                globalThis.printResolve = resolve;
-              }),
-            ])
+      pages = await loadAndWait("autoprint.pdf", "", null /* zoom = */, {
+        earlySetup: () => {
+          // No need to trigger the print dialog.
+          window.print = () => {};
+        },
+        appSetup: app => {
+          app._testPrintResolver = Promise.withResolvers();
+        },
+        eventBusSetup: eventBus => {
+          eventBus.on(
+            "print",
+            () => {
+              window.PDFViewerApplication._testPrintResolver.resolve();
+            },
+            { once: true }
           );
-          await page.waitForFunction(() => {
-            // We don't really need to print the document.
-            window.print = () => {};
-            if (!window.PDFViewerApplication?.eventBus) {
-              return false;
-            }
-            window.PDFViewerApplication.eventBus.on(
-              "print",
-              () => {
-                const resolve = globalThis.printResolve;
-                delete globalThis.printResolve;
-                resolve();
-              },
-              { once: true }
-            );
-            return true;
-          });
-        }
-      );
+        },
+      });
     });
 
     afterAll(async () => {
       await closePages(pages);
-      printHandles.clear();
     });
 
     it("must check if printing is triggered when the document is open", async () => {
@@ -1808,7 +1783,11 @@ describe("Interaction", () => {
         pages.map(async ([browserName, page]) => {
           await waitForScripting(page);
 
-          await awaitPromise(await printHandles.get(page));
+          await awaitPromise(
+            await page.evaluateHandle(() => [
+              window.PDFViewerApplication._testPrintResolver.promise,
+            ])
+          );
         })
       );
     });

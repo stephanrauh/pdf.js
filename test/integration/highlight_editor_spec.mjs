@@ -910,20 +910,13 @@ describe("Highlight Editor", () => {
         "tracemonkey.pdf",
         `.page[data-page-number = "1"] .endOfContent`,
         null,
-        async page => {
-          await page.waitForFunction(async () => {
-            await window.PDFViewerApplication.initializedPromise;
-            return true;
-          });
-          await page.evaluate(() => {
+        {
+          eventBusSetup: eventBus => {
             window.editingEvents = [];
-            window.PDFViewerApplication.eventBus.on(
-              "annotationeditorstateschanged",
-              ({ details }) => {
-                window.editingEvents.push(details);
-              }
-            );
-          });
+            eventBus.on("annotationeditorstateschanged", ({ details }) => {
+              window.editingEvents.push(details);
+            });
+          },
         },
         { highlightEditorColors: "red=#AB0000" }
       );
@@ -997,7 +990,13 @@ describe("Highlight Editor", () => {
         "tracemonkey.pdf",
         ".annotationEditorLayer",
         null,
-        null,
+        {
+          eventBusSetup: eventBus => {
+            eventBus.on("annotationeditoruimanager", ({ uiManager }) => {
+              window.uiManager = uiManager;
+            });
+          },
+        },
         {
           highlightEditorColors: "red=#AB0000",
           supportsCaretBrowsingMode: true,

@@ -238,17 +238,16 @@ class PDFDocumentProperties {
     }
   }
 
-  async #parseFileSize(fileSize = 0) {
-    const kb = fileSize / 1024,
+  #getL10nStr(id, args = null) {
+    return this.l10n.get(`pdfjs-document-properties-${id}`, args);
+  }
+
+  async #parseFileSize(b = 0) {
+    const kb = b / 1024,
       mb = kb / 1024;
-    if (!kb) {
-      return undefined;
-    }
-    return this.l10n.get(`pdfjs-document-properties-${mb >= 1 ? "mb" : "kb"}`, {
-      size_mb: mb >= 1 && (+mb.toPrecision(3)).toLocaleString(),
-      size_kb: mb < 1 && (+kb.toPrecision(3)).toLocaleString(),
-      size_b: fileSize.toLocaleString(),
-    });
+    return kb
+      ? this.#getL10nStr(`size-${mb >= 1 ? "mb" : "kb"}`, { mb, kb, b })
+      : undefined;
   }
 
   async #parsePageSize(pageSizeInches, pagesRotation) {
@@ -317,49 +316,30 @@ class PDFDocumentProperties {
 
     const [{ width, height }, unit, name, orientation] = await Promise.all([
       this._isNonMetricLocale ? sizeInches : sizeMillimeters,
-      this.l10n.get(
-        `pdfjs-document-properties-page-size-unit-${
-          this._isNonMetricLocale ? "inches" : "millimeters"
-        }`
+      this.#getL10nStr(
+        `page-size-unit-${this._isNonMetricLocale ? "inches" : "millimeters"}`
       ),
-      rawName &&
-        this.l10n.get(`pdfjs-document-properties-page-size-name-${rawName}`),
-      this.l10n.get(
-        `pdfjs-document-properties-page-size-orientation-${
-          isPortrait ? "portrait" : "landscape"
-        }`
+      rawName && this.#getL10nStr(`page-size-name-${rawName}`),
+      this.#getL10nStr(
+        `page-size-orientation-${isPortrait ? "portrait" : "landscape"}`
       ),
     ]);
 
-    return this.l10n.get(
-      `pdfjs-document-properties-page-size-dimension-${
-        name ? "name-" : ""
-      }string`,
-      {
-        width: width.toLocaleString(),
-        height: height.toLocaleString(),
-        unit,
-        name,
-        orientation,
-      }
+    return this.#getL10nStr(
+      `page-size-dimension-${name ? "name-" : ""}string`,
+      { width, height, unit, name, orientation }
     );
   }
 
   async #parseDate(inputDate) {
-    const dateObject = PDFDateString.toDateObject(inputDate);
-    if (!dateObject) {
-      return undefined;
-    }
-    return this.l10n.get("pdfjs-document-properties-date-string", {
-      date: dateObject.toLocaleDateString(),
-      time: dateObject.toLocaleTimeString(),
-    });
+    const dateObj = PDFDateString.toDateObject(inputDate);
+    return dateObj
+      ? this.#getL10nStr("date-time-string", { dateObj })
+      : undefined;
   }
 
   #parseLinearization(isLinearized) {
-    return this.l10n.get(
-      `pdfjs-document-properties-linearized-${isLinearized ? "yes" : "no"}`
-    );
+    return this.#getL10nStr(`linearized-${isLinearized ? "yes" : "no"}`);
   }
 }
 
