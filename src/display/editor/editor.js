@@ -1404,6 +1404,7 @@ class AnnotationEditor {
       parent,
       id: parent.getNextId(),
       uiManager,
+      eventBus: parent.eventBus,
     });
     editor.rotation = data.rotation;
     editor.#accessibilityData = data.accessibilityData;
