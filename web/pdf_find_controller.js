@@ -844,7 +844,7 @@ class PDFFindController {
     let isUnicode = false;
     // #2339 modified by ngx-extended-pdf-viewer
     if (findMultiple && typeof query === "string") {
-      query = query.split(/\s+/);
+      query = query.trim().split(/\s+/);
     }
     if (matchRegExp && typeof query === "string") {
       query = new RegExp(query, caseSensitive ? "g" : "gi");
