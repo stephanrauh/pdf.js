@@ -39,6 +39,8 @@ class InkEditor extends AnnotationEditor {
 
   #boundCanvasPointerdown = this.canvasPointerdown.bind(this);
 
+  #boundCanvasTouchMove = this.canvasTouchMove.bind(this);
+
   #canvasContextMenuTimeoutId = null;
 
   #currentPath2D = new Path2D();
@@ -67,6 +69,8 @@ class InkEditor extends AnnotationEditor {
 
   static _editorType = AnnotationEditorType.INK;
 
+  static _currentPointerType = null;
+
   constructor(params) {
     super({ ...params, name: "inkEditor" });
     this.color = params.color || null;
@@ -81,6 +85,33 @@ class InkEditor extends AnnotationEditor {
     this.x = 0;
     this.y = 0;
     this._willKeepAspectRatio = true;
+    this.editorPointerType = null;
+    if (InkEditor._currentPointerType === null) {
+      InkEditor._currentPointerType = ""; // add listener only once
+      window.addEventListener("pointerdown", this.windowPointerDown);
+    }
+  }
+
+  destroy() {
+    super.destroy();
+    if (InkEditor._currentPointerType !== null) {
+      window.removeEventListener("pointerdown", this.windowPointerDown);
+      InkEditor._currentPointerType = null;  // remove listener only once
+    }
+  }
+
+  windowPointerDown(event) {
+    InkEditor._currentPointerType = event.pointerType;
+    return true; // do not prevent default
+  }
+
+  initializePointerType() {
+    this.editorPointerType = InkEditor._currentPointerType;
+  }
+
+  resetPointerType(pointerType) {
+    this.editorPointerType = null;
+
   }
 
   /** @inheritdoc */
@@ -325,6 +356,7 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.enableEditMode();
+    this.initializePointerType();
     this._isDraggable = false;
     this.canvas.addEventListener("pointerdown", this.#boundCanvasPointerdown, {
       signal: this._uiManager._signal,
@@ -338,6 +370,7 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.disableEditMode();
+    this.resetPointerType();
     this._isDraggable = !this.isEmpty();
     this.div.classList.remove("editing");
 
@@ -407,6 +440,10 @@ class InkEditor extends AnnotationEditor {
     });
     this.canvas.addEventListener("pointerup", this.#boundCanvasPointerup, {
       signal,
+    });
+    this.canvas.addEventListener("touchmove", this.#boundCanvasTouchMove, {
+      signal: this._uiManager._signal,
+      passive: false,
     });
     this.canvas.removeEventListener(
       "pointerdown",
@@ -698,7 +735,7 @@ class InkEditor extends AnnotationEditor {
    * @param {PointerEvent} event
    */
   canvasPointerdown(event) {
-    if (event.button !== 0 || !this.isInEditMode() || this.#disableEditing) {
+    if (event.button !== 0 || !this.isInEditMode() || this.#disableEditing || this.editorPointerType !== event.pointerType) {
       return;
     }
 
@@ -743,6 +780,14 @@ class InkEditor extends AnnotationEditor {
     this.#endDrawing(event);
   }
 
+  canvasTouchMove(event) {
+    if (!this.isInEditMode() || this.#disableEditing || this.editorPointerType !== InkEditor._currentPointerType) {
+      return;
+    }
+    // disable default scroll behaviour on touch move
+    event.preventDefault();
+  }
+
   /**
    * End the drawing.
    * @param {PointerEvent} event
@@ -757,6 +802,7 @@ class InkEditor extends AnnotationEditor {
       this.#boundCanvasPointermove
     );
     this.canvas.removeEventListener("pointerup", this.#boundCanvasPointerup);
+    this.canvas.removeEventListener("touchmove", this.#boundCanvasTouchMove);
     this.canvas.addEventListener("pointerdown", this.#boundCanvasPointerdown, {
       signal: this._uiManager._signal,
     });
