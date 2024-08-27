@@ -420,7 +420,7 @@ class TextLayer {
           transform = `scaleX(${(canvasWidth * this.#scale) / width}) ${transform}`;
         }
       } catch (fingerprintIsBlockedException) {} // #707 modified by ngx-extended-pdf-viewer
- 
+
     }
     if (properties.angle !== 0) {
       transform = `rotate(${properties.angle}deg) ${transform}`;
@@ -462,6 +462,9 @@ class TextLayer {
       const canvas = document.createElement("canvas");
       canvas.className = "hiddenCanvasElement";
       canvas.lang = lang;
+      // #2490 modified by ngx-extended-pdf-viewer
+      canvas.width = canvas.height = 0;
+      // #2490 end of modification by ngx-extended-pdf-viewer
       document.body.append(canvas);
       canvasContext = canvas.getContext("2d", {
         alpha: false,
