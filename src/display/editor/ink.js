@@ -24,6 +24,32 @@ import { InkAnnotationElement } from "../annotation_layer.js";
 import { noContextMenu } from "../display_utils.js";
 import { opacityToHex } from "./tools.js";
 
+// #2527 modified by ngx-extended-pdf-viewer
+class PointerType {
+  static current = null;
+
+  constructor(editor) {
+    if (PointerType.current === null) {
+      PointerType.current = "";
+      window.addEventListener("pointerdown", this.windowPointerDown, true);
+    }
+  }
+
+  destroy() {
+    if (PointerType.current !== null) {
+      window.removeEventListener("pointerdown", this.windowPointerDown, true);
+      PointerType.current = null;
+    }
+  }
+
+  windowPointerDown(event) {
+    PointerType.current = event.pointerType;
+    return true;
+  }
+}
+const pointerType = new PointerType();
+// #2527 end of modification by ngx-extended-pdf-viewer
+
 /**
  * Basic draw editor in order to generate an Ink annotation.
  */
@@ -66,8 +92,6 @@ class InkEditor extends AnnotationEditor {
 
   static _editorType = AnnotationEditorType.INK;
 
-  static _currentPointerType = null;
-
   constructor(params) {
     super({ ...params, name: "inkEditor" });
     this.color = params.color || null;
@@ -83,32 +107,17 @@ class InkEditor extends AnnotationEditor {
     this.y = 0;
     this._willKeepAspectRatio = true;
     this.editorPointerType = null;
-    if (InkEditor._currentPointerType === null) {
-      InkEditor._currentPointerType = '';  // add listener only once
-      window.addEventListener('pointerdown', this.windowPointerDown);
-    }
   }
 
-  destroy() {
-    super.destroy();
-    if (InkEditor._currentPointerType !== null) {
-      window.removeEventListener('pointerdown', this.windowPointerDown);
-      InkEditor._currentPointerType = null;  // remove listener only once
-    }
-  }
-
-  windowPointerDown(event) {
-    InkEditor._currentPointerType = event.pointerType;
-    return true;  // do not prevent default
-  }
-
+  // #2527 modified by ngx-extended-pdf-viewer
   initializePointerType() {
-    this.editorPointerType = InkEditor._currentPointerType;
+    this.editorPointerType = PointerType.current;
   }
 
-  resetPointerType(pointerType) {
+  resetPointerType() {
     this.editorPointerType = null;
   }
+  // #2527 end of modification by ngx-extended-pdf-viewer
 
   /** @inheritdoc */
   static initialize(l10n, uiManager) {
@@ -352,7 +361,9 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.enableEditMode();
-    this.initializePointerType();
+    // #2527 modified by ngx-extended-pdf-viewer
+    setTimeout(() => this.initializePointerType());
+    // #2527 end of modification by ngx-extended-pdf-viewer
     this._isDraggable = false;
     this.#addPointerdownListener();
   }
@@ -364,7 +375,9 @@ class InkEditor extends AnnotationEditor {
     }
 
     super.disableEditMode();
+    // #2527 modified by ngx-extended-pdf-viewer
     this.resetPointerType();
+    // #2527 end of modification by ngx-extended-pdf-viewer
     this._isDraggable = !this.isEmpty();
     this.div.classList.remove("editing");
     this.#removePointerdownListener();
@@ -765,9 +778,11 @@ class InkEditor extends AnnotationEditor {
     event.preventDefault();
 
     if (!this.div.contains(document.activeElement)) {
+      // #1802 modified by ngx-extended-pdf-viewer
       this.div.focus({
         preventScroll: true /* See issue #17327 */,
       });
+      // #1802 end of modification by ngx-extended-pdf-viewer
     }
 
     this.#startDrawing(event.offsetX, event.offsetY);
@@ -800,7 +815,9 @@ class InkEditor extends AnnotationEditor {
   }
 
   canvasTouchMove(event) {
-    if (!this.isInEditMode() || this.#disableEditing || this.editorPointerType !== InkEditor._currentPointerType) {
+    // #2527 modified by ngx-extended-pdf-viewer
+    if (!this.isInEditMode() || this.#disableEditing || this.editorPointerType !== PointerType.current) {
+      // #2527 end of modification by ngx-extended-pdf-viewer
       return;
     }
     // disable default scroll behaviour on touch move
@@ -902,12 +919,23 @@ class InkEditor extends AnnotationEditor {
       // This editor was created in using copy (ctrl+c).
       const [parentWidth, parentHeight] = this.parentDimensions;
       this.setAspectRatio(this.width * parentWidth, this.height * parentHeight);
+      // #1825 modified by ngx-extended-pdf-viewer
+      if (this.doNotMove) {
+        this.setAt(
+          baseX * parentWidth,
+          baseY * parentHeight,
+          0,
+          0
+        );
+      } else {
       this.setAt(
         baseX * parentWidth,
         baseY * parentHeight,
         this.width * parentWidth,
         this.height * parentHeight
       );
+    }
+    // #1825 end of modification by ngx-extended-pdf-viewer
 
       this.#isCanvasInitialized = true;
       this.#setCanvasDims();
