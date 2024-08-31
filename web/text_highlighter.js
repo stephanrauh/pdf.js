@@ -350,7 +350,7 @@ class TextHighlighter {
       pageMatches,
       pageMatchesLength,
       "highlight",
-      findController.state?.highlightMatches,
+      findController.state?.highlightAll,
       pageIdx === findController.selected.pageIdx,
       findController.selected.matchIdx
     );
