@@ -36,6 +36,15 @@ function parseUrlOrPath(sourceUrl) {
   return new URL(url.pathToFileURL(sourceUrl));
 }
 
+function createRequest(url, headers, callback) {
+  if (url.protocol === "http:") {
+    const http = NodePackages.get("http");
+    return http.request(url, { headers }, callback);
+  }
+  const https = NodePackages.get("https");
+  return https.request(url, { headers }, callback);
+}
+
 class PDFNodeStream {
   constructor(source) {
     this.source = source;
@@ -314,22 +323,11 @@ class PDFNodeStreamFullReader extends BaseFullReader {
       this._filename = extractFilenameFromHeader(getResponseHeader);
     };
 
-    this._request = null;
-    if (this._url.protocol === "http:") {
-      const http = NodePackages.get("http");
-      this._request = http.request(
-        this._url,
-        { headers: stream.httpHeaders },
-        handleResponse
-      );
-    } else {
-      const https = NodePackages.get("https");
-      this._request = https.request(
-        this._url,
-        { headers: stream.httpHeaders },
-        handleResponse
-      );
-    }
+    this._request = createRequest(
+      this._url,
+      stream.httpHeaders,
+      handleResponse
+    );
 
     this._request.on("error", reason => {
       this._storedError = reason;
@@ -365,22 +363,7 @@ class PDFNodeStreamRangeReader extends BaseRangeReader {
       this._setReadableStream(response);
     };
 
-    this._request = null;
-    if (this._url.protocol === "http:") {
-      const http = NodePackages.get("http");
-      this._request = http.request(
-        this._url,
-        { headers: this._httpHeaders },
-        handleResponse
-      );
-    } else {
-      const https = NodePackages.get("https");
-      this._request = https.request(
-        this._url,
-        { headers: this._httpHeaders },
-        handleResponse
-      );
-    }
+    this._request = createRequest(this._url, this._httpHeaders, handleResponse);
 
     this._request.on("error", reason => {
       this._storedError = reason;
