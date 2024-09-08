@@ -544,7 +544,7 @@ class PDFViewer {
               showCover: true,
               size: "fixed",
             });
-            this.pageFlip.loadFromHTML(document.querySelectorAll(".page"));
+            this.pageFlip.loadFromHTML(this.container.querySelectorAll(".page"));
             // triggered by page turning
             this.pageFlip.on("flip", e => {
               if (this._currentPageNumber !== e.data + 1) {
