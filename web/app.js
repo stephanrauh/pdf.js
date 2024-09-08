@@ -3088,7 +3088,25 @@ function onKeyDown(evt) {
     switch (evt.keyCode) {
       case 70: // f
         if (!this.supportsIntegratedFind && !evt.shiftKey) {
-          this.findBar?.open();
+          // #2548 modified by ngx-extended-pdf-viewer
+          if (AppOptions.get("textLayerMode") !== TextLayerMode.DISABLE) {
+            let findButtonVisible = false;
+            const primaryViewFind = this.pdfViewer.viewer.closest("#outerContainer")?.querySelector("#primaryViewFind");
+            if (primaryViewFind) {
+              findButtonVisible ||= !(primaryViewFind?.classList.contains("dummy-component"));
+            }
+            const secondaryToolBar = this.pdfViewer.viewer.closest("#outerContainer")?.querySelector("#secondaryToolbarToggle");
+            if (!secondaryToolBar.hidden) {
+              const secondaryViewFind = this.pdfViewer.viewer.closest("#outerContainer")?.querySelector("#secondaryViewFind");
+              if (secondaryViewFind) {
+                findButtonVisible ||=  !(secondaryViewFind?.classList.contains("dummy-component"));
+              }
+            }
+            if (findButtonVisible) {
+              this.findBar?.open();
+            }
+          }
+          // #2548 end of modification by ngx-extended-pdf-viewer
           handled = true;
         }
         break;
