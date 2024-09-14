@@ -120,6 +120,20 @@ class HighlightEditor extends AnnotationEditor {
       this.#addToDrawLayer();
       this.rotate(this.rotation);
     }
+    // #2256 / 2556 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "added",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: {
+        color: this.color,
+        thickness: this.#thickness,
+        isFreeHighlight: this.#isFreeHighlight,
+        text: this.#text,
+      },
+    });
+    // #2256 / 2556 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */
