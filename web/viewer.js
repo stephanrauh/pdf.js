@@ -75,28 +75,28 @@ function getViewerConfiguration() {
       customScaleOption: document.getElementById("customScaleOption"),
       previous: document.getElementById("previous"),
       next: document.getElementById("next"),
-      zoomIn: document.getElementById("zoomIn"),
-      zoomOut: document.getElementById("zoomOut"),
-      print: document.getElementById("print"),
-      editorFreeTextButton: document.getElementById("editorFreeText"),
+      zoomIn: document.getElementById("primaryZoomIn"), // modified by ngx-extended-pdf-viewer
+      zoomOut: document.getElementById("primaryZoomOut"), // modified by ngx-extended-pdf-viewer
+      print: document.getElementById("printButton"),
+      editorFreeTextButton: document.getElementById("primaryEditorFreeText"), // modified by ngx-extended-pdf-viewer
       editorFreeTextParamsToolbar: document.getElementById(
         "editorFreeTextParamsToolbar"
       ),
-      editorHighlightButton: document.getElementById("editorHighlight"),
+      editorHighlightButton: document.getElementById("primaryEditorHighlight"), // modified by ngx-extended-pdf-viewer
       editorHighlightParamsToolbar: document.getElementById(
         "editorHighlightParamsToolbar"
       ),
       editorHighlightColorPicker: document.getElementById(
         "editorHighlightColorPicker"
       ),
-      editorInkButton: document.getElementById("editorInk"),
+      editorInkButton: document.getElementById("primaryEditorInk"),  // modified by ngx-extended-pdf-viewer
       editorInkParamsToolbar: document.getElementById("editorInkParamsToolbar"),
-      editorStampButton: document.getElementById("editorStamp"),
+      editorStampButton: document.getElementById("primaryEditorStamp"),  // modified by ngx-extended-pdf-viewer
       presentationModeButton: document.getElementById("presentationMode"), // #1807 modified by ngx-extended-pdf-viewer
       editorStampParamsToolbar: document.getElementById(
         "editorStampParamsToolbar"
       ),
-      download: document.getElementById("download"),
+      download: document.getElementById("downloadButton"),
     },
     secondaryToolbar: {
       toolbar: document.getElementById("secondaryToolbar"),
@@ -134,7 +134,7 @@ function getViewerConfiguration() {
       // Divs (and sidebar button)
       outerContainer: document.getElementById("outerContainer"),
       sidebarContainer: document.getElementById("sidebarContainer"),
-      toggleButton: document.getElementById("sidebarToggle"),
+      toggleButton: document.getElementById("primarySidebarToggle"), // modified by ngx-extended-pdf-viewer
       resizer: document.getElementById("sidebarResizer"),
       // Buttons
       thumbnailButton: document.getElementById("viewThumbnail"),
@@ -151,7 +151,7 @@ function getViewerConfiguration() {
     },
     findBar: {
       bar: document.getElementById("findbar"),
-      toggleButton: document.getElementById("viewFind"),
+      toggleButton: document.getElementById("primaryViewFind"), // modified by ngx-extended-pdf-viewer
       findField: document.getElementById("findInput"),
       highlightAllCheckbox: document.getElementById("findHighlightAll"),
       caseSensitiveCheckbox: document.getElementById("findMatchCase"),
@@ -161,8 +161,8 @@ function getViewerConfiguration() {
       entireWordCheckbox: document.getElementById("findEntireWord"),
       findMsg: document.getElementById("findMsg"),
       findResultsCount: document.getElementById("findResultsCount"),
-      findPreviousButton: document.getElementById("findPrevious"),
-      findNextButton: document.getElementById("findNext"),
+      findPreviousButton: document.getElementById("findPreviousButton") ?? document.getElementById("findPrevious"),
+      findNextButton: document.getElementById("findNextButton") ?? document.getElementById("findNext"),
     },
     passwordOverlay: {
       dialog: document.getElementById("passwordDialog"),

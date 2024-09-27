@@ -15,6 +15,7 @@
 
 import { AbortException, assert, MissingPDFException } from "../shared/util.js";
 import {
+  createHeaders,
   extractFilenameFromHeader,
   validateRangeRequestCapabilities,
 } from "./network_utils.js";
@@ -55,7 +56,7 @@ class PDFNodeStream {
     // end of modification by ngx-extended-pdf-viewer #864
     // Check if url refers to filesystem.
     this.isFsUrl = this.url.protocol === "file:";
-    this.httpHeaders = (this.isHttp && source.httpHeaders) || {};
+    this.headers = createHeaders(this.isHttp, source.httpHeaders);
 
     this._fullRequestReader = null;
     this._rangeRequestReaders = [];
@@ -293,6 +294,9 @@ class PDFNodeStreamFullReader extends BaseFullReader {
   constructor(stream) {
     super(stream);
 
+    // Node.js requires the `headers` to be a regular Object.
+    const headers = Object.fromEntries(stream.headers);
+
     const handleResponse = response => {
       if (response.statusCode === 404) {
         const error = new MissingPDFException(`Missing PDF "${this._url}".`);
@@ -303,14 +307,11 @@ class PDFNodeStreamFullReader extends BaseFullReader {
       this._headersCapability.resolve();
       this._setReadableStream(response);
 
-      // Make sure that headers name are in lower case, as mentioned
-      // here: https://nodejs.org/api/http.html#http_message_headers.
-      const getResponseHeader = name =>
-        this._readableStream.headers[name.toLowerCase()];
+      const responseHeaders = new Headers(this._readableStream.headers);
 
       const { allowRangeRequests, suggestedLength } =
         validateRangeRequestCapabilities({
-          getResponseHeader,
+          responseHeaders,
           isHttp: stream.isHttp,
           rangeChunkSize: this._rangeChunkSize,
           disableRange: this._disableRange,
@@ -320,14 +321,10 @@ class PDFNodeStreamFullReader extends BaseFullReader {
       // Setting right content length.
       this._contentLength = suggestedLength || this._contentLength;
 
-      this._filename = extractFilenameFromHeader(getResponseHeader);
+      this._filename = extractFilenameFromHeader(responseHeaders);
     };
 
-    this._request = createRequest(
-      this._url,
-      stream.httpHeaders,
-      handleResponse
-    );
+    this._request = createRequest(this._url, headers, handleResponse);
 
     this._request.on("error", reason => {
       this._storedError = reason;
@@ -344,15 +341,9 @@ class PDFNodeStreamRangeReader extends BaseRangeReader {
   constructor(stream, start, end) {
     super(stream);
 
-    this._httpHeaders = {};
-    for (const property in stream.httpHeaders) {
-      const value = stream.httpHeaders[property];
-      if (value === undefined) {
-        continue;
-      }
-      this._httpHeaders[property] = value;
-    }
-    this._httpHeaders.Range = `bytes=${start}-${end - 1}`;
+    // Node.js requires the `headers` to be a regular Object.
+    const headers = Object.fromEntries(stream.headers);
+    headers.Range = `bytes=${start}-${end - 1}`;
 
     const handleResponse = response => {
       if (response.statusCode === 404) {
@@ -363,7 +354,7 @@ class PDFNodeStreamRangeReader extends BaseRangeReader {
       this._setReadableStream(response);
     };
 
-    this._request = createRequest(this._url, this._httpHeaders, handleResponse);
+    this._request = createRequest(this._url, headers, handleResponse);
 
     this._request.on("error", reason => {
       this._storedError = reason;

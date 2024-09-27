@@ -26,6 +26,7 @@
 import {
   AbortException,
   AnnotationMode,
+  OutputScale,
   PixelsPerInch,
   RenderingCancelledException,
   setLayerDimensions,
@@ -33,9 +34,9 @@ import {
 } from "pdfjs-lib";
 import {
   approximateFraction,
+  calcRound,
   DEFAULT_SCALE,
   floorToDivide,
-  OutputScale,
   RenderingStates,
   TextLayerMode,
 } from "./ui_utils.js";
@@ -131,6 +132,10 @@ class PDFPageView {
 
   #previousRotation = null;
 
+  #scaleRoundX = 1;
+
+  #scaleRoundY = 1;
+
   #renderError = null;
 
   #renderingState = RenderingStates.INITIAL;
@@ -220,6 +225,13 @@ class PDFPageView {
         "--scale-factor",
         this.scale * PixelsPerInch.PDF_TO_CSS_UNITS
       );
+
+      if (this.pageColors?.background) {
+        container?.style.setProperty(
+          "--page-bg-color",
+          this.pageColors.background
+        );
+      }
 
       const { optionalContentConfigPromise } = options;
       if (optionalContentConfigPromise) {
@@ -389,7 +401,11 @@ class PDFPageView {
   async #renderAnnotationLayer() {
     let error = null;
     try {
-      await this.annotationLayer.render(this.viewport, "display");
+      await this.annotationLayer.render(
+        this.viewport,
+        { structTreeLayer: this.structTreeLayer },
+        "display"
+      );
     } catch (ex) {
       console.error(`#renderAnnotationLayer: "${ex}".`);
       error = ex;
@@ -474,16 +490,15 @@ class PDFPageView {
     if (!this.textLayer) {
       return;
     }
-    this.structTreeLayer ||= new StructTreeLayerBuilder();
 
-    const tree = await (!this.structTreeLayer.renderingDone
-      ? this.pdfPage.getStructTree()
-      : null);
-    const treeDom = this.structTreeLayer?.render(tree);
+    const treeDom = await this.structTreeLayer?.render();
     if (treeDom) {
-      // Pause translation when inserting the structTree in the DOM.
       this.l10n.pause();
-      this.canvas?.append(treeDom);
+      this.structTreeLayer?.addElementsToTextLayer();
+      if (this.canvas && treeDom.parentNode !== this.canvas) {
+        // Pause translation when inserting the structTree in the DOM.
+        this.canvas.append(treeDom);
+      }
       this.l10n.resume();
     }
     this.structTreeLayer?.show();
@@ -766,9 +781,6 @@ class PDFPageView {
       this.textLayer.cancel();
       this.textLayer = null;
     }
-    if (this.structTreeLayer && !this.textLayer) {
-      this.structTreeLayer = null;
-    }
     if (
       this.annotationLayer &&
       (!keepAnnotationLayer || !this.annotationLayer.div)
@@ -776,6 +788,9 @@ class PDFPageView {
       this.annotationLayer.cancel();
       this.annotationLayer = null;
       this._annotationCanvasMap = null;
+    }
+    if (this.structTreeLayer && !this.textLayer) {
+      this.structTreeLayer = null;
     }
     if (
       this.annotationEditorLayer &&
@@ -1043,23 +1058,33 @@ class PDFPageView {
     const sfy = approximateFraction(outputScale.sy);
 
     // modified by ngx-extended-pdf-viewer #387, #1095
-    width = floorToDivide(width * outputScale.sx, sfx[0]);
-    height = floorToDivide(height * outputScale.sy, sfy[0]);
-    const divisor = await MaxCanvasSize.reduceToMaxCanvasSize(width, height);
+    let canvasWidth = floorToDivide(width * outputScale.sx, sfx[0]);
+    let canvasHeight = floorToDivide(height * outputScale.sy, sfy[0]);
+    const divisor = await MaxCanvasSize.reduceToMaxCanvasSize(canvasWidth, canvasHeight);
     if (divisor > 1) {
-      viewport.width /= divisor;
-      viewport.width *= 0.95; // add a small safety margin
-      viewport.height /= divisor;
-      viewport.width *= 0.95; // add a small safety margin
+      canvasWidth /= divisor;
+      canvasWidth *= 0.95; // add a small safety margin
+      canvasHeight /= divisor;
+      canvasHeight *= 0.95; // add a small safety margin
       const reduction = Math.round((divisor / 0.95 - 1) * 100);
       warn(`Page ${this.id}: Reduced the maximum resolution by ${reduction}% because the browser can't render larger canvases.`);
     }
+    canvas.width = canvasWidth;
+    canvas.height = canvasHeight;
     // end of modification
-    canvas.width = floorToDivide(viewport.width * outputScale.sx, sfx[0]);
-    canvas.height = floorToDivide(viewport.height * outputScale.sy, sfy[0]);
-    const { style } = canvas;
-    style.width = floorToDivide(viewport.width, sfx[1]) + "px";
-    style.height = floorToDivide(viewport.height, sfy[1]) + "px";
+    const pageWidth = floorToDivide(calcRound(width), sfx[1]);
+    const pageHeight = floorToDivide(calcRound(height), sfy[1]);
+    outputScale.sx = canvasWidth / pageWidth;
+    outputScale.sy = canvasHeight / pageHeight;
+
+    if (this.#scaleRoundX !== sfx[1]) {
+      div.style.setProperty("--scale-round-x", `${sfx[1]}px`);
+      this.#scaleRoundX = sfx[1];
+    }
+    if (this.#scaleRoundY !== sfy[1]) {
+      div.style.setProperty("--scale-round-y", `${sfy[1]}px`);
+      this.#scaleRoundY = sfy[1];
+    }
 
     // Add the viewport so it's known what it was originally drawn with.
     this.#viewportMap.set(canvas, viewport);
@@ -1085,6 +1110,13 @@ class PDFPageView {
       async () => {
         showCanvas?.(true);
         await this.#finishRenderTask(renderTask);
+
+        if (this.textLayer || this.annotationLayer) {
+          this.structTreeLayer ||= new StructTreeLayerBuilder(
+            pdfPage,
+            viewport.rawDims
+          );
+        }
 
         this.#renderTextLayer();
 

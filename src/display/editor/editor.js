@@ -676,11 +676,7 @@ class AnnotationEditor {
       parentScale,
       pageDimensions: [pageWidth, pageHeight],
     } = this;
-    const scaledWidth = pageWidth * parentScale;
-    const scaledHeight = pageHeight * parentScale;
-    return FeatureTest.isCSSRoundSupported
-      ? [Math.round(scaledWidth), Math.round(scaledHeight)]
-      : [scaledWidth, scaledHeight];
+    return [pageWidth * parentScale, pageHeight * parentScale];
   }
 
   /**
@@ -1031,6 +1027,15 @@ class AnnotationEditor {
     // We destroy the alt text but we don't null it because we want to be able
     // to restore it in case the user undoes the deletion.
     this.#altText?.destroy();
+  }
+
+  addContainer(container) {
+    const editToolbarDiv = this._editToolbar?.div;
+    if (editToolbarDiv) {
+      editToolbarDiv.before(container);
+    } else {
+      this.div.append(container);
+    }
   }
 
   getClientDimensions() {
@@ -1409,6 +1414,7 @@ class AnnotationEditor {
       data.rect,
       pageHeight
     );
+
     editor.x = x / pageWidth;
     editor.y = y / pageHeight;
     editor.width = width / pageWidth;
@@ -1816,7 +1822,7 @@ class AnnotationEditor {
   /**
    * Render an annotation in the annotation layer.
    * @param {Object} annotation
-   * @returns {HTMLElement}
+   * @returns {HTMLElement|null}
    */
   renderAnnotationElement(annotation) {
     let content = annotation.container.querySelector(".annotationContent");
@@ -1837,7 +1843,7 @@ class AnnotationEditor {
   resetAnnotationElement(annotation) {
     const { firstChild } = annotation.container;
     if (
-      firstChild.nodeName === "DIV" &&
+      firstChild?.nodeName === "DIV" &&
       firstChild.classList.contains("annotationContent")
     ) {
       firstChild.remove();

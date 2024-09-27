@@ -107,7 +107,7 @@ pdfjs-document-properties-file-size = Розмір файлу:
 # Variables:
 #   $size_kb (Number) - the PDF file size in kilobytes
 #   $size_b (Number) - the PDF file size in bytes
-pdfjs-document-properties-kb = { $size_kb } КБ ({ $size_b } байтів)
+pdfjs-document-properties-kb = { $size_kb } кБ ({ $size_b } байтів)
 # Variables:
 #   $size_mb (Number) - the PDF file size in megabytes
 #   $size_b (Number) - the PDF file size in bytes
@@ -368,6 +368,22 @@ pdfjs-editor-resizer-label-bottom-right = Нижній правий кут – �
 pdfjs-editor-resizer-label-bottom-middle = Внизу посередині – зміна розміру
 pdfjs-editor-resizer-label-bottom-left = Нижній лівий кут – зміна розміру
 pdfjs-editor-resizer-label-middle-left = Ліворуч посередині – зміна розміру
+pdfjs-editor-resizer-top-left =
+    .aria-label = Верхній лівий кут – зміна розміру
+pdfjs-editor-resizer-top-middle =
+    .aria-label = Вгорі посередині – зміна розміру
+pdfjs-editor-resizer-top-right =
+    .aria-label = Верхній правий кут – зміна розміру
+pdfjs-editor-resizer-middle-right =
+    .aria-label = Праворуч посередині – зміна розміру
+pdfjs-editor-resizer-bottom-right =
+    .aria-label = Нижній правий кут – зміна розміру
+pdfjs-editor-resizer-bottom-middle =
+    .aria-label = Внизу посередині – зміна розміру
+pdfjs-editor-resizer-bottom-left =
+    .aria-label = Нижній лівий кут – зміна розміру
+pdfjs-editor-resizer-middle-left =
+    .aria-label = Ліворуч посередині – зміна розміру
 
 ## Color picker
 
@@ -427,3 +443,8 @@ pdfjs-image-alt-text-settings-button-label = Налаштування альте
 pdfjs-editor-alt-text-settings-dialog-label = Налаштування альтернативного тексту зображення
 pdfjs-editor-alt-text-settings-automatic-title = Автоматичний альтернативний текст
 pdfjs-editor-alt-text-settings-create-model-button-label = Автоматично створювати альтернативний текст
+pdfjs-editor-alt-text-settings-delete-model-button = Видалити
+pdfjs-editor-alt-text-settings-download-model-button = Завантажити
+pdfjs-editor-alt-text-settings-downloading-model-button = Завантаження…
+pdfjs-editor-alt-text-settings-editor-title = Редактор альтернативного тексту
+pdfjs-editor-alt-text-settings-close-button = Закрити

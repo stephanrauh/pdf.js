@@ -462,7 +462,7 @@ describe("Interaction", () => {
             page,
             getSelector("47R"),
             async () => {
-              await page.click("#print");
+              await page.click("#printButton");
             }
           );
           expect(text).withContext(`In ${browserName}`).toEqual("WillPrint");
@@ -509,7 +509,7 @@ describe("Interaction", () => {
             page,
             getSelector("47R"),
             async () => {
-              await page.click("#download");
+              await page.click("#downloadButton");
             }
           );
           expect(text).withContext(`In ${browserName}`).toEqual("WillSave");
@@ -1764,7 +1764,7 @@ describe("Interaction", () => {
         },
         eventBusSetup: eventBus => {
           eventBus.on(
-            "print",
+            "afterprint",
             () => {
               window.PDFViewerApplication._testPrintResolver.resolve();
             },
@@ -2463,6 +2463,34 @@ describe("Interaction", () => {
           await page.click(getSelector("25R"));
           await page.waitForFunction(
             `${getQuerySelector("28R")}.value === "12300"`
+          );
+        })
+      );
+    });
+  });
+
+  describe("Correctly format numbers", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("bug1918115.pdf", getSelector("33R"));
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the computed value is correct", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page], i) => {
+          await waitForScripting(page);
+
+          const inputSelector = getSelector("33R");
+          await page.click(inputSelector);
+          await page.type(inputSelector, "7");
+          await page.click(getSelector("34R"));
+          await page.waitForFunction(
+            `${getQuerySelector("35R")}.value === "324,00"`
           );
         })
       );
