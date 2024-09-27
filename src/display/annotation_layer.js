@@ -1165,6 +1165,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
       const storedData = angularData.value ? angularData : formData;
       if (angularData !== formData) {
         storage.setValue(id, { value: angularData.value });
+        storedData.formattedValue = angularData.value;
       }
       // #1737 + #1887 end of modification by ngx-extended-pdf-viewer
       let textContent = storedData.value || "";
@@ -1579,7 +1580,7 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
     });
 
     // #1737 modified by ngx-extended-pdf-viewer
-    window.registerAcroformField(id, element, value ? data.exportValue : false);
+    window.registerAcroformField(id, element, value ? data.exportValue : undefined, undefined, data.fieldValue);
     element.addEventListener("updateFromAngular", newvalue => storage.setValue(id, { value: newvalue.detail }));
     // #1887 end of modification by ngx-extended-pdf-viewer
     if (updateAngularValueNecessary) {
