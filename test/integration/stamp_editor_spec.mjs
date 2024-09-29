@@ -47,6 +47,7 @@ import {
 import { fileURLToPath } from "url";
 import fs from "fs";
 import path from "path";
+import { PNG } from "pngjs";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1122,6 +1123,74 @@ describe("Stamp Editor", () => {
     });
   });
 
+  describe("New alt-text flow (bug 1920515)", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait(
+        "empty.pdf",
+        ".annotationEditorLayer",
+        null,
+        {
+          eventBusSetup: eventBus => {
+            eventBus.on("annotationeditoruimanager", ({ uiManager }) => {
+              window.uiManager = uiManager;
+            });
+          },
+        },
+        {
+          enableAltText: false,
+          enableFakeMLManager: false,
+          enableUpdatedAddImage: true,
+          enableGuessAltText: true,
+        }
+      );
+    });
+
+    afterEach(async () => {
+      for (const [, page] of pages) {
+        if (await isVisible(page, "#newAltTextDialog")) {
+          await page.keyboard.press("Escape");
+          await page.waitForSelector("#newAltTextDisclaimer", {
+            visible: false,
+          });
+        }
+        await page.evaluate(() => {
+          window.uiManager.reset();
+        });
+        // Disable editing mode.
+        await switchToStamp(page, /* disable */ true);
+      }
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the toggle button isn't displayed when there is no AI", async () => {
+      // Run sequentially to avoid clipboard issues.
+      for (const [, page] of pages) {
+        await switchToStamp(page);
+
+        // Add an image.
+        await copyImage(page, "../images/firefox_logo.png", 0);
+        const editorSelector = getEditorSelector(0);
+        await page.waitForSelector(editorSelector);
+        await waitForSerialized(page, 1);
+
+        // Wait for the dialog to be visible.
+        await page.waitForSelector("#newAltTextDialog.noAi", { visible: true });
+
+        // enableFakeMLManager is false, so it means that we don't have ML but
+        // we're using the new flow, hence we don't want to have the toggle
+        // button.
+        await page.waitForSelector("#newAltTextCreateAutomatically", {
+          hidden: true,
+        });
+      }
+    });
+  });
+
   describe("No auto-resize", () => {
     let pages;
 
@@ -1163,6 +1232,51 @@ describe("Stamp Editor", () => {
             const dims = await getDims();
             expect(dims).withContext(`In ${browserName}`).toEqual(initialDims);
           }
+        })
+      );
+    });
+  });
+
+  describe("A stamp musn't be on top of the secondary toolbar", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer", 600);
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that a stamp editor isn't on top of the secondary toolbar", async () => {
+      // Run sequentially to avoid clipboard issues.
+      const editorSelector = getEditorSelector(0);
+
+      for (const [, page] of pages) {
+        await switchToStamp(page);
+
+        await copyImage(page, "../images/red.png", 0);
+
+        await page.waitForSelector(editorSelector);
+        await waitForSerialized(page, 1);
+      }
+
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          const debug = false;
+
+          await page.click("#secondaryToolbarToggleButton");
+          await page.waitForSelector("#secondaryToolbar", { visible: true });
+          const secondary = await page.$("#secondaryToolbar");
+          const png = await secondary.screenshot({
+            type: "png",
+            path: debug ? `foo.png` : "",
+          });
+          const secondaryImage = PNG.sync.read(Buffer.from(png));
+          const buffer = new Uint32Array(secondaryImage.data.buffer);
+          expect(buffer.every(x => x === 0xff0000ff))
+            .withContext(`In ${browserName}`)
+            .toBeFalse();
         })
       );
     });

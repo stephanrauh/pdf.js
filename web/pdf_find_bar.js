@@ -25,9 +25,11 @@ const MATCHES_COUNT_LIMIT = 1000;
  * is done by PDFFindController.
  */
 class PDFFindBar {
+  #mainContainer;
+
   #resizeObserver = new ResizeObserver(this.#resizeObserverCallback.bind(this));
 
-  constructor(options, eventBus) {
+  constructor(options, mainContainer, eventBus) {
     this.opened = false;
 
     this.bar = options.bar;
@@ -47,6 +49,7 @@ class PDFFindBar {
     this.findNextButton = options.findNextButton;
 
     this.eventBus = eventBus;
+    this.#mainContainer = mainContainer;
 
     // Add event listeners to the DOM elements.
     this.toggleButton.addEventListener("click", () => {
@@ -199,7 +202,7 @@ class PDFFindBar {
       //  - The width of the viewer itself changes.
       //  - The width of the findbar changes, by toggling the visibility
       //    (or localization) of find count/status messages.
-      this.#resizeObserver.observe(this.bar.parentNode);
+      this.#resizeObserver.observe(this.#mainContainer);
       this.#resizeObserver.observe(this.bar);
 
       this.opened = true;
@@ -231,7 +234,7 @@ class PDFFindBar {
     }
   }
 
-  #resizeObserverCallback(entries) {
+  #resizeObserverCallback() {
     const { bar } = this;
     // The find bar has an absolute position and thus the browser extends
     // its width to the maximum possible width once the find bar does not fit

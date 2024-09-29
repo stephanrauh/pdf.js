@@ -21,7 +21,7 @@ import {
   DEFAULT_SCALE_VALUE,
   MAX_SCALE,
   MIN_SCALE,
-  toggleCheckedBtn,
+  toggleExpandedBtn,
 } from "./ui_utils.js";
 
 /**
@@ -168,7 +168,18 @@ class Toolbar {
   }
   // #2459 end of modification by ngx-extended-pdf-viewer
 
-  #updateToolbarDensity() {}
+  #updateToolbarDensity({ value }) {
+    let name = "normal";
+    switch (value) {
+      case 1:
+        name = "compact";
+        break;
+      case 2:
+        name = "touch";
+        break;
+    }
+    document.documentElement.setAttribute("data-toolbar-density", name);
+  }
 
   #setAnnotationEditorUIManager(uiManager, parentContainer) {
     const colorPicker = new ColorPicker({ uiManager });
@@ -323,22 +334,22 @@ class Toolbar {
       editorStampParamsToolbar,
     } = this.#opts;
 
-    toggleCheckedBtn(
+    toggleExpandedBtn(
       editorFreeTextButton,
       mode === AnnotationEditorType.FREETEXT,
       editorFreeTextParamsToolbar
     );
-    toggleCheckedBtn(
+    toggleExpandedBtn(
       editorHighlightButton,
       mode === AnnotationEditorType.HIGHLIGHT,
       editorHighlightParamsToolbar
     );
-    toggleCheckedBtn(
+    toggleExpandedBtn(
       editorInkButton,
       mode === AnnotationEditorType.INK,
       editorInkParamsToolbar
     );
-    toggleCheckedBtn(
+    toggleExpandedBtn(
       editorStampButton,
       mode === AnnotationEditorType.STAMP,
       editorStampParamsToolbar

@@ -48,8 +48,6 @@ class FreeTextEditor extends AnnotationEditor {
 
   #fontSize;
 
-  #initialData = null;
-
   static _freeTextDefaultContent = "";
 
   static _internalPadding = 0;
@@ -627,7 +625,7 @@ class FreeTextEditor extends AnnotationEditor {
 
         // position is the position of the first glyph in the annotation
         // and it's relative to its container.
-        const { position } = this.#initialData;
+        const { position } = this._initialData;
         let [tx, ty] = this.getInitialTranslation();
         [tx, ty] = this.pageTranslationToScreen(tx, ty);
         const [pageWidth, pageHeight] = this.pageDimensions;
@@ -810,6 +808,7 @@ class FreeTextEditor extends AnnotationEditor {
           rect,
           rotation,
           id,
+          popupRef,
         },
         textContent,
         textPosition,
@@ -834,6 +833,7 @@ class FreeTextEditor extends AnnotationEditor {
         rotation,
         id,
         deleted: false,
+        popupRef,
       };
     }
     const editor = super.deserialize(data, parent, uiManager);
@@ -841,7 +841,7 @@ class FreeTextEditor extends AnnotationEditor {
     editor.#color = Util.makeHexColor(...data.color);
     editor.#content = FreeTextEditor.#deserializeContent(data.value);
     editor.annotationElementId = data.id || null;
-    editor.#initialData = initialData;
+    editor._initialData = initialData;
 
     return editor;
   }
@@ -853,11 +853,7 @@ class FreeTextEditor extends AnnotationEditor {
     }
 
     if (this.deleted) {
-      return {
-        pageIndex: this.pageIndex,
-        id: this.annotationElementId,
-        deleted: true,
-      };
+      return this.serializeDeleted();
     }
 
     const padding = FreeTextEditor._internalPadding * this.parentScale;
@@ -895,7 +891,7 @@ class FreeTextEditor extends AnnotationEditor {
   }
 
   #hasElementChanged(serialized) {
-    const { value, fontSize, color, pageIndex } = this.#initialData;
+    const { value, fontSize, color, pageIndex } = this._initialData;
 
     return (
       this._hasBeenMoved ||

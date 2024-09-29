@@ -55,8 +55,6 @@ class HighlightEditor extends AnnotationEditor {
 
   #id = null;
 
-  #initialData = null;
-
   #isFreeHighlight = false;
 
   #lastPoint = null;
@@ -819,7 +817,7 @@ class HighlightEditor extends AnnotationEditor {
     let initialData = null;
     if (data instanceof HighlightAnnotationElement) {
       const {
-        data: { quadPoints, rect, rotation, id, color, opacity },
+        data: { quadPoints, rect, rotation, id, color, opacity, popupRef },
         parent: {
           page: { pageNumber },
         },
@@ -835,6 +833,7 @@ class HighlightEditor extends AnnotationEditor {
         rotation,
         id,
         deleted: false,
+        popupRef,
       };
     } else if (data instanceof InkAnnotationElement) {
       const {
@@ -845,6 +844,7 @@ class HighlightEditor extends AnnotationEditor {
           id,
           color,
           borderStyle: { rawWidth: thickness },
+          popupRef,
         },
         parent: {
           page: { pageNumber },
@@ -861,6 +861,7 @@ class HighlightEditor extends AnnotationEditor {
         rotation,
         id,
         deleted: false,
+        popupRef,
       };
     }
 
@@ -873,7 +874,7 @@ class HighlightEditor extends AnnotationEditor {
       editor.#thickness = data.thickness;
     }
     editor.annotationElementId = data.id || null;
-    editor.#initialData = initialData;
+    editor._initialData = initialData;
 
     const [pageWidth, pageHeight] = editor.pageDimensions;
     const [pageX, pageY] = editor.pageTranslation;
@@ -936,11 +937,7 @@ class HighlightEditor extends AnnotationEditor {
     }
 
     if (this.deleted) {
-      return {
-        pageIndex: this.pageIndex,
-        id: this.annotationElementId,
-        deleted: true,
-      };
+      return this.serializeDeleted();
     }
 
     const rect = this.getRect(0, 0);
@@ -968,7 +965,7 @@ class HighlightEditor extends AnnotationEditor {
   }
 
   #hasElementChanged(serialized) {
-    const { color } = this.#initialData;
+    const { color } = this._initialData;
     return serialized.color.some((c, i) => c !== color[i]);
   }
 
