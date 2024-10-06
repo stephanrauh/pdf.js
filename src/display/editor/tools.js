@@ -131,8 +131,10 @@ class ImageManager {
       if (typeof rawData === "string") {
         data.url = rawData;
         image = await fetchData(rawData, "blob");
-      } else {
+      } else if (rawData instanceof File) {
         image = data.file = rawData;
+      } else if (rawData instanceof Blob) {
+        image = rawData;
       }
 
       if (image.type === "image/svg+xml") {
@@ -183,6 +185,11 @@ class ImageManager {
     return this.#get(url, url);
   }
 
+  async getFromBlob(id, blobPromise) {
+    const blob = await blobPromise;
+    return this.#get(id, blob);
+  }
+
   async getFromId(id) {
     this.#cache ||= new Map();
     const data = this.#cache.get(id);
@@ -197,7 +204,33 @@ class ImageManager {
     if (data.file) {
       return this.getFromFile(data.file);
     }
+    if (data.blobPromise) {
+      const { blobPromise } = data;
+      delete data.blobPromise;
+      return this.getFromBlob(data.id, blobPromise);
+    }
     return this.getFromUrl(data.url);
+  }
+
+  getFromCanvas(id, canvas) {
+    this.#cache ||= new Map();
+    let data = this.#cache.get(id);
+    if (data?.bitmap) {
+      data.refCounter += 1;
+      return data;
+    }
+    const offscreen = new OffscreenCanvas(canvas.width, canvas.height);
+    const ctx = offscreen.getContext("2d");
+    ctx.drawImage(canvas, 0, 0);
+    data = {
+      bitmap: offscreen.transferToImageBitmap(),
+      id: `image_${this.#baseId}_${this.#id++}`,
+      refCounter: 1,
+      isSvg: false,
+    };
+    this.#cache.set(id, data);
+    this.#cache.set(data.id, data);
+    return data;
   }
 
   getSvgUrl(id) {
@@ -218,6 +251,16 @@ class ImageManager {
     if (data.refCounter !== 0) {
       return;
     }
+    const { bitmap } = data;
+    if (!data.url && !data.file) {
+      // The image has no way to be restored (ctrl+z) so we must fix that.
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = canvas.getContext("bitmaprenderer");
+      ctx.transferFromImageBitmap(bitmap);
+      data.blobPromise = canvas.convertToBlob();
+    }
+
+    bitmap.close?.();
     data.bitmap = null;
   }
 
@@ -629,6 +672,8 @@ class AnnotationEditorUIManager {
 
   #viewer = null;
 
+  #updateModeCapability = null;
+
   static TRANSLATE_SMALL = 1; // page units.
 
   static TRANSLATE_BIG = 10; // page units.
@@ -825,6 +870,9 @@ class AnnotationEditorUIManager {
   }
 
   destroy() {
+    this.#updateModeCapability?.resolve();
+    this.#updateModeCapability = null;
+
     this.#abortController?.abort();
     this.#abortController = null;
     this._signal = null;
@@ -1352,7 +1400,7 @@ class AnnotationEditorUIManager {
    * Paste callback.
    * @param {ClipboardEvent} event
    */
-  paste(event) {
+  async paste(event) {
     event.preventDefault();
     const { clipboardData } = event;
     for (const item of clipboardData.items) {
@@ -1365,11 +1413,11 @@ class AnnotationEditorUIManager {
     }
 
     const data = clipboardData.getData("application/pdfjs");
-    this.addSerializedEditor(data);
+    await this.addSerializedEditor(data);
   }
 
   // #1783 end of modification by ngx-extended-pdf-viewer (extract a method)
-  addSerializedEditor(data, activateEditorIfNecessary = false, doNotMove = false, ignorePageNumber=true) {
+  async addSerializedEditor(data, activateEditorIfNecessary = false, doNotMove = false, ignorePageNumber = true) {
     if (!data) {
       return;
     }
@@ -1397,15 +1445,15 @@ class AnnotationEditorUIManager {
     // #1783 end of modification by ngx-extended-pdf-viewer
     this.unselectAll();
 
-    // #1783 modified by ngx-extended-pdf-viewer
     try {
       const newEditors = [];
       for (const editor of data) {
+        // #1783 modified by ngx-extended-pdf-viewer
         const pageNumberMissing = editor.pageIndex === undefined;
         const useCurrentPage = ignorePageNumber || pageNumberMissing;
         const layer = useCurrentPage ? this.currentLayer : this.getLayer(editor.pageIndex);
         // #1783 end of modification by ngx-extended-pdf-viewer
-        const deserializedEditor = layer.deserialize(editor);
+        const deserializedEditor = await layer.deserialize(editor);
         if (!deserializedEditor) {
           return;
         }
@@ -1605,37 +1653,54 @@ class AnnotationEditorUIManager {
    * @param {boolean} [isFromKeyboard] - true if the mode change is due to a
    *   keyboard action.
    */
-  updateMode(mode, editId = null, isFromKeyboard = false) {
+  async updateMode(mode, editId = null, isFromKeyboard = false) {
     if (this.#mode === mode) {
       return;
     }
+
+    if (this.#updateModeCapability) {
+      await this.#updateModeCapability.promise;
+      if (!this.#updateModeCapability) {
+        // This ui manager has been destroyed.
+        return;
+      }
+    }
+
+    this.#updateModeCapability = Promise.withResolvers();
+
     this.#mode = mode;
     if (mode === AnnotationEditorType.NONE) {
       this.setEditingState(false);
       this.#disableAll();
+
+      this.#updateModeCapability.resolve();
       return;
     }
     this.setEditingState(true);
-    this.#enableAll();
+    await this.#enableAll();
     this.unselectAll();
     for (const layer of this.#allLayers.values()) {
       layer.updateMode(mode);
     }
-    if (!editId && isFromKeyboard) {
-      this.addNewEditorFromKeyboard();
+    if (!editId) {
+      if (isFromKeyboard) {
+        this.addNewEditorFromKeyboard();
+      }
+
+      this.#updateModeCapability.resolve();
       return;
     }
 
-    if (!editId) {
-      return;
-    }
     for (const editor of this.#allEditors.values()) {
       if (editor.annotationElementId === editId) {
         this.setSelected(editor);
         editor.enterInEditMode();
-        break;
+      } else {
+        editor.unselect();
       }
     }
+
+    this.#updateModeCapability.resolve();
   }
 
   addNewEditorFromKeyboard() {
@@ -1735,12 +1800,14 @@ class AnnotationEditorUIManager {
   /**
    * Enable all the layers.
    */
-  #enableAll() {
+  async #enableAll() {
     if (!this.#isEnabled) {
       this.#isEnabled = true;
+      const promises = [];
       for (const layer of this.#allLayers.values()) {
-        layer.enable();
+        promises.push(layer.enable());
       }
+      await Promise.all(promises);
       for (const editor of this.#allEditors.values()) {
         editor.enable();
       }

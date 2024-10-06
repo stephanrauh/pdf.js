@@ -3003,10 +3003,8 @@ class InkAnnotationElement extends AnnotationElement {
     }
 
     this.container.append(svg);
+    this._editOnDoubleClick();
 
-    if (this._isEditable) {
-      this._editOnDoubleClick();
-    }
     return this.container;
   }
 
@@ -3101,6 +3099,7 @@ class StrikeOutAnnotationElement extends AnnotationElement {
 class StampAnnotationElement extends AnnotationElement {
   constructor(parameters) {
     super(parameters, { isRenderable: true, ignoreBorder: true });
+    this.annotationEditorType = AnnotationEditorType.STAMP;
   }
 
   render() {
@@ -3110,6 +3109,8 @@ class StampAnnotationElement extends AnnotationElement {
     if (!this.data.popupRef && this.hasPopupData) {
       this._createPopup();
     }
+    this._editOnDoubleClick();
+
     return this.container;
   }
 }

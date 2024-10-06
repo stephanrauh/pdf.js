@@ -20,7 +20,10 @@ import {
   closePages,
   copy,
   copyToClipboard,
+  dragAndDropAnnotation,
+  getAnnotationSelector,
   getEditorDimensions,
+  getEditors,
   getEditorSelector,
   getFirstSerialized,
   getRect,
@@ -98,7 +101,23 @@ describe("Stamp Editor", () => {
     let pages;
 
     beforeAll(async () => {
-      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer");
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer", null, {
+        eventBusSetup: eventBus => {
+          eventBus.on("annotationeditoruimanager", ({ uiManager }) => {
+            window.uiManager = uiManager;
+          });
+        },
+      });
+    });
+
+    afterEach(async () => {
+      for (const [, page] of pages) {
+        await page.evaluate(() => {
+          window.uiManager.reset();
+        });
+        // Disable editing mode.
+        await switchToStamp(page, /* disable */ true);
+      }
     });
 
     afterAll(async () => {
@@ -126,8 +145,6 @@ describe("Stamp Editor", () => {
           const [bitmap] = await serializeBitmapDimensions(page);
           expect(bitmap.width).toEqual(512);
           expect(bitmap.height).toEqual(543);
-
-          await clearAll(page);
         })
       );
     });
@@ -135,14 +152,15 @@ describe("Stamp Editor", () => {
     it("must load a SVG", async () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
+          await switchToStamp(page);
           await page.click("#editorStampAddImage");
           const input = await page.$("#stampEditorFileInput");
           await input.uploadFile(
             `${path.join(__dirname, "../images/firefox_logo.svg")}`
           );
-          await waitForImage(page, getEditorSelector(1));
+          await waitForImage(page, getEditorSelector(0));
 
-          const { width } = await getEditorDimensions(page, 1);
+          const { width } = await getEditorDimensions(page, 0);
 
           expect(Math.round(parseFloat(width))).toEqual(40);
 
@@ -154,8 +172,32 @@ describe("Stamp Editor", () => {
           );
           expect(Math.abs(bitmap.width - 242 * ratio) < 1).toBeTrue();
           expect(Math.abs(bitmap.height - 80 * ratio) < 1).toBeTrue();
+        })
+      );
+    });
 
-          await clearAll(page);
+    it("must load a SVG, delete it and undo", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToStamp(page);
+          await page.click("#editorStampAddImage");
+          const input = await page.$("#stampEditorFileInput");
+          await input.uploadFile(
+            `${path.join(__dirname, "../images/firefox_logo.svg")}`
+          );
+          const editorSelector = getEditorSelector(0);
+          await waitForImage(page, editorSelector);
+
+          await waitForSerialized(page, 1);
+          await page.waitForSelector(`${editorSelector} button.delete`);
+          await page.click(`${editorSelector} button.delete`);
+
+          await waitForSerialized(page, 0);
+
+          await kbUndo(page);
+          await waitForSerialized(page, 1);
+
+          await waitForSelectedEditor(page, editorSelector);
         })
       );
     });
@@ -1277,6 +1319,156 @@ describe("Stamp Editor", () => {
           expect(buffer.every(x => x === 0xff0000ff))
             .withContext(`In ${browserName}`)
             .toBeFalse();
+        })
+      );
+    });
+  });
+
+  describe("Stamp (move existing)", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("stamps.pdf", getAnnotationSelector("25R"));
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must move an annotation", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click(getAnnotationSelector("25R"), { count: 2 });
+          await waitForSelectedEditor(page, getEditorSelector(0));
+
+          const editorIds = await getEditors(page, "stamp");
+          expect(editorIds.length).withContext(`In ${browserName}`).toEqual(5);
+
+          // All the current annotations should be serialized as null objects
+          // because they haven't been edited yet.
+          const serialized = await getSerialized(page);
+          expect(serialized).withContext(`In ${browserName}`).toEqual([]);
+
+          const editorRect = await page.$eval(getEditorSelector(0), el => {
+            const { x, y, width, height } = el.getBoundingClientRect();
+            return { x, y, width, height };
+          });
+
+          // Select the annotation we want to move.
+          await page.mouse.click(editorRect.x + 2, editorRect.y + 2);
+          await waitForSelectedEditor(page, getEditorSelector(0));
+
+          await dragAndDropAnnotation(
+            page,
+            editorRect.x + editorRect.width / 2,
+            editorRect.y + editorRect.height / 2,
+            100,
+            100
+          );
+          await waitForSerialized(page, 1);
+        })
+      );
+    });
+  });
+
+  describe("Stamp (change alt-text)", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("stamps.pdf", getAnnotationSelector("58R"));
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must update an existing alt-text", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click(getAnnotationSelector("58R"), { count: 2 });
+          await waitForSelectedEditor(page, getEditorSelector(4));
+
+          const editorIds = await getEditors(page, "stamp");
+          expect(editorIds.length).withContext(`In ${browserName}`).toEqual(5);
+
+          await page.click(`${getEditorSelector(4)} button.altText`);
+          await page.waitForSelector("#altTextDialog", { visible: true });
+
+          const textareaSelector = "#altTextDialog textarea";
+          await page.waitForFunction(
+            sel => document.querySelector(sel).value !== "",
+            {},
+            textareaSelector
+          );
+
+          const altText = await page.evaluate(
+            sel => document.querySelector(sel).value,
+            textareaSelector
+          );
+          expect(altText).toEqual("An elephant");
+
+          await page.evaluate(sel => {
+            document.querySelector(sel).value = "";
+          }, textareaSelector);
+
+          await page.click(textareaSelector);
+          await page.type(textareaSelector, "Hello World");
+
+          // All the current annotations should be serialized as null objects
+          // because they haven't been edited yet.
+          const serialized = await getSerialized(page);
+          expect(serialized).withContext(`In ${browserName}`).toEqual([]);
+
+          const saveButtonSelector = "#altTextDialog #altTextSave";
+          await page.click(saveButtonSelector);
+
+          await waitForSerialized(page, 1);
+        })
+      );
+    });
+  });
+
+  describe("Stamp (delete existing and undo)", () => {
+    let pages;
+
+    beforeAll(async () => {
+      pages = await loadAndWait("stamps.pdf", getAnnotationSelector("37R"));
+    });
+
+    afterAll(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the annotation is correctly restored", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click(getAnnotationSelector("37R"), { count: 2 });
+          const editorSelector = getEditorSelector(2);
+          await waitForSelectedEditor(page, editorSelector);
+
+          const editorIds = await getEditors(page, "stamp");
+          expect(editorIds.length).withContext(`In ${browserName}`).toEqual(5);
+
+          // All the current annotations should be serialized as null objects
+          // because they haven't been edited yet.
+          let serialized = await getSerialized(page);
+          expect(serialized).withContext(`In ${browserName}`).toEqual([]);
+
+          await page.waitForSelector(`${editorSelector} button.delete`);
+          await page.click(`${editorSelector} button.delete`);
+
+          await waitForSerialized(page, 1);
+          serialized = await getSerialized(page);
+          expect(serialized)
+            .withContext(`In ${browserName}`)
+            .toEqual([
+              { id: "37R", deleted: true, pageIndex: 0, popupRef: "44R" },
+            ]);
+
+          await kbUndo(page);
+          await waitForSerialized(page, 0);
+
+          await waitForSelectedEditor(page, editorSelector);
         })
       );
     });
