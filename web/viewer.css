@@ -820,7 +820,7 @@ body {
   mask-image: var(--toolbarButton-editorStamp-icon);
 }
 
-#print::before {
+#printButton::before {
   mask-image: var(--toolbarButton-print-icon);
 }
 
