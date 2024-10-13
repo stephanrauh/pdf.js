@@ -2036,7 +2036,7 @@ const PDFViewerApplication = {
     this.printService = PDFPrintServiceFactory.createPrintService({
       pdfDocument: this.pdfDocument,
       pagesOverview: this.pdfViewer.getPagesOverview(),
-      printContainer: this.appConfig.printContainer,
+      // printContainer: this.appConfig.printContainer, // #2603 modified by ngx-extended-pdf-viewer
       printResolution: AppOptions.get("printResolution"),
       printAnnotationStoragePromise: this._printAnnotationStoragePromise,
       eventBus: this.pdfViewer.eventBus, // #588 modified by ngx-extended-pdf-viewer

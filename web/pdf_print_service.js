@@ -16,7 +16,6 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("./interfaces.js").IPDFPrintServiceFactory} IPDFPrintServiceFactory */
 
-import canvasSize from "canvas-size";
 import {
   AnnotationMode,
   PixelsPerInch,
@@ -101,7 +100,7 @@ class PDFPrintService {
     {
       pdfDocument,
       pagesOverview,
-      printContainer,
+      // printContainer, // #2603 modified by ngx-extended-pdf-viewer
       printResolution,
       printAnnotationStoragePromise = null,
       eventBus, // #588 modified by ngx-extended-pdf-viewer
@@ -111,7 +110,7 @@ class PDFPrintService {
   ) {
     this.pdfDocument = pdfDocument;
     this.pagesOverview = pagesOverview;
-    this.printContainer = printContainer;
+    // this.printContainer = printContainer; // #2603 modified by ngx-extended-pdf-viewer
     this._printResolution = printResolution || 150;
     this._optionalContentConfigPromise = pdfDocument.getOptionalContentConfig({
       intent: "print",
@@ -170,7 +169,11 @@ class PDFPrintService {
       // so if it differs then an external consumer has a stale reference to us.
       return;
     }
-    this.printContainer.textContent = "";
+    // #2603 modified by ngx-extended-pdf-viewer
+    // remove the print container after the print job is done
+    this.printContainer.remove();
+    this.printContainer = null;
+    // #2603 end of modification by ngx-extended-pdf-viewer
 
     const body = document.querySelector("body");
     body.removeAttribute("data-pdfjsprinting");
@@ -349,6 +352,13 @@ function printPdf() {
       return; // eslint-disable-line no-unsafe-finally
     }
     const activeServiceOnEntry = activeService;
+    // #2603 modified by ngx-extended-pdf-viewer
+    // create a new print container for each print job
+    const printContainer = document.createElement("div");
+    printContainer.id = "printContainer";
+    document.body.append(printContainer);
+    activeServiceOnEntry.printContainer = printContainer;
+    // #2603 end of modification by ngx-extended-pdf-viewer
     activeService
       .renderPages()
       .then(function () {
