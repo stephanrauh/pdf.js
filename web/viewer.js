@@ -107,7 +107,7 @@ function getViewerConfiguration() {
         typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")
           ? document.getElementById("secondaryOpenFile")
           : null,
-      printButton: document.getElementById("secondaryPrint"),
+      printButton: document.getElementById("secondaryPrintButton"),
       downloadButton: document.getElementById("secondaryDownload"),
       viewBookmarkButton: document.getElementById("viewBookmark"),
       firstPageButton: document.getElementById("firstPage"),
@@ -253,7 +253,7 @@ function getViewerConfiguration() {
       ),
       editorHighlightShowAll: document.getElementById("editorHighlightShowAll"),
     },
-    printContainer: document.getElementById("printContainer"),
+    // printContainer: document.getElementById("printContainer"), // #2603 modified by ngx-extended-pdf-viewer
   };
 }
 

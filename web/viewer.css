@@ -572,7 +572,7 @@ body {
   mask-image: var(--toolbarButton-editorStamp-icon);
 }
 
-:is(#printButton, #secondaryPrint)::before {
+:is(#printButton, #secondaryPrintButton)::before {
   mask-image: var(--toolbarButton-print-icon);
 }
 
@@ -1201,7 +1201,7 @@ dialog :link {
     }
     /*#endif*/
 
-    #secondaryPrint::before {
+    #secondaryPrintButton::before {
       mask-image: var(--toolbarButton-print-icon);
     }
 
