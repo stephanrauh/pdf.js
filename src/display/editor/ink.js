@@ -88,6 +88,8 @@ class InkEditor extends AnnotationEditor {
 
   static _defaultThickness = 1;
 
+  static _defaultSmoothness = 11;
+
   static _type = "ink";
 
   static _editorType = AnnotationEditorType.INK;
@@ -96,6 +98,7 @@ class InkEditor extends AnnotationEditor {
     super({ ...params, name: "inkEditor" });
     this.color = params.color || null;
     this.thickness = params.thickness || null;
+    this.smoothness = params.smoothness || null;
     this.opacity = params.opacity || null;
     this.paths = [];
     this.bezierPath2D = [];
@@ -130,6 +133,9 @@ class InkEditor extends AnnotationEditor {
       case AnnotationEditorParamsType.INK_THICKNESS:
         InkEditor._defaultThickness = value;
         break;
+        case AnnotationEditorParamsType.INK_SMOOTHNESS:
+          InkEditor._defaultSmoothness = value;
+          break;
       case AnnotationEditorParamsType.INK_COLOR:
         InkEditor._defaultColor = value;
         break;
@@ -145,6 +151,9 @@ class InkEditor extends AnnotationEditor {
       case AnnotationEditorParamsType.INK_THICKNESS:
         this.#updateThickness(value);
         break;
+      case AnnotationEditorParamsType.INK_SMOOTHNESS:
+        this.#updateSmoothness(value);
+        break;
       case AnnotationEditorParamsType.INK_COLOR:
         this.#updateColor(value);
         break;
@@ -158,6 +167,7 @@ class InkEditor extends AnnotationEditor {
   static get defaultPropertiesToUpdate() {
     return [
       [AnnotationEditorParamsType.INK_THICKNESS, InkEditor._defaultThickness],
+      [AnnotationEditorParamsType.INK_SMOOTHNESS, InkEditor._defaultSmoothness],
       [
         AnnotationEditorParamsType.INK_COLOR,
         InkEditor._defaultColor || AnnotationEditor._defaultLineColor,
@@ -175,6 +185,10 @@ class InkEditor extends AnnotationEditor {
       [
         AnnotationEditorParamsType.INK_THICKNESS,
         this.thickness || InkEditor._defaultThickness,
+      ],
+      [
+        AnnotationEditorParamsType.INK_SMOOTHNESS,
+        this.smoothness || InkEditor._defaultSmoothness,
       ],
       [
         AnnotationEditorParamsType.INK_COLOR,
@@ -216,6 +230,38 @@ class InkEditor extends AnnotationEditor {
       editorType: this.constructor.name,
       value: thickness,
       previousValue: savedThickness,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
+  }
+
+  /**
+   * Update the smoothness and make this action undoable.
+   * @param {number} smoothness
+   */
+  #updateSmoothness(smoothness) {
+    const setSmoothness = th => {
+      this.smoothness = th;
+      this.#generateBezierPoints();
+      this.#fitToContent();
+    };
+    const savedSmoothness = this.smoothness;
+    this.addCommands({
+      cmd: setSmoothness.bind(this, smoothness),
+      undo: setSmoothness.bind(this, savedSmoothness),
+      post: this._uiManager.updateUI.bind(this._uiManager, this),
+      mustExec: true,
+      type: AnnotationEditorParamsType.INK_SMOOTHNESS,
+      overwriteIfSameType: true,
+      keepUndo: true,
+    });
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "smoothnessChanged",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: smoothness,
+      previousValue: savedSmoothness,
     });
     // #2256 end of modification by ngx-extended-pdf-viewer
   }
@@ -468,10 +514,12 @@ class InkEditor extends AnnotationEditor {
       this.#isCanvasInitialized = true;
       this.#setCanvasDims();
       this.thickness ||= InkEditor._defaultThickness;
+      this.smoothness ||= InkEditor._defaultSmoothness;
       this.color ||=
         InkEditor._defaultColor || AnnotationEditor._defaultLineColor;
       this.opacity ??= InkEditor._defaultOpacity;
     }
+
     this.currentPath.push([x, y]);
     this.#hasSomethingToDraw = false;
     this.#setStroke();
@@ -495,6 +543,7 @@ class InkEditor extends AnnotationEditor {
     if (this.currentPath.length > 1 && x === lastX && y === lastY) {
       return;
     }
+    console.log(x, y);
     const currentPath = this.currentPath;
     let path2D = this.#currentPath2D;
     currentPath.push([x, y]);
@@ -511,6 +560,7 @@ class InkEditor extends AnnotationEditor {
       path2D.moveTo(...currentPath[0]);
     }
 
+    /*
     this.#makeBezierCurve(
       path2D,
       ...currentPath.at(-3),
@@ -518,6 +568,8 @@ class InkEditor extends AnnotationEditor {
       x,
       y
     );
+    */
+    path2D.ellipse(x, y, 1, 1, 0, 0, 2 * Math.PI);
   }
 
   #endPath() {
@@ -630,22 +682,33 @@ class InkEditor extends AnnotationEditor {
   }
 
   #makeBezierCurve(path2D, x0, y0, x1, y1, x2, y2) {
+    const smoothnessFactor = (this.#mapSmoothnessValue(this.smoothness) * 2) / 3;
+    console.log("makeBezierCurve() Smoothness factor: ", smoothnessFactor);
     const prevX = (x0 + x1) / 2;
     const prevY = (y0 + y1) / 2;
     const x3 = (x1 + x2) / 2;
     const y3 = (y1 + y2) / 2;
 
     path2D.bezierCurveTo(
-      prevX + (2 * (x1 - prevX)) / 3,
-      prevY + (2 * (y1 - prevY)) / 3,
-      x3 + (2 * (x1 - x3)) / 3,
-      y3 + (2 * (y1 - y3)) / 3,
+      prevX + smoothnessFactor * (x1 - prevX),
+      prevY + smoothnessFactor * (y1 - prevY),
+      x3 + smoothnessFactor * (x1 - x3),
+      y3 + smoothnessFactor * (y1 - y3),
       x3,
       y3
     );
   }
 
+  #mapSmoothnessValue(x) {
+    const a = 0.00715;
+    const b = 0.345;
+    return a * Math.exp(b * x);
+  }
+
   #generateBezierPoints() {
+    const smoothness = this.#mapSmoothnessValue(this.smoothness) * 3;
+    console.log("generateBezierPoints() Smoothness: ", smoothness);
+
     const path = this.currentPath;
     if (path.length <= 2) {
       return [[path[0], path[0], path.at(-1), path.at(-1)]];
@@ -663,8 +726,8 @@ class InkEditor extends AnnotationEditor {
       // The quadratic is: [[x0, y0], [x1, y1], [x3, y3]].
       // Convert the quadratic to a cubic
       // (see https://fontforge.org/docs/techref/bezier.html#converting-truetype-to-postscript)
-      const control1 = [x0 + (2 * (x1 - x0)) / 3, y0 + (2 * (y1 - y0)) / 3];
-      const control2 = [x3 + (2 * (x1 - x3)) / 3, y3 + (2 * (y1 - y3)) / 3];
+      const control1 = [x0 + (2 * (x1 - x0)) / smoothness, y0 + (2 * (y1 - y0)) / smoothness];
+      const control2 = [x3 + (2 * (x1 - x3)) / smoothness, y3 + (2 * (y1 - y3)) / smoothness];
 
       bezierPoints.push([[x0, y0], control1, control2, [x3, y3]]);
 
@@ -675,8 +738,8 @@ class InkEditor extends AnnotationEditor {
     const [x2, y2] = path[i + 1];
 
     // The quadratic is: [[x0, y0], [x1, y1], [x2, y2]].
-    const control1 = [x0 + (2 * (x1 - x0)) / 3, y0 + (2 * (y1 - y0)) / 3];
-    const control2 = [x2 + (2 * (x1 - x2)) / 3, y2 + (2 * (y1 - y2)) / 3];
+    const control1 = [x0 + (2 * (x1 - x0)) / smoothness, y0 + (2 * (y1 - y0)) / smoothness];
+    const control2 = [x2 + (2 * (x1 - x2)) / smoothness, y2 + (2 * (y1 - y2)) / smoothness];
 
     bezierPoints.push([[x0, y0], control1, control2, [x2, y2]]);
     return bezierPoints;

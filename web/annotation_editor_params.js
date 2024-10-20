@@ -23,6 +23,7 @@ import { AnnotationEditorParamsType } from "pdfjs-lib";
  * @property {HTMLInputElement} editorFreeTextColor
  * @property {HTMLInputElement} editorInkColor
  * @property {HTMLInputElement} editorInkThickness
+ * @property {HTMLInputElement} editorInkSmoothness
  * @property {HTMLInputElement} editorInkOpacity
  * @property {HTMLButtonElement} editorStampAddImage
  * @property {HTMLInputElement} editorFreeHighlightThickness
@@ -47,6 +48,7 @@ class AnnotationEditorParams {
     editorFreeTextColor,
     editorInkColor,
     editorInkThickness,
+    editorInkSmoothness,
     editorInkOpacity,
     editorStampAddImage,
     editorFreeHighlightThickness,
@@ -70,6 +72,9 @@ class AnnotationEditorParams {
     });
     editorInkThickness.addEventListener("input", function () {
       dispatchEvent("INK_THICKNESS", this.valueAsNumber);
+    });
+    editorInkSmoothness.addEventListener("input", function () {
+      dispatchEvent("INK_SMOOTHNESS", this.valueAsNumber);
     });
     editorInkOpacity.addEventListener("input", function () {
       dispatchEvent("INK_OPACITY", this.valueAsNumber);
@@ -107,6 +112,10 @@ class AnnotationEditorParams {
             break;
           case AnnotationEditorParamsType.INK_THICKNESS:
             editorInkThickness.value = value;
+            break;
+          case AnnotationEditorParamsType.INK_SMOOTHNESS:
+            console.log("Smoothness", value);
+            editorInkSmoothness.value = value;
             break;
           case AnnotationEditorParamsType.INK_OPACITY:
             editorInkOpacity.value = value;
