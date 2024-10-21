@@ -2276,11 +2276,27 @@ const PDFViewerApplication = {
     window.addEventListener("click", onClick.bind(this), { signal });
     window.addEventListener("keydown", onKeyDown.bind(this), { signal });
     window.addEventListener("keyup", onKeyUp.bind(this), { signal });
-    window.addEventListener(
-      "resize",
-      () => eventBus.dispatch("resize", { source: window }),
-      { signal }
-    );
+    if (viewerContainer) {
+      let resizeTimeout;
+      const resizeObserver = new ResizeObserver(entries => {
+        for (const entry of entries) {
+          if (entry.target === mainContainer) {
+            clearTimeout(resizeTimeout);
+            resizeTimeout = setTimeout(() => {
+              eventBus.dispatch("resize", { source: mainContainer });
+            }, 50);
+          }
+        }
+      });
+
+      resizeObserver.observe(mainContainer);
+    } else {
+      window.addEventListener(
+        "resize",
+        () => eventBus.dispatch("resize", { source: window }),
+        { signal }
+      );
+    }
     window.addEventListener(
       "hashchange",
       () => {
