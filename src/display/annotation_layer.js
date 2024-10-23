@@ -1364,7 +1364,10 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
 
       // #1737 modified by ngx-extended-pdf-viewer
       window.registerAcroformField(id, element, storedData.value, undefined, this.data.fieldValue);
-      element.addEventListener("updateFromAngular", newvalue => storage.setValue(id, { value: newvalue.detail }));
+      element.addEventListener("updateFromAngular", newvalue => {
+        elementData.formattedValue = null;
+        storage.setValue(id, { value: newvalue.detail });
+      });
       // #1737 end of modification by ngx-extended-pdf-viewer
       if (this.enableScripting && this.hasJSActions) {
         element.addEventListener("focus", event => {
