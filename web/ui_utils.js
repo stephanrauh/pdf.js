@@ -877,6 +877,19 @@ function toggleExpandedBtn(button, toggle, view = null) {
   button.setAttribute("aria-expanded", toggle);
 
   view?.classList.toggle("hidden", !toggle);
+
+  // #2533 modified by ngx-extended-pdf-viewer
+  if (view && !view.classList.contains("hidden")) {
+    const rect = button.getBoundingClientRect();
+    const container = button.closest("#toolbarViewer");
+    if (container) {
+      const containerRect = container.getBoundingClientRect();
+      const distanceFromRight = containerRect.right - rect.right;
+      view.style.removeProperty("inset-inline-end");
+      view.style.setProperty("inset-inline-end", distanceFromRight + "px");
+    }
+  }
+  // #2533 end of modification by ngx-extended-pdf-viewer
 }
 
 // In Firefox, the css calc function uses f32 precision but the Chrome or Safari
