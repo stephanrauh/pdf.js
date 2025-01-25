@@ -2025,6 +2025,10 @@ appConfig: null,
    * @private
    */
   _cleanup() {
+    if (this.resizeObserver) {
+      this.resizeObserver.disconnect();
+      this.resizeObserver = null;
+    }
     if (!this.pdfDocument) {
       return; // run cleanup when document is loaded
     }
@@ -2327,20 +2331,28 @@ appConfig: null,
     window.addEventListener("click", onClick.bind(this), { signal });
     window.addEventListener("keydown", onKeyDown.bind(this), { signal });
     window.addEventListener("keyup", onKeyUp.bind(this), { signal });
+    // #2595 modified by ngx-extended-pdf-viewer
     if (viewerContainer) {
       let resizeTimeout;
-      const resizeObserver = new ResizeObserver(entries => {
-        for (const entry of entries) {
-          if (entry.target === mainContainer) {
-            clearTimeout(resizeTimeout);
-            resizeTimeout = setTimeout(() => {
+      let previousWidth = mainContainer.clientWidth;
+      let previousHeight = mainContainer.clientHeight;
+      this.resizeObserver = new ResizeObserver(entries => {
+        const newWidth = mainContainer.clientWidth;
+        const newHeight = mainContainer.clientHeight;
+
+        if (newWidth !== previousWidth || newHeight !== previousHeight) {
+          clearTimeout(resizeTimeout);
+          resizeTimeout = setTimeout(() => {
+            if (mainContainer.offsetParent) { // #2762 don't resize when hidden
               eventBus.dispatch("resize", { source: mainContainer });
-            }, 50);
-          }
+            }
+          }, 50);
+          previousWidth = newWidth;
+          previousHeight = newHeight;
         }
       });
 
-      resizeObserver.observe(mainContainer);
+      this.resizeObserver.observe(mainContainer);
     } else {
       window.addEventListener(
         "resize",
@@ -2348,6 +2360,7 @@ appConfig: null,
         { signal }
       );
     }
+    // #2595 end of modification by ngx-extended-pdf-viewer
     window.addEventListener(
       "hashchange",
       () => {
