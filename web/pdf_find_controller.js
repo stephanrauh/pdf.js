@@ -434,6 +434,11 @@ class PDFFindController {
     this.onIsPageVisible = null;
 
     this.#reset();
+    // #2503 modified by ngx-extended-pdf-viewer: inform the find controller about changes of the pageViewMode
+    this._eventBus.on("pageviewmodechanged", ({pageViewMode}) => {
+      this._pageViewMode = pageViewMode;
+    });
+    // #2503 end of modification by ngx-extended-pdf-viewer
     if (listenToEventBus) { // #2339 modified by ngx-extended-pdf-viewer
       eventBus._on("find", this.#onFind.bind(this));
       eventBus._on("findbarclose", this.#onFindBarClose.bind(this));

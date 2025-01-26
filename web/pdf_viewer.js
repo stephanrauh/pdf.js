@@ -447,6 +447,10 @@ class PDFViewer {
           watchScroll(this.#outerScrollContainer, this._scrollUpdate.bind(this));
         }
       }
+
+      // #2503 modified by ngx-extended-pdf-viewer: inform the find controller about changes of the pageViewMode
+      this.eventBus.dispatch("pageviewmodechanged", { source: this, pageViewMode: viewMode });
+      // #2503 end of modification by ngx-extended-pdf-viewer
     }
   }
 
