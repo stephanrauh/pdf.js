@@ -1552,7 +1552,29 @@ appConfig: null,
           const initialBookmark = this.initialBookmark;
 
           // Initialize the default values, from user preferences.
-          const zoom = AppOptions.get("defaultZoomValue");
+          // #2205 modified by ngx-extended-pdf-viewer: stop rendering twice with different zoom settings
+          // (when rendering the first page, currentScaleValue is usually undefined, and the rendered uses 100%
+          // as a default. A short time later, ngx-extended-pdf-viewer sets the correct value, taken
+          // from the stettings in the store. This causes a second rendering to happen, which we can easily
+          // avoid by setting the correct value here.)
+          let zoom = AppOptions.get("defaultZoomValue");
+          if (!zoom || zoom === '') {
+            try {
+              zoom = await this.store.get('zoom');
+              if (typeof zoom === 'string') {
+                zoom = zoom?.replace("%", "");
+              }
+              if (!isNaN(Number(zoom))) {
+                zoom = Number(zoom) / 100;
+              }
+            } catch (error) {
+              // console.log("Couldn't get the zoom setting", error);
+            }
+          }
+          if (!pdfViewer.currentScaleValue && zoom && zoom !== '') {
+            pdfViewer.currentScaleValue = zoom;
+          }
+          // #2205 end of modification by ngx-extended-pdf-viewer
           let hash = zoom ? `zoom=${zoom}` : null;
 
           let rotation = null;
