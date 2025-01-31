@@ -915,6 +915,48 @@ class HighlightEditor extends AnnotationEditor {
         deleted: false,
         popupRef,
       };
+    } else if (data.annotationType && data.annotationType === AnnotationEditorType.HIGHLIGHT) {
+      // eslint-disable-next-line prefer-const
+      let { quadPoints, outlines, rect, rotation, id, color, opacity, popupRef, pageIndex, thickness } = data;
+
+      // Ensure quadPoints is an array
+      if (quadPoints) {
+        if (!Array.isArray(quadPoints)) {
+          quadPoints = Object.values(quadPoints);
+        }
+      }
+
+      let inkLists;
+      if (!quadPoints && outlines) {
+        if (Array.isArray(outlines)) {
+          // 'outlines' is an array of arrays
+          inkLists = outlines.map(subArray => subArray);
+        } else if (typeof outlines === "object" && outlines.points) {
+          // 'outlines' is an object with 'points' property
+          inkLists = [outlines.points.flat()];
+        } else {
+          // Handle unexpected format
+          console.error("Unexpected outlines format");
+          return null;
+        }
+        thickness = thickness || data.thickness || 1;
+      }
+
+      initialData = data = {
+        annotationType: AnnotationEditorType.HIGHLIGHT,
+        color: Array.from(color),
+        opacity,
+        quadPoints,
+        inkLists,
+        thickness,
+        boxes: null,
+        pageIndex,
+        rect: rect.slice(0),
+        rotation,
+        id,
+        deleted: false,
+        popupRef: popupRef || null,
+      };
     } else if (data instanceof InkAnnotationElement) {
       const {
         data: {
