@@ -277,6 +277,9 @@ class PDFViewer {
     this.container = options.container;
     this.viewer = options.viewer || options.container.firstElementChild;
 
+    /** #2784 modified by ngx-extended-pdf-viewer */
+    this.eventBus = options.eventBus;
+    /** #2784 end of modification by ngx-extended-pdf-viewer */
     /** #495 modified by ngx-extended-pdf-viewer */
     this.pageViewMode = options.pageViewMode || "multiple";
     /** end of modification */
@@ -300,7 +303,6 @@ class PDFViewer {
     }
     this.#resizeObserver.observe(this.container);
 
-    this.eventBus = options.eventBus;
     this.linkService = options.linkService || new SimpleLinkService();
     this.downloadManager = options.downloadManager || null;
     this.findController = options.findController || null;
