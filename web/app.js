@@ -794,6 +794,11 @@ const PDFViewerApplication = {
       });
       appConfig.mainContainer.addEventListener("drop", function (evt) {
         if (AppOptions.get("enableDragAndDrop")) { // #686 modified by ngx-extended-pdf-viewer
+            // #2812 modified by ngx-extended-pdf-viewer
+            if (!evt.dataTransfer.files?.length) {
+              return;
+            }
+            // #2812 end of modification by ngx-extended-pdf-viewer
             if (evt.dataTransfer.files?.[0].type !== "application/pdf") {
             return;
           }
