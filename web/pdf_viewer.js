@@ -2044,13 +2044,16 @@ class PDFViewer {
       this._setCurrentPageNumber(
         stillFullyVisible ? currentId : visiblePages[0].id
       );
-
-      this._updateLocation(visible.first);
-      this.eventBus.dispatch("updateviewarea", {
-        source: this,
-        location: this._location,
-      });
     }
+
+    // #2828 modified by ngx-extended-pdf-viewer - now the location is always updated,
+    // preventing the page to jump to page 1 after zooming
+    this._updateLocation(visible.first);
+    this.eventBus.dispatch("updateviewarea", {
+      source: this,
+      location: this._location,
+    });
+
     // #1808 end of modification by ngx-extended-pdf-viewer
     // #859 modified by ngx-extended-pdf-viewer
     this.hidePagesDependingOnpageViewMode();

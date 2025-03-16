@@ -64,7 +64,7 @@ if (!HTMLCollection.prototype[Symbol.iterator]) {
 
 function getViewerConfiguration() {
   return {
-    appContainer: document.body,
+    appContainer: document.getElementsByClassName("body")[0],
     principalContainer: document.getElementById("mainContainer"),
     mainContainer: document.getElementById("viewerContainer"),
     viewerContainer: document.getElementById("viewer"),
