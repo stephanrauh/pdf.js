@@ -74,10 +74,13 @@ class L10n {
     (this.#elements ||= new Set()).add(element);
     try {
       this.#l10n.connectRoot(element);
-      await this.#l10n.translateRoots();
+      // await this.#l10n.translateRoots(); // #2828 modified by ngx-extended-pdf-viewer
     } catch {
       // Element is under an existing root, so there is no need to add it again.
+      // #2828 but ngx-extended-pdf-viewer needs to call the translation
+      // nonetheless, so let's silently drop the exception
     }
+    await this.#l10n.translateRoots(); // #2828 modified by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */
