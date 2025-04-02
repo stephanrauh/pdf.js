@@ -76,7 +76,25 @@ class PDFFindBar {
       this.dispatchEvent("");
     });
 
-    this.bar.addEventListener("keydown", ({ keyCode, shiftKey, target }) => {
+    // #2852 modified by ngx-extended-pdf-viewer
+    this.findField.parentElement.addEventListener("keydown", event => {
+      // Stop event from bubbling and optionally prevent default behavior
+      const { keyCode } = event;
+      if (keyCode !== 13 && keyCode !== 27) {
+        event.stopPropagation();
+      }
+      if (event.metaKey && event.key === "ArrowDown") {
+        event.preventDefault();
+      }
+
+      if (event.metaKey && event.key === "ArrowUp") {
+        event.preventDefault();
+      }
+    });
+    // #2852 end of modification by ngx-extended-pdf-viewer
+
+    this.bar.addEventListener("keydown", event => {
+      const { keyCode, shiftKey, target } = event;
       switch (keyCode) {
         case 13: // Enter
           if (target === this.findField) {
@@ -88,6 +106,11 @@ class PDFFindBar {
           break;
         case 27: // Escape
           this.close();
+
+          // #2852 modified by ngx-extended-pdf-viewer
+          // Stop event from bubbling and optionally prevent default behavior
+          event.stopPropagation();
+          // #2852 end of modification by ngx-extended-pdf-viewer
           break;
       }
     });
