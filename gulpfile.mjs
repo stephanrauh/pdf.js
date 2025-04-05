@@ -556,9 +556,11 @@ function createWorkerBundle(defines) {
   const workerFileConfig = createWebpackConfig(defines, {
     filename: defines.MINIFIED ? "pdf.worker.min.mjs" : "pdf.worker.mjs",
     library: {
-      type: "module",
+      type: defines.SKIP_BABEL ? "module" : "commonjs",
     },
   });
+  console.log(workerFileConfig)
+
   return gulp
     .src("./src/pdf.worker.js", { encoding: false })
     .pipe(webpack2Stream(workerFileConfig))
