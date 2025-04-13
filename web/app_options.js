@@ -659,6 +659,11 @@ class AppOptions {
     let events;
 
     for (const name in options) {
+      // #2874 modified by ngx-extended-pdf-viewer
+      if (name === "positionPopupDialogsWithJavaScript") {
+        continue;
+      }
+      // #2874 end of modification by ngx-extended-pdf-viewer
       const defaultOpt = defaultOptions[name];
       let userOpt = options[name];
 
