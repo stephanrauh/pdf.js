@@ -13,6 +13,7 @@
  * limitations under the License.
  */
 
+import '../src/pdf.js'; // #2536 mofified by ngx-extended-pdf-viewer (support for Safari 16 + 17)
 import { RenderingStates, ScrollMode, SpreadMode } from "./ui_utils.js";
 import { AppOptions } from "./app_options.js";
 import { LinkTarget } from "./pdf_link_service.js";

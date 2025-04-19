@@ -82,7 +82,7 @@ const ENV_TARGETS = [
   "last 2 versions",
   "Chrome >= 103",
   "Firefox ESR",
-  "Safari >= 16.4",
+  "Safari >= 15.0",
   "Node >= 20",
   "> 1%",
   "not IE > 0",
@@ -320,10 +320,25 @@ function createWebpackConfig(
     /node_modules[\\/]core-js/,
   ];
 
-  const babelPresets = skipBabel
-    ? undefined
-    : [["@babel/preset-env", BABEL_PRESET_ENV_OPTS]];
-  const babelPlugins = [
+
+  const babelPresets =  [[
+    "@babel/preset-env",
+    {
+      ...BABEL_PRESET_ENV_OPTS,
+        targets: BABEL_TARGETS,
+    }]];
+    const babelPlugins = [
+    function debugBabelPlugin() {
+      return {
+        name: "debug-babel-plugin",
+        visitor: {
+          Program(path, state) {
+            const filename = state?.file?.opts?.filename ?? "(unknown file)";
+            // console.log(`[Babel] Transpiling: ${filename}`);
+          }
+        }
+      };
+    },
     [
       babelPluginPDFJSPreprocessor,
       {
@@ -398,7 +413,6 @@ function createWebpackConfig(
             presets: babelPresets,
             plugins: babelPlugins,
             targets: BABEL_TARGETS,
-            compact: skipBabel ? "auto" : true,
           },
         },
       ],
@@ -581,7 +595,7 @@ function createWebBundle(defines, options) {
     }
   );
   return gulp
-    .src(["./web/viewer.js", "./src/pdf.js"], { encoding: false }) // #2687 modified by ngx-extended-pdf-viewer
+    .src(["./web/viewer.js"], { encoding: false }) // #2687 modified by ngx-extended-pdf-viewer
     .pipe(webpack2Stream(viewerFileConfig));
 }
 
