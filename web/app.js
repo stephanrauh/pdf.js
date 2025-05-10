@@ -898,6 +898,7 @@ appConfig: null,
     if (this.pdfViewer.isInPresentationMode) {
       return;
     }
+
     this.pdfViewer.updateScale({
       drawingDelay: AppOptions.get("defaultZoomDelay"),
       steps,
@@ -2850,6 +2851,8 @@ function onScaleChanging(evt) {
   this.toolbar?.setPageScale(evt.presetValue, evt.scale);
 
   this.pdfViewer.update(evt.noScroll);
+
+  this.pdfViewer.updateBookModeScale(evt);
 }
 
 function onRotationChanging(evt) {
