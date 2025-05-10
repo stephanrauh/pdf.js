@@ -79,8 +79,8 @@ class Toolbar {
     const buttons = [
       { element: options.previous, eventName: "previouspage" },
       { element: options.next, eventName: "nextpage" },
-      { element: options.zoomIn, eventName: "zoomin" },
-      { element: options.zoomOut, eventName: "zoomout" },
+      // { element: options.zoomIn, eventName: "zoomin" },
+      // { element: options.zoomOut, eventName: "zoomout" },
       { element: options.print, eventName: "print" },
       // #1807 modified by ngx-extended-pdf-viewer
       {

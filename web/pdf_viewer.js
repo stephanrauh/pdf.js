@@ -554,13 +554,16 @@ class PDFViewer {
             viewer.style.overflow = "hidden";
             viewer.style.marginLeft = "auto";
             viewer.style.marginRight = "auto";
-            this.pageFlip = new PageFlip(htmlParentElement, {
-              width: page1.clientWidth,
-              height: page1.clientHeight,
-              showCover: true,
-              size: "fixed",
-            },
-            this.cspPolicyService); // #2362 modified by ngx-extended-pdf-viewer
+            this.pageFlip = new PageFlip(
+              htmlParentElement,
+              {
+                width: page1.clientWidth,
+                height: page1.clientHeight,
+                showCover: true,
+                size: "fixed",
+              },
+              this.cspPolicyService
+            ); // #2362 modified by ngx-extended-pdf-viewer
             this.pageFlip.loadFromHTML(this.container.querySelectorAll(".page"));
             // triggered by page turning
             this.pageFlip.on("flip", e => {
@@ -1736,10 +1739,13 @@ class PDFViewer {
       } else if (this._scrollMode === ScrollMode.HORIZONTAL) {
         [hPadding, vPadding] = [vPadding, hPadding]; // Swap the padding values.
       }
-      const pageWidthScale =
+      let pageWidthScale =
         (((this.container.clientWidth - hPadding) / currentPage.width) *
           currentPage.scale) /
         this.#pageWidthScaleFactor;
+      if (this.pageViewMode === "book") {
+        pageWidthScale /= 2;
+      }
       const pageHeightScale =
         ((this.container.clientHeight - vPadding) / currentPage.height) *
         currentPage.scale;
@@ -2046,8 +2052,8 @@ class PDFViewer {
       );
     }
 
-    // #2828 modified by ngx-extended-pdf-viewer - now the location is always updated,
-    // preventing the page to jump to page 1 after zooming
+    // #2828 modified by ngx-extended-pdf-viewer - now the location is always
+    // updated, preventing the page to jump to page 1 after zooming
     this._updateLocation(visible.first);
     this.eventBus.dispatch("updateviewarea", {
       source: this,
@@ -2058,6 +2064,29 @@ class PDFViewer {
     // #859 modified by ngx-extended-pdf-viewer
     this.hidePagesDependingOnpageViewMode();
     // #859 end of modification
+  }
+
+  async updateBookModeScale(evt) {
+    if (this.pageViewMode === "book") {
+      if (this.pageFlip) {
+        if (evt.scale && evt.scale !== evt.previousScale) {
+          // resize the page
+          const page = this._pages[0];
+          if (page.pdfPage) {
+            const width = page.width;
+            const height = page.height;
+            const block = page.div.parentElement;
+
+            const borderWith = this.removePageBorders ? 1 : 40;
+            block.style.width = `${2 * width + borderWith}px`;
+            block.style.height = `${height}px`;
+            this.pageFlip.render.setting.width = width;
+            this.pageFlip.render.setting.height = height;
+            this.pageFlip.render.update();
+          }
+        }
+      }
+    }
   }
 
   #switchToEditAnnotationMode() {
