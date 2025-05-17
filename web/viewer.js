@@ -16,6 +16,7 @@
 import '../src/pdf.js'; // #2536 mofified by ngx-extended-pdf-viewer (support for Safari 16 + 17)
 import { RenderingStates, ScrollMode, SpreadMode } from "./ui_utils.js";
 import { AppOptions } from "./app_options.js";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { LinkTarget } from "./pdf_link_service.js";
 import { PDFViewerApplication } from "./app.js";
 
