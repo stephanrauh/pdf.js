@@ -147,6 +147,7 @@ class AnnotationEditorLayer {
     if (!AnnotationEditorLayer._initialized) {
       AnnotationEditorLayer._initialized = true;
       for (const editorType of editorTypes) {
+        editorType.eventBus = eventBus;
         editorType.initialize(l10n, uiManager);
       }
     }
