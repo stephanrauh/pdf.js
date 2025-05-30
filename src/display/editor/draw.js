@@ -231,7 +231,36 @@ class DrawingEditor extends AnnotationEditor {
         this._drawId,
         options.toSVGProperties()
       );
+
+      // #2256 modified by ngx-extended-pdf-viewer
+      if (name === "stroke") {
+        this.eventBus?.dispatch("annotation-editor-event", {
+          source: this,
+          type: "colorChanged",
+          page: this.pageIndex + 1,
+          editorType: this.constructor.name,
+          value,
+        });
+      } else if (name === "stroke-width") {
+        this.eventBus?.dispatch("annotation-editor-event", {
+          source: this,
+          type: "thicknessChanged",
+          page: this.pageIndex + 1,
+          editorType: this.constructor.name,
+          value,
+        });
+      } else if (name === "stroke-opacity") {
+        this.eventBus?.dispatch("annotation-editor-event", {
+          source: this,
+          type: "opacityChanged",
+          page: this.pageIndex + 1,
+          editorType: this.constructor.name,
+          value,
+        });
+      }
+      // #2256 end of modification by ngx-extended-pdf-viewer
     };
+
     this.addCommands({
       cmd: setter.bind(this, value),
       undo: setter.bind(this, savedValue),
@@ -804,6 +833,7 @@ class DrawingEditor extends AnnotationEditor {
     );
     // We track the timestamp to know if the touchmove event is used to draw.
     DrawingEditor.#currentMoveTimestamp = event.timeStamp;
+
     stopEvent(event);
   }
 
@@ -840,6 +870,18 @@ class DrawingEditor extends AnnotationEditor {
         DrawingEditor.#currentDraw.end(event.offsetX, event.offsetY)
       );
     }
+
+    // #2256 modified by ngx-extended-pdf-viewerAdd commentMore actions
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "bezierPathChanged",
+      page: this._currentParent ? this._currentParent.pageIndex + 1 : NaN,
+      editorType: this.name,
+      // value: editor.getOutlines(),
+      // previousValue: currentPath,
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
+
     if (this.supportMultipleDrawings) {
       const draw = DrawingEditor.#currentDraw;
       const drawId = this._currentDrawId;
@@ -893,6 +935,7 @@ class DrawingEditor extends AnnotationEditor {
           mustBeCommitted: !isAborted,
         }
       );
+
       this._cleanup(true);
       return editor;
     }

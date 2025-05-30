@@ -539,14 +539,24 @@ class AnnotationEditor {
    * @param {number} x - in page coordinates.
    * @param {number} y - in page coordinates.
    */
-  _onTranslating(x, y) {}
+  _onTranslating(x, y) {  }
 
   /**
    * Called when the editor has been translated.
    * @param {number} x - in page coordinates.
    * @param {number} y - in page coordinates.
    */
-  _onTranslated(x, y) {}
+  _onTranslated(x, y) {
+    // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "moved",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: { x, y },
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
+  }
 
   get _hasBeenMoved() {
     return (
