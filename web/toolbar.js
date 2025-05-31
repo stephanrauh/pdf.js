@@ -89,6 +89,9 @@ class Toolbar {
       },
       // #1807 end of modication by ngx-extended-pdf-viewer
       { element: options.download, eventName: "download" },
+      // #2900 modified by ngx-extended-pdf-viewer - deactivate the buttons
+      // because they're handled by TypeScript
+      /*
       {
         element: options.editorFreeTextButton,
         eventName: "switchannotationeditormode",
@@ -141,6 +144,8 @@ class Toolbar {
           data: { action: "pdfjs.image.icon_click" },
         },
       },
+      */
+      // #2900 end of modification by ngx-extended-pdf-viewer
     ];
 
     // Bind the event listeners for click and various other actions.
