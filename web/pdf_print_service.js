@@ -302,6 +302,7 @@ class PDFPrintService {
         }
         print.call(window);
         // Delay promise resolution in case print() was not synchronous.
+        // Smartphone browsers tends to be slower than desktop browsers.
         // modified by ngx-extended-pdf-viewer #83
         const isIOS = navigator.platform && [
           "iPad Simulator",
@@ -314,7 +315,10 @@ class PDFPrintService {
         // iPad on iOS 13 detection
         || (navigator.userAgent.includes("Mac") && "ontouchend" in document);
 
-        setTimeout(resolve, isIOS ? 1500 : 20); // Tidy-up.
+        const isAndroid = /Android/i.test(navigator.userAgent);
+
+        const optimalTimeout = isIOS || isAndroid ? 1500 : 100;
+        setTimeout(resolve, optimalTimeout);
         // end of modification by ngx-extended-pdf-viewer
       }, 0);
     });
