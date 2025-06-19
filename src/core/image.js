@@ -18,6 +18,7 @@ import {
   FeatureTest,
   FormatError,
   ImageKind,
+  MathClamp,
   warn,
 } from "../shared/util.js";
 import {
@@ -26,26 +27,12 @@ import {
 } from "../shared/image_utils.js";
 import { BaseStream } from "./base_stream.js";
 import { ColorSpace } from "./colorspace.js";
+import { ColorSpaceUtils } from "./colorspace_utils.js";
 import { DecodeStream } from "./decode_stream.js";
 import { ImageResizer } from "./image_resizer.js";
 import { JpegStream } from "./jpeg_stream.js";
 import { JpxImage } from "./jpx.js";
 import { Name } from "./primitives.js";
-
-/**
- * Decode and clamp a value. The formula is different from the spec because we
- * don't decode to float range [0,1], we decode it in the [0,max] range.
- */
-function decodeAndClamp(value, addend, coefficient, max) {
-  value = addend + value * coefficient;
-  // Clamp the value to the range
-  if (value < 0) {
-    value = 0;
-  } else if (value > max) {
-    value = max;
-  }
-  return value;
-}
 
 /**
  * Resizes an image mask with 1 component.
@@ -100,6 +87,7 @@ class PDFImage {
     mask = null,
     isMask = false,
     pdfFunctionFactory,
+    globalColorSpaceCache,
     localColorSpaceCache,
   }) {
     this.image = image;
@@ -152,11 +140,26 @@ class PDFImage {
       );
       width = image.width;
       height = image.height;
-    }
-    if (width < 1 || height < 1) {
-      throw new FormatError(
-        `Invalid image width: ${width} or height: ${height}`
-      );
+    } else {
+      const validWidth = typeof width === "number" && width > 0,
+        validHeight = typeof height === "number" && height > 0;
+
+      if (!validWidth || !validHeight) {
+        if (!image.fallbackDims) {
+          throw new FormatError(
+            `Invalid image width: ${width} or height: ${height}`
+          );
+        }
+        warn(
+          "PDFImage - using the Width/Height of the parent image, for SMask/Mask data."
+        );
+        if (!validWidth) {
+          width = image.fallbackDims.width;
+        }
+        if (!validHeight) {
+          height = image.fallbackDims.height;
+        }
+      }
     }
     this.width = width;
     this.height = height;
@@ -209,17 +212,20 @@ class PDFImage {
         colorSpace = Name.get("DeviceRGBA");
       }
 
-      this.colorSpace = ColorSpace.parse({
+      this.colorSpace = ColorSpaceUtils.parse({
         cs: colorSpace,
         xref,
         resources: isInline ? res : null,
         pdfFunctionFactory,
+        globalColorSpaceCache,
         localColorSpaceCache,
       });
       this.numComps = this.colorSpace.numComps;
 
       if (this.jpxDecoderOptions) {
-        this.jpxDecoderOptions.numComponents = hasColorSpace ? this.numComp : 0;
+        this.jpxDecoderOptions.numComponents = hasColorSpace
+          ? this.numComps
+          : 0;
         // If the jpx image has a color space then it musn't be used in order to
         // be able to use the color space that comes from the pdf.
         this.jpxDecoderOptions.isIndexedColormap =
@@ -253,12 +259,17 @@ class PDFImage {
     }
 
     if (smask) {
+      // Provide fallback width/height values for corrupt SMask images
+      // (see issue19611.pdf).
+      smask.fallbackDims ??= { width, height };
+
       this.smask = new PDFImage({
         xref,
         res,
         image: smask,
         isInline,
         pdfFunctionFactory,
+        globalColorSpaceCache,
         localColorSpaceCache,
       });
     } else if (mask) {
@@ -268,6 +279,10 @@ class PDFImage {
         if (!imageMask) {
           warn("Ignoring /Mask in image without /ImageMask.");
         } else {
+          // Provide fallback width/height values for corrupt Mask images
+          // (see issue19611.pdf).
+          mask.fallbackDims ??= { width, height };
+
           this.mask = new PDFImage({
             xref,
             res,
@@ -275,6 +290,7 @@ class PDFImage {
             isInline,
             isMask: true,
             pdfFunctionFactory,
+            globalColorSpaceCache,
             localColorSpaceCache,
           });
         }
@@ -295,6 +311,7 @@ class PDFImage {
     image,
     isInline = false,
     pdfFunctionFactory,
+    globalColorSpaceCache,
     localColorSpaceCache,
   }) {
     const imageData = image;
@@ -326,6 +343,7 @@ class PDFImage {
       smask: smaskData,
       mask: maskData,
       pdfFunctionFactory,
+      globalColorSpaceCache,
       localColorSpaceCache,
     });
   }
@@ -478,10 +496,11 @@ class PDFImage {
     let index = 0;
     for (i = 0, ii = this.width * this.height; i < ii; i++) {
       for (let j = 0; j < numComps; j++) {
-        buffer[index] = decodeAndClamp(
-          buffer[index],
-          decodeAddends[j],
-          decodeCoefficients[j],
+        // Decode and clamp. The formula is different from the spec because we
+        // don't decode to float range [0,1], we decode it in the [0,max] range.
+        buffer[index] = MathClamp(
+          decodeAddends[j] + buffer[index] * decodeCoefficients[j],
+          0,
           max
         );
         index++;

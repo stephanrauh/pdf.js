@@ -199,17 +199,13 @@ class PDFPrintService {
     this.scratchCanvas.width = this.scratchCanvas.height = 0;
     this.scratchCanvas = null;
     activeService = null;
-    // #2337 modified by ngx-extended-pdf-viewer
-    // ensureOverlay().then(function () {
-    if (overlayManager.active === dialog) {
-        // #2337 end of modification by ngx-extended-pdf-viewer
-        overlayManager.close(dialog);
-        // #2337 modified by ngx-extended-pdf-viewer
-        overlayManager.unregister(dialog);
-        overlayPromise = undefined;
-       }
-    // });
-    // #2337 end of modification by ngx-extended-pdf-viewer
+    ensureOverlay().then(function () {
+      overlayManager.closeIfActive(dialog);
+      // #2337 modified by ngx-extended-pdf-viewer
+      overlayManager.unregister(dialog);
+      overlayPromise = undefined;
+      // #2337 end of modification by ngx-extended-pdf-viewer
+    });
   }
 
   renderPages() {
@@ -359,46 +355,45 @@ function printPdf() {
     if (!activeService) {
       NgxConsole.error("Expected print service to be initialized.");
       ensureOverlay().then(function () {
-        if (overlayManager.active === dialog) {
-          overlayManager.close(dialog);
-        }
+        overlayManager.closeIfActive(dialog);
       });
-      return; // eslint-disable-line no-unsafe-finally
+    } else {
+      const activeServiceOnEntry = activeService;
+      // #2603 modified by ngx-extended-pdf-viewer
+      // create a new print container for each print job
+      const printContainer = document.createElement("div");
+      printContainer.id = "printContainer";
+      document.body.append(printContainer);
+      activeServiceOnEntry.printContainer = printContainer;
+      // #2603 end of modification by ngx-extended-pdf-viewer
+
+      activeService
+        .renderPages()
+        .then(function () {
+          // #643 modified by ngx-extended-pdf-viewer
+          const progressIndicator = document.getElementById("printServiceDialog");
+          if (progressIndicator) {
+            progressIndicator.classList.add("hidden");
+          }
+          // #643 end of modification
+          return activeServiceOnEntry.performPrint();
+        })
+        .catch(() => {
+          // Ignore any error messages.
+        })
+        .then(() => {
+          // aborts acts on the "active" print request, so we need to check
+          // whether the print request (activeServiceOnEntry) is still active.
+          // Without the check, an unrelated print request (created after
+          // aborting this print request while the pages were being generated)
+          // would be aborted.
+          if (activeServiceOnEntry.active) {
+            abort();
+          }
+        });
     }
-    const activeServiceOnEntry = activeService;
-    // #2603 modified by ngx-extended-pdf-viewer
-    // create a new print container for each print job
-    const printContainer = document.createElement("div");
-    printContainer.id = "printContainer";
-    document.body.append(printContainer);
-    activeServiceOnEntry.printContainer = printContainer;
-    // #2603 end of modification by ngx-extended-pdf-viewer
-    activeService
-      .renderPages()
-      .then(function () {
-        // #643 modified by ngx-extended-pdf-viewer
-        const progressIndicator = document.getElementById("printServiceDialog");
-        if (progressIndicator) {
-          progressIndicator.classList.add("hidden");
-        }
-        // #643 end of modification
-        return activeServiceOnEntry.performPrint();
-      })
-      .catch(function () {
-        // Ignore any error messages.
-      })
-      .then(function () {
-        // aborts acts on the "active" print request, so we need to check
-        // whether the print request (activeServiceOnEntry) is still active.
-        // Without the check, an unrelated print request (created after aborting
-        // this print request while the pages were being generated) would be
-        // aborted.
-        if (activeServiceOnEntry.active) {
-          abort();
-        }
-      });
   }
-}
+};
 
 function dispatchEvent(eventType) {
   const event = new CustomEvent(eventType, {

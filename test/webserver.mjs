@@ -35,6 +35,7 @@ const MIME_TYPES = {
   ".log": "text/plain",
   ".bcmap": "application/octet-stream",
   ".ftl": "text/plain",
+  ".wasm": "application/wasm",
 };
 const DEFAULT_MIME_TYPE = "application/octet-stream";
 

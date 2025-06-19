@@ -14,10 +14,16 @@
  */
 
 import { assert, isNodeJS } from "../../src/shared/util.js";
+import {
+  fetchData as fetchDataNode,
+  NodeCMapReaderFactory,
+  NodeStandardFontDataFactory,
+} from "../../src/display/node_utils.js";
 import { NullStream, StringStream } from "../../src/core/stream.js";
 import { Page, PDFDocument } from "../../src/core/document.js";
+import { DOMCMapReaderFactory } from "../../src/display/cmap_reader_factory.js";
+import { DOMStandardFontDataFactory } from "../../src/display/standard_fontdata_factory.js";
 import { fetchData as fetchDataDOM } from "../../src/display/display_utils.js";
-import { fetchData as fetchDataNode } from "../../src/display/node_utils.js";
 import { Ref } from "../../src/core/primitives.js";
 
 const TEST_PDFS_PATH = isNodeJS ? "./test/pdfs/" : "../pdfs/";
@@ -27,6 +33,8 @@ const CMAP_URL = isNodeJS ? "./external/bcmaps/" : "../../external/bcmaps/";
 const STANDARD_FONT_DATA_URL = isNodeJS
   ? "./external/standard_fonts/"
   : "../../external/standard_fonts/";
+
+const WASM_URL = isNodeJS ? "./external/openjpeg/" : "../../external/openjpeg/";
 
 class DefaultFileReaderFactory {
   static async fetch(params) {
@@ -38,12 +46,23 @@ class DefaultFileReaderFactory {
   }
 }
 
+const DefaultCMapReaderFactory =
+  typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC") && isNodeJS
+    ? NodeCMapReaderFactory
+    : DOMCMapReaderFactory;
+
+const DefaultStandardFontDataFactory =
+  typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC") && isNodeJS
+    ? NodeStandardFontDataFactory
+    : DOMStandardFontDataFactory;
+
 function buildGetDocumentParams(filename, options) {
   const params = Object.create(null);
   params.url = isNodeJS
     ? TEST_PDFS_PATH + filename
     : new URL(TEST_PDFS_PATH + filename, window.location).href;
   params.standardFontDataUrl = STANDARD_FONT_DATA_URL;
+  params.wasmUrl = WASM_URL;
 
   for (const option in options) {
     params[option] = options[option];
@@ -231,7 +250,9 @@ export {
   buildGetDocumentParams,
   CMAP_URL,
   createIdFactory,
+  DefaultCMapReaderFactory,
   DefaultFileReaderFactory,
+  DefaultStandardFontDataFactory,
   getCrossOriginHostname,
   STANDARD_FONT_DATA_URL,
   TEST_PDFS_PATH,

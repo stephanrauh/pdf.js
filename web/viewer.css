@@ -51,11 +51,11 @@
   --toolbar-border-color: rgb(184 184 184);
   --toolbar-box-shadow: 0 1px 0 var(--toolbar-border-color);
   --toolbar-border-bottom: none;
-  --toolbarSidebar-box-shadow: inset calc(-1px * var(--dir-factor)) 0 0
-      rgb(0 0 0 / 0.25),
+  --toolbarSidebar-box-shadow:
+    inset calc(-1px * var(--dir-factor)) 0 0 rgb(0 0 0 / 0.25),
     0 1px 0 rgb(0 0 0 / 0.15), 0 0 1px rgb(0 0 0 / 0.1);
   --toolbarSidebar-border-bottom: none;
-  --button-hover-color: rgb(221 222 223);
+  --button-hover-color: color-mix(in srgb, currentColor 17%, transparent);
   --toggled-btn-color: rgb(0 0 0);
   --toggled-btn-bg-color: rgb(0 0 0 / 0.3);
   --toggled-hover-active-btn-color: rgb(0 0 0 / 0.4);
@@ -76,7 +76,6 @@
   --doorhanger-bg-color: rgb(255 255 255);
   --doorhanger-border-color: rgb(12 12 13 / 0.2);
   --doorhanger-hover-color: rgb(12 12 13);
-  --doorhanger-hover-bg-color: rgb(237 237 237);
   --doorhanger-separator-color: rgb(222 222 222);
   --dialog-button-border: none;
   --dialog-button-bg-color: rgb(12 12 13 / 0.1);
@@ -89,6 +88,7 @@
   --toolbarButton-editorHighlight-icon: url(images/toolbarButton-editorHighlight.svg);
   --toolbarButton-editorInk-icon: url(images/toolbarButton-editorInk.svg);
   --toolbarButton-editorStamp-icon: url(images/toolbarButton-editorStamp.svg);
+  --toolbarButton-editorSignature-icon: url(images/toolbarButton-editorSignature.svg);
   --toolbarButton-menuArrow-icon: url(images/toolbarButton-menuArrow.svg);
   --toolbarButton-sidebarToggle-icon: url(images/toolbarButton-sidebarToggle.svg);
   --toolbarButton-secondaryToolbarToggle-icon: url(images/toolbarButton-secondaryToolbarToggle.svg);
@@ -155,7 +155,6 @@
     --sidebar-toolbar-bg-color: rgb(50 50 52);
     --toolbar-bg-color: rgb(56 56 61);
     --toolbar-border-color: rgb(12 12 13);
-    --button-hover-color: rgb(102 102 103);
     --toggled-btn-color: rgb(255 255 255);
     --toggled-btn-bg-color: rgb(0 0 0 / 0.3);
     --toggled-hover-active-btn-color: rgb(0 0 0 / 0.4);
@@ -171,10 +170,9 @@
     --treeitem-selected-bg-color: rgb(255 255 255 / 0.25);
     --thumbnail-hover-color: rgb(255 255 255 / 0.1);
     --thumbnail-selected-color: rgb(255 255 255 / 0.2);
-    --doorhanger-bg-color: rgb(74 74 79);
+    --doorhanger-bg-color: #42414d;
     --doorhanger-border-color: rgb(39 39 43);
     --doorhanger-hover-color: rgb(249 249 250);
-    --doorhanger-hover-bg-color: rgb(93 94 98);
     --doorhanger-separator-color: rgb(92 92 97);
     --dialog-button-bg-color: rgb(92 92 97);
     --dialog-button-hover-bg-color: rgb(115 115 115);
@@ -184,7 +182,6 @@
 @media screen and (forced-colors: active) {
   :root {
     --button-hover-color: Highlight;
-    --doorhanger-hover-bg-color: Highlight;
     --toolbar-icon-opacity: 1;
     --toolbar-icon-bg-color: ButtonText;
     --toolbar-icon-hover-bg-color: ButtonFace;
@@ -570,6 +567,10 @@ body {
 
 #editorStampButton::before {
   mask-image: var(--toolbarButton-editorStamp-icon);
+}
+
+#editorSignatureButton::before {
+  mask-image: var(--toolbarButton-editorSignature-icon);
 }
 
 #printButton::before {
@@ -1071,7 +1072,6 @@ dialog :link {
     }
 
     &:is(:hover, :focus-visible) {
-      background-color: var(--doorhanger-hover-bg-color);
       color: var(--doorhanger-hover-color);
     }
 
@@ -1119,7 +1119,7 @@ dialog :link {
     z-index: 30000;
     cursor: default;
 
-    #editorStampAddImage::before {
+    :is(#editorStampAddImage, #editorSignatureAddSignature)::before {
       mask-image: var(--editorParams-stampAddImage-icon);
     }
 
@@ -1130,9 +1130,13 @@ dialog :link {
       font-style: normal;
       font-weight: 400;
       line-height: 150%;
-      color: var(--main-color);
       width: fit-content;
       inset-inline-start: 0;
+      color: var(--main-color);
+    }
+
+    button:is(:hover, :focus-visible) .editorParamsLabel {
+      color: var(--doorhanger-hover-color);
     }
 
     .editorParamsToolbarContainer {

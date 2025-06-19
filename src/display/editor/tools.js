@@ -43,17 +43,6 @@ function bindEvents(obj, element, names) {
 }
 
 /**
- * Convert a number between 0 and 100 into an hex number between 0 and 255.
- * @param {number} opacity
- * @return {string}
- */
-function opacityToHex(opacity) {
-  return Math.round(Math.min(255, Math.max(1, 255 * opacity)))
-    .toString(16)
-    .padStart(2, "0");
-}
-
-/**
  * Class to create some unique ids for the different editors.
  */
 class IdManager {
@@ -662,6 +651,8 @@ class AnnotationEditorUIManager {
 
   #mainHighlightColorPicker = null;
 
+  #missingCanvases = null;
+
   #mlManager = null;
 
   #mode = AnnotationEditorType.NONE;
@@ -669,6 +660,8 @@ class AnnotationEditorUIManager {
   #selectedEditors = new Set();
 
   #selectedTextNode = null;
+
+  #signatureManager = null;
 
   #pageColors = null;
 
@@ -834,6 +827,7 @@ class AnnotationEditorUIManager {
     container,
     viewer,
     altTextManager,
+    signatureManager,
     eventBus,
     pdfDocument,
     pageColors,
@@ -849,6 +843,7 @@ class AnnotationEditorUIManager {
     this.#container = container;
     this.#viewer = viewer;
     this.#altTextManager = altTextManager;
+    this.#signatureManager = signatureManager;
     this._eventBus = eventBus;
     eventBus._on("editingaction", this.onEditingAction.bind(this), { signal });
     eventBus._on("pagechanging", this.onPageChanging.bind(this), { signal });
@@ -906,12 +901,16 @@ class AnnotationEditorUIManager {
     this.#allLayers.clear();
     this.#allEditors.clear();
     this.#editorsToRescale.clear();
+    this.#missingCanvases?.clear();
     this.#activeEditor = null;
     this.#selectedEditors.clear();
     this.#commandManager.destroy();
     this.#altTextManager?.destroy();
+    this.#signatureManager?.destroy();
     this.#highlightToolbar?.hide();
     this.#highlightToolbar = null;
+    this.#mainHighlightColorPicker?.destroy();
+    this.#mainHighlightColorPicker = null;
     if (this.#focusMainContainerTimeoutId) {
       clearTimeout(this.#focusMainContainerTimeoutId);
       this.#focusMainContainerTimeoutId = null;
@@ -1004,6 +1003,14 @@ class AnnotationEditorUIManager {
 
   editAltText(editor, firstTime = false) {
     this.#altTextManager?.editAltText(this, editor, firstTime);
+  }
+
+  getSignature(editor) {
+    this.#signatureManager?.getSignature({ uiManager: this, editor });
+  }
+
+  get signatureManager() {
+    return this.#signatureManager;
   }
 
   switchToMode(mode, callback) {
@@ -1717,6 +1724,9 @@ class AnnotationEditorUIManager {
       this.#updateModeCapability.resolve();
       return;
     }
+    if (mode === AnnotationEditorType.SIGNATURE) {
+      await this.#signatureManager?.loadSignatures();
+    }
     this.setEditingState(true);
     await this.#enableAll();
     this.unselectAll();
@@ -1777,7 +1787,7 @@ class AnnotationEditorUIManager {
 
     switch (type) {
       case AnnotationEditorParamsType.CREATE:
-        this.currentLayer.addNewEditor();
+        this.currentLayer.addNewEditor(value);
         return;
       case AnnotationEditorParamsType.HIGHLIGHT_DEFAULT_COLOR:
         this.#mainHighlightColorPicker?.updateColor(value);
@@ -1920,6 +1930,9 @@ class AnnotationEditorUIManager {
       }, 0);
     }
     this.#allEditors.delete(editor.id);
+    if (editor.annotationElementId) {
+      this.#missingCanvases?.delete(editor.annotationElementId);
+    }
     this.unselect(editor);
     if (
       !editor.annotationElementId ||
@@ -2273,6 +2286,7 @@ class AnnotationEditorUIManager {
           for (const editor of editors) {
             if (this.#allEditors.has(editor.id)) {
               editor.translateInPage(totalX, totalY);
+              editor.translationDone();
             }
           }
         },
@@ -2280,6 +2294,7 @@ class AnnotationEditorUIManager {
           for (const editor of editors) {
             if (this.#allEditors.has(editor.id)) {
               editor.translateInPage(-totalX, -totalY);
+              editor.translationDone();
             }
           }
         },
@@ -2289,6 +2304,7 @@ class AnnotationEditorUIManager {
 
     for (const editor of editors) {
       editor.translateInPage(x, y);
+      editor.translationDone();
     }
   }
 
@@ -2588,6 +2604,19 @@ class AnnotationEditorUIManager {
     }
     editor.renderAnnotationElement(annotation);
   }
+
+  setMissingCanvas(annotationId, annotationElementId, canvas) {
+    const editor = this.#missingCanvases?.get(annotationId);
+    if (!editor) {
+      return;
+    }
+    editor.setCanvas(annotationElementId, canvas);
+    this.#missingCanvases.delete(annotationId);
+  }
+
+  addMissingCanvas(annotationId, editor) {
+    (this.#missingCanvases ||= new Map()).set(annotationId, editor);
+  }
 }
 
 export {
@@ -2596,5 +2625,4 @@ export {
   ColorManager,
   CommandManager,
   KeyboardManager,
-  opacityToHex,
 };

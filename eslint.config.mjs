@@ -33,12 +33,14 @@ export default [
       "external/bcmaps/",
       "external/builder/fixtures/",
       "external/builder/fixtures_babel/",
-      "external/quickjs/",
       "external/openjpeg/",
+      "external/qcms/",
+      "external/quickjs/",
       "test/stats/results/",
       "test/tmp/",
       "test/pdfs/",
       "web/locale/",
+      "web/wasm/",
       "**/*~/",
     ],
   },
@@ -91,6 +93,17 @@ export default [
       "import/no-empty-named-blocks": "error",
       "import/no-commonjs": "error",
       "import/no-mutable-exports": "error",
+      "import/no-restricted-paths": [
+        "error",
+        {
+          zones: [
+            {
+              target: "./web",
+              from: "./src",
+            },
+          ],
+        },
+      ],
       "import/no-self-import": "error",
       "import/no-unresolved": [
         "error",
@@ -115,7 +128,7 @@ export default [
       "unicorn/no-abusive-eslint-disable": "error",
       "unicorn/no-array-push-push": "error",
       "unicorn/no-console-spaces": "error",
-      "unicorn/no-instanceof-array": "error",
+      "unicorn/no-instanceof-builtins": "error",
       "unicorn/no-invalid-remove-event-listener": "error",
       "unicorn/no-new-buffer": "error",
       "unicorn/no-single-promise-in-promise-methods": "error",
@@ -350,15 +363,6 @@ export default [
       "jasmine/no-suite-dupes": ["error", "branch"],
       "jasmine/prefer-jasmine-matcher": "off",
       "jasmine/prefer-toHaveBeenCalledWith": "off",
-    },
-  },
-  {
-    files: jsFiles("test/fuzz"),
-    rules: {
-      "import/no-unresolved": [
-        "error",
-        { ignore: [".*/build/image_decoders/.*"] },
-      ],
     },
   },
   {

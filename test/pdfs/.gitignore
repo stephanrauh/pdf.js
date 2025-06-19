@@ -16,6 +16,7 @@
 !bug1727053.pdf
 !issue18408_reduced.pdf
 !bug1907000_reduced.pdf
+!bug1953099.pdf
 !issue11913.pdf
 !issue2391-1.pdf
 !issue2391-2.pdf
@@ -94,6 +95,7 @@
 !issue8424.pdf
 !issue8480.pdf
 !bug1650302_reduced.pdf
+!issue18816.pdf
 !issue8570.pdf
 !issue8697.pdf
 !issue8702.pdf
@@ -105,6 +107,7 @@
 !issue9084.pdf
 !issue12963.pdf
 !issue9105_reduced.pdf
+!issue19484_2.pdf
 !issue9105_other.pdf
 !issue9252.pdf
 !issue9262_reduced.pdf
@@ -121,6 +124,7 @@
 !issue10542_reduced.pdf
 !issue10665_reduced.pdf
 !issue11016_reduced.pdf
+!issue19532.pdf
 !issue15516_reduced.pdf
 !issue11045.pdf
 !bug1057544.pdf
@@ -275,6 +279,7 @@
 !pr6531_1.pdf
 !pr6531_2.pdf
 !pr7352.pdf
+!pr19449.pdf
 !bug900822.pdf
 !bug1392647.pdf
 !issue918.pdf
@@ -478,6 +483,7 @@
 !openoffice.pdf
 !js-buttons.pdf
 !issue7014.pdf
+!issue19484_1.pdf
 !issue8187.pdf
 !annotation-link-text-popup.pdf
 !issue9278.pdf
@@ -502,6 +508,7 @@
 !annotation-line-without-appearance.pdf
 !bug1669099.pdf
 !annotation-square-circle.pdf
+!bug1942064.pdf
 !annotation-square-circle-without-appearance.pdf
 !annotation-stamp.pdf
 !issue14048.pdf
@@ -528,7 +535,9 @@
 !bug1743245.pdf
 !quadpoints.pdf
 !transparent.pdf
+!issue19326.pdf
 !issue13931.pdf
+!issue19474.pdf
 !xobject-image.pdf
 !issue15441.pdf
 !issue6605.pdf
@@ -555,6 +564,8 @@
 !poppler-85140-0.pdf
 !issue15012.pdf
 !issue19176.pdf
+!bug1947248_text.pdf
+!bug1947248_forms.pdf
 !issue15150.pdf
 !poppler-395-0-fuzzed.pdf
 !issue14165.pdf
@@ -606,6 +617,7 @@
 !issue16021.pdf
 !bug1770750.pdf
 !issue16063.pdf
+!issue19389.pdf
 !issue16067.pdf
 !bug1820909.1.pdf
 !issue16221.pdf
@@ -650,6 +662,7 @@
 !bug1868759.pdf
 !issue17730.pdf
 !bug1883609.pdf
+!issue19550.pdf
 !issue17808.pdf
 !issue17871_bottom_right.pdf
 !issue17871_top_right.pdf
@@ -692,3 +705,11 @@
 !issue19182.pdf
 !issue18911.pdf
 !issue19207.pdf
+!issue19239.pdf
+!issue19360.pdf
+!bug1019475_1.pdf
+!bug1019475_2.pdf
+!issue19505.pdf
+!colors.pdf
+!red_stamp.pdf
+!issue19633.pdf

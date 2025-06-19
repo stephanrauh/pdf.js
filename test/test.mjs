@@ -952,6 +952,8 @@ async function startBrowser({
       "browser.newtabpage.enabled": false,
       // Disable network connections to Contile.
       "browser.topsites.contile.enabled": false,
+      // Disable logging for remote settings.
+      "services.settings.loglevel": "off",
       ...extraPrefsFirefox,
     };
   }
@@ -1049,9 +1051,7 @@ async function closeSession(browser) {
       await session.browser.close();
     }
     session.closed = true;
-    const allClosed = sessions.every(function (s) {
-      return s.closed;
-    });
+    const allClosed = sessions.every(s => s.closed);
     if (allClosed) {
       if (tempDir) {
         fs.rmSync(tempDir, { recursive: true, force: true });

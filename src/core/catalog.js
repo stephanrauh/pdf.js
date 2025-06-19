@@ -14,15 +14,7 @@
  */
 
 import {
-  collectActions,
-  isNumberArray,
-  MissingDataException,
-  PDF_VERSION_REGEXP,
-  recoverJsURL,
-  toRomanNumerals,
-  XRefEntryException,
-} from "./core_utils.js";
-import {
+  _isValidExplicitDest,
   createValidAbsoluteUrl,
   DocumentActionEventType,
   FormatError,
@@ -35,6 +27,15 @@ import {
   warn,
 } from "../shared/util.js";
 import {
+  collectActions,
+  isNumberArray,
+  MissingDataException,
+  PDF_VERSION_REGEXP,
+  recoverJsURL,
+  toRomanNumerals,
+  XRefEntryException,
+} from "./core_utils.js";
+import {
   Dict,
   isDict,
   isName,
@@ -44,61 +45,22 @@ import {
   RefSet,
   RefSetCache,
 } from "./primitives.js";
+import { GlobalColorSpaceCache, GlobalImageCache } from "./image_utils.js";
 import { NameTree, NumberTree } from "./name_number_tree.js";
 import { BaseStream } from "./base_stream.js";
 import { clearGlobalCaches } from "./cleanup_helper.js";
-import { ColorSpace } from "./colorspace.js";
+import { ColorSpaceUtils } from "./colorspace_utils.js";
 import { FileSpec } from "./file_spec.js";
-import { GlobalImageCache } from "./image_utils.js";
 import { MetadataParser } from "./metadata_parser.js";
 import { StructTreeRoot } from "./struct_tree.js";
 
-function isValidExplicitDest(dest) {
-  if (!Array.isArray(dest) || dest.length < 2) {
-    return false;
-  }
-  const [page, zoom, ...args] = dest;
-  if (!(page instanceof Ref) && !Number.isInteger(page)) {
-    return false;
-  }
-  if (!(zoom instanceof Name)) {
-    return false;
-  }
-  const argsLen = args.length;
-  let allowNull = true;
-  switch (zoom.name) {
-    case "XYZ":
-      if (argsLen < 2 || argsLen > 3) {
-        return false;
-      }
-      break;
-    case "Fit":
-    case "FitB":
-      return argsLen === 0;
-    case "FitH":
-    case "FitBH":
-    case "FitV":
-    case "FitBV":
-      if (argsLen > 1) {
-        return false;
-      }
-      break;
-    case "FitR":
-      if (argsLen !== 4) {
-        return false;
-      }
-      allowNull = false;
-      break;
-    default:
-      return false;
-  }
-  for (const arg of args) {
-    if (!(typeof arg === "number" || (allowNull && arg === null))) {
-      return false;
-    }
-  }
-  return true;
-}
+const isRef = v => v instanceof Ref;
+
+const isValidExplicitDest = _isValidExplicitDest.bind(
+  null,
+  /* validRef = */ isRef,
+  /* validName = */ isName
+);
 
 function fetchDest(dest) {
   if (dest instanceof Dict) {
@@ -140,6 +102,7 @@ class Catalog {
     this.fontCache = new RefSetCache();
     this.builtInCMapCache = new Map();
     this.standardFontDataCache = new Map();
+    this.globalColorSpaceCache = new GlobalColorSpaceCache();
     this.globalImageCache = new GlobalImageCache();
     this.pageKidsCountCache = new RefSetCache();
     this.pageIndexCache = new RefSetCache();
@@ -394,7 +357,7 @@ class Catalog {
         isNumberArray(color, 3) &&
         (color[0] !== 0 || color[1] !== 0 || color[2] !== 0)
       ) {
-        rgbColor = ColorSpace.singletons.rgb.getRgb(color, 0);
+        rgbColor = ColorSpaceUtils.rgb.getRgb(color, 0);
       }
 
       const outlineItem = {
@@ -707,20 +670,23 @@ class Catalog {
   }
 
   get destinations() {
-    const obj = this._readDests(),
+    const rawDests = this.#readDests(),
       dests = Object.create(null);
-    if (obj instanceof NameTree) {
-      for (const [key, value] of obj.getAll()) {
-        const dest = fetchDest(value);
-        if (dest) {
-          dests[stringToPDFString(key)] = dest;
+    for (const obj of rawDests) {
+      if (obj instanceof NameTree) {
+        for (const [key, value] of obj.getAll()) {
+          const dest = fetchDest(value);
+          if (dest) {
+            dests[stringToPDFString(key)] = dest;
+          }
         }
-      }
-    } else if (obj instanceof Dict) {
-      for (const [key, value] of obj) {
-        const dest = fetchDest(value);
-        if (dest) {
-          dests[key] = dest;
+      } else if (obj instanceof Dict) {
+        for (const [key, value] of obj) {
+          const dest = fetchDest(value);
+          if (dest) {
+            // Always let the NameTree take precedence.
+            dests[key] ||= dest;
+          }
         }
       }
     }
@@ -728,40 +694,39 @@ class Catalog {
   }
 
   getDestination(id) {
-    const obj = this._readDests();
-    if (obj instanceof NameTree) {
-      const dest = fetchDest(obj.get(id));
-      if (dest) {
-        return dest;
+    const rawDests = this.#readDests();
+    for (const obj of rawDests) {
+      if (obj instanceof NameTree || obj instanceof Dict) {
+        const dest = fetchDest(obj.get(id));
+        if (dest) {
+          return dest;
+        }
       }
+    }
+
+    if (rawDests[0] instanceof NameTree) {
       // Fallback to checking the *entire* NameTree, in an attempt to handle
       // corrupt PDF documents with out-of-order NameTrees (fixes issue 10272).
-      const allDest = this.destinations[id];
-      if (allDest) {
-        warn(`Found "${id}" at an incorrect position in the NameTree.`);
-        return allDest;
-      }
-    } else if (obj instanceof Dict) {
-      const dest = fetchDest(obj.get(id));
+      const dest = this.destinations[id];
       if (dest) {
+        warn(`Found "${id}" at an incorrect position in the NameTree.`);
         return dest;
       }
     }
     return null;
   }
 
-  /**
-   * @private
-   */
-  _readDests() {
+  #readDests() {
     const obj = this._catDict.get("Names");
+    const rawDests = [];
     if (obj?.has("Dests")) {
-      return new NameTree(obj.getRaw("Dests"), this.xref);
-    } else if (this._catDict.has("Dests")) {
-      // Simple destination dictionary.
-      return this._catDict.get("Dests");
+      rawDests.push(new NameTree(obj.getRaw("Dests"), this.xref));
     }
-    return undefined;
+    if (this._catDict.has("Dests")) {
+      // Simple destination dictionary.
+      rawDests.push(this._catDict.get("Dests"));
+    }
+    return rawDests;
   }
 
   get pageLabels() {
@@ -923,8 +888,7 @@ class Catalog {
     }
     let prefs = null;
 
-    for (const key of obj.getKeys()) {
-      const value = obj.get(key);
+    for (const [key, value] of obj) {
       let prefValue;
 
       switch (key) {
@@ -1168,28 +1132,16 @@ class Catalog {
     return shadow(this, "jsActions", actions);
   }
 
-  async fontFallback(id, handler) {
-    const translatedFonts = await Promise.all(this.fontCache);
-
-    for (const translatedFont of translatedFonts) {
-      if (translatedFont.loadedName === id) {
-        translatedFont.fallback(handler);
-        return;
-      }
-    }
-  }
-
   async cleanup(manuallyTriggered = false) {
     clearGlobalCaches();
+    this.globalColorSpaceCache.clear();
     this.globalImageCache.clear(/* onlyData = */ manuallyTriggered);
     this.pageKidsCountCache.clear();
     this.pageIndexCache.clear();
     this.pageDictCache.clear();
     this.nonBlendModesSet.clear();
 
-    const translatedFonts = await Promise.all(this.fontCache);
-
-    for (const { dict } of translatedFonts) {
+    for (const { dict } of await Promise.all(this.fontCache)) {
       delete dict.cacheKey;
     }
     this.fontCache.clear();
@@ -1523,9 +1475,7 @@ class Catalog {
           if (!found) {
             throw new FormatError("Kid reference not found in parent's kids.");
           }
-          return Promise.all(kidPromises).then(function () {
-            return [total, parentRef];
-          });
+          return Promise.all(kidPromises).then(() => [total, parentRef]);
         });
     }
 

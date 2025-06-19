@@ -30,6 +30,7 @@ import {
 import {
   getCurrentTransform,
   getCurrentTransformInverse,
+  OutputScale,
   PixelsPerInch,
 } from "./display_utils.js";
 import {
@@ -811,7 +812,7 @@ function getImageSmoothingEnabled(transform, interpolate) {
   scale[0] = Math.fround(scale[0]);
   scale[1] = Math.fround(scale[1]);
   const actualScale = Math.fround(
-    (globalThis.devicePixelRatio || 1) * PixelsPerInch.PDF_TO_CSS_UNITS
+    OutputScale.pixelRatio * PixelsPerInch.PDF_TO_CSS_UNITS
   );
   return scale[0] <= actualScale && scale[1] <= actualScale;
 }
@@ -2043,12 +2044,13 @@ class CanvasGraphics {
       ctx.save();
       ctx.translate(x, y);
       ctx.scale(fontSize, -fontSize);
+      let currentTransform;
       if (
         fillStrokeMode === TextRenderingMode.FILL ||
         fillStrokeMode === TextRenderingMode.FILL_STROKE
       ) {
         if (patternFillTransform) {
-          const currentTransform = ctx.getTransform();
+          currentTransform = ctx.getTransform();
           ctx.setTransform(...patternFillTransform);
           ctx.fill(
             this.#getScaledPath(path, currentTransform, patternFillTransform)
@@ -2062,8 +2064,22 @@ class CanvasGraphics {
         fillStrokeMode === TextRenderingMode.FILL_STROKE
       ) {
         if (patternStrokeTransform) {
-          const currentTransform = ctx.getTransform();
+          currentTransform ||= ctx.getTransform();
           ctx.setTransform(...patternStrokeTransform);
+          const { a, b, c, d } = currentTransform;
+          const invPatternTransform = Util.inverseTransform(
+            patternStrokeTransform
+          );
+          const transf = Util.transform(
+            [a, b, c, d, 0, 0],
+            invPatternTransform
+          );
+          const [sx, sy] = Util.singularValueDecompose2dScale(transf);
+
+          // Cancel the pattern scaling of the line width.
+          // If sx and sy are different, unfortunately we can't do anything and
+          // we'll have a rendering bug.
+          ctx.lineWidth *= Math.max(sx, sy) / fontSize;
           ctx.stroke(
             this.#getScaledPath(path, currentTransform, patternStrokeTransform)
           );
@@ -2347,7 +2363,7 @@ class CanvasGraphics {
 
     ctx.save();
     ctx.transform(...current.textMatrix);
-    ctx.translate(current.x, current.y);
+    ctx.translate(current.x, current.y + current.textRise);
 
     ctx.scale(textHScale, fontDirection);
 

@@ -103,6 +103,16 @@ function arrayBuffersToBytes(arr) {
   return data;
 }
 
+async function fetchBinaryData(url) {
+  const response = await fetch(url);
+  if (!response.ok) {
+    throw new Error(
+      `Failed to fetch file "${url}" with "${response.statusText}".`
+    );
+  }
+  return new Uint8Array(await response.arrayBuffer());
+}
+
 /**
  * Get the value of an inheritable property.
  *
@@ -217,6 +227,10 @@ function readInt8(data, offset) {
   return (data[offset] << 24) >> 24;
 }
 
+function readInt16(data, offset) {
+  return ((data[offset] << 24) | (data[offset + 1] << 16)) >> 16;
+}
+
 function readUint16(data, offset) {
   return (data[offset] << 8) | data[offset + 1];
 }
@@ -270,7 +284,7 @@ function isNumberArray(arr, len) {
   // BigInt64Array/BigUint64Array types (their elements aren't "number").
   return (
     ArrayBuffer.isView(arr) &&
-    (arr.length === 0 || typeof arr[0] === "number") &&
+    !(arr instanceof BigInt64Array || arr instanceof BigUint64Array) &&
     (len === null || arr.length === len)
   );
 }
@@ -701,6 +715,7 @@ export {
   encodeToXmlString,
   escapePDFName,
   escapeString,
+  fetchBinaryData,
   getInheritableProperty,
   getLookupTableFactory,
   getNewAnnotationsMap,
@@ -722,6 +737,7 @@ export {
   ParserEOFException,
   parseXFAPath,
   PDF_VERSION_REGEXP,
+  readInt16,
   readInt8,
   readUint16,
   readUint32,

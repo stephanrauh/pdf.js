@@ -27,23 +27,26 @@ import {
   AnnotationEditorParamsType,
   AnnotationEditorType,
   AnnotationMode,
+  AnnotationType,
   createValidAbsoluteUrl,
   FeatureTest,
+  getUuid,
   ImageKind,
   InvalidPDFException,
-  MissingPDFException,
+  MathClamp,
   normalizeUnicode,
   OPS,
   PasswordResponses,
   PermissionFlag,
+  ResponseException,
   shadow,
-  UnexpectedResponseException,
   Util,
   VerbosityLevel,
 } from "./shared/util.js";
 import {
   build,
   getDocument,
+  isValidExplicitDest,
   PDFDataRangeTransport,
   PDFWorker,
   version,
@@ -62,6 +65,7 @@ import {
   RenderingCancelledException,
   setLayerDimensions,
   stopEvent,
+  SupportedImageMimeTypes,
 } from "./display/display_utils.js";
 import { AnnotationEditorLayer } from "./display/editor/annotation_editor_layer.js";
 import { AnnotationEditorUIManager } from "./display/editor/tools.js";
@@ -71,6 +75,7 @@ import { DOMSVGFactory } from "./display/svg_factory.js";
 import { DrawLayer } from "./display/draw_layer.js";
 import { GlobalWorkerOptions } from "./display/worker_options.js";
 import { HighlightOutliner } from "./display/editor/drawers/highlight.js";
+import { SignatureExtractor } from "./display/editor/drawers/signaturedraw.js";
 import { TextLayer } from "./display/text_layer.js";
 import { TouchManager } from "./display/touch_manager.js";
 import { XfaLayer } from "./display/xfa_layer.js";
@@ -96,6 +101,7 @@ export {
   AnnotationEditorUIManager,
   AnnotationLayer,
   AnnotationMode,
+  AnnotationType,
   build,
   ColorPicker,
   createValidAbsoluteUrl,
@@ -106,13 +112,15 @@ export {
   getDocument,
   getFilenameFromUrl,
   getPdfFilenameFromUrl,
+  getUuid,
   getXfaPageViewport,
   GlobalWorkerOptions,
   ImageKind,
   InvalidPDFException,
   isDataScheme,
   isPdfFile,
-  MissingPDFException,
+  isValidExplicitDest,
+  MathClamp,
   noContextMenu,
   normalizeUnicode,
   OPS,
@@ -124,12 +132,14 @@ export {
   PermissionFlag,
   PixelsPerInch,
   RenderingCancelledException,
+  ResponseException,
   setLayerDimensions,
   shadow,
+  SignatureExtractor,
   stopEvent,
+  SupportedImageMimeTypes,
   TextLayer,
   TouchManager,
-  UnexpectedResponseException,
   Util,
   VerbosityLevel,
   version,

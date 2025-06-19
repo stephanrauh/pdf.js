@@ -30,8 +30,6 @@ const isNodeJS =
 const IDENTITY_MATRIX = [1, 0, 0, 1, 0, 0];
 const FONT_IDENTITY_MATRIX = [0.001, 0, 0, 0.001, 0, 0];
 
-const MAX_IMAGE_SIZE_TO_CACHE = 10e6; // Ten megabytes.
-
 // Represent the percentage of the height of a single-line field over
 // the font size. Acrobat seems to use this value.
 const LINE_FACTOR = 1.35;
@@ -80,6 +78,7 @@ const AnnotationEditorType = {
   HIGHLIGHT: 9,
   STAMP: 13,
   INK: 15,
+  SIGNATURE: 101,
 };
 
 const AnnotationEditorParamsType = {
@@ -428,35 +427,28 @@ function createValidAbsoluteUrl(url, baseUrl = null, options = null) {
   if (!url) {
     return null;
   }
-  try {
-    if (options && typeof url === "string") {
-      // Let URLs beginning with "www." default to using the "http://" protocol.
-      if (options.addDefaultProtocol && url.startsWith("www.")) {
-        const dots = url.match(/\./g);
-        // Avoid accidentally matching a *relative* URL pointing to a file named
-        // e.g. "www.pdf" or similar.
-        if (dots?.length >= 2) {
-          url = `http://${url}`;
-        }
-      }
-
-      // According to ISO 32000-1:2008, section 12.6.4.7, URIs should be encoded
-      // in 7-bit ASCII. Some bad PDFs use UTF-8 encoding; see bug 1122280.
-      if (options.tryConvertEncoding) {
-        try {
-          url = stringToUTF8String(url);
-        } catch {}
+  if (options && typeof url === "string") {
+    // Let URLs beginning with "www." default to using the "http://" protocol.
+    if (options.addDefaultProtocol && url.startsWith("www.")) {
+      const dots = url.match(/\./g);
+      // Avoid accidentally matching a *relative* URL pointing to a file named
+      // e.g. "www.pdf" or similar.
+      if (dots?.length >= 2) {
+        url = `http://${url}`;
       }
     }
 
-    const absoluteUrl = baseUrl ? new URL(url, baseUrl) : new URL(url);
-    if (_isValidProtocol(absoluteUrl)) {
-      return absoluteUrl;
+    // According to ISO 32000-1:2008, section 12.6.4.7, URIs should be encoded
+    // in 7-bit ASCII. Some bad PDFs use UTF-8 encoding; see bug 1122280.
+    if (options.tryConvertEncoding) {
+      try {
+        url = stringToUTF8String(url);
+      } catch {}
     }
-  } catch {
-    /* `new URL()` will throw on incorrect data. */
   }
-  return null;
+
+  const absoluteUrl = baseUrl ? URL.parse(url, baseUrl) : URL.parse(url);
+  return _isValidProtocol(absoluteUrl) ? absoluteUrl : null;
 }
 
 function shadow(obj, prop, value, nonSerializable = false) {
@@ -520,16 +512,11 @@ class InvalidPDFException extends BaseException {
   }
 }
 
-class MissingPDFException extends BaseException {
-  constructor(msg) {
-    super(msg, "MissingPDFException");
-  }
-}
-
-class UnexpectedResponseException extends BaseException {
-  constructor(msg, status) {
-    super(msg, "UnexpectedResponseException");
+class ResponseException extends BaseException {
+  constructor(msg, status, missing) {
+    super(msg, "ResponseException");
     this.status = status;
+    this.missing = missing;
   }
 }
 
@@ -657,18 +644,24 @@ class FeatureTest {
     if (
       (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
       (typeof navigator !== "undefined" &&
-        typeof navigator?.platform === "string")
+        typeof navigator?.platform === "string" &&
+        typeof navigator?.userAgent === "string")
     ) {
+      const { platform, userAgent } = navigator;
+
       return shadow(this, "platform", {
-        isMac: navigator.platform.includes("Mac"),
-        isWindows: navigator.platform.includes("Win"),
+        isAndroid: userAgent.includes("Android"),
+        isLinux: platform.includes("Linux"),
+        isMac: platform.includes("Mac"),
+        isWindows: platform.includes("Win"),
         isFirefox:
           (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
-          (typeof navigator?.userAgent === "string" &&
-            navigator.userAgent.includes("Firefox")),
+          userAgent.includes("Firefox"),
       });
     }
     return shadow(this, "platform", {
+      isAndroid: false,
+      isLinux: false,
       isMac: false,
       isWindows: false,
       isFirefox: false,
@@ -1106,6 +1099,60 @@ function getUuid() {
 
 const AnnotationPrefix = "pdfjs_internal_id_";
 
+function _isValidExplicitDest(validRef, validName, dest) {
+  if (!Array.isArray(dest) || dest.length < 2) {
+    return false;
+  }
+  const [page, zoom, ...args] = dest;
+  if (!validRef(page) && !Number.isInteger(page)) {
+    return false;
+  }
+  if (!validName(zoom)) {
+    return false;
+  }
+  const argsLen = args.length;
+  let allowNull = true;
+  switch (zoom.name) {
+    case "XYZ":
+      if (argsLen < 2 || argsLen > 3) {
+        return false;
+      }
+      break;
+    case "Fit":
+    case "FitB":
+      return argsLen === 0;
+    case "FitH":
+    case "FitBH":
+    case "FitV":
+    case "FitBV":
+      if (argsLen > 1) {
+        return false;
+      }
+      break;
+    case "FitR":
+      if (argsLen !== 4) {
+        return false;
+      }
+      allowNull = false;
+      break;
+    default:
+      return false;
+  }
+  for (const arg of args) {
+    if (typeof arg === "number" || (allowNull && arg === null)) {
+      continue;
+    }
+    return false;
+  }
+  return true;
+}
+
+// TOOD: Replace all occurrences of this function with `Math.clamp` once
+//       https://github.com/tc39/proposal-math-clamp/ is generally available.
+function MathClamp(v, min, max) {
+  return Math.min(Math.max(v, min), max);
+}
+
 // TODO: Remove this once `Uint8Array.prototype.toHex` is generally available.
 function toHexUtil(arr) {
   if (Uint8Array.prototype.toHex) {
@@ -1145,6 +1192,7 @@ if (
 }
 
 export {
+  _isValidExplicitDest,
   AbortException,
   AnnotationActionEventType,
   AnnotationBorderStyleType,
@@ -1179,8 +1227,7 @@ export {
   isNodeJS,
   LINE_DESCENT_FACTOR,
   LINE_FACTOR,
-  MAX_IMAGE_SIZE_TO_CACHE,
-  MissingPDFException,
+  MathClamp,
   normalizeUnicode,
   objectFromMap,
   objectSize,
@@ -1190,6 +1237,7 @@ export {
   PasswordResponses,
   PermissionFlag,
   RenderingIntentFlag,
+  ResponseException,
   setVerbosityLevel,
   shadow,
   string32,
@@ -1199,7 +1247,6 @@ export {
   TextRenderingMode,
   toBase64Util,
   toHexUtil,
-  UnexpectedResponseException,
   UnknownErrorException,
   unreachable,
   utf8StringToString,

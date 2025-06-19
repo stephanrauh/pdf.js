@@ -34,13 +34,11 @@ import {
 import {
   CMAP_URL,
   createIdFactory,
+  DefaultCMapReaderFactory,
+  DefaultStandardFontDataFactory,
   STANDARD_FONT_DATA_URL,
   XRefMock,
 } from "./test_utils.js";
-import {
-  DefaultCMapReaderFactory,
-  DefaultStandardFontDataFactory,
-} from "../../src/display/api.js";
 import { Dict, Name, Ref, RefSetCache } from "../../src/core/primitives.js";
 import { Lexer, Parser } from "../../src/core/parser.js";
 import { FlateStream } from "../../src/core/flate_stream.js";
@@ -5089,6 +5087,57 @@ describe("annotation", function () {
       expect(data.annotationType).toEqual(AnnotationType.STRIKEOUT);
       expect(data.quadPoints).toEqual(
         Float32Array.from([10, 20, 20, 20, 10, 10, 20, 10])
+      );
+    });
+  });
+
+  describe("StampAnnotation for signatures", function () {
+    it("should create a new Stamp annotation", async function () {
+      const xref = (partialEvaluator.xref = new XRefMock());
+      const changes = new RefSetCache();
+      const task = new WorkerTask("test Stamp creation");
+      await AnnotationFactory.saveNewAnnotations(
+        partialEvaluator,
+        task,
+        [
+          {
+            annotationType: 101,
+            isSignature: true,
+            areContours: true,
+            color: [0, 0, 0],
+            thickness: 0,
+            pageIndex: 0,
+            rect: [12, 34, 56, 78],
+            rotation: 0,
+            structTreeParentId: null,
+            lines: [[NaN, NaN, NaN, NaN, 1, 2, 3, 4, 5, 6, 7, 8]],
+          },
+        ],
+        null,
+        changes
+      );
+      const data = await writeChanges(changes, xref);
+
+      const base = data[0].data.replace(/\(D:\d+\)/, "(date)");
+      expect(base).toEqual(
+        "1 0 obj\n" +
+          "<< /Type /Annot /Subtype /Stamp /CreationDate (date) /Rect [12 34 56 78] " +
+          "/F 4 /Border [0 0 0] " +
+          "/Rotate 0 /AP << /N 2 0 R>>>>\n" +
+          "endobj\n"
+      );
+
+      const appearance = data[1].data;
+      expect(appearance).toEqual(
+        "2 0 obj\n" +
+          "<< /FormType 1 /Subtype /Form /Type /XObject /BBox [12 34 56 78] /Length 37>> stream\n" +
+          "0 w 1 J 1 j\n" +
+          "0 g\n" +
+          "1 2 m\n" +
+          "3 4 5 6 7 8 c\n" +
+          "F\n" +
+          "endstream\n" +
+          "endobj\n"
       );
     });
   });

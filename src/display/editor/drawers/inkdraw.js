@@ -13,8 +13,8 @@
  * limitations under the License.
  */
 
+import { MathClamp, Util } from "../../../shared/util.js";
 import { Outline } from "./outline.js";
-import { Util } from "../../../shared/util.js";
 
 class InkDrawOutliner {
   // The last 3 points of the line.
@@ -318,6 +318,10 @@ class InkDrawOutline extends Outline {
     this.#computeBbox();
   }
 
+  get thickness() {
+    return this.#thickness;
+  }
+
   setLastElement(element) {
     this.#lines.push(element);
     return {
@@ -344,7 +348,7 @@ class InkDrawOutline extends Outline {
         buffer.push("Z");
         continue;
       }
-      if (line.length === 12) {
+      if (line.length === 12 && isNaN(line[6])) {
         buffer.push(
           `L${Outline.svgRound(line[10])} ${Outline.svgRound(line[11])}`
         );
@@ -548,7 +552,7 @@ class InkDrawOutline extends Outline {
       });
     }
 
-    const outlines = new InkDrawOutline();
+    const outlines = new this.prototype.constructor();
     outlines.build(
       newLines,
       pageWidth,
@@ -612,10 +616,10 @@ class InkDrawOutline extends Outline {
     }
 
     const [marginX, marginY] = this.#getMarginComponents();
-    bbox[0] = Math.min(1, Math.max(0, bbox[0] - marginX));
-    bbox[1] = Math.min(1, Math.max(0, bbox[1] - marginY));
-    bbox[2] = Math.min(1, Math.max(0, bbox[2] + marginX));
-    bbox[3] = Math.min(1, Math.max(0, bbox[3] + marginY));
+    bbox[0] = MathClamp(bbox[0] - marginX, 0, 1);
+    bbox[1] = MathClamp(bbox[1] - marginY, 0, 1);
+    bbox[2] = MathClamp(bbox[2] + marginX, 0, 1);
+    bbox[3] = MathClamp(bbox[3] + marginY, 0, 1);
 
     bbox[2] -= bbox[0];
     bbox[3] -= bbox[1];

@@ -23,7 +23,7 @@ import {
   Util,
   warn,
 } from "../shared/util.js";
-import { setLayerDimensions } from "./display_utils.js";
+import { OutputScale, setLayerDimensions } from "./display_utils.js";
 
 /**
  * @typedef {Object} TextLayerParameters
@@ -46,7 +46,6 @@ import { setLayerDimensions } from "./display_utils.js";
 
 const MAX_TEXT_DIVS_TO_RENDER = 100000;
 const DEFAULT_FONT_SIZE = 30;
-const DEFAULT_FONT_ASCENT = 0.8;
 
 class TextLayer {
   #capability = Promise.withResolvers();
@@ -116,7 +115,7 @@ class TextLayer {
     }
     this.#container = this.#rootContainer = container;
 
-    this.#scale = viewport.scale * (globalThis.devicePixelRatio || 1);
+    this.#scale = viewport.scale * OutputScale.pixelRatio;
     this.#rotation = viewport.rotation;
     this.#layoutTextParams = {
       div: null,
@@ -206,7 +205,7 @@ class TextLayer {
    * @returns {undefined}
    */
   update({ viewport, onBefore = null }) {
-    const scale = viewport.scale * (globalThis.devicePixelRatio || 1);
+    const scale = viewport.scale * OutputScale.pixelRatio;
     const rotation = viewport.rotation;
 
     if (rotation !== this.#rotation) {
@@ -332,7 +331,7 @@ class TextLayer {
     fontFamily = TextLayer.fontFamilyMap.get(fontFamily) || fontFamily;
     const fontHeight = Math.hypot(tx[2], tx[3]);
     const fontAscent =
-      fontHeight * TextLayer.#getAscent(fontFamily, this.#lang);
+      fontHeight * TextLayer.#getAscent(fontFamily, style, this.#lang);
 
     let left, top;
     if (angle === 0) {
@@ -343,7 +342,7 @@ class TextLayer {
       top = tx[5] - fontAscent * Math.cos(angle);
     }
 
-    const scaleFactorStr = "calc(var(--scale-factor)*";
+    const scaleFactorStr = "calc(var(--total-scale-factor) *";
     const divStyle = textDiv.style;
     // Setting the style properties individually, rather than all at once,
     // should be OK since the `textDiv` isn't appended to the document yet.
@@ -529,7 +528,7 @@ class TextLayer {
     div.remove();
   }
 
-  static #getAscent(fontFamily, lang) {
+  static #getAscent(fontFamily, style, lang) {
     const cachedAscent = this.#ascentCache.get(fontFamily);
     if (cachedAscent) {
       return cachedAscent;
@@ -540,56 +539,32 @@ class TextLayer {
     this.#ensureCtxFont(ctx, DEFAULT_FONT_SIZE, fontFamily);
     const metrics = ctx.measureText("");
 
-    // Both properties aren't available by default in Firefox.
-    let ascent = metrics?.fontBoundingBoxAscent; // #707 modified by ngx-extended-pdf-viewer
-    let descent = Math.abs(metrics?.fontBoundingBoxDescent); // #707 modified by ngx-extended-pdf-viewer
-
-    if (ascent) {
-      const ratio = ascent / (ascent + descent);
-      this.#ascentCache.set(fontFamily, ratio);
-
-      ctx.canvas.width = ctx.canvas.height = 0;
-      return ratio;
-    }
-
-    // Try basic heuristic to guess ascent/descent.
-    // Draw a g with baseline at 0,0 and then get the line
-    // number where a pixel has non-null red component (starting
-    // from bottom).
-    ctx.strokeStyle = "red";
-    ctx.clearRect(0, 0, DEFAULT_FONT_SIZE, DEFAULT_FONT_SIZE);
-    ctx.strokeText("g", 0, 0);
-    let pixels = ctx.getImageData(
-      0,
-      0,
-      DEFAULT_FONT_SIZE,
-      DEFAULT_FONT_SIZE
-    ).data;
-    descent = 0;
-    for (let i = pixels.length - 1 - 3; i >= 0; i -= 4) {
-      if (pixels[i] > 0) {
-        descent = Math.ceil(i / 4 / DEFAULT_FONT_SIZE);
-        break;
-      }
-    }
-
-    // Draw an A with baseline at 0,DEFAULT_FONT_SIZE and then get the line
-    // number where a pixel has non-null red component (starting
-    // from top).
-    ctx.clearRect(0, 0, DEFAULT_FONT_SIZE, DEFAULT_FONT_SIZE);
-    ctx.strokeText("A", 0, DEFAULT_FONT_SIZE);
-    pixels = ctx.getImageData(0, 0, DEFAULT_FONT_SIZE, DEFAULT_FONT_SIZE).data;
-    ascent = 0;
-    for (let i = 0, ii = pixels.length; i < ii; i += 4) {
-      if (pixels[i] > 0) {
-        ascent = DEFAULT_FONT_SIZE - Math.floor(i / 4 / DEFAULT_FONT_SIZE);
-        break;
-      }
-    }
+    // #707 modified by ngx-extended-pdf-viewer: ascent isn't available in Brave
+    const ascent = metrics?.fontBoundingBoxAscent; // #707 modified by ngx-extended-pdf-viewer
+    const descent = Math.abs(metrics?.fontBoundingBoxDescent); // #707 modified by ngx-extended-pdf-viewer
 
     ctx.canvas.width = ctx.canvas.height = 0;
+    let ratio = 0.8; // DEFAULT_FONT_ASCENT
 
-    const ratio = ascent ? ascent / (ascent + descent) : DEFAULT_FONT_ASCENT;
+    if (ascent) {
+      ratio = ascent / (ascent + descent);
+    } else {
+      if (
+        (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
+        FeatureTest.platform.isFirefox
+      ) {
+        warn(
+          "Enable the `dom.textMetrics.fontBoundingBox.enabled` preference " +
+            "in `about:config` to improve TextLayer rendering."
+        );
+      }
+      if (style.ascent) {
+        ratio = style.ascent;
+      } else if (style.descent) {
+        ratio = 1 + style.descent;
+      }
+    }
+
     this.#ascentCache.set(fontFamily, ratio);
     return ratio;
   }

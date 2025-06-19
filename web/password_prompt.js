@@ -93,11 +93,9 @@ class PasswordPrompt {
   }
 
   async close() {
-    if (this.overlayManager.active === this.dialog) {
-      this.overlayManager.close(this.dialog);
+      this.overlayManager.closeIfActive(this.dialog);
       this.input.value = ""; // modified by ngx-extended-pdf-viewer
       this.input.type = "text"; // #8 modified by ngx-extended-pdf-viewer
-    }
   }
 
   #verify() {

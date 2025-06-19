@@ -13,12 +13,7 @@
  * limitations under the License.
  */
 
-import {
-  assert,
-  MAX_IMAGE_SIZE_TO_CACHE,
-  unreachable,
-  warn,
-} from "../shared/util.js";
+import { assert, unreachable, warn } from "../shared/util.js";
 import { RefSet, RefSetCache } from "./primitives.js";
 
 class BaseLocalCache {
@@ -174,12 +169,32 @@ class RegionalImageCache extends BaseLocalCache {
   }
 }
 
+class GlobalColorSpaceCache extends BaseLocalCache {
+  constructor(options) {
+    super({ onlyRefs: true });
+  }
+
+  set(name = null, ref, data) {
+    if (!ref) {
+      throw new Error('GlobalColorSpaceCache.set - expected "ref" argument.');
+    }
+    if (this._imageCache.has(ref)) {
+      return;
+    }
+    this._imageCache.put(ref, data);
+  }
+
+  clear() {
+    this._imageCache.clear();
+  }
+}
+
 class GlobalImageCache {
   static NUM_PAGES_THRESHOLD = 2;
 
   static MIN_IMAGES_TO_CACHE = 10;
 
-  static MAX_BYTE_SIZE = 5 * MAX_IMAGE_SIZE_TO_CACHE;
+  static MAX_BYTE_SIZE = 5e7; // Fifty megabytes.
 
   #decodeFailedSet = new RefSet();
 
@@ -295,6 +310,7 @@ class GlobalImageCache {
 }
 
 export {
+  GlobalColorSpaceCache,
   GlobalImageCache,
   LocalColorSpaceCache,
   LocalFunctionCache,

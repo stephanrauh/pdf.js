@@ -248,8 +248,12 @@ class Parser {
           }
           // Check that the "EI" sequence isn't part of the image data, since
           // that would cause the image to be truncated (fixes issue11124.pdf).
+          //
+          // Check more than the `followingBytes` to be able to find operators
+          // with multiple arguments, e.g. transform (cm) with decimal arguments
+          // (fixes issue19494.pdf).
           const tmpLexer = new Lexer(
-            new Stream(followingBytes.slice()),
+            new Stream(stream.peekBytes(5 * n)),
             knownCommands
           );
           // Reduce the number of (potential) warning messages.
@@ -929,9 +933,14 @@ class Lexer {
     if (ch < /* '0' = */ 0x30 || ch > /* '9' = */ 0x39) {
       const msg = `Invalid number: ${String.fromCharCode(ch)} (charCode ${ch})`;
 
-      if (isWhiteSpace(ch) || ch === /* EOF = */ -1) {
+      if (
+        isWhiteSpace(ch) ||
+        /* '(' = */ ch === 0x28 ||
+        /* '<' = */ ch === 0x3c ||
+        ch === /* EOF = */ -1
+      ) {
         // This is consistent with Adobe Reader (fixes issue9252.pdf,
-        // issue15604.pdf, bug1753983.pdf).
+        // issue15604.pdf, bug1753983.pdf, bug1953099.pdf).
         info(`Lexer.getNumber - "${msg}".`);
         return 0;
       }

@@ -82,13 +82,14 @@ const EXPORT_DATA_PROPERTIES = [
   "black",
   "bold",
   "charProcOperatorList",
-  "composite",
   "cssFontInfo",
   "data",
   "defaultVMetrics",
   "defaultWidth",
   "descent",
+  "disableFontFace",
   "fallbackName",
+  "fontExtraProperties",
   "fontMatrix",
   "isInvalidPDFjsFont",
   "isType3Font",
@@ -98,22 +99,23 @@ const EXPORT_DATA_PROPERTIES = [
   "missingFile",
   "name",
   "remeasure",
-  "subtype",
   "systemFontInfo",
-  "type",
   "vertical",
 ];
 
 const EXPORT_DATA_EXTRA_PROPERTIES = [
   "cMap",
+  "composite",
   "defaultEncoding",
   "differences",
   "isMonospace",
   "isSerifFont",
   "isSymbolicFont",
   "seacMap",
+  "subtype",
   "toFontChar",
   "toUnicode",
+  "type",
   "vmetrics",
   "widths",
 ];
@@ -485,6 +487,8 @@ function adjustMapping(charCodeToGlyphId, hasGlyph, newGlyphZeroId, toUnicode) {
   const isInPrivateArea = code =>
     (PRIVATE_USE_AREAS[0][0] <= code && code <= PRIVATE_USE_AREAS[0][1]) ||
     (PRIVATE_USE_AREAS[1][0] <= code && code <= PRIVATE_USE_AREAS[1][1]);
+  let LIGATURE_TO_UNICODE = null;
+
   for (const originalCharCode in charCodeToGlyphId) {
     let glyphId = charCodeToGlyphId[originalCharCode];
     // For missing glyphs don't create the mappings so the glyph isn't
@@ -514,7 +518,23 @@ function adjustMapping(charCodeToGlyphId, hasGlyph, newGlyphZeroId, toUnicode) {
     // glyph ids to the correct unicode.
     let unicode = toUnicode.get(originalCharCode);
     if (typeof unicode === "string") {
-      unicode = unicode.codePointAt(0);
+      if (unicode.length === 1) {
+        unicode = unicode.codePointAt(0);
+      } else {
+        if (!LIGATURE_TO_UNICODE) {
+          LIGATURE_TO_UNICODE = new Map();
+          // The code range [0xfb00, 0xfb4f] contains some ligature characters
+          // but not all.
+          // See https://www.compart.com/en/unicode/block/U+FB00.
+          for (let i = 0xfb00; i <= 0xfb4f; i++) {
+            const normalized = String.fromCharCode(i).normalize("NFKD");
+            if (normalized.length > 1) {
+              LIGATURE_TO_UNICODE.set(normalized, i);
+            }
+          }
+        }
+        unicode = LIGATURE_TO_UNICODE.get(unicode) || unicode.codePointAt(0);
+      }
     }
     if (unicode && !isInPrivateArea(unicode) && !usedGlyphIds.has(glyphId)) {
       toUnicodeExtraMap.set(unicode, glyphId);
@@ -556,9 +576,7 @@ function getRanges(glyphs, toUnicodeExtraMap, numGlyphs) {
   if (codes.length === 0) {
     codes.push({ fontCharCode: 0, glyphId: 0 });
   }
-  codes.sort(function fontGetRangesSort(a, b) {
-    return a.fontCharCode - b.fontCharCode;
-  });
+  codes.sort((a, b) => a.fontCharCode - b.fontCharCode);
 
   // Split the sorted codes into ranges.
   const ranges = [];
@@ -952,11 +970,12 @@ function createNameTable(name, proto) {
  * decoding logics whatever type it is (assuming the font type is supported).
  */
 class Font {
-  constructor(name, file, properties) {
+  constructor(name, file, properties, evaluatorOptions) {
     this.name = name;
     this.psName = null;
     this.mimetype = null;
-    this.disableFontFace = false;
+    this.disableFontFace = evaluatorOptions.disableFontFace;
+    this.fontExtraProperties = evaluatorOptions.fontExtraProperties;
 
     this.loadedName = properties.loadedName;
     this.isType3Font = properties.isType3Font;
@@ -1123,18 +1142,17 @@ class Font {
     return shadow(this, "renderer", renderer);
   }
 
-  exportData(extraProperties = false) {
-    const exportDataProperties = extraProperties
+  exportData() {
+    const exportDataProps = this.fontExtraProperties
       ? [...EXPORT_DATA_PROPERTIES, ...EXPORT_DATA_EXTRA_PROPERTIES]
       : EXPORT_DATA_PROPERTIES;
 
     const data = Object.create(null);
-    let property, value;
-    for (property of exportDataProperties) {
-      value = this[property];
+    for (const prop of exportDataProps) {
+      const value = this[prop];
       // Ignore properties that haven't been explicitly set.
       if (value !== undefined) {
-        data[property] = value;
+        data[prop] = value;
       }
     }
     return data;
@@ -1757,20 +1775,23 @@ class Font {
       }
 
       // removing duplicate entries
-      mappings.sort(function (a, b) {
-        return a.charCode - b.charCode;
-      });
-      for (let i = 1; i < mappings.length; i++) {
-        if (mappings[i - 1].charCode === mappings[i].charCode) {
-          mappings.splice(i, 1);
-          i--;
+      mappings.sort((a, b) => a.charCode - b.charCode);
+      const finalMappings = [],
+        seenCharCodes = new Set();
+      for (const map of mappings) {
+        const { charCode } = map;
+
+        if (seenCharCodes.has(charCode)) {
+          continue;
         }
+        seenCharCodes.add(charCode);
+        finalMappings.push(map);
       }
 
       return {
         platformId: potentialTable.platformId,
         encodingId: potentialTable.encodingId,
-        mappings,
+        mappings: finalMappings,
         hasShortCmap,
       };
     }
@@ -3579,7 +3600,7 @@ class ErrorFont {
     return [chars];
   }
 
-  exportData(extraProperties = false) {
+  exportData() {
     return { error: this.error };
   }
 }

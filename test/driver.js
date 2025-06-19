@@ -20,6 +20,7 @@ const {
   DrawLayer,
   getDocument,
   GlobalWorkerOptions,
+  OutputScale,
   PixelsPerInch,
   shadow,
   TextLayer,
@@ -30,7 +31,9 @@ const { GenericL10n, parseQueryString, SimpleLinkService } = pdfjsViewer;
 
 const WAITING_TIME = 100; // ms
 const CMAP_URL = "/build/generic/web/cmaps/";
+const ICC_URL = "/build/generic/web/iccs/";
 const STANDARD_FONT_DATA_URL = "/build/generic/web/standard_fonts/";
+const WASM_URL = "/build/generic/web/wasm/";
 const IMAGE_RESOURCES_PATH = "/web/images/";
 const VIEWER_CSS = "../build/components/pdf_viewer.css";
 const VIEWER_LOCALE = "en-US";
@@ -105,33 +108,33 @@ async function inlineImages(node, silentErrors = false) {
           }
           return response.blob();
         })
-        // eslint-disable-next-line arrow-body-style
-        .then(blob => {
-          return new Promise((resolve, reject) => {
-            const reader = new FileReader();
-            reader.onload = () => {
-              resolve(reader.result);
-            };
-            reader.onerror = reject;
+        .then(
+          blob =>
+            new Promise((resolve, reject) => {
+              const reader = new FileReader();
+              reader.onload = () => {
+                resolve(reader.result);
+              };
+              reader.onerror = reject;
 
-            reader.readAsDataURL(blob);
-          });
-        })
-        // eslint-disable-next-line arrow-body-style
-        .then(dataUrl => {
-          return new Promise((resolve, reject) => {
-            image.onload = resolve;
-            image.onerror = evt => {
-              if (silentErrors) {
-                resolve();
-                return;
-              }
-              reject(evt);
-            };
+              reader.readAsDataURL(blob);
+            })
+        )
+        .then(
+          dataUrl =>
+            new Promise((resolve, reject) => {
+              image.onload = resolve;
+              image.onerror = evt => {
+                if (silentErrors) {
+                  resolve();
+                  return;
+                }
+                reject(evt);
+              };
 
-            image.src = dataUrl;
-          });
-        })
+              image.src = dataUrl;
+            })
+        )
         .catch(reason => {
           throw new Error(`Error inlining image (${url}): ${reason}`);
         })
@@ -214,6 +217,18 @@ class Rasterize {
     return { svg, foreignObject, style, div };
   }
 
+  static createRootCSS(viewport) {
+    const { scale, userUnit } = viewport;
+    return [
+      ":root {",
+      "  --scale-round-x: 1px; --scale-round-y: 1px;",
+      `  --scale-factor: ${scale};`,
+      `  --user-unit: ${userUnit};`,
+      `  --total-scale-factor: ${scale * userUnit};`,
+      "}",
+    ].join("\n");
+  }
+
   static async annotationLayer(
     ctx,
     viewport,
@@ -231,9 +246,7 @@ class Rasterize {
       div.className = "annotationLayer";
 
       const [common, overrides] = await this.annotationStylePromise;
-      style.textContent =
-        `${common}\n${overrides}\n` +
-        `:root { --scale-factor: ${viewport.scale} }`;
+      style.textContent = `${common}\n${overrides}\n${this.createRootCSS(viewport)}`;
 
       const annotationViewport = viewport.clone({ dontFlip: true });
       const annotationImageMap = await convertCanvasesToImages(
@@ -292,9 +305,7 @@ class Rasterize {
       svg.setAttribute("font-size", 1);
 
       const [common, overrides] = await this.textStylePromise;
-      style.textContent =
-        `${common}\n${overrides}\n` +
-        `:root { --scale-factor: ${viewport.scale} }`;
+      style.textContent = `${common}\n${overrides}\n${this.createRootCSS(viewport)}`;
 
       // Rendering text layer as HTML.
       const textLayer = new TextLayer({
@@ -321,9 +332,7 @@ class Rasterize {
       svg.setAttribute("font-size", 1);
 
       const [common, overrides] = await this.drawLayerStylePromise;
-      style.textContent =
-        `${common}\n${overrides}` +
-        `:root { --scale-factor: ${viewport.scale} }`;
+      style.textContent = `${common}\n${overrides}\n${this.createRootCSS(viewport)}`;
 
       // Rendering text layer as HTML.
       const textLayer = new TextLayer({
@@ -345,9 +354,9 @@ class Rasterize {
         let x = parseFloat(left) / 100;
         let y = parseFloat(top) / 100;
         if (isNaN(x)) {
-          posRegex ||= /^calc\(var\(--scale-factor\)\*(.*)px\)$/;
+          posRegex ||= /^calc\(var\(--total-scale-factor\)\s*\*(.*)px\)$/;
           // The element is tagged so we've to extract the position from the
-          // string, e.g. `calc(var(--scale-factor)*66.32px)`.
+          // string, e.g. `calc(var(--total-scale-factor)*66.32px)`.
           let match = left.match(posRegex);
           if (match) {
             x = parseFloat(match[1]) / pageWidth;
@@ -630,10 +639,13 @@ class Driver {
           url: new URL(task.file, window.location),
           password: task.password,
           cMapUrl: CMAP_URL,
+          iccUrl: ICC_URL,
           standardFontDataUrl: STANDARD_FONT_DATA_URL,
+          wasmUrl: WASM_URL,
           disableAutoFetch: !task.enableAutoFetch,
           pdfBug: true,
           useSystemFonts: task.useSystemFonts,
+          useWasm: task.useWasm,
           useWorkerFetch: task.useWorkerFetch,
           enableXfa: task.enableXfa,
           isOffscreenCanvasSupported,
@@ -865,7 +877,7 @@ class Driver {
           page => {
             // Default to creating the test images at the devices pixel ratio,
             // unless the test explicitly specifies an output scale.
-            const outputScale = task.outputScale || window.devicePixelRatio;
+            const outputScale = task.outputScale || OutputScale.pixelRatio;
             let viewport = page.getViewport({
               scale: PixelsPerInch.PDF_TO_CSS_UNITS,
             });
