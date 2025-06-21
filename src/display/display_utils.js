@@ -259,7 +259,9 @@ class PageViewport {
    * @see {@link convertToViewportRectangle}
    */
   convertToViewportPoint(x, y) {
-    return Util.applyTransform([x, y], this.transform);
+    const p = [x, y];
+    Util.applyTransform(p, this.transform);
+    return p;
   }
 
   /**
@@ -270,8 +272,10 @@ class PageViewport {
    * @see {@link convertToViewportPoint}
    */
   convertToViewportRectangle(rect) {
-    const topLeft = Util.applyTransform([rect[0], rect[1]], this.transform);
-    const bottomRight = Util.applyTransform([rect[2], rect[3]], this.transform);
+    const topLeft = [rect[0], rect[1]];
+    Util.applyTransform(topLeft, this.transform);
+    const bottomRight = [rect[2], rect[3]];
+    Util.applyTransform(bottomRight, this.transform);
     return [topLeft[0], topLeft[1], bottomRight[0], bottomRight[1]];
   }
 
@@ -285,7 +289,9 @@ class PageViewport {
    * @see {@link convertToViewportPoint}
    */
   convertToPdfPoint(x, y) {
-    return Util.applyInverseTransform([x, y], this.transform);
+    const p = [x, y];
+    Util.applyInverseTransform(p, this.transform);
+    return p;
   }
 }
 
@@ -413,21 +419,9 @@ function isValidFetchUrl(url, baseUrl) {
   const res = baseUrl ? URL.parse(url, baseUrl) : URL.parse(url);
   // The Fetch API only supports the http/https protocols, and not file/ftp.
   // modified by ngx-extended-pdf-viewer #864
-  return res?.protocol === "http:" || res?.protocol === "https:" || protocol === "capacitor:"; 
+  return res?.protocol === "http:" || res?.protocol === "https:" || res?.protocol === "capacitor:";
   // end of modification by ngx-extended-pdf-viewer #864
 }
-
-// modified by ngx-extended-pdf-viewer #1512
-function generateTrustedURL(sourcePath) {
-  if (window.trustedTypes) {
-    const sanitizer = window.trustedTypes.createPolicy("pdf-viewer-2", {
-      createScriptURL: url => url,
-    });
-    return sanitizer.createScriptURL(sourcePath);
-  }
-  return sourcePath;
-}
-// end of modification by ngx-extended-pdf-viewer #1512
 
 /**
  * Event handler to suppress context menu.
@@ -578,6 +572,8 @@ function getRGB(color) {
 function getColorValues(colors) {
   const span = document.createElement("span");
   span.style.visibility = "hidden";
+  // NOTE: The following does *not* affect `forced-colors: active` mode.
+  span.style.colorScheme = "only light";
   document.body.append(span);
   for (const name of colors.keys()) {
     span.style.color = name;
@@ -674,11 +670,12 @@ class OutputScale {
    * @returns {boolean} Returns `true` if scaling was limited,
    *   `false` otherwise.
    */
-  limitCanvas(width, height, maxPixels, maxDim) {
+  limitCanvas(width, height, maxPixels, maxDim, capAreaFactor = -1) {
     let maxAreaScale = Infinity,
       maxWidthScale = Infinity,
       maxHeightScale = Infinity;
 
+    maxPixels = OutputScale.capPixels(maxPixels, capAreaFactor);
     if (maxPixels > 0) {
       maxAreaScale = Math.sqrt(maxPixels / (width * height));
     }
@@ -698,6 +695,20 @@ class OutputScale {
 
   static get pixelRatio() {
     return globalThis.devicePixelRatio || 1;
+  }
+
+  static capPixels(maxPixels, capAreaFactor) {
+    if (capAreaFactor >= 0) {
+      const winPixels = Math.ceil(
+        (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")
+          ? window.innerWidth * window.innerHeight
+          : window.screen.availWidth * window.screen.availHeight) *
+          this.pixelRatio ** 2 *
+          (1 + capAreaFactor / 100)
+      );
+      return maxPixels > 0 ? Math.min(maxPixels, winPixels) : winPixels;
+    }
+    return maxPixels;
   }
 }
 

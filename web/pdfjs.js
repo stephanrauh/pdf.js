@@ -35,7 +35,7 @@ import {
   PermissionFlag,
   ResponseException,
   shadow,
-  // UnexpectedResponseException,
+  updateUrlHash,
   Util,
   VerbosityLevel,
 } from "../src/shared/util.js";
@@ -44,7 +44,8 @@ import { SignatureExtractor } from "../src/display/editor/drawers/signaturedraw.
 
 import { TouchManager } from "../src/display/touch_manager.js";
 
-import { build, getDocument, isValidExplicitDest } from "../src/display/api.js";
+import { build, getDocument } from "../src/display/api.js";
+import { isValidExplicitDest } from "../src/display/api_utils.js";
 import { getFilenameFromUrl, getPdfFilenameFromUrl, isDataScheme, isPdfFile, noContextMenu, stopEvent, SupportedImageMimeTypes } from "../src/display/display_utils.js";
 
 import {
@@ -98,7 +99,6 @@ export {
   isPdfFile,
   isValidExplicitDest,
   MathClamp,
-  // MissingPDFException,
   noContextMenu,
   normalizeUnicode,
   OPS,
@@ -118,7 +118,7 @@ export {
   SupportedImageMimeTypes,
   TextLayer,
   TouchManager,
-  // UnexpectedResponseException,
+  updateUrlHash,
   Util,
   VerbosityLevel,
   version,

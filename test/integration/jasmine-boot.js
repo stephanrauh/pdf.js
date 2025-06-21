@@ -23,7 +23,7 @@ async function runTests(results) {
   jasmine.jasmine.DEFAULT_TIMEOUT_INTERVAL = 30000;
 
   jasmine.loadConfig({
-    random: false,
+    random: true,
     spec_dir: "integration",
     spec_files: [
       "accessibility_spec.mjs",
@@ -31,6 +31,7 @@ async function runTests(results) {
       "autolinker_spec.mjs",
       "caret_browsing_spec.mjs",
       "copy_paste_spec.mjs",
+      "document_properties_spec.mjs",
       "find_spec.mjs",
       "freetext_editor_spec.mjs",
       "highlight_editor_spec.mjs",

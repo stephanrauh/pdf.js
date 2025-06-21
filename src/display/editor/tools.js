@@ -1713,6 +1713,7 @@ class AnnotationEditorUIManager {
     }
 
     this.#updateModeCapability = Promise.withResolvers();
+    this.#currentDrawingSession?.commitOrRemove();
 
     this.#mode = mode;
     if (mode === AnnotationEditorType.NONE) {
@@ -1743,7 +1744,7 @@ class AnnotationEditorUIManager {
     }
 
     for (const editor of this.#allEditors.values()) {
-      if (editor.annotationElementId === editId) {
+      if (editor.annotationElementId === editId || editor.id === editId) {
         this.setSelected(editor);
         editor.enterInEditMode();
       } else {
@@ -1762,16 +1763,17 @@ class AnnotationEditorUIManager {
 
   /**
    * Update the toolbar if it's required to reflect the tool currently used.
+   * @param {Object} options
    * @param {number} mode
    * @returns {undefined}
    */
-  updateToolbar(mode) {
-    if (mode === this.#mode) {
+  updateToolbar(options) {
+    if (options.mode === this.#mode) {
       return;
     }
     this._eventBus.dispatch("switchannotationeditormode", {
       source: this,
-      mode,
+      ...options,
     });
   }
 

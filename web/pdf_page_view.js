@@ -85,6 +85,9 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  * @property {number} [maxCanvasDim] - The maximum supported canvas dimension,
  *   in either width or height. Use `-1` for no limit.
  *   The default value is 32767.
+ * @property {number} [capCanvasAreaFactor] - Cap the canvas area to the
+ *   viewport increased by the value in percent. Use `-1` for no limit.
+ *   The default value is 200%.
  * @property {boolean} [enableDetailCanvas] - When enabled, if the rendered
  *   pages would need a canvas that is larger than `maxCanvasPixels` or
  *   `maxCanvasDim`, it will draw a second canvas on top of the CSS-zoomed one,
@@ -99,7 +102,7 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  * @property {boolean} [enableHWA] - Enables hardware acceleration for
  *   rendering. The default value is `false`.
  * @property {boolean} [enableAutoLinking] - Enable creation of hyperlinks from
- *   text that look like URLs. The default value is `false`.
+ *   text that look like URLs. The default value is `true`.
  */
 
 const DEFAULT_LAYER_PROPERTIES =
@@ -134,7 +137,7 @@ class PDFPageView extends BasePDFPageView {
 
   #canvasWrapper = null;
 
-  #enableAutoLinking = false;
+  #enableAutoLinking = true;
 
   #hasRestrictedScaling = false;
 
@@ -192,7 +195,9 @@ class PDFPageView extends BasePDFPageView {
     this.maxCanvasPixels =
       options.maxCanvasPixels ?? AppOptions.get("maxCanvasPixels");
     this.maxCanvasDim = options.maxCanvasDim || AppOptions.get("maxCanvasDim");
-    this.#enableAutoLinking = options.enableAutoLinking || false;
+    this.capCanvasAreaFactor =
+      options.capCanvasAreaFactor ?? AppOptions.get("capCanvasAreaFactor");
+    this.#enableAutoLinking = options.enableAutoLinking !== false;
 
     this.l10n = options.l10n;
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
@@ -454,7 +459,6 @@ class PDFPageView extends BasePDFPageView {
     if (!this.textLayer) {
       return;
     }
-
     let error = null;
     try {
       await this.textLayer.render({
@@ -786,7 +790,8 @@ class PDFPageView extends BasePDFPageView {
         width,
         height,
         this.maxCanvasPixels,
-        this.maxCanvasDim
+        this.maxCanvasDim,
+        this.capCanvasAreaFactor
       );
     }
   }

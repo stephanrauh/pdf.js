@@ -19,13 +19,16 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
   if (
     typeof PDFJSDev !== "undefined" &&
     PDFJSDev.test("LIB") &&
-    typeof navigator === "undefined"
+    !globalThis.navigator?.language
   ) {
-    globalThis.navigator = Object.create(null);
+    globalThis.navigator = {
+      language: "en-US",
+      maxTouchPoints: 1,
+      platform: "",
+      userAgent: "",
+    };
   }
-  const userAgent = navigator.userAgent || "";
-  const platform = navigator.platform || "";
-  const maxTouchPoints = navigator.maxTouchPoints || 1;
+  const { maxTouchPoints, platform, userAgent } = navigator;
 
   const isAndroid = /Android/.test(userAgent);
   const isIOS =
@@ -170,6 +173,11 @@ const defaultOptions = {
     value: true,
     kind: OptionKind.BROWSER,
   },
+  supportsPrinting: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.BROWSER,
+  },
   toolbarDensity: {
     /** @type {number} */
     value: 0, // 0 = "normal", 1 = "compact", 2 = "touch"
@@ -192,6 +200,11 @@ const defaultOptions = {
   annotationMode: {
     /** @type {number} */
     value: 2,
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
+  capCanvasAreaFactor: {
+    /** @type {number} */
+    value: 200,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   cursorToolOnLoad: {
@@ -236,7 +249,7 @@ const defaultOptions = {
   },
   enableAutoLinking: {
     /** @type {boolean} */
-    value: typeof PDFJSDev === "undefined" || PDFJSDev.test("MOZCENTRAL"),
+    value: true,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   enableDetailCanvas: {
@@ -326,6 +339,11 @@ const defaultOptions = {
   maxCanvasPixels: {
     /** @type {number} */
     value: 2 ** 25,
+    kind: OptionKind.VIEWER,
+  },
+  minDurationToUpdateCanvas: {
+    /** @type {number} */
+    value: 500, // ms
     kind: OptionKind.VIEWER,
   },
   forcePageColors: {
@@ -427,7 +445,13 @@ const defaultOptions = {
   },
   docBaseUrl: {
     /** @type {string} */
-    value: typeof PDFJSDev === "undefined" ? document.URL.split("#", 1)[0] : "",
+    value:
+      typeof PDFJSDev === "undefined"
+        ? // NOTE: We cannot use the `updateUrlHash` function here, because of
+          // the default preferences generation (see `gulpfile.mjs`).
+          // However, the following line is *only* used in development mode.
+          document.URL.split("#", 1)[0]
+        : "",
     kind: OptionKind.API,
   },
   enableHWA: {
@@ -529,7 +553,10 @@ const defaultOptions = {
 
   workerPort: {
     /** @type {Object} */
-    value: null,
+    value:
+      typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")
+        ? globalThis.pdfjsPreloadedWorker || null
+        : null,
     kind: OptionKind.WORKER,
   },
   workerSrc: {

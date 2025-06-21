@@ -90,6 +90,8 @@ class AnnotationEditor {
 
   #touchManager = null;
 
+  isSelected = false;
+
   _isCopy = false;
 
   _editToolbar = null;
@@ -1047,15 +1049,14 @@ class AnnotationEditor {
       );
     } else if (isHorizontal) {
       ratioX =
-        Math.max(
-          minWidth,
-          Math.min(1, Math.abs(oppositePoint[0] - point[0] - deltaX))
-        ) / savedWidth;
+        MathClamp(Math.abs(oppositePoint[0] - point[0] - deltaX), minWidth, 1) /
+        savedWidth;
     } else {
       ratioY =
-        Math.max(
+        MathClamp(
+          Math.abs(oppositePoint[1] - point[1] - deltaY),
           minHeight,
-          Math.min(1, Math.abs(oppositePoint[1] - point[1] - deltaY))
+          1
         ) / savedHeight;
     }
 
@@ -1221,7 +1222,7 @@ class AnnotationEditor {
     const [tx, ty] = this.getInitialTranslation();
     this.translate(tx, ty);
 
-    bindEvents(this, div, ["keydown", "pointerdown"]);
+    bindEvents(this, div, ["keydown", "pointerdown", "dblclick"]);
 
     if (this.isResizable && this._uiManager._supportsPinchToZoom) {
       this.#touchManager ||= new TouchManager({
@@ -1328,10 +1329,6 @@ class AnnotationEditor {
     }
 
     this.#selectOnPointerEvent(event);
-  }
-
-  get isSelected() {
-    return this._uiManager.isSelected(this);
   }
 
   #selectOnPointerEvent(event) {
@@ -1550,16 +1547,30 @@ class AnnotationEditor {
 
   /**
    * Enable edit mode.
+   * @returns {boolean} - true if the edit mode has been enabled.
    */
   enableEditMode() {
+    if (this.isInEditMode()) {
+      return false;
+    }
+    this.parent.setEditingState(false);
     this.#isInEditMode = true;
+
+    return true;
   }
 
   /**
    * Disable edit mode.
+   * @returns {boolean} - true if the edit mode has been disabled.
    */
   disableEditMode() {
+    if (!this.isInEditMode()) {
+      return false;
+    }
+    this.parent.setEditingState(true);
     this.#isInEditMode = false;
+
+    return true;
   }
 
   /**
@@ -1893,6 +1904,10 @@ class AnnotationEditor {
    * Select this editor.
    */
   select() {
+    if (this.isSelected && this._editToolbar) {
+      return;
+    }
+    this.isSelected = true;
     this.makeResizable();
     this.div?.classList.add("selectedEditor");
     if (!this._editToolbar) {
@@ -1914,6 +1929,10 @@ class AnnotationEditor {
    * Unselect this editor.
    */
   unselect() {
+    if (!this.isSelected) {
+      return;
+    }
+    this.isSelected = false;
     this.#resizersDiv?.classList.add("hidden");
     this.div?.classList.remove("selectedEditor");
     if (this.div?.contains(document.activeElement)) {
@@ -1947,9 +1966,37 @@ class AnnotationEditor {
   enableEditing() {}
 
   /**
+   * Check if the content of this editor can be changed.
+   * For example, a FreeText editor can be changed (the user can change the
+   * text), but a Stamp editor cannot.
+   * @returns {boolean}
+   */
+  get canChangeContent() {
+    return false;
+  }
+
+  /**
    * The editor is about to be edited.
    */
-  enterInEditMode() {}
+  enterInEditMode() {
+    if (!this.canChangeContent) {
+      return;
+    }
+    this.enableEditMode();
+    this.div.focus();
+  }
+
+  /**
+   * ondblclick callback.
+   * @param {MouseEvent} event
+   */
+  dblclick(event) {
+    this.enterInEditMode();
+    this.parent.updateToolbar({
+      mode: this.constructor._editorType,
+      editId: this.id,
+    });
+  }
 
   /**
    * @returns {HTMLElement | null} the element requiring an alt text.

@@ -26,6 +26,7 @@ import {
   AnnotationFieldFlag,
   AnnotationFlag,
   AnnotationType,
+  DrawOPS,
   OPS,
   RenderingIntentFlag,
   stringToBytes,
@@ -1782,7 +1783,7 @@ describe("annotation", function () {
         [1, 0, 0, 1, 0, 0],
         false,
       ]);
-      expect(opList.argsArray[1]).toEqual(new Uint8ClampedArray([26, 51, 76]));
+      expect(opList.argsArray[1]).toEqual(["#1a334c"]);
     });
 
     it("should render auto-sized text for printing", async function () {
@@ -2256,7 +2257,7 @@ describe("annotation", function () {
       );
       expect(newData.data).toEqual(
         "2 0 obj\n<< /Subtype /Form /Resources " +
-          "<< /Font << /Helv 314 0 R>>>> /BBox [0 0 32 10] /Matrix [0 1 -1 0 32 0] /Length 74>> stream\n" +
+          "<< /Font << /Helv 314 0 R>>>> /BBox [0 0 10 32] /Matrix [0 1 -1 0 32 0] /Length 74>> stream\n" +
           "/Tx BMC q BT /Helv 5 Tf 1 0 0 1 0 0 Tm 2 2.94 Td (hello world) Tj " +
           "ET Q EMC\nendstream\nendobj\n"
       );
@@ -2663,7 +2664,7 @@ describe("annotation", function () {
         [1, 0, 0, 1, 0, 0],
         false,
       ]);
-      expect(opList1.argsArray[1]).toEqual(new Uint8ClampedArray([26, 51, 76]));
+      expect(opList1.argsArray[1]).toEqual(["#1a334c"]);
 
       annotationStorage.set(annotation.data.id, { value: false });
 
@@ -2686,7 +2687,7 @@ describe("annotation", function () {
         [1, 0, 0, 1, 0, 0],
         false,
       ]);
-      expect(opList2.argsArray[1]).toEqual(new Uint8ClampedArray([76, 51, 26]));
+      expect(opList2.argsArray[1]).toEqual(["#4c331a"]);
     });
 
     it("should render checkboxes for printing twice", async function () {
@@ -2747,9 +2748,7 @@ describe("annotation", function () {
           [1, 0, 0, 1, 0, 0],
           false,
         ]);
-        expect(opList.argsArray[1]).toEqual(
-          new Uint8ClampedArray([26, 51, 76])
-        );
+        expect(opList.argsArray[1]).toEqual(["#1a334c"]);
       }
     });
 
@@ -2808,7 +2807,7 @@ describe("annotation", function () {
         [1, 0, 0, 1, 0, 0],
         false,
       ]);
-      expect(opList.argsArray[1]).toEqual(new Uint8ClampedArray([26, 51, 76]));
+      expect(opList.argsArray[1]).toEqual(["#1a334c"]);
     });
 
     it("should save checkboxes", async function () {
@@ -3051,7 +3050,7 @@ describe("annotation", function () {
         [1, 0, 0, 1, 0, 0],
         false,
       ]);
-      expect(opList1.argsArray[1]).toEqual(new Uint8ClampedArray([26, 51, 76]));
+      expect(opList1.argsArray[1]).toEqual(["#1a334c"]);
 
       annotationStorage.set(annotation.data.id, { value: false });
 
@@ -3074,7 +3073,7 @@ describe("annotation", function () {
         [1, 0, 0, 1, 0, 0],
         false,
       ]);
-      expect(opList2.argsArray[1]).toEqual(new Uint8ClampedArray([76, 51, 26]));
+      expect(opList2.argsArray[1]).toEqual(["#4c331a"]);
     });
 
     it("should render radio buttons for printing using normal appearance", async function () {
@@ -3133,7 +3132,7 @@ describe("annotation", function () {
         [1, 0, 0, 1, 0, 0],
         false,
       ]);
-      expect(opList.argsArray[1]).toEqual(new Uint8ClampedArray([76, 51, 26]));
+      expect(opList.argsArray[1]).toEqual(["#4c331a"]);
     });
 
     it("should save radio buttons", async function () {
@@ -3807,7 +3806,7 @@ describe("annotation", function () {
         [
           "2 0 obj",
           "<< /Subtype /Form /Resources << /Font << /Helv 314 0 R>>>> " +
-            "/BBox [0 0 32 10] /Matrix [0 -1 1 0 0 10] /Length 170>> stream",
+            "/BBox [0 0 10 32] /Matrix [0 -1 1 0 0 10] /Length 170>> stream",
           "/Tx BMC q",
           "1 1 10 32 re W n",
           "0.600006 0.756866 0.854904 rg",
@@ -4285,14 +4284,13 @@ describe("annotation", function () {
         null
       );
 
-      expect(opList.fnArray.length).toEqual(16);
+      expect(opList.fnArray.length).toEqual(15);
       expect(opList.fnArray).toEqual([
         OPS.beginAnnotation,
         OPS.save,
         OPS.transform,
-        OPS.constructPath,
         OPS.clip,
-        OPS.endPath,
+        OPS.constructPath,
         OPS.beginText,
         OPS.setFillRGBColor,
         OPS.setCharSpacing,
@@ -4659,7 +4657,7 @@ describe("annotation", function () {
         null
       );
 
-      expect(opList.argsArray.length).toEqual(8);
+      expect(opList.argsArray.length).toEqual(7);
       expect(opList.fnArray).toEqual([
         OPS.beginAnnotation,
         OPS.setLineWidth,
@@ -4667,7 +4665,6 @@ describe("annotation", function () {
         OPS.setLineJoin,
         OPS.setStrokeRGBColor,
         OPS.constructPath,
-        OPS.stroke,
         OPS.endAnnotation,
       ]);
 
@@ -4678,12 +4675,25 @@ describe("annotation", function () {
       // LineJoin.
       expect(opList.argsArray[3]).toEqual([1]);
       // Color.
-      expect(opList.argsArray[4]).toEqual(new Uint8ClampedArray([0, 255, 0]));
+      expect(opList.argsArray[4]).toEqual(["#00ff00"]);
       // Path.
-      expect(opList.argsArray[5][0]).toEqual([OPS.moveTo, OPS.curveTo]);
-      expect(opList.argsArray[5][1]).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+      expect(opList.argsArray[5][0]).toEqual(OPS.stroke);
+      expect(opList.argsArray[5][1]).toEqual([
+        new Float32Array([
+          DrawOPS.moveTo,
+          1,
+          2,
+          DrawOPS.curveTo,
+          3,
+          4,
+          5,
+          6,
+          7,
+          8,
+        ]),
+      ]);
       // Min-max.
-      expect(opList.argsArray[5][2]).toEqual([1, 2, 1, 2]);
+      expect(opList.argsArray[5][2]).toEqual(new Float32Array([1, 2, 7, 8]));
     });
   });
 
@@ -4831,13 +4841,12 @@ describe("annotation", function () {
         null
       );
 
-      expect(opList.argsArray.length).toEqual(6);
+      expect(opList.argsArray.length).toEqual(5);
       expect(opList.fnArray).toEqual([
         OPS.beginAnnotation,
         OPS.setFillRGBColor,
         OPS.setGState,
         OPS.constructPath,
-        OPS.eoFill,
         OPS.endAnnotation,
       ]);
     });
@@ -4953,13 +4962,12 @@ describe("annotation", function () {
         null
       );
 
-      expect(opList.argsArray.length).toEqual(6);
+      expect(opList.argsArray.length).toEqual(5);
       expect(opList.fnArray).toEqual([
         OPS.beginAnnotation,
         OPS.setFillRGBColor,
         OPS.setGState,
         OPS.constructPath,
-        OPS.fill,
         OPS.endAnnotation,
       ]);
     });

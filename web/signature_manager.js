@@ -187,10 +187,10 @@ class SignatureManager {
       },
       { passive: true }
     );
-    description.addEventListener(
+    this.#description.addEventListener(
       "input",
       () => {
-        this.#clearDescription.disabled = description.value === "";
+        this.#clearDescription.disabled = this.#description.value === "";
       },
       { passive: true }
     );
@@ -325,6 +325,7 @@ class SignatureManager {
     this.#saveCheckbox.disabled =
       this.#clearButton.disabled =
       this.#addButton.disabled =
+      this.#description.disabled =
         !value;
   }
 

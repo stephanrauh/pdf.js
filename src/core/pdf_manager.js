@@ -25,6 +25,7 @@ import { ImageResizer } from "./image_resizer.js";
 import { JpegStream } from "./jpeg_stream.js";
 import { JpxImage } from "./jpx.js";
 import { MissingDataException } from "./core_utils.js";
+import { OperatorList } from "./operator_list.js";
 import { PDFDocument } from "./document.js";
 import { Stream } from "./stream.js";
 
@@ -74,6 +75,7 @@ class BasePdfManager {
     // Initialize image-options once per document.
     ImageResizer.setOptions(evaluatorOptions);
     JpegStream.setOptions(evaluatorOptions);
+    OperatorList.setOptions(evaluatorOptions);
 
     const options = { ...evaluatorOptions, handler };
     JpxImage.setOptions(options);
@@ -91,10 +93,6 @@ class BasePdfManager {
 
   get docBaseUrl() {
     return this._docBaseUrl;
-  }
-
-  get catalog() {
-    return this.pdfDocument.catalog;
   }
 
   ensureDoc(prop, args) {
@@ -115,18 +113,6 @@ class BasePdfManager {
 
   fontFallback(id, handler) {
     return this.pdfDocument.fontFallback(id, handler);
-  }
-
-  loadXfaFonts(handler, task) {
-    return this.pdfDocument.loadXfaFonts(handler, task);
-  }
-
-  loadXfaImages() {
-    return this.pdfDocument.loadXfaImages();
-  }
-
-  serializeXfaData(annotationStorage) {
-    return this.pdfDocument.serializeXfaData(annotationStorage);
   }
 
   cleanup(manuallyTriggered = false) {

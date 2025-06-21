@@ -24,11 +24,7 @@ import {
   shadow,
   Util,
 } from "../../shared/util.js";
-import {
-  AnnotationEditorUIManager,
-  bindEvents,
-  KeyboardManager,
-} from "./tools.js";
+import { AnnotationEditorUIManager, KeyboardManager } from "./tools.js";
 import { AnnotationEditor } from "./editor.js";
 import { FreeTextAnnotationElement } from "../annotation_layer.js";
 
@@ -304,13 +300,10 @@ class FreeTextEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   enableEditMode() {
-    if (this.isInEditMode()) {
-      return;
+    if (!super.enableEditMode()) {
+      return false;
     }
 
-    this.parent.setEditingState(false);
-    this.parent.updateToolbar(AnnotationEditorType.FREETEXT);
-    super.enableEditMode();
     this.overlayDiv.classList.remove("enabled");
     this.editorDiv.contentEditable = true;
     this._isDraggable = false;
@@ -342,16 +335,16 @@ class FreeTextEditor extends AnnotationEditor {
     this.editorDiv.addEventListener("paste", this.editorDivPaste.bind(this), {
       signal,
     });
+
+    return true;
   }
 
   /** @inheritdoc */
   disableEditMode() {
-    if (!this.isInEditMode()) {
-      return;
+    if (!super.disableEditMode()) {
+      return false;
     }
 
-    this.parent.setEditingState(true);
-    super.disableEditMode();
     this.overlayDiv.classList.add("enabled");
     this.editorDiv.contentEditable = false;
     this.div.setAttribute("aria-activedescendant", this.#editorDivId);
@@ -369,6 +362,8 @@ class FreeTextEditor extends AnnotationEditor {
     // In case the blur callback hasn't been called.
     this.isEditing = false;
     this.parent.div.classList.add("freetextEditing");
+
+    return true;
   }
 
   /** @inheritdoc */
@@ -527,18 +522,7 @@ class FreeTextEditor extends AnnotationEditor {
     this.editorDiv.focus();
   }
 
-  /**
-   * ondblclick callback.
-   * @param {MouseEvent} event
-   */
-  dblclick(event) {
-    this.enterInEditMode();
-  }
-
-  /**
-   * onkeydown callback.
-   * @param {KeyboardEvent} event
-   */
+  /** @inheritdoc */
   keydown(event) {
     if (event.target === this.div && event.key === "Enter") {
       this.enterInEditMode();
@@ -576,6 +560,11 @@ class FreeTextEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
+  get canChangeContent() {
+    return true;
+  }
+
+  /** @inheritdoc */
   render() {
     if (this.div) {
       return this.div;
@@ -607,8 +596,6 @@ class FreeTextEditor extends AnnotationEditor {
     this.overlayDiv = document.createElement("div");
     this.overlayDiv.classList.add("overlay", "enabled");
     this.div.append(this.overlayDiv);
-
-    bindEvents(this, this.div, ["dblclick", "keydown"]);
 
     if (this._isCopy || this.annotationElementId) {
       // This editor was created in using copy (ctrl+c).
@@ -747,7 +734,7 @@ class FreeTextEditor extends AnnotationEditor {
 
     // Set the caret at the right position.
     const newRange = new Range();
-    let beforeLength = bufferBefore.reduce((acc, line) => acc + line.length, 0);
+    let beforeLength = Math.sumPrecise(bufferBefore.map(line => line.length));
     for (const { firstChild } of this.editorDiv.childNodes) {
       // Each child is either a div with a text node or a br element.
       if (firstChild.nodeType === Node.TEXT_NODE) {

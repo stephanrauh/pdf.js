@@ -12,7 +12,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-/* globals pdfjsLib, pdfjsTestingUtils, pdfjsViewer */
+/* globals pdfjsLib, _pdfjsTestingUtils, pdfjsViewer */
 
 const {
   AnnotationLayer,
@@ -26,7 +26,7 @@ const {
   TextLayer,
   XfaLayer,
 } = pdfjsLib;
-const { HighlightOutliner } = pdfjsTestingUtils;
+const { HighlightOutliner } = _pdfjsTestingUtils;
 const { GenericL10n, parseQueryString, SimpleLinkService } = pdfjsViewer;
 
 const WAITING_TIME = 100; // ms
@@ -738,7 +738,7 @@ class Driver {
                 await page.getAnnotations({ intent: "display" });
               }
             }
-            doc.annotationStorage.setAll(task.annotationStorage);
+            doc.annotationStorage._setValues(task.annotationStorage);
 
             const data = await doc.saveDocument();
             await loadingTask.destroy();
@@ -919,7 +919,7 @@ class Driver {
               pageColors = null;
 
             if (task.annotationStorage) {
-              task.pdfDoc.annotationStorage.setAll(task.annotationStorage);
+              task.pdfDoc.annotationStorage._setValues(task.annotationStorage);
             }
 
             let textLayerCanvas, annotationLayerCanvas, annotationLayerContext;

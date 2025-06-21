@@ -20,13 +20,6 @@ import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { LinkTarget } from "./pdf_link_service.js";
 import { PDFViewerApplication } from "./app.js";
 
-/* eslint-disable-next-line no-unused-vars */
-const pdfjsVersion =
-  typeof PDFJSDev !== "undefined" ? PDFJSDev.eval("BUNDLE_VERSION") : void 0;
-/* eslint-disable-next-line no-unused-vars */
-const pdfjsBuild =
-  typeof PDFJSDev !== "undefined" ? PDFJSDev.eval("BUNDLE_BUILD") : void 0;
-
 const AppConstants =
   typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")
     ? { LinkTarget, RenderingStates, ScrollMode, SpreadMode }
@@ -66,7 +59,11 @@ if (!HTMLCollection.prototype[Symbol.iterator]) {
 
 function getViewerConfiguration() {
   return {
-    appContainer: document.getElementsByClassName("body")[0],
+    // modified by ngx-extended-pdf-viewer
+    // ngx-extended-pdf-viewer puts the viewer in a div bearing the "body" class
+    // if you're running the viewer with "gulp server", the default (document.body) kicks in
+    appContainer: document.getElementsByClassName("body")[0] ?? document.body,
+    // end of modification by ngx-extended-pdf-viewer
     principalContainer: document.getElementById("mainContainer"),
     mainContainer: document.getElementById("viewerContainer"),
     viewerContainer: document.getElementById("viewer"),

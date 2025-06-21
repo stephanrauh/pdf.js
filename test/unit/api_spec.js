@@ -17,6 +17,7 @@ import {
   AnnotationEditorType,
   AnnotationMode,
   AnnotationType,
+  DrawOPS,
   ImageKind,
   InvalidPDFException,
   isNodeJS,
@@ -794,17 +795,25 @@ describe("api", function () {
         OPS.setLineWidth,
         OPS.setStrokeRGBColor,
         OPS.constructPath,
-        OPS.closeStroke,
       ]);
       expect(opList.argsArray).toEqual([
         [0.5],
-        new Uint8ClampedArray([255, 0, 0]),
+        ["#ff0000"],
         [
-          [OPS.moveTo, OPS.lineTo],
-          [0, 9.75, 0.5, 9.75],
-          [0, 9.75, 0.5, 9.75],
+          OPS.closeStroke,
+          [
+            new Float32Array([
+              DrawOPS.moveTo,
+              0,
+              9.75,
+              DrawOPS.lineTo,
+              0.5,
+              9.75,
+              DrawOPS.closePath,
+            ]),
+          ],
+          new Float32Array([0, 9.75, 0.5, 9.75]),
         ],
-        null,
       ]);
       expect(opList.lastChunk).toEqual(true);
 
@@ -825,6 +834,47 @@ describe("api", function () {
 
       const page = await pdfDocument.getPage(1);
       expect(page instanceof PDFPageProxy).toEqual(true);
+
+      await loadingTask.destroy();
+    });
+
+    it("gets data, on failure, from `PDFDocumentLoadingTask`-instance", async function () {
+      const typedArrayPdf = await DefaultFileReaderFactory.fetch({
+        path: TEST_PDFS_PATH + "issue6010_1.pdf",
+      });
+
+      // Sanity check to make sure that we fetched the entire PDF file.
+      expect(typedArrayPdf instanceof Uint8Array).toEqual(true);
+      expect(typedArrayPdf.length).toEqual(1116);
+
+      const loadingTask = getDocument(typedArrayPdf.slice());
+      expect(loadingTask instanceof PDFDocumentLoadingTask).toEqual(true);
+
+      let passwordData = null;
+      // Attach the callback that is used to request a password;
+      // similarly to how the default viewer handles passwords.
+      loadingTask.onPassword = async (updatePassword, reason) => {
+        passwordData = await loadingTask.getData();
+
+        updatePassword(new Error("Should reject the loadingTask."));
+      };
+
+      try {
+        await loadingTask.promise;
+
+        // Shouldn't get here.
+        expect(false).toEqual(true);
+      } catch (ex) {
+        expect(ex instanceof PasswordException).toEqual(true);
+        expect(ex.code).toEqual(PasswordResponses.NEED_PASSWORD);
+      }
+
+      // Ensure that the raw PDF document can be fetched while
+      // an `onPassword` callback is delaying initialization...
+      expect(passwordData).toEqual(typedArrayPdf);
+      // ... and once an exception has stopped initialization.
+      const data = await loadingTask.getData();
+      expect(data).toEqual(typedArrayPdf);
 
       await loadingTask.destroy();
     });
@@ -1032,7 +1082,7 @@ describe("api", function () {
           getDocument(tracemonkeyGetDocumentParams);
         }).toThrow(
           new Error(
-            "PDFWorker.fromPort - the worker is being destroyed.\n" +
+            "PDFWorker.create - the worker is being destroyed.\n" +
               "Please remember to await `PDFDocumentLoadingTask.destroy()`-calls."
           )
         );
@@ -1345,6 +1395,50 @@ describe("api", function () {
 
       const destC = await pdfDoc.getDestination("C");
       expect(destC).toEqual([{ num: 5, gen: 0 }, { name: "Fit" }]);
+
+      await loadingTask.destroy();
+    });
+
+    it("gets a destination, from /Dests dictionary with keys using PDFDocEncoding", async function () {
+      if (isNodeJS) {
+        pending("Linked test-cases are not supported in Node.js.");
+      }
+      const loadingTask = getDocument(buildGetDocumentParams("issue19835.pdf"));
+      const pdfDoc = await loadingTask.promise;
+
+      const page3 = await pdfDoc.getPage(3);
+      const annots = await page3.getAnnotations();
+
+      const annot = annots.find(x => x.id === "22R");
+      // Sanity check to make sure that we found the "correct" annotation.
+      expect(annot.dest).toEqual(
+        "\u00f2\u00ab\u00d9\u0025\u006f\u2030\u0062\u2122\u0030\u00ab\u00f4\u0047\u0016\u0142\u00e8\u00bd\u2014\u0063\u00a1\u00db"
+      );
+
+      const dest = await pdfDoc.getDestination(annot.dest);
+      expect(dest).toEqual([2, { name: "XYZ" }, 34.0799999, 315.439999, 0]);
+
+      await loadingTask.destroy();
+    });
+
+    it("gets a destination containing Unicode escape sequence (\x1b), from /Dests dictionary with keys using PDFDocEncoding", async function () {
+      if (isNodeJS) {
+        pending("Linked test-cases are not supported in Node.js.");
+      }
+      const loadingTask = getDocument(buildGetDocumentParams("issue19835.pdf"));
+      const pdfDoc = await loadingTask.promise;
+
+      const page3 = await pdfDoc.getPage(3);
+      const annots = await page3.getAnnotations();
+
+      const annot = annots.find(x => x.id === "55R");
+      // Sanity check to make sure that we found the "correct" annotation.
+      expect(annot.dest).toEqual(
+        "\u02d9\u0064\u002a\u0010\u000e\u0061\u00d6\u0002\u005b\u00b7\u201a\u0022\u00c5\u00da\u017e\u00bb\u00d5\u0062\u02dd\u00d1"
+      );
+
+      const dest = await pdfDoc.getDestination(annot.dest);
+      expect(dest).toEqual([28, { name: "XYZ" }, 34.0799999, 73.5199999, 0]);
 
       await loadingTask.destroy();
     });
@@ -4195,8 +4289,8 @@ Caron Broadcasting, Inc., an Ohio corporation (“Lessee”).`)
       const opListAnnotEnable = await pdfPage.getOperatorList({
         annotationMode: AnnotationMode.ENABLE,
       });
-      expect(opListAnnotEnable.fnArray.length).toBeGreaterThan(140);
-      expect(opListAnnotEnable.argsArray.length).toBeGreaterThan(140);
+      expect(opListAnnotEnable.fnArray.length).toBeGreaterThan(130);
+      expect(opListAnnotEnable.argsArray.length).toBeGreaterThan(130);
       expect(opListAnnotEnable.lastChunk).toEqual(true);
       expect(opListAnnotEnable.separateAnnots).toEqual({
         form: false,
@@ -4229,8 +4323,8 @@ Caron Broadcasting, Inc., an Ohio corporation (“Lessee”).`)
       const opListAnnotEnableStorage = await pdfPage.getOperatorList({
         annotationMode: AnnotationMode.ENABLE_STORAGE,
       });
-      expect(opListAnnotEnableStorage.fnArray.length).toBeGreaterThan(170);
-      expect(opListAnnotEnableStorage.argsArray.length).toBeGreaterThan(170);
+      expect(opListAnnotEnableStorage.fnArray.length).toBeGreaterThan(150);
+      expect(opListAnnotEnableStorage.argsArray.length).toBeGreaterThan(150);
       expect(opListAnnotEnableStorage.lastChunk).toEqual(true);
       expect(opListAnnotEnableStorage.separateAnnots).toEqual({
         form: false,

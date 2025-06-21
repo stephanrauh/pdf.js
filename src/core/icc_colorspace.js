@@ -24,9 +24,20 @@ import {
   qcms_drop_transformer,
   qcms_transformer_from_memory,
 } from "../../external/qcms/qcms.js";
-import { shadow, warn } from "../shared/util.js";
+import { shadow, Util, warn } from "../shared/util.js";
 import { ColorSpace } from "./colorspace.js";
 import { QCMS } from "../../external/qcms/qcms_utils.js";
+
+function fetchSync(url) {
+  // Parsing and using color spaces is still synchronous,
+  // so we must load the wasm module synchronously.
+  // TODO: Make the color space stuff asynchronous and use fetch.
+  const xhr = new XMLHttpRequest();
+  xhr.open("GET", url, false);
+  xhr.responseType = "arraybuffer";
+  xhr.send(null);
+  return xhr.response;
+}
 
 class IccColorSpace extends ColorSpace {
   #transformer;
@@ -52,28 +63,30 @@ class IccColorSpace extends ColorSpace {
     switch (numComps) {
       case 1:
         inType = DataType.Gray8;
-        this.#convertPixel = (src, srcOffset) =>
-          qcms_convert_one(this.#transformer, src[srcOffset] * 255);
+        this.#convertPixel = (src, srcOffset, css) =>
+          qcms_convert_one(this.#transformer, src[srcOffset] * 255, css);
         break;
       case 3:
         inType = DataType.RGB8;
-        this.#convertPixel = (src, srcOffset) =>
+        this.#convertPixel = (src, srcOffset, css) =>
           qcms_convert_three(
             this.#transformer,
             src[srcOffset] * 255,
             src[srcOffset + 1] * 255,
-            src[srcOffset + 2] * 255
+            src[srcOffset + 2] * 255,
+            css
           );
         break;
       case 4:
         inType = DataType.CMYK;
-        this.#convertPixel = (src, srcOffset) =>
+        this.#convertPixel = (src, srcOffset, css) =>
           qcms_convert_four(
             this.#transformer,
             src[srcOffset] * 255,
             src[srcOffset + 1] * 255,
             src[srcOffset + 2] * 255,
-            src[srcOffset + 3] * 255
+            src[srcOffset + 3] * 255,
+            css
           );
         break;
       default:
@@ -90,9 +103,16 @@ class IccColorSpace extends ColorSpace {
     IccColorSpace.#finalizer.register(this, this.#transformer);
   }
 
+  getRgbHex(src, srcOffset) {
+    this.#convertPixel(src, srcOffset, /* css */ true);
+    return QCMS._cssColor;
+  }
+
   getRgbItem(src, srcOffset, dest, destOffset) {
-    QCMS._destBuffer = dest.subarray(destOffset, destOffset + 3);
-    this.#convertPixel(src, srcOffset);
+    QCMS._destBuffer = dest;
+    QCMS._destOffset = destOffset;
+    QCMS._destLength = 3;
+    this.#convertPixel(src, srcOffset, /* css */ false);
     QCMS._destBuffer = null;
   }
 
@@ -105,10 +125,9 @@ class IccColorSpace extends ColorSpace {
       }
     }
     QCMS._mustAddAlpha = alpha01 && dest.buffer === src.buffer;
-    QCMS._destBuffer = dest.subarray(
-      destOffset,
-      destOffset + count * (3 + alpha01)
-    );
+    QCMS._destBuffer = dest;
+    QCMS._destOffset = destOffset;
+    QCMS._destLength = count * (3 + alpha01);
     qcms_convert_array(this.#transformer, src);
     QCMS._mustAddAlpha = false;
     QCMS._destBuffer = null;
@@ -130,27 +149,23 @@ class IccColorSpace extends ColorSpace {
   static get isUsable() {
     let isUsable = false;
     if (this.#useWasm) {
-      try {
-        this._module = QCMS._module = this.#load();
-        isUsable = !!this._module;
-      } catch (e) {
-        warn(`ICCBased color space: "${e}".`);
+      if (this.#wasmUrl) {
+        try {
+          this._module = initSync({
+            module: fetchSync(`${this.#wasmUrl}qcms_bg.wasm`),
+          });
+          isUsable = !!this._module;
+          QCMS._memory = this._module.memory;
+          QCMS._makeHexColor = Util.makeHexColor;
+        } catch (e) {
+          warn(`ICCBased color space: "${e}".`);
+        }
+      } else {
+        warn("No ICC color space support due to missing `wasmUrl` API option");
       }
     }
 
     return shadow(this, "isUsable", isUsable);
-  }
-
-  static #load() {
-    // Parsing and using color spaces is still synchronous,
-    // so we must load the wasm module synchronously.
-    // TODO: Make the color space stuff asynchronous and use fetch.
-    const filename = "qcms_bg.wasm";
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET", `${this.#wasmUrl}${filename}`, false);
-    xhr.responseType = "arraybuffer";
-    xhr.send(null);
-    return initSync({ module: xhr.response });
   }
 }
 
@@ -158,16 +173,27 @@ class CmykICCBasedCS extends IccColorSpace {
   static #iccUrl;
 
   constructor() {
-    const filename = "CGATS001Compat-v2-micro.icc";
-    const xhr = new XMLHttpRequest();
-    xhr.open("GET", `${CmykICCBasedCS.#iccUrl}${filename}`, false);
-    xhr.responseType = "arraybuffer";
-    xhr.send(null);
-    super(new Uint8Array(xhr.response), "DeviceCMYK", 4);
+    const iccProfile = new Uint8Array(
+      fetchSync(`${CmykICCBasedCS.#iccUrl}CGATS001Compat-v2-micro.icc`)
+    );
+    super(iccProfile, "DeviceCMYK", 4);
   }
 
   static setOptions({ iccUrl }) {
     this.#iccUrl = iccUrl;
+  }
+
+  static get isUsable() {
+    let isUsable = false;
+    if (IccColorSpace.isUsable) {
+      if (this.#iccUrl) {
+        isUsable = true;
+      } else {
+        warn("No CMYK ICC profile support due to missing `iccUrl` API option");
+      }
+    }
+
+    return shadow(this, "isUsable", isUsable);
   }
 }
 

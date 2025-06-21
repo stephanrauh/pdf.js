@@ -172,6 +172,10 @@
       "enum": [-1, 0, 3, 15],
       "default": 0
     },
+    "capCanvasAreaFactor": {
+      "type": "integer",
+      "default": 200
+    },
     "enablePermissions": {
       "type": "boolean",
       "default": false
@@ -228,7 +232,7 @@
     "enableAutoLinking": {
       "description": "Enable creation of hyperlinks from text that look like URLs.",
       "type": "boolean",
-      "default": false
+      "default": true
     }
   }
 }

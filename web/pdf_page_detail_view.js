@@ -140,7 +140,7 @@ class PDFPageDetailView extends BasePDFPageView {
       return;
     }
 
-    const { viewport, maxCanvasPixels } = this.pageView;
+    const { viewport, maxCanvasPixels, capCanvasAreaFactor } = this.pageView;
 
     const visibleWidth = visibleArea.maxX - visibleArea.minX;
     const visibleHeight = visibleArea.maxY - visibleArea.minY;
@@ -156,7 +156,8 @@ class PDFPageDetailView extends BasePDFPageView {
     const visiblePixels =
       visibleWidth * visibleHeight * OutputScale.pixelRatio ** 2;
     const maxDetailToVisibleLinearRatio = Math.sqrt(
-      maxCanvasPixels / visiblePixels
+      OutputScale.capPixels(maxCanvasPixels, capCanvasAreaFactor) /
+        visiblePixels
     );
     const maxOverflowScale = (maxDetailToVisibleLinearRatio - 1) / 2;
     let overflowScale = Math.min(1, maxOverflowScale);

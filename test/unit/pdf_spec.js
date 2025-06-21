@@ -31,13 +31,13 @@ import {
   PermissionFlag,
   ResponseException,
   shadow,
+  updateUrlHash,
   Util,
   VerbosityLevel,
 } from "../../src/shared/util.js";
 import {
   build,
   getDocument,
-  isValidExplicitDest,
   PDFDataRangeTransport,
   PDFWorker,
   version,
@@ -65,6 +65,7 @@ import { ColorPicker } from "../../src/display/editor/color_picker.js";
 import { DOMSVGFactory } from "../../src/display/svg_factory.js";
 import { DrawLayer } from "../../src/display/draw_layer.js";
 import { GlobalWorkerOptions } from "../../src/display/worker_options.js";
+import { isValidExplicitDest } from "../../src/display/api_utils.js";
 import { SignatureExtractor } from "../../src/display/editor/drawers/signaturedraw.js";
 import { TextLayer } from "../../src/display/text_layer.js";
 import { TouchManager } from "../../src/display/touch_manager.js";
@@ -117,6 +118,7 @@ const expectedAPI = Object.freeze({
   SupportedImageMimeTypes,
   TextLayer,
   TouchManager,
+  updateUrlHash,
   Util,
   VerbosityLevel,
   version,
@@ -135,6 +137,10 @@ describe("pdfjs_api", function () {
     // The imported Object contains an (automatically) inserted Symbol,
     // hence we copy the data to allow using a simple comparison below.
     expect({ ...pdfjsAPI }).toEqual(expectedAPI);
+
+    expect(Object.keys(globalThis.pdfjsLib).sort()).toEqual(
+      Object.keys(expectedAPI).sort()
+    );
   });
 });
 
