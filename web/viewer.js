@@ -96,7 +96,7 @@ function getViewerConfiguration() {
       editorStampParamsToolbar: document.getElementById(
         "editorStampParamsToolbar"
       ),
-      editorSignatureButton: document.getElementById("editorSignatureButton"),
+      editorSignatureButton: document.getElementById("primaryEditorSignatureButton") ?? document.getElementById("editorSignatureButton"),
       editorSignatureParamsToolbar: document.getElementById(
         "editorSignatureParamsToolbar"
       ),
