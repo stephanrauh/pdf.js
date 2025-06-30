@@ -432,7 +432,7 @@ class AnnotationEditor {
   commit() {
     this.addToAnnotationStorage();
     // #2256 modified by ngx-extended-pdf-viewer
-    this._eventBus?.dispatch("annotation-editor-event", {
+    this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "commit",
       page: this.pageIndex + 1,

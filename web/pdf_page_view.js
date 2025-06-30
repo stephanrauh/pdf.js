@@ -1110,6 +1110,7 @@ class PDFPageView extends BasePDFPageView {
         onAppend: annotationEditorLayerDiv => {
           this.#addLayer(annotationEditorLayerDiv, "annotationEditorLayer");
         },
+        eventBus: this.eventBus // #2256 modified by ngx-extended-pdf-viewer
       });
       this.#renderAnnotationEditorLayer();
     });

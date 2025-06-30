@@ -474,6 +474,18 @@ class StampEditor extends AnnotationEditor {
     this._reportTelemetry({
       action: "inserted_image",
     });
+        // #2256 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "imageAdded",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      value: canvas,
+      width,
+      height,
+      fileName: this.#bitmapFileName
+    });
+    // #2256 end of modification by ngx-extended-pdf-viewer
     if (this.#bitmapFileName) {
       this.div.setAttribute("aria-description", this.#bitmapFileName);
     }
