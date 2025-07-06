@@ -883,8 +883,10 @@ function toggleCheckedBtn(button, toggle, view = null) {
 }
 
 function toggleExpandedBtn(button, toggle, view = null) {
-  button.classList.toggle("toggled", toggle);
-  button.setAttribute("aria-expanded", toggle);
+  // modified by ngx-extended-pdf-viewer
+  button?.classList.toggle("toggled", toggle);
+  button?.setAttribute("aria-expanded", toggle);
+  // end of modification by ngx-extended-pdf-viewer
 
   view?.classList.toggle("hidden", !toggle);
 

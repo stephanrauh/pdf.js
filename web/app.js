@@ -206,7 +206,7 @@ appConfig: null,
     try {
       await this.preferences.initializedPromise;
     } catch (ex) {
-      console.error("initialize:", ex);
+      NgxConsole.error("initialize:", ex);
     }
     if (AppOptions.get("pdfBugEnabled")) {
       await this._parseHashParams();
@@ -320,7 +320,7 @@ appConfig: null,
         // Ensure that the "fake" worker won't be ignored.
         AppOptions.set("workerPort", null);
       } catch (ex) {
-        console.error("_parseHashParams:", ex);
+        NgxConsole.error("_parseHashParams:", ex);
       }
     }
     if (params.has("textlayer")) {
@@ -336,7 +336,7 @@ appConfig: null,
             await loadPDFBug();
             this._PDFBug.loadCSS();
           } catch (ex) {
-            console.error("_parseHashParams:", ex);
+            NgxConsole.error("_parseHashParams:", ex);
           }
           break;
       }
@@ -347,7 +347,7 @@ appConfig: null,
         await loadPDFBug();
         this._PDFBug.init(mainContainer, enabled);
       } catch (ex) {
-        console.error("_parseHashParams:", ex);
+        NgxConsole.error("_parseHashParams:", ex);
       }
 
       const debugOpts = { pdfBug: true, fontExtraProperties: true };
@@ -857,7 +857,7 @@ appConfig: null,
     if (!AppOptions.get("supportsDocumentFonts")) {
       AppOptions.set("disableFontFace", true);
       this.l10n.get("pdfjs-web-fonts-disabled").then(msg => {
-        console.warn(msg);
+        NgxConsole.warn(msg);
       });
     }
 
@@ -909,7 +909,7 @@ appConfig: null,
     } catch (ex) {
       // The viewer could be in e.g. a cross-origin <iframe> element,
       // fallback to dispatching the event at the current `document`.
-      console.error(`webviewerinitialized: ${ex}`);
+      NgxConsole.error(`webviewerinitialized: ${ex}`);
       parent.document.dispatchEvent(event);
       // #2070 end of modification
     }
@@ -1507,7 +1507,7 @@ appConfig: null,
       }
     }
 
-    console.error(`${message}\n\n${moreInfoText.join("\n")}`);
+    NgxConsole.error(`${message}\n\n${moreInfoText.join("\n")}`);
     return message;
   },
 
@@ -1883,12 +1883,16 @@ appConfig: null,
     this._contentLength ??= contentLength; // See `getDownloadInfo`-call above.
 
     // Provides some basic debug information
-    console.log(
-      `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
-        `${(metadata?.get("pdf:producer") || info.Producer || "-").trim()} / ` +
-        `${(metadata?.get("xmp:creatortool") || info.Creator || "-").trim()}` +
-        `] (PDF.js: ${version || "?"} [${build || "?"}])`
-    );
+    // #1793 modified by ngx-extended-pdf-vieweer
+    if (AppOptions?.get("verbosity") > 0) {
+      NgxConsole.log(
+        `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
+          `${(metadata?.get("pdf:producer") || info.Producer || "-").trim()} / ` +
+          `${(metadata?.get("xmp:creatortool") || info.Creator || "-").trim()}` +
+          `] (PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer ${ngxExtendedPdfViewerVersion}`
+      );
+    }
+    // #1793 end of modification by ngx-extended-pdf-viewer
     const pdfTitle = this._docTitle;
 
     if (pdfTitle) {
@@ -1913,11 +1917,11 @@ appConfig: null,
       (info.IsAcroFormPresent || info.IsXFAPresent) &&
       !this.pdfViewer.renderForms
     ) {
-      console.warn("Warning: Interactive form support is not enabled");
+      NgxConsole.warn("Warning: Interactive form support is not enabled");
     }
 
     if (info.IsSignaturesPresent) {
-      console.warn("Warning: Digital signatures validation is not supported");
+      NgxConsole.warn("Warning: Digital signatures validation is not supported");
     }
 
     this.eventBus.dispatch("metadataloaded", { source: this });

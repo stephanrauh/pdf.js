@@ -735,7 +735,7 @@ class AppOptions {
 
       if (!defaultOpt || !(typeof userOpt === typeof defaultOpt.value || Type[(typeof userOpt).toUpperCase()] & defaultOpt.type)) {
         // #2459 modified by ngx-extended-pdf-viewer
-        if (typeof defaultOpt.value === "number" && typeof userOpt === "string") {
+        if (typeof defaultOpt?.value === "number" && typeof userOpt === "string") {
           if (!Number.isNaN(Number(userOpt))) {
             userOpt = Number(userOpt);
           }
