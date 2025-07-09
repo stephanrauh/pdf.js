@@ -45,6 +45,8 @@ import {
  * @property {HTMLButtonElement} editorFreeTextButton - Button to switch to
  *   FreeText editing.
  * @property {HTMLButtonElement} download - Button to download the document.
+ * @property {HTMLButtonElement} movePageUp - Button to move a page up inside the document.
+ * @property {HTMLButtonElement} movePageDown - Button to move a page down inside the document.
  */
 
 class Toolbar {
@@ -91,6 +93,8 @@ class Toolbar {
       },
       // #1807 end of modication by ngx-extended-pdf-viewer
       { element: options.download, eventName: "download" },
+      { element: options.movePageUp, eventName: "movePageUp" },
+      { element: options.movePageDown, eventName: "movePageDown" },
       // #2900 modified by ngx-extended-pdf-viewer - deactivate the buttons
       // because they're handled by TypeScript
       /*
@@ -319,6 +323,7 @@ class Toolbar {
           break;
       }
     });
+
     eventBus._on("toolbardensity", this.#updateToolbarDensity.bind(this));
 
     if (editorHighlightColorPicker) {

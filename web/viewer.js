@@ -101,6 +101,8 @@ function getViewerConfiguration() {
         "editorSignatureParamsToolbar"
       ),
       download: document.getElementById("downloadButton"),
+      movePageUp: document.getElementById("movePageUpButton"),
+      movePageDown: document.getElementById("movePageDownButton"),
     },
     secondaryToolbar: {
       toolbar: document.getElementById("secondaryToolbar"),

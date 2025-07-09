@@ -528,6 +528,14 @@ body {
   mask-image: var(--toolbarButton-editorFreeText-icon);
 }
 
+#movePageUpButton::before {
+  mask-image: var(--toolbarButton-pageUp-icon);
+}
+
+#movePageDownButton::before {
+  mask-image: var(--toolbarButton-pageDown-icon);
+}
+
 #editorHighlightButton::before {
   mask-image: var(--toolbarButton-editorHighlight-icon);
 }

@@ -31,6 +31,7 @@
   --loading-icon-delay: 400ms;
   --focus-ring-color: light-dark(#0060df, #0df);
   --focus-ring-outline: 2px solid var(--focus-ring-color);
+  --dotted-line-margin-x: 6px;
 
   @media screen and (forced-colors: active) {
     --pdfViewer-padding-bottom: 9px;
@@ -220,4 +221,9 @@
 .pdfPresentationMode .pdfViewer .page {
   margin: 0 auto;
   border: 2px solid transparent;
+}
+
+.dotted-line {
+  border-top: 2px dotted lightslategrey;
+  margin: var(--dotted-line-margin-x) 0;
 }

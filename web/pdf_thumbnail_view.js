@@ -27,10 +27,12 @@ import { OutputScale, RenderingCancelledException } from "pdfjs-lib";
 import { AppOptions } from "./app_options.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { RenderingStates } from "./ui_utils.js";
+import {PDFViewerApplication} from "./app.js";
 
 const DRAW_UPSCALE_FACTOR = 2; // See comment in `PDFThumbnailView.draw` below.
 const MAX_NUM_SCALING_STEPS = 3;
 const THUMBNAIL_WIDTH = 98; // px
+let initialDragY = 0;
 
 function zeroCanvas(c) {
   // Zeroing the width and height causes Firefox to release graphics
@@ -147,6 +149,70 @@ class PDFThumbnailView {
       this.createThumbnail(this, linkService, id, container, this.#pageL10nArgs);
     }
     // end of modification
+
+    this.div.addEventListener('dragstart', this._dragStartHandler.bind(this));
+    this.div.addEventListener('dragover', this._dragOverHandler.bind(this));
+    this.div.addEventListener('drop', this._dropHandler.bind(this));
+    this.div.addEventListener('mousedown', this._mouseDownHandler.bind(this));
+  }
+
+  _dragStartHandler(event) {
+    event.dataTransfer.setData('text/plain', this.id.toString());
+  }
+
+  _dragOverHandler(event) {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "move";
+    const target = event.currentTarget;
+    const bounding = target.getBoundingClientRect();
+    this._removeDottedLine();
+    // Don't show line for initial dragged item
+    if(bounding.top < initialDragY && bounding.bottom > initialDragY) {
+      return;
+    }
+    this._showDottedLine(target, bounding.height, initialDragY > event.clientY);
+  }
+
+  _dropHandler(event) {
+    event.preventDefault();
+    event.stopPropagation();
+    const draggedId = parseInt(event.dataTransfer.getData('text/plain'), 10);
+    const targetId = this.id;
+    this._removeDottedLine();
+    if (draggedId !== targetId) {
+      this._movePage(draggedId, targetId);
+    }
+  }
+
+  _mouseDownHandler(event) {
+    initialDragY = event.clientY;
+  }
+
+  _showDottedLine(target, height, insertAbove) {
+    const dottedLine = document.createElement('div');
+    dottedLine.className = 'dotted-line';
+    if (insertAbove) {
+      dottedLine.style.setProperty("--dotted-line-margin-x", `${-(height)}px`);
+    } else {
+      dottedLine.style.setProperty("--dotted-line-margin-x", "6px");
+    }
+    target.appendChild(dottedLine);
+  }
+
+  _removeDottedLine() {
+    const existingLine = document.querySelector('.dotted-line');
+    if (existingLine) {
+      existingLine.parentNode.removeChild(existingLine);
+    }
+  }
+
+  _movePage(draggedId, targetId) {
+    const thumbnailsContainer = this.div.parentNode.parentNode;
+    const draggedThumbnail = thumbnailsContainer.children[draggedId - 1];
+    const targetThumbnail = thumbnailsContainer.children[targetId - 1];
+    if (draggedThumbnail && targetThumbnail) {
+      PDFViewerApplication.movePage(draggedId, targetId);
+    }
   }
 
   // modified by ngx-extended-pdf-viewer

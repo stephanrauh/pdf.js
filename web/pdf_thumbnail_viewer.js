@@ -169,6 +169,12 @@ class PDFThumbnailViewer {
     }
   }
 
+  swapThumbnails(prevIndex, newIndex) {
+    let prevIndexPage = this._thumbnails[prevIndex].pdfPage
+    this._thumbnails[prevIndex].setPdfPage(this._thumbnails[newIndex].pdfPage);
+    this._thumbnails[newIndex].setPdfPage(prevIndexPage);
+  }
+
   cleanup() {
     for (const thumbnail of this._thumbnails) {
       if (thumbnail.renderingState !== RenderingStates.FINISHED) {
@@ -219,7 +225,6 @@ class PDFThumbnailViewer {
         for (let pageNum = 1; pageNum <= pagesCount; ++pageNum) {
           const thumbnail = new PDFThumbnailView({
             container: this.container,
-            eventBus: this.eventBus,
             id: pageNum,
             defaultViewport: viewport.clone(),
             optionalContentConfigPromise,
