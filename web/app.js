@@ -195,6 +195,9 @@ appConfig: null,
   _caretBrowsing: null,
   _isScrolling: false,
   editorUndoBar: null,
+  // #2943 modified by ngx-extended-pdf-viewer
+  pageOrder: null,
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   // Called once when the document is loaded.
   async initialize(appConfig) {
@@ -1360,7 +1363,8 @@ appConfig: null,
     this.downloadManager.download(data, this._downloadUrl, this._docFilename);
   },
 
-  async save() {
+  // #2943 modified by ngx-extended-pdf-viewer
+  async save(pageOrder = null) {
     if (this._saveInProgress) {
       return;
     }
@@ -1368,7 +1372,7 @@ appConfig: null,
     await this.pdfScriptingManager.dispatchWillSave();
 
     try {
-      const data = await this.pdfDocument.saveDocument();
+      const data = await this.pdfDocument.saveDocument(pageOrder);
       this.downloadManager.download(data, this._downloadUrl, this._docFilename);
     } catch (reason) {
       // When the PDF document isn't ready, fallback to a "regular" download.
@@ -1399,11 +1403,53 @@ appConfig: null,
     // a message and change PdfjsChild.sys.mjs to take it into account.
     const { classList } = this.appConfig.appContainer;
     classList.add("wait");
-    await (this.pdfDocument?.annotationStorage.size > 0
-      ? this.save()
-      : this.download());
+    const hasChanges = this.pdfDocument?.annotationStorage.size > 0 || !this.pageOrder.every((value, index, array) =>
+      index === 0 || value >= array[index - 1]);
+    await (hasChanges ? this.save(this.pageOrder) : this.download());
     classList.remove("wait");
   },
+
+  movePageUp(event) {
+    if(event.source.pageNumber <= 1) return
+    this.pdfViewer.swapPages(event.source.pageNumber - 1, event.source.pageNumber - 2);
+    this.pdfThumbnailViewer.swapThumbnails(event.source.pageNumber - 1, event.source.pageNumber - 2);
+    this.page = event.source.pageNumber - 1;
+    [this.pageOrder[event.source.pageNumber - 1], this.pageOrder[event.source.pageNumber]] = [this.pageOrder[event.source.pageNumber], this.pageOrder[event.source.pageNumber - 1]];
+  },
+
+  movePageDown(event) {
+    if(event.source.pageNumber === this.pdfDocument.numPages) return
+    this.pdfViewer.swapPages(event.source.pageNumber - 1, event.source.pageNumber);
+    this.pdfThumbnailViewer.swapThumbnails(event.source.pageNumber - 1, event.source.pageNumber);
+    this.page = event.source.pageNumber + 1;
+    [this.pageOrder[event.source.pageNumber - 2], this.pageOrder[event.source.pageNumber - 1]] = [this.pageOrder[event.source.pageNumber - 1], this.pageOrder[event.source.pageNumber - 2]];
+  },
+
+  movePage(prevPageIndex, newPageIndex) {
+    if (prevPageIndex < 1 || prevPageIndex > this.pdfDocument.numPages || newPageIndex < 1 || newPageIndex > this.pdfDocument.numPages) return;
+
+    const prevPageNumber = prevPageIndex - 1;
+    const newPageNumber = newPageIndex - 1;
+
+    if (prevPageNumber < newPageNumber) {
+      // Move page down
+      for (let i = prevPageNumber; i < newPageNumber; i++) {
+        this.pdfViewer.swapPages(i, i + 1);
+        this.pdfThumbnailViewer.swapThumbnails(i, i + 1);
+        [this.pageOrder[i], this.pageOrder[i + 1]] = [this.pageOrder[i + 1], this.pageOrder[i]];
+      }
+    } else if (prevPageNumber > newPageNumber) {
+      // Move page up
+      for (let i = prevPageNumber; i > newPageNumber; i--) {
+        this.pdfViewer.swapPages(i, i - 1);
+        this.pdfThumbnailViewer.swapThumbnails(i, i - 1);
+        [this.pageOrder[i], this.pageOrder[i - 1]] = [this.pageOrder[i - 1], this.pageOrder[i]];
+      }
+    }
+
+    this.page = newPageIndex;
+  },
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   // #1685 modified by ngx-extended-pdf-viewer
   async _exportWithAnnotations() {
@@ -1636,7 +1682,7 @@ appConfig: null,
                 zoom = Number(zoom) / 100;
               }
             } catch (error) {
-              // console.log("Couldn't get the zoom setting", error);
+              // NgxConsole.log("Couldn't get the zoom setting", error);
             }
           }
           if (!pdfViewer.currentScaleValue && zoom && zoom !== '') {
@@ -1786,6 +1832,9 @@ appConfig: null,
 
     this._initializePageLabels(pdfDocument);
     this._initializeMetadata(pdfDocument);
+    // #2943 modified by ngx-extended-pdf-viewer
+    this._initializePageOrder(pdfDocument);
+    // #2943 end of modification by ngx-extended-pdf-viewer
   },
 
   /**
@@ -1926,6 +1975,18 @@ appConfig: null,
 
     this.eventBus.dispatch("metadataloaded", { source: this });
   },
+
+  // #2943 modified by ngx-extended-pdf-viewer
+  /**
+   * @private
+   */
+  async _initializePageOrder(pdfDocument) {
+    if (pdfDocument !== this.pdfDocument) {
+      return; // The document was closed while the page order resolved.
+    }
+    this.pageOrder = Array.from({length: this.pdfDocument.numPages}, (_, i) => i + 1);
+  },
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   /**
    * @private
@@ -2262,6 +2323,10 @@ appConfig: null,
     );
     eventBus._on("print", this.triggerPrinting.bind(this), opts);
     eventBus._on("download", this.downloadOrSave.bind(this), opts);
+    // #2943 modified by ngx-extended-pdf-viewer
+    eventBus._on("movePageUp", this.movePageUp.bind(this), opts);
+    eventBus._on("movePageDown", this.movePageDown.bind(this), opts);
+    // #2943 end of modification by ngx-extended-pdf-viewer
     eventBus._on("firstpage", () => (this.page = 1), opts);
     eventBus._on("lastpage", () => (this.page = this.pagesCount), opts);
     eventBus._on("nextpage", () => pdfViewer.nextPage(), opts);
