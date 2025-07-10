@@ -25,19 +25,16 @@ import {
   VerbosityLevel,
   warn,
 } from "../shared/util.js";
-import {
-  arrayBuffersToBytes,
-  getNewAnnotationsMap,
-  XRefParseException,
-} from "./core_utils.js";
-import { Dict, isDict, Ref, RefSetCache } from "./primitives.js";
-import { LocalPdfManager, NetworkPdfManager } from "./pdf_manager.js";
-import { MessageHandler, wrapReason } from "../shared/message_handler.js";
-import { AnnotationFactory } from "./annotation.js";
-import { clearGlobalCaches } from "./cleanup_helper.js";
-import { incrementalUpdate } from "./writer.js";
-import { PDFWorkerStream } from "./worker_stream.js";
-import { StructTreeRoot } from "./struct_tree.js";
+import {arrayBuffersToBytes, getNewAnnotationsMap, XRefParseException,} from "./core_utils.js";
+import {Dict, isDict, Ref, RefSetCache} from "./primitives.js";
+import {LocalPdfManager, NetworkPdfManager} from "./pdf_manager.js";
+import {MessageHandler, wrapReason} from "../shared/message_handler.js";
+import {AnnotationFactory} from "./annotation.js";
+import {clearGlobalCaches} from "./cleanup_helper.js";
+import {incrementalUpdate} from "./writer.js";
+import {PDFWorkerStream} from "./worker_stream.js";
+import {StructTreeRoot} from "./struct_tree.js";
+import {Catalog} from "./catalog.js";
 
 // modified by ngx-extended-pdf-viewer #358
 // (several not-so-old browsers don't implement Promise.allSettled())
@@ -133,7 +130,7 @@ class WorkerMessageHandler {
     const WorkerTasks = new Set();
     const verbosity = getVerbosityLevel();
 
-    const { docId, apiVersion } = docParams;
+    const {docId, apiVersion} = docParams;
     const workerVersion =
       typeof PDFJSDev !== "undefined" && !PDFJSDev.test("TESTING")
         ? PDFJSDev.eval("BUNDLE_VERSION")
@@ -141,7 +138,7 @@ class WorkerMessageHandler {
     if (apiVersion !== workerVersion) {
       throw new Error(
         `The API version "${apiVersion}" does not match ` +
-          `the Worker version "${workerVersion}".`
+        `the Worker version "${workerVersion}".`
       );
     }
 
@@ -212,19 +209,19 @@ class WorkerMessageHandler {
         ? await pdfManager.ensureDoc("htmlForXfa")
         : null;
 
-      return { numPages, fingerprints, htmlForXfa };
+      return {numPages, fingerprints, htmlForXfa};
     }
 
     async function getPdfManager({
-      data,
-      password,
-      disableAutoFetch,
-      rangeChunkSize,
-      length,
-      docBaseUrl,
-      enableXfa,
-      evaluatorOptions,
-    }) {
+                                   data,
+                                   password,
+                                   disableAutoFetch,
+                                   rangeChunkSize,
+                                   length,
+                                   docBaseUrl,
+                                   enableXfa,
+                                   evaluatorOptions,
+                                 }) {
       const pdfManagerArgs = {
         source: null,
         disableAutoFetch,
@@ -279,7 +276,7 @@ class WorkerMessageHandler {
         });
 
       new Promise(function (resolve, reject) {
-        const readChunk = function ({ value, done }) {
+        const readChunk = function ({value, done}) {
           try {
             ensureNotTerminated();
             if (done) {
@@ -339,7 +336,7 @@ class WorkerMessageHandler {
     function setupDoc(data) {
       function onSuccess(doc) {
         ensureNotTerminated();
-        handler.send("GetDoc", { pdfInfo: doc });
+        handler.send("GetDoc", {pdfInfo: doc});
       }
 
       function onFailure(ex) {
@@ -351,7 +348,7 @@ class WorkerMessageHandler {
 
           handler
             .sendWithPromise("PasswordRequest", ex)
-            .then(function ({ password }) {
+            .then(function ({password}) {
               finishWorkerTask(task);
               pdfManager.updatePassword(password);
               pdfManagerReady();
@@ -400,7 +397,7 @@ class WorkerMessageHandler {
           pdfManager = newPdfManager;
 
           pdfManager.requestLoadedStream(/* noFetch = */ true).then(stream => {
-            handler.send("DataLoaded", { length: stream.bytes.byteLength });
+            handler.send("DataLoaded", {length: stream.bytes.byteLength});
           });
         })
         .then(pdfManagerReady, onFailure);
@@ -466,7 +463,7 @@ class WorkerMessageHandler {
       return pdfManager.ensureCatalog("jsActions");
     });
 
-    handler.on("GetPageJSActions", function ({ pageIndex }) {
+    handler.on("GetPageJSActions", function ({pageIndex}) {
       return pdfManager
         .getPage(pageIndex)
         .then(page => pdfManager.ensure(page, "jsActions"));
@@ -499,7 +496,7 @@ class WorkerMessageHandler {
       return pdfManager.requestLoadedStream().then(stream => stream.bytes);
     });
 
-    handler.on("GetAnnotations", function ({ pageIndex, intent }) {
+    handler.on("GetAnnotations", function ({pageIndex, intent}) {
       return pdfManager.getPage(pageIndex).then(function (page) {
         const task = new WorkerTask(`GetAnnotations: page ${pageIndex}`);
         startWorkerTask(task);
@@ -531,9 +528,10 @@ class WorkerMessageHandler {
       return pdfManager.ensureDoc("calculationOrderIds");
     });
 
+    // #2943 modified by ngx-extended-pdf-viewer
     handler.on(
       "SaveDocument",
-      async function ({ isPureXfa, numPages, annotationStorage, filename }) {
+      async function ({isPureXfa, numPages, annotationStorage, filename, pageOrder = null}) {
         const globalPromises = [
           pdfManager.requestLoadedStream(),
           pdfManager.ensureCatalog("acroForm"),
@@ -545,6 +543,27 @@ class WorkerMessageHandler {
         ];
         const changes = new RefSetCache();
         const promises = [];
+
+        if (Array.isArray(pageOrder)) {
+          const xref = await pdfManager.ensureDoc("xref");
+          const catalog = new Catalog(pdfManager, xref);
+          const allPagesDicts = await catalog.getAllPageDicts();
+          const pageEntries = Array.from(allPagesDicts.entries());
+          const pagesRef = catalog.cloneDict().getRaw("Pages");
+          const pagesDict = await xref.fetchIfRefAsync(pagesRef);
+          const newPagesDict = pagesDict.clone();
+
+          // Update Kids using the Refs of the pages
+          const updatedKids = pageOrder.map(i => pageEntries[i - 1][1][1]);
+          newPagesDict._map.set("Kids", updatedKids);
+          for (const kidRef of updatedKids) {
+            const kidDict = await xref.fetchIfRefAsync(kidRef);
+            kidDict._map.set("Parent", pagesRef);
+            changes.put(kidRef, { data: kidDict });
+          }
+
+          changes.put(pagesRef, { data: newPagesDict });
+        }
 
         const newAnnotationsByPage = !isPureXfa
           ? getNewAnnotationsMap(annotationStorage)
@@ -736,6 +755,7 @@ class WorkerMessageHandler {
         });
       }
     );
+    // #2943 end of modification by ngx-extended-pdf-viewer
 
     handler.on("GetOperatorList", function (data, sink) {
       const pageIndex = data.pageIndex;
@@ -764,7 +784,7 @@ class WorkerMessageHandler {
               if (start) {
                 info(
                   `page=${pageIndex + 1} - getOperatorList: time=` +
-                    `${Date.now() - start}ms, len=${operatorListInfo.length}`
+                  `${Date.now() - start}ms, len=${operatorListInfo.length}`
                 );
               }
               sink.close();
@@ -784,7 +804,7 @@ class WorkerMessageHandler {
     });
 
     handler.on("GetTextContent", function (data, sink) {
-      const { pageIndex, includeMarkedContent, disableNormalization } = data;
+      const {pageIndex, includeMarkedContent, disableNormalization} = data;
 
       pdfManager.getPage(pageIndex).then(function (page) {
         const task = new WorkerTask("GetTextContent: page " + pageIndex);
@@ -808,7 +828,7 @@ class WorkerMessageHandler {
               if (start) {
                 info(
                   `page=${pageIndex + 1} - getTextContent: time=` +
-                    `${Date.now() - start}ms`
+                  `${Date.now() - start}ms`
                 );
               }
               sink.close();
@@ -880,8 +900,8 @@ class WorkerMessageHandler {
       if (data) {
         info(
           "showUnverifiedSignatures=" +
-            data +
-            ". This is an incompletely implemented feature. Signatures cannot be validated, so use it at own risk."
+          data +
+          ". This is an incompletely implemented feature. Signatures cannot be validated, so use it at own risk."
         );
       }
       self.showUnverifiedSignatures = data;
@@ -917,4 +937,4 @@ class WorkerMessageHandler {
   }
 }
 
-export { WorkerMessageHandler, WorkerTask };
+export {WorkerMessageHandler, WorkerTask};

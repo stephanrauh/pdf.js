@@ -528,6 +528,16 @@ body {
   mask-image: var(--toolbarButton-editorFreeText-icon);
 }
 
+/* #2943 modified by ngx-extended-pdf-viewer */
+#movePageUpButton::before {
+  mask-image: var(--toolbarButton-pageUp-icon);
+}
+
+#movePageDownButton::before {
+  mask-image: var(--toolbarButton-pageDown-icon);
+}
+/* #2943 end of modification by ngx-extended-pdf-viewer */
+
 #editorHighlightButton::before {
   mask-image: var(--toolbarButton-editorHighlight-icon);
 }

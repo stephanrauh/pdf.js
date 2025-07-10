@@ -497,7 +497,6 @@ class PDFViewer {
   }
   // #1989 end of modification by ngx-extended-pdf-viewer
 
-
   get pagesCount() {
     return this._pages.length;
   }
@@ -505,6 +504,16 @@ class PDFViewer {
   getPageView(index) {
     return this._pages[index];
   }
+
+  // #2943 modified by ngx-extended-pdf-viewer
+  swapPages(oldIndex, newIndex) {
+    const oldIndexPage = this._pages[oldIndex].pdfPage;
+    const newIndexPage = this._pages[newIndex].pdfPage;
+    this._pages[oldIndex].setPdfPage(newIndexPage);
+    this._pages[newIndex].setPdfPage(oldIndexPage);
+    this.refresh();
+  }
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   getCachedPageViews() {
     return new Set(this.#buffer);
