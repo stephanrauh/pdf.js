@@ -27,7 +27,9 @@ import { OutputScale, RenderingCancelledException } from "pdfjs-lib";
 import { AppOptions } from "./app_options.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { RenderingStates } from "./ui_utils.js";
-import {PDFViewerApplication} from "./app.js";
+// #2943 modified by ngx-extended-pdf-viewer
+import { PDFViewerApplication } from "./app.js";
+// #2943 end of modification by ngx-extended-pdf-viewer
 
 const DRAW_UPSCALE_FACTOR = 2; // See comment in `PDFThumbnailView.draw` below.
 const MAX_NUM_SCALING_STEPS = 3;
@@ -150,7 +152,7 @@ class PDFThumbnailView {
     } else {
       this.createThumbnail(this, linkService, id, container, this.#pageL10nArgs);
     }
-    // end of modification
+    // end of modification 
 
     // #2943 modified by ngx-extended-pdf-viewer
     this.div.addEventListener('dragstart', this._dragStartHandler.bind(this));

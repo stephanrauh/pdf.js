@@ -1403,12 +1403,15 @@ appConfig: null,
     // a message and change PdfjsChild.sys.mjs to take it into account.
     const { classList } = this.appConfig.appContainer;
     classList.add("wait");
+    // #2943 modified by ngx-extended-pdf-viewer
     const hasChanges = this.pdfDocument?.annotationStorage.size > 0 || !this.pageOrder.every((value, index, array) =>
       index === 0 || value >= array[index - 1]);
     await (hasChanges ? this.save(this.pageOrder) : this.download());
+    // #2943 end of modification by ngx-extended-pdf-viewer
     classList.remove("wait");
   },
 
+  // #2943 modified by ngx-extended-pdf-viewer
   movePageUp(event) {
     if(event.source.pageNumber <= 1) return
     this.pdfViewer.swapPages(event.source.pageNumber - 1, event.source.pageNumber - 2);

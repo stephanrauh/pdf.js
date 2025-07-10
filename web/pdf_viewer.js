@@ -497,6 +497,7 @@ class PDFViewer {
   }
   // #1989 end of modification by ngx-extended-pdf-viewer
 
+
   get pagesCount() {
     return this._pages.length;
   }
