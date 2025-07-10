@@ -195,7 +195,9 @@ appConfig: null,
   _caretBrowsing: null,
   _isScrolling: false,
   editorUndoBar: null,
+  // #2943 modified by ngx-extended-pdf-viewer
   pageOrder: null,
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   // Called once when the document is loaded.
   async initialize(appConfig) {
@@ -1361,6 +1363,7 @@ appConfig: null,
     this.downloadManager.download(data, this._downloadUrl, this._docFilename);
   },
 
+  // #2943 modified by ngx-extended-pdf-viewer
   async save(pageOrder = null) {
     if (this._saveInProgress) {
       return;
@@ -1446,6 +1449,7 @@ appConfig: null,
 
     this.page = newPageIndex;
   },
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   // #1685 modified by ngx-extended-pdf-viewer
   async _exportWithAnnotations() {
@@ -1828,7 +1832,9 @@ appConfig: null,
 
     this._initializePageLabels(pdfDocument);
     this._initializeMetadata(pdfDocument);
+    // #2943 modified by ngx-extended-pdf-viewer
     this._initializePageOrder(pdfDocument);
+    // #2943 end of modification by ngx-extended-pdf-viewer
   },
 
   /**
@@ -1970,6 +1976,7 @@ appConfig: null,
     this.eventBus.dispatch("metadataloaded", { source: this });
   },
 
+  // #2943 modified by ngx-extended-pdf-viewer
   /**
    * @private
    */
@@ -1979,6 +1986,7 @@ appConfig: null,
     }
     this.pageOrder = Array.from({length: this.pdfDocument.numPages}, (_, i) => i + 1);
   },
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   /**
    * @private
@@ -2315,8 +2323,10 @@ appConfig: null,
     );
     eventBus._on("print", this.triggerPrinting.bind(this), opts);
     eventBus._on("download", this.downloadOrSave.bind(this), opts);
+    // #2943 modified by ngx-extended-pdf-viewer
     eventBus._on("movePageUp", this.movePageUp.bind(this), opts);
     eventBus._on("movePageDown", this.movePageDown.bind(this), opts);
+    // #2943 end of modification by ngx-extended-pdf-viewer
     eventBus._on("firstpage", () => (this.page = 1), opts);
     eventBus._on("lastpage", () => (this.page = this.pagesCount), opts);
     eventBus._on("nextpage", () => pdfViewer.nextPage(), opts);

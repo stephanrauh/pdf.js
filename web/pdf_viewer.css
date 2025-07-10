@@ -31,7 +31,9 @@
   --loading-icon-delay: 400ms;
   --focus-ring-color: light-dark(#0060df, #0df);
   --focus-ring-outline: 2px solid var(--focus-ring-color);
+  /* #2943 modified by ngx-extended-pdf-viewer */
   --dotted-line-margin-x: 6px;
+  /* #2943 end of modification by ngx-extended-pdf-viewer */
 
   @media screen and (forced-colors: active) {
     --pdfViewer-padding-bottom: 9px;
@@ -223,7 +225,9 @@
   border: 2px solid transparent;
 }
 
+/* #2943 modified by ngx-extended-pdf-viewer */
 .dotted-line {
   border-top: 2px dotted lightslategrey;
   margin: var(--dotted-line-margin-x) 0;
 }
+/* #2943 end of modification by ngx-extended-pdf-viewer */

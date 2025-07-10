@@ -528,6 +528,7 @@ class WorkerMessageHandler {
       return pdfManager.ensureDoc("calculationOrderIds");
     });
 
+    // #2943 modified by ngx-extended-pdf-viewer
     handler.on(
       "SaveDocument",
       async function ({isPureXfa, numPages, annotationStorage, filename, pageOrder = null}) {
@@ -754,6 +755,7 @@ class WorkerMessageHandler {
         });
       }
     );
+    // #2943 end of modification by ngx-extended-pdf-viewer
 
     handler.on("GetOperatorList", function (data, sink) {
       const pageIndex = data.pageIndex;

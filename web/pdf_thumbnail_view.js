@@ -32,7 +32,9 @@ import {PDFViewerApplication} from "./app.js";
 const DRAW_UPSCALE_FACTOR = 2; // See comment in `PDFThumbnailView.draw` below.
 const MAX_NUM_SCALING_STEPS = 3;
 const THUMBNAIL_WIDTH = 98; // px
+// #2943 modified by ngx-extended-pdf-viewer
 let initialDragY = 0;
+// #2943 end of modification by ngx-extended-pdf-viewer
 
 function zeroCanvas(c) {
   // Zeroing the width and height causes Firefox to release graphics
@@ -150,6 +152,7 @@ class PDFThumbnailView {
     }
     // end of modification
 
+    // #2943 modified by ngx-extended-pdf-viewer
     this.div.addEventListener('dragstart', this._dragStartHandler.bind(this));
     this.div.addEventListener('dragover', this._dragOverHandler.bind(this));
     this.div.addEventListener('drop', this._dropHandler.bind(this));
@@ -214,6 +217,7 @@ class PDFThumbnailView {
       PDFViewerApplication.movePage(draggedId, targetId);
     }
   }
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   // modified by ngx-extended-pdf-viewer
   createThumbnail(pdfThumbnailView, linkService, id, container, pageL10nArgs) {

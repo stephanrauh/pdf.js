@@ -1023,6 +1023,7 @@ class PDFDocumentProxy {
     return this._transport.getData();
   }
 
+  // #2943 modified by ngx-extended-pdf-viewer
   /**
    * @returns {Promise<Uint8Array>} A promise that is resolved with a
    *   {Uint8Array} containing the full data of the saved document.
@@ -1030,6 +1031,7 @@ class PDFDocumentProxy {
   saveDocument(pageOrder = null) {
     return this._transport.saveDocument(pageOrder);
   }
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   /**
    * @returns {Promise<{ length: number }>} A promise that is resolved when the
@@ -2815,6 +2817,7 @@ class WorkerTransport {
     return this.messageHandler.sendWithPromise("GetData", null);
   }
 
+  // #2943 modified by ngx-extended-pdf-viewer
   saveDocument(pageOrder = null) {
     if (this.annotationStorage.size <= 0) {
       warn(
@@ -2840,6 +2843,7 @@ class WorkerTransport {
         this.annotationStorage.resetModified();
       });
   }
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   getPage(pageNumber) {
     if (

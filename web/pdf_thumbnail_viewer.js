@@ -169,11 +169,13 @@ class PDFThumbnailViewer {
     }
   }
 
+  // #2943 modified by ngx-extended-pdf-viewer
   swapThumbnails(prevIndex, newIndex) {
     let prevIndexPage = this._thumbnails[prevIndex].pdfPage
     this._thumbnails[prevIndex].setPdfPage(this._thumbnails[newIndex].pdfPage);
     this._thumbnails[newIndex].setPdfPage(prevIndexPage);
   }
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   cleanup() {
     for (const thumbnail of this._thumbnails) {

@@ -101,8 +101,10 @@ function getViewerConfiguration() {
         "editorSignatureParamsToolbar"
       ),
       download: document.getElementById("downloadButton"),
+      // #2943 modified by ngx-extended-pdf-viewer
       movePageUp: document.getElementById("movePageUpButton"),
       movePageDown: document.getElementById("movePageDownButton"),
+      // #2943 end of modification by ngx-extended-pdf-viewer
     },
     secondaryToolbar: {
       toolbar: document.getElementById("secondaryToolbar"),
