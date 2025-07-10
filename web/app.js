@@ -1926,12 +1926,16 @@ appConfig: null,
     this._contentLength ??= contentLength; // See `getDownloadInfo`-call above.
 
     // Provides some basic debug information
-    NgxConsole.log(
-      `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
-        `${(metadata?.get("pdf:producer") || info.Producer || "-").trim()} / ` +
-        `${(metadata?.get("xmp:creatortool") || info.Creator || "-").trim()}` +
-        `] (PDF.js: ${version || "?"} [${build || "?"}])`
-    );
+    // #1793 modified by ngx-extended-pdf-vieweer
+    if (AppOptions?.get("verbosity") > 0) {
+      NgxConsole.log(
+        `PDF ${pdfDocument.fingerprints[0]} [${info.PDFFormatVersion} ` +
+          `${(metadata?.get("pdf:producer") || info.Producer || "-").trim()} / ` +
+          `${(metadata?.get("xmp:creatortool") || info.Creator || "-").trim()}` +
+          `] (PDF.js: ${version || "?"} [${build || "?"}])  modified by ngx-extended-pdf-viewer ${ngxExtendedPdfViewerVersion}`
+      );
+    }
+    // #1793 end of modification by ngx-extended-pdf-viewer
     const pdfTitle = this._docTitle;
 
     if (pdfTitle) {
