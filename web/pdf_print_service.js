@@ -105,6 +105,9 @@ class PDFPrintService {
       printAnnotationStoragePromise = null,
       eventBus, // #588 modified by ngx-extended-pdf-viewer
       cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
+      // #2943 modified by ngx-extended-pdf-viewer
+      pageOrder = null,
+      // #2943 end of modification by ngx-extended-pdf-viewer
     },
     isInPDFPrintRange,
     filteredPageCount
@@ -113,6 +116,9 @@ class PDFPrintService {
     this.pagesOverview = pagesOverview;
     // this.printContainer = printContainer; // #2603 modified by ngx-extended-pdf-viewer
     this._printResolution = printResolution || 150;
+    // #2943 modified by ngx-extended-pdf-viewer
+    this.pageOrder = pageOrder || Array.from({length: pdfDocument.numPages}, (_, i) => i + 1);
+    // #2943 end of modification by ngx-extended-pdf-viewer
     this._optionalContentConfigPromise = pdfDocument.getOptionalContentConfig({
       intent: "print",
     });
@@ -245,7 +251,7 @@ class PDFPrintService {
       renderPage(
         this,
         this.pdfDocument,
-        /* pageNumber = */ index + 1,
+        /* pageNumber = */ this.pageOrder[index],
         this.pagesOverview[index],
         this._printResolution,
         this._optionalContentConfigPromise,

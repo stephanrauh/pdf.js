@@ -2224,6 +2224,9 @@ appConfig: null,
       // printContainer: this.appConfig.printContainer, // #2603 modified by ngx-extended-pdf-viewer
       printResolution: AppOptions.get("printResolution"),
       printAnnotationStoragePromise: this._printAnnotationStoragePromise,
+      // #2943 modified by ngx-extended-pdf-viewer
+      pageOrder: this.pageOrder,
+      // #2943 end of modification by ngx-extended-pdf-viewer
       eventBus: this.pdfViewer.eventBus, // #588 modified by ngx-extended-pdf-viewer
       cspPolicyService: this.cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
     });
