@@ -121,11 +121,17 @@ class FirefoxPrintService {
     printContainer,
     printResolution,
     printAnnotationStoragePromise = null,
+    // #2943 modified by ngx-extended-pdf-viewer
+    pageOrder = null,
+    // #2943 end of modification by ngx-extended-pdf-viewer
   }) {
     this.pdfDocument = pdfDocument;
     this.pagesOverview = pagesOverview;
     this.printContainer = printContainer;
     this._printResolution = printResolution || 150;
+    // #2943 modified by ngx-extended-pdf-viewer
+    this.pageOrder = pageOrder || Array.from({length: pdfDocument.numPages}, (_, i) => i + 1);
+    // #2943 end of modification by ngx-extended-pdf-viewer
     this._optionalContentConfigPromise = pdfDocument.getOptionalContentConfig({
       intent: "print",
     });
@@ -171,7 +177,7 @@ class FirefoxPrintService {
     for (let i = 0, ii = pagesOverview.length; i < ii; ++i) {
       composePage(
         pdfDocument,
-        /* pageNumber = */ i + 1,
+        /* pageNumber = */ this.pageOrder[i],
         pagesOverview[i],
         printContainer,
         _printResolution,
