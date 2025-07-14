@@ -155,10 +155,12 @@ class PDFThumbnailView {
     // end of modification 
 
     // #2943 modified by ngx-extended-pdf-viewer
-    this.div.addEventListener('dragstart', this._dragStartHandler.bind(this));
-    this.div.addEventListener('dragover', this._dragOverHandler.bind(this));
-    this.div.addEventListener('drop', this._dropHandler.bind(this));
-    this.div.addEventListener('mousedown', this._mouseDownHandler.bind(this));
+    if (AppOptions.get("enablePageReordering")) {
+      this.div.addEventListener('dragstart', this._dragStartHandler.bind(this));
+      this.div.addEventListener('dragover', this._dragOverHandler.bind(this));
+      this.div.addEventListener('drop', this._dropHandler.bind(this));
+      this.div.addEventListener('mousedown', this._mouseDownHandler.bind(this));
+    }
   }
 
   _dragStartHandler(event) {
@@ -237,6 +239,9 @@ class PDFThumbnailView {
     const div = document.createElement("div");
     div.className = "thumbnail";
     div.setAttribute("data-page-number", this.id);
+    if (AppOptions.get("enablePageReordering")) {
+      div.draggable = true;
+    }
     this.div = div;
     this.#updateDims();
 

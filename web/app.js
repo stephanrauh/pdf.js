@@ -628,6 +628,19 @@ appConfig: null,
         if (editorSignatureButton && AppOptions.get("enableSignatureEditor")) {
           editorSignatureButton.parentElement.hidden = false;
         }
+        // #2943 modified by ngx-extended-pdf-viewer - handle page reordering buttons
+        const movePageUpButton = document.getElementById("movePageUp");
+        const movePageDownButton = document.getElementById("movePageDown");
+        if (movePageUpButton && movePageDownButton) {
+          if (AppOptions.get("enablePageReordering")) {
+            movePageUpButton.hidden = false;
+            movePageDownButton.hidden = false;
+          } else {
+            movePageUpButton.hidden = true;
+            movePageDownButton.hidden = true;
+          }
+        }
+        // #2943 end of modification by ngx-extended-pdf-viewer
         this.annotationEditorParams = new AnnotationEditorParams(
           appConfig.annotationEditorParams,
           eventBus
