@@ -1438,7 +1438,7 @@ appConfig: null,
     this.pdfViewer.swapPages(event.source.pageNumber - 1, event.source.pageNumber);
     this.pdfThumbnailViewer.swapThumbnails(event.source.pageNumber - 1, event.source.pageNumber);
     this.page = event.source.pageNumber + 1;
-    [this.pageOrder[event.source.pageNumber - 2], this.pageOrder[event.source.pageNumber - 1]] = [this.pageOrder[event.source.pageNumber - 1], this.pageOrder[event.source.pageNumber - 2]];
+    [this.pageOrder[event.source.pageNumber - 1], this.pageOrder[event.source.pageNumber]] = [this.pageOrder[event.source.pageNumber], this.pageOrder[event.source.pageNumber - 1]];
   },
 
   movePage(prevPageIndex, newPageIndex) {
