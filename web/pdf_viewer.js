@@ -2917,15 +2917,25 @@ class PDFViewer {
 
   // #1783 modified by ngx-extended-pdf-viewer
   getSerializedAnnotations() {
-    const rawAnnotations = this.pdfDocument.annotationStorage.getAll();
-    if (rawAnnotations) {
-      const annotations = Object.values(rawAnnotations);
-      return annotations
-        .filter(a => a.serialize)
-        .map(a => a.serialize())
-        .filter(a => a?.annotationType !== undefined);
+    const annotationStorage = this.pdfDocument.annotationStorage;
+
+    // Check if there are any annotations in storage
+    if (annotationStorage.size === 0) {
+      return null;
     }
-    return null;
+
+    const annotations = [];
+
+    for (const [key, annotation] of annotationStorage) {
+      if (annotation && typeof annotation.serialize === 'function') {
+        const serialized = annotation.serialize();
+        if (serialized && serialized.annotationType !== undefined) {
+          annotations.push(serialized);
+        }
+      }
+    }
+
+    return annotations.length > 0 ? annotations : null;
   }
 
   async addEditorAnnotation(data) {
@@ -2942,6 +2952,8 @@ class PDFViewer {
     if (!Array.isArray(data)) {
       data = [data];
     }
+
+    data?.forEach(annotation => (annotation.isCopy = true));
 
     await this.#annotationEditorUIManager.addSerializedEditor(data, true, true, false);
   }
