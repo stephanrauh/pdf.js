@@ -20,6 +20,7 @@ import {
   getSpanRectFromText,
   loadAndWait,
   scrollIntoView,
+  waitForPageChanging,
   waitForPageRendered,
 } from "./test_utils.mjs";
 import { PNG } from "pngjs";
@@ -1216,6 +1217,103 @@ describe("PDF viewer", () => {
               .withContext(`In ${browserName}`)
               .toBe(normalizeRotation(rotation));
           }
+        })
+      );
+    });
+  });
+
+  describe("Filename with a hash sign", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait("empty%23hash.pdf", ".textLayer .endOfContent");
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must extract the filename correctly", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          const filename = await page.evaluate(() => document.title);
+
+          expect(filename)
+            .withContext(`In ${browserName}`)
+            .toBe("empty#hash.pdf");
+        })
+      );
+    });
+  });
+
+  describe("File param with an URL", () => {
+    let pages;
+
+    beforeEach(async () => {
+      const baseURL = new URL(global.integrationBaseUrl);
+      const url = `${baseURL.origin}/build/generic/web/compressed.tracemonkey-pldi-09.pdf`;
+      pages = await loadAndWait(
+        encodeURIComponent(url),
+        ".textLayer .endOfContent"
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must load and extract the filename correctly", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          const filename = await page.evaluate(() => document.title);
+
+          expect(filename)
+            .withContext(`In ${browserName}`)
+            .toBe("compressed.tracemonkey-pldi-09.pdf");
+        })
+      );
+    });
+  });
+
+  describe("Keyboard scrolling on startup (bug 843653)", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".textLayer .endOfContent");
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that keyboard scrolling works without having to give the focus to the viewer", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          const pdfViewer = await page.evaluateHandle(
+            () => window.PDFViewerApplication.pdfViewer
+          );
+
+          // The viewer should not have the focus.
+          const hasFocus = await pdfViewer.evaluate(viewer =>
+            viewer.container.contains(document.activeElement)
+          );
+          expect(hasFocus).withContext(`In ${browserName}`).toBeFalse();
+
+          let currentPageNumber = await pdfViewer.evaluate(
+            viewer => viewer.currentPageNumber
+          );
+          expect(currentPageNumber).withContext(`In ${browserName}`).toBe(1);
+
+          // Press the 'PageDown' key to check that it works.
+          const handle = await waitForPageChanging(page);
+          await page.keyboard.press("PageDown");
+          await awaitPromise(handle);
+
+          // The second page should be displayed.
+          currentPageNumber = await pdfViewer.evaluate(
+            viewer => viewer.currentPageNumber
+          );
+          expect(currentPageNumber).withContext(`In ${browserName}`).toBe(2);
         })
       );
     });

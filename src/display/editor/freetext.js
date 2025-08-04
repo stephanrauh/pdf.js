@@ -131,6 +131,9 @@ class FreeTextEditor extends AnnotationEditor {
       FreeTextEditor._defaultColor ||
       AnnotationEditor._defaultLineColor;
     this.#fontSize = params.fontSize || FreeTextEditor._defaultFontSize;
+    if (!this.annotationElementId) {
+      this._uiManager.a11yAlert("pdfjs-editor-freetext-added-alert");
+    }
   }
 
   /** @inheritdoc */
@@ -811,6 +814,7 @@ class FreeTextEditor extends AnnotationEditor {
         pageIndex: pageNumber - 1,
         rect: rect.slice(0),
         rotation,
+        annotationElementId: id,
         id,
         deleted: false,
         popupRef,
@@ -820,7 +824,6 @@ class FreeTextEditor extends AnnotationEditor {
     editor.#fontSize = data.fontSize;
     editor.#color = Util.makeHexColor(...data.color);
     editor.#content = FreeTextEditor.#deserializeContent(data.value);
-    editor.annotationElementId = data.id || null;
     editor._initialData = initialData;
 
     return editor;

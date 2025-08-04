@@ -2367,6 +2367,7 @@ class PartialEvaluator {
     disableNormalization = false,
     keepWhiteSpace = false,
     prevRefs = null,
+    intersector = null,
   }) {
     const objId = stream.dict?.objId;
     const seenRefs = new RefSet(prevRefs);
@@ -2511,6 +2512,7 @@ class PartialEvaluator {
       transform = textContentItem.prevTransform,
       fontName = textContentItem.fontName,
     }) {
+      intersector?.addExtraChar(" ");
       textContent.items.push({
         str: " ",
         dir: "ltr",
@@ -2969,9 +2971,21 @@ class PartialEvaluator {
 
         if (!font.vertical) {
           scaledDim *= textState.textHScale;
+          intersector?.addGlyph(
+            getCurrentTextTransform(),
+            scaledDim,
+            0,
+            glyph.unicode
+          );
           textState.translateTextMatrix(scaledDim, 0);
           textChunk.width += scaledDim;
         } else {
+          intersector?.addGlyph(
+            getCurrentTextTransform(),
+            0,
+            scaledDim,
+            glyph.unicode
+          );
           textState.translateTextMatrix(0, scaledDim);
           scaledDim = Math.abs(scaledDim);
           textChunk.height += scaledDim;
@@ -2990,8 +3004,12 @@ class PartialEvaluator {
           // alignment issues between the textLayer and the canvas if the text
           // contains e.g. tabs (fixes issue6612.pdf).
           textChunk.str.push(" ");
+          intersector?.addExtraChar(" ");
         }
-        textChunk.str.push(glyphUnicode);
+
+        if (!intersector) {
+          textChunk.str.push(glyphUnicode);
+        }
 
         if (charSpacing) {
           if (!font.vertical) {
@@ -3007,6 +3025,7 @@ class PartialEvaluator {
     }
 
     function appendEOL() {
+      intersector?.addExtraChar("\n");
       resetLastChars();
       if (textContentItem.initialized) {
         textContentItem.hasEOL = true;
@@ -3032,6 +3051,7 @@ class PartialEvaluator {
         if (textContentItem.initialized) {
           resetLastChars();
           textContentItem.str.push(" ");
+          intersector?.addExtraChar(" ");
         }
         return false;
       }
@@ -3083,7 +3103,7 @@ class PartialEvaluator {
       if (batch && length < TEXT_CHUNK_BATCH_SIZE) {
         return;
       }
-      sink.enqueue(textContent, length);
+      sink?.enqueue(textContent, length);
       textContent.items = [];
       textContent.styles = Object.create(null);
     }
@@ -3093,7 +3113,7 @@ class PartialEvaluator {
     return new Promise(function promiseBody(resolve, reject) {
       const next = function (promise) {
         enqueueChunk(/* batch = */ true);
-        Promise.all([promise, sink.ready]).then(function () {
+        Promise.all([promise, sink?.ready]).then(function () {
           try {
             promiseBody(resolve, reject);
           } catch (ex) {
@@ -3346,7 +3366,7 @@ class PartialEvaluator {
                   },
 
                   get desiredSize() {
-                    return sink.desiredSize;
+                    return sink.desiredSize ?? 0;
                   },
 
                   get ready() {
@@ -3364,7 +3384,7 @@ class PartialEvaluator {
                         : resources,
                     stateManager: xObjStateManager,
                     includeMarkedContent,
-                    sink: sinkWrapper,
+                    sink: sink && sinkWrapper,
                     seenStyles,
                     viewBox,
                     lang,
@@ -3504,7 +3524,7 @@ class PartialEvaluator {
             }
             break;
         } // switch
-        if (textContent.items.length >= sink.desiredSize) {
+        if (textContent.items.length >= (sink?.desiredSize ?? 1)) {
           // Wait for ready, if we reach highWaterMark.
           stop = true;
           break;

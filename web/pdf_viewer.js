@@ -294,6 +294,8 @@ class PDFViewer {
   #minZoom = MIN_SCALE;
   // #2459 end of modification by ngx-extended-pdf-viewer
 
+  #viewerAlert = null;
+
   /**
    * @param {PDFViewerOptions} options
    */
@@ -307,6 +309,7 @@ class PDFViewer {
     }
     this.container = options.container;
     this.viewer = options.viewer || options.container.firstElementChild;
+    this.#viewerAlert = options.viewerAlert || null;
 
     /** #2784 modified by ngx-extended-pdf-viewer */
     this.eventBus = options.eventBus;
@@ -1197,6 +1200,7 @@ class PDFViewer {
             this.#annotationEditorUIManager = new AnnotationEditorUIManager(
               this.container,
               viewer,
+              this.#viewerAlert,
               this.#altTextManager,
               this.#signatureManager,
               eventBus,
@@ -2816,12 +2820,19 @@ class PDFViewer {
    * @property {string|null} [editId] - ID of the existing annotation to edit.
    * @property {boolean} [isFromKeyboard] - True if the mode change is due to a
    *   keyboard action.
+   * @property {boolean} [mustEnterInEditMode] - True if the editor must enter
+   *   edit mode.
    */
 
   /**
    * @param {AnnotationEditorModeOptions} options
    */
-  set annotationEditorMode({ mode, editId = null, isFromKeyboard = false }) {
+  set annotationEditorMode({
+    mode,
+    editId = null,
+    isFromKeyboard = false,
+    mustEnterInEditMode = false,
+  }) {
     if (!this.#annotationEditorUIManager) {
       throw new Error(`The AnnotationEditor is not enabled.`);
     }
@@ -2843,7 +2854,8 @@ class PDFViewer {
       await this.#annotationEditorUIManager.updateMode(
         mode,
         editId,
-        isFromKeyboard
+        isFromKeyboard,
+        mustEnterInEditMode
       );
       if (
         mode !== this.#annotationEditorMode ||

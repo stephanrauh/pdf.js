@@ -538,6 +538,7 @@ appConfig: null,
     const pdfViewer = (this.pdfViewer = new PDFViewer({
       container,
       viewer,
+      viewerAlert: appConfig.viewerAlert,
       eventBus,
       renderingQueue,
       linkService,
@@ -806,6 +807,11 @@ appConfig: null,
       const queryString = document.location.search.substring(1);
       const params = parseQueryString(queryString);
       file = params.get("file") ?? AppOptions.get("defaultUrl");
+      try {
+        file = new URL(decodeURIComponent(file)).href;
+      } catch {
+        file = encodeURIComponent(file).replaceAll("%2F", "/");
+      }
       validateFileURL(file);
     } else if (PDFJSDev.test("MOZCENTRAL")) {
       file = window.location.href;
@@ -1752,11 +1758,6 @@ appConfig: null,
             spreadMode,
           });
           this.eventBus.dispatch("documentinit", { source: this });
-          // Make all navigation keys work on document load,
-          // unless the viewer is embedded in a web page.
-          if (!this.isViewerEmbedded) {
-            pdfViewer.focus();
-          }
 
           // For documents with different page sizes, once all pages are
           // resolved, ensure that the correct location becomes visible on load.
@@ -1942,6 +1943,13 @@ appConfig: null,
     if (pdfDocument !== this.pdfDocument) {
       return; // The document was closed while the metadata resolved.
     }
+    if (info.collectedSignatureCertificates) {
+      this.externalServices.reportTelemetry({
+        type: "signatureCertificates",
+        data: info.collectedSignatureCertificates,
+      });
+    }
+
     this.documentInfo = info;
     this.metadata = metadata;
     this._contentDispositionFilename ??= contentDispositionFilename;
@@ -2725,7 +2733,7 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
 
     this.open({
       url: URL.createObjectURL(file),
-      originalUrl: file.name,
+      originalUrl: encodeURIComponent(file.name),
     });
   };
 
@@ -3372,8 +3380,7 @@ function onKeyDown(evt) {
     curElementTagName === "INPUT" ||
     curElementTagName === "TEXTAREA" ||
     curElementTagName === "SELECT" ||
-    (curElementTagName === "BUTTON" &&
-      (evt.keyCode === /* Enter = */ 13 || evt.keyCode === /* Space = */ 32)) ||
+    (curElementTagName === "BUTTON" && evt.keyCode === /* Space = */ 32) ||
     curElement?.isContentEditable
   ) {
     // Make sure that the secondary toolbar is closed when Escape is pressed.
@@ -3444,7 +3451,6 @@ function onKeyDown(evt) {
         }
         turnPage = 1;
         break;
-      case 13: // enter key
       case 32: // spacebar
         if (!isViewerInPresentationMode) {
           turnOnlyIfPageFit = true;
@@ -3518,7 +3524,6 @@ function onKeyDown(evt) {
   // shift-key
   if (cmd === 4) {
     switch (evt.keyCode) {
-      case 13: // enter key
       case 32: // spacebar
         if (
           !isViewerInPresentationMode &&

@@ -41,7 +41,7 @@ describe("find bar", () => {
         pages.map(async ([browserName, page]) => {
           // Highlight all occurrences of the letter A (case insensitive).
           await page.click("#viewFindButton");
-          await page.waitForSelector("#viewFindButton", { hidden: false });
+          await page.waitForSelector("#findInput", { visible: true });
           await page.type("#findInput", "a");
           await page.click("#findHighlightAll + label");
           await page.waitForSelector(".textLayer .highlight");
@@ -101,7 +101,7 @@ describe("find bar", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           await page.click("#viewFindButton");
-          await page.waitForSelector("#viewFindButton", { hidden: false });
+          await page.waitForSelector("#findInput", { visible: true });
           await page.type("#findInput", "preferences");
           await page.waitForSelector("#findInput[data-status='']");
           await page.waitForSelector(".xfaLayer .highlight");
@@ -139,8 +139,36 @@ describe("find bar", () => {
         pages.map(async ([browserName, page]) => {
           // Search for "40"
           await page.click("#viewFindButton");
-          await page.waitForSelector("#viewFindButton", { hidden: false });
+          await page.waitForSelector("#findInput", { visible: true });
           await page.type("#findInput", "40");
+
+          const highlight = await page.waitForSelector(".textLayer .highlight");
+
+          expect(await highlight.isIntersectingViewport()).toBeTrue();
+        })
+      );
+    });
+  });
+
+  describe("scrolls to the search result text for smaller viewports", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait("tracemonkey.pdf", ".textLayer", 100);
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must scroll to the search result text", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          // Set a smaller viewport to simulate a mobile device
+          await page.setViewport({ width: 350, height: 600 });
+          await page.click("#viewFindButton");
+          await page.waitForSelector("#findInput", { visible: true });
+          await page.type("#findInput", "productivity");
 
           const highlight = await page.waitForSelector(".textLayer .highlight");
 

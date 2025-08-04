@@ -38,7 +38,6 @@ const FindState = {
 
 const FIND_TIMEOUT = 250; // ms
 const MATCH_SCROLL_OFFSET_TOP = -50; // px
-const MATCH_SCROLL_OFFSET_LEFT = -400; // px
 
 const CHARACTERS_TO_NORMALIZE = {
   "\u2010": "-", // Hyphen
@@ -106,7 +105,7 @@ const NFKC_CHARS_TO_NORMALIZE = new Map();
 let noSyllablesRegExp = null;
 let withSyllablesRegExp = null;
 
-function normalize(text) {
+function normalize(text, options = {}) {
   // The diacritics in the text or in the query can be composed or not.
   // So we use a decomposed text using NFD (and the same for the query)
   // in order to be sure that diacritics are in the same order.
@@ -127,6 +126,7 @@ function normalize(text) {
   }
 
   const hasSyllables = syllablePositions.length > 0;
+  const ignoreDashEOL = options.ignoreDashEOL ?? false;
 
   let normalizationRegex;
   if (!hasSyllables && noSyllablesRegExp) {
@@ -303,6 +303,12 @@ function normalize(text) {
       }
 
       if (p5) {
+        if (ignoreDashEOL) {
+          // Keep the - but remove the EOL.
+          shiftOrigin += 1;
+          eol += 1;
+          return p5.slice(0, -1);
+        }
         // In "X-\ny", "-\n" is removed because an hyphen at the end of a line
         // between two letters is likely here to mark a break in a word.
         // If X is encoded with UTF-32 then it can have a length greater than 1.
@@ -628,10 +634,9 @@ class PDFFindController {
       //  return;
     }
     this._scrollMatches = false; // Ensure that scrolling only happens once.
-
     const spot = {
       top: MATCH_SCROLL_OFFSET_TOP,
-      left: selectedLeft + MATCH_SCROLL_OFFSET_LEFT,
+      left: selectedLeft,
     };
     /** #492 modified by ngx-extended-pdf-viewer */
     scrollIntoView(element, spot, /* scrollMatches = */ true, this._pageViewMode === "infinite-scroll");

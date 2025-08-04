@@ -128,8 +128,10 @@ class StampEditor extends AnnotationEditor {
       this._uiManager.useNewAltTextFlow &&
       this.#bitmap
     ) {
-      this._editToolbar.hide();
-      this._uiManager.editAltText(this, /* firstTime = */ true);
+      this.addEditToolbar().then(() => {
+        this._editToolbar.hide();
+        this._uiManager.editAltText(this, /* firstTime = */ true);
+      });
       return;
     }
 
@@ -337,6 +339,11 @@ class StampEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
+  get toolbarButtons() {
+    return [["altText", this.createAltText()]];
+  }
+
+  /** @inheritdoc */
   get isResizable() {
     return true;
   }
@@ -356,7 +363,7 @@ class StampEditor extends AnnotationEditor {
     super.render();
     this.div.hidden = true;
 
-    this.addAltTextButton();
+    this.createAltText();
 
     if (!this.#missingCanvas) {
       if (this.#bitmap) {
@@ -488,6 +495,9 @@ class StampEditor extends AnnotationEditor {
     // #2256 end of modification by ngx-extended-pdf-viewer
     if (this.#bitmapFileName) {
       this.div.setAttribute("aria-description", this.#bitmapFileName);
+    }
+    if (!this.annotationElementId) {
+      this._uiManager.a11yAlert("pdfjs-editor-stamp-added-alert");
     }
   }
 
@@ -786,6 +796,7 @@ class StampEditor extends AnnotationEditor {
         pageIndex: pageNumber - 1,
         rect: rect.slice(0),
         rotation,
+        annotationElementId: id,
         id,
         deleted: false,
         accessibilityData: {
@@ -817,7 +828,6 @@ class StampEditor extends AnnotationEditor {
     editor.width = (rect[2] - rect[0]) / parentWidth;
     editor.height = (rect[3] - rect[1]) / parentHeight;
 
-    editor.annotationElementId = data.id || null;
     if (accessibilityData) {
       editor.altTextData = accessibilityData;
     }
