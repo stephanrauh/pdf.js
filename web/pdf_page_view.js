@@ -99,8 +99,6 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  * @property {IL10n} [l10n] - Localization service.
  * @property {Object} [layerProperties] - The object that is used to lookup
  *   the necessary layer-properties.
- * @property {boolean} [enableHWA] - Enables hardware acceleration for
- *   rendering. The default value is `false`.
  * @property {boolean} [enableAutoLinking] - Enable creation of hyperlinks from
  *   text that look like URLs. The default value is `true`.
  */
@@ -918,9 +916,9 @@ class PDFPageView extends BasePDFPageView {
     return canvasWrapper;
   }
 
-  _getRenderingContext(canvasContext, transform) {
+  _getRenderingContext(canvas, transform) {
     return {
-      canvasContext,
+      canvas,
       transform,
       viewport: this.viewport,
       annotationMode: this.#annotationMode,
@@ -1006,7 +1004,7 @@ class PDFPageView extends BasePDFPageView {
     const { width, height } = viewport;
     this.#originalViewport = viewport;
 
-    const { canvas, prevCanvas, ctx } = this._createCanvas(newCanvas => {
+    const { canvas, prevCanvas } = this._createCanvas(newCanvas => {
       // Always inject the canvas as the first element in the wrapper.
       canvasWrapper.prepend(newCanvas);
     });
@@ -1055,7 +1053,7 @@ class PDFPageView extends BasePDFPageView {
       ? [outputScale.sx, 0, 0, outputScale.sy, 0, 0]
       : null;
     const resultPromise = this._drawCanvas(
-      this._getRenderingContext(ctx, transform),
+      this._getRenderingContext(canvas, transform),
       () => {
         prevCanvas?.remove();
         this._resetCanvas();

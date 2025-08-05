@@ -111,8 +111,9 @@ describe("FreeText Editor", () => {
           await waitForSelectedEditor(page, editorSelector);
           await waitForStorageEntries(page, 1);
 
-          const alert = await page.$eval("#viewer-alert", el => el.textContent);
-          expect(alert).toEqual("Text added");
+          await page.waitForFunction(
+            `document.getElementById("viewer-alert").textContent === "Text added"`
+          );
 
           let content = await page.$eval(editorSelector, el =>
             el.innerText.trimEnd()
@@ -1083,6 +1084,61 @@ describe("FreeText Editor", () => {
 
           await kbUndo(page);
           await waitForSerialized(page, 0);
+        })
+      );
+    });
+
+    it("must delete an existing annotation with a popup", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await page.click("[data-annotation-id='26R']");
+          // Wait for the popup to be displayed.
+          const popupSelector = "[data-annotation-id='popup_26R'] .popup";
+          await page.waitForSelector(popupSelector, { visible: true });
+
+          await switchToFreeText(page);
+
+          const editorSelector = getEditorSelector(0);
+          await selectEditor(page, editorSelector);
+          await page.keyboard.press("Backspace");
+          await page.waitForFunction(
+            sel => !document.querySelector(sel),
+            {},
+            editorSelector
+          );
+
+          await waitForSerialized(page, 1);
+          const serialized = await getSerialized(page);
+          expect(serialized).toEqual([
+            {
+              pageIndex: 0,
+              id: "26R",
+              deleted: true,
+              popupRef: "",
+            },
+          ]);
+
+          // Disable editing mode.
+          await switchToFreeText(page, /* disable = */ true);
+
+          await page.waitForSelector(":not([data-annotation-id='26R'] .popup)");
+
+          // Re-enable editing mode.
+          await switchToFreeText(page);
+          await page.focus(".annotationEditorLayer");
+
+          await kbUndo(page);
+          await waitForSerialized(page, 0);
+
+          // Disable editing mode.
+          await switchToFreeText(page, /* disable = */ true);
+
+          const popupAreaSelector =
+            "[data-annotation-id='26R'].popupTriggerArea";
+          await page.waitForSelector(popupAreaSelector, { visible: true });
+          await page.click("[data-annotation-id='26R']");
+          // Wait for the popup to be displayed.
+          await page.waitForSelector(popupSelector, { visible: true });
         })
       );
     });
@@ -3443,6 +3499,50 @@ describe("FreeText Editor", () => {
           );
           await page.waitForSelector(".annotationEditorLayer.freetextEditing");
           await awaitPromise(modeChangedHandle);
+        })
+      );
+    });
+  });
+
+  describe("FreeText must update its color", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer");
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the text color is the one chosen from the color picker", async () => {
+      await Promise.all(
+        pages.map(async ([_, page]) => {
+          await switchToFreeText(page);
+
+          const rect = await getRect(page, ".annotationEditorLayer");
+          const editorSelector = getEditorSelector(0);
+          const data = "Hello PDF.js World !!";
+          await page.mouse.click(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2
+          );
+          await page.waitForSelector(editorSelector, { visible: true });
+          await page.type(`${editorSelector} .internal`, data);
+          await commit(page);
+
+          const colorPickerSelector = `${editorSelector} input.basicColorPicker`;
+          await page.waitForSelector(colorPickerSelector, { visible: true });
+          await page.locator(colorPickerSelector).fill("#ff0000");
+
+          await page.waitForFunction(
+            sel => {
+              const el = document.querySelector(sel);
+              return getComputedStyle(el).color === "rgb(255, 0, 0)";
+            },
+            {},
+            `${editorSelector} .internal`
+          );
         })
       );
     });

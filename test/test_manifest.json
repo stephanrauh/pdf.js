@@ -12156,5 +12156,77 @@
     "rounds": 1,
     "type": "eq",
     "annotations": true
+  },
+  {
+    "id": "firefox_logo",
+    "file": "pdfs/firefox_logo.pdf",
+    "md5": "e212e0cec3e39907950c597782a42c3a",
+    "rounds": 1,
+    "type": "eq",
+    "annotations": true
+  },
+  {
+    "id": "issue20062",
+    "file": "pdfs/issue20062.pdf",
+    "md5": "9fa985242476c642464d94893528e40f",
+    "rounds": 1,
+    "type": "eq"
+  },
+  {
+    "id": "highlights-popup",
+    "file": "pdfs/highlights.pdf",
+    "md5": "55c12c918f3e2253b39b42075cb38205",
+    "rounds": 1,
+    "type": "eq",
+    "lastPage": 1,
+    "save": true,
+    "annotations": true,
+    "annotationStorage": {
+      "pdfjs_internal_editor_0": {
+        "annotationType": 9,
+        "popup": {
+          "contents": "Hello PDF.js World"
+        },
+        "pageIndex": 0,
+        "date": "2013-11-12T14:15:16Z",
+        "id": "612R"
+      }
+    }
+  },
+  {
+    "id": "annotation-caret-ink-popup-deleted",
+    "file": "pdfs/annotation-caret-ink.pdf",
+    "md5": "6218ca235580d1975474c979e0128c2d",
+    "rounds": 1,
+    "type": "eq",
+    "lastPage": 1,
+    "save": true,
+    "annotations": true,
+    "annotationStorage": {
+      "pdfjs_internal_editor_0": {
+        "annotationType": 15,
+        "popup": {
+          "deleted": true
+        },
+        "pageIndex": 0,
+        "id": "25R",
+        "popupRef": "27R"
+      }
+    }
+  },
+  {
+    "id": "issue20065",
+    "file": "pdfs/issue20065.pdf",
+    "md5": "39ad13514d0b0108e4ae42f4b1422839",
+    "rounds": 1,
+    "disableFontFace": true,
+    "type": "eq"
+  },
+  {
+    "id": "bug1978317",
+    "file": "pdfs/bug1978317.pdf",
+    "md5": "ae4f643ee9bb0fd725277a9d1e0fb1df",
+    "rounds": 1,
+    "type": "load"
   }
 ]

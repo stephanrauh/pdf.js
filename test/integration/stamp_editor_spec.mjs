@@ -125,8 +125,9 @@ describe("Stamp Editor", () => {
           const editorSelector = getEditorSelector(0);
           await waitForImage(page, editorSelector);
 
-          const alert = await page.$eval("#viewer-alert", el => el.textContent);
-          expect(alert).toEqual("Image added");
+          await page.waitForFunction(
+            `document.getElementById("viewer-alert").textContent === "Image added"`
+          );
 
           const { width } = await getEditorDimensions(page, editorSelector);
 
@@ -1367,7 +1368,7 @@ describe("Stamp Editor", () => {
     });
   });
 
-  describe("A stamp musn't be on top of the secondary toolbar", () => {
+  describe("A stamp mustn't be on top of the secondary toolbar", () => {
     let pages;
 
     beforeEach(async () => {

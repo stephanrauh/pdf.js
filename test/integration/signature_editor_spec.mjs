@@ -181,8 +181,9 @@ describe("Signature Editor", () => {
             { visible: true }
           );
 
-          const alert = await page.$eval("#viewer-alert", el => el.textContent);
-          expect(alert).toEqual("Signature added");
+          await page.waitForFunction(
+            `document.getElementById("viewer-alert").textContent === "Signature added"`
+          );
 
           // Check the tooltip.
           await page.waitForSelector(
@@ -365,6 +366,9 @@ describe("Signature Editor", () => {
           `${editorSelector} .altText.editDescription`,
           el => el.title
         );
+        const originalL10nParameter = await page.$eval(editorSelector, el =>
+          el.getAttribute("data-l10n-args")
+        );
 
         await copy(page);
         await paste(page);
@@ -376,6 +380,9 @@ describe("Signature Editor", () => {
           `${pastedEditorSelector} .altText.editDescription`,
           el => el.title
         );
+        const pastedL10nParameter = await page.$eval(pastedEditorSelector, el =>
+          el.getAttribute("data-l10n-args")
+        );
 
         expect(pastedRect)
           .withContext(`In ${browserName}`)
@@ -383,6 +390,9 @@ describe("Signature Editor", () => {
         expect(pastedDescription)
           .withContext(`In ${browserName}`)
           .toEqual(originalDescription);
+        expect(pastedL10nParameter)
+          .withContext(`In ${browserName}`)
+          .toEqual(originalL10nParameter);
       }
     });
   });
@@ -714,6 +724,49 @@ describe("Signature Editor", () => {
               visible: false,
             });
           }
+        })
+      );
+    });
+  });
+
+  describe("Bug 1975719", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait("empty.pdf", ".annotationEditorLayer");
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that an error is displayed with a monochrome image", async () => {
+      await Promise.all(
+        pages.map(async ([_, page]) => {
+          await switchToSignature(page);
+
+          await page.click("#editorSignatureAddSignature");
+
+          await page.waitForSelector("#addSignatureDialog", {
+            visible: true,
+          });
+          await page.click("#addSignatureImageButton");
+          await page.waitForSelector("#addSignatureImagePlaceholder", {
+            visible: true,
+          });
+          const input = await page.$("#addSignatureFilePicker");
+          await input.uploadFile(
+            `${path.join(__dirname, "../images/red.png")}`
+          );
+          await page.waitForSelector("#addSignatureError", { visible: true });
+          await page.waitForSelector(
+            "#addSignatureErrorTitle[data-l10n-id='pdfjs-editor-add-signature-image-no-data-error-title']"
+          );
+          await page.waitForSelector(
+            "#addSignatureErrorDescription[data-l10n-id='pdfjs-editor-add-signature-image-no-data-error-description']"
+          );
+          await page.click("#addSignatureErrorCloseButton");
+          await page.waitForSelector("#addSignatureError", { visible: false });
         })
       );
     });

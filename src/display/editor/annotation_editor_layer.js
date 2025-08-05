@@ -395,6 +395,9 @@ class AnnotationEditorLayer {
       for (const editable of editables) {
         const { id } = editable.data;
         if (this.#uiManager.isDeletedAnnotationElement(id)) {
+          editable.updateEdited({
+            deleted: true,
+          });
           continue;
         }
         let editor = resetAnnotations.get(id);
@@ -566,7 +569,7 @@ class AnnotationEditorLayer {
 
   /**
    * An editor can have a different parent, for example after having
-   * being dragged and droped from a page to another.
+   * being dragged and dropped from a page to another.
    * @param {AnnotationEditor} editor
    */
   changeParent(editor) {

@@ -38,6 +38,7 @@ const FindState = {
 
 const FIND_TIMEOUT = 250; // ms
 const MATCH_SCROLL_OFFSET_TOP = -50; // px
+const MATCH_SCROLL_OFFSET_LEFT = -400; // px
 
 const CHARACTERS_TO_NORMALIZE = {
   "\u2010": "-", // Hyphen
@@ -634,9 +635,10 @@ class PDFFindController {
       //  return;
     }
     this._scrollMatches = false; // Ensure that scrolling only happens once.
+
     const spot = {
       top: MATCH_SCROLL_OFFSET_TOP,
-      left: selectedLeft,
+      left: selectedLeft + MATCH_SCROLL_OFFSET_LEFT,
     };
     /** #492 modified by ngx-extended-pdf-viewer */
     scrollIntoView(element, spot, /* scrollMatches = */ true, this._pageViewMode === "infinite-scroll");
@@ -787,7 +789,7 @@ class PDFFindController {
         // kind of whitespaces are replaced by a single " ".
 
         if (p1) {
-          // Escape characters like *+?... to not interfer with regexp syntax.
+          // Escape characters like *+?... to not interfere with regexp syntax.
           return `[ ]*\\${p1}[ ]*`;
         }
         if (p2) {

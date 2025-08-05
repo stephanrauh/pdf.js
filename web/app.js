@@ -73,6 +73,7 @@ import { LinkTarget, PDFLinkService } from "./pdf_link_service.js";
 import { AltTextManager } from "web-alt_text_manager";
 import { AnnotationEditorParams } from "web-annotation_editor_params";
 import { CaretBrowsingMode } from "./caret_browsing.js";
+import { CommentManager } from "./comment_manager.js";
 import { DownloadManager } from "web-download_manager";
 import { EditorUndoBar } from "./editor_undo_bar.js";
 import { OverlayManager } from "./overlay_manager.js";
@@ -392,6 +393,9 @@ appConfig: null,
         spreadModeOnLoad: x => parseInt(x),
         supportsCaretBrowsingMode: x => x === "true",
         viewerCssTheme: x => parseInt(x),
+        forcePageColors: x => x === "true",
+        pageColorsBackground: x => x,
+        pageColorsForeground: x => x,
       });
     }
 
@@ -530,6 +534,10 @@ appConfig: null,
             eventBus
           )
         : null;
+    const commentManager =
+      AppOptions.get("enableComment") && appConfig.editCommentDialog
+        ? new CommentManager(appConfig.editCommentDialog, overlayManager)
+        : null;
 
     const enableHWA = AppOptions.get("enableHWA"),
       maxCanvasPixels = AppOptions.get("maxCanvasPixels"),
@@ -544,6 +552,7 @@ appConfig: null,
       linkService,
       downloadManager,
       altTextManager,
+      commentManager,
       signatureManager,
       editorUndoBar: this.editorUndoBar,
       findController,

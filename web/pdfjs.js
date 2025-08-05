@@ -46,7 +46,7 @@ import { TouchManager } from "../src/display/touch_manager.js";
 
 import { build, getDocument } from "../src/display/api.js";
 import { isValidExplicitDest } from "../src/display/api_utils.js";
-import { getFilenameFromUrl, getPdfFilenameFromUrl, isDataScheme, isPdfFile, noContextMenu, stopEvent, SupportedImageMimeTypes } from "../src/display/display_utils.js";
+import { getFilenameFromUrl, getPdfFilenameFromUrl, getRGB, isDataScheme, isPdfFile, noContextMenu, stopEvent, SupportedImageMimeTypes } from "../src/display/display_utils.js";
 
 import {
   fetchData,
@@ -90,6 +90,7 @@ export {
   getDocument,
   getFilenameFromUrl,
   getPdfFilenameFromUrl,
+  getRGB,
   getUuid,
   getXfaPageViewport,
   GlobalWorkerOptions,
