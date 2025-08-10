@@ -109,7 +109,7 @@ class Catalog {
 
   systemFontCache = new Map();
 
-  constructor(pdfManager, xref) {
+  constructor(pdfManager, xref, options = {}) {
     this.pdfManager = pdfManager;
     this.xref = xref;
 
@@ -117,6 +117,14 @@ class Catalog {
     if (!(this.#catDict instanceof Dict)) {
       throw new FormatError("Catalog object is not a dictionary.");
     }
+    // #2995 modified by ngx-extended-pdf-viewer
+    // New feature flags (defaults kept false for upstream-compat;
+    // set to true in ngx-extendede-pdf-viewer)
+    this.disableOpenActionJavaScript = !!options.disableOpenActionJavaScript;
+    this.disableCatalogAAJavaScript = !!options.disableCatalogAAJavaScript;
+    this.#sanitizeOpenAction();
+    this.#sanitizeCatalogAA();
+    // #2995 end of modification by ngx-extended-pdf-viewer
     // Given that `XRef.parse` will both fetch *and* validate the /Pages-entry,
     // the following call must always succeed here:
     this.toplevelPagesDict; // eslint-disable-line no-unused-expressions
@@ -1764,6 +1772,106 @@ class Catalog {
       }
     }
   }
-}
 
+  // #2995 modified by ngx-extended-pdf-viewer
+  // Helper methods to check if an action chain contains JavaScript
+  // imports sicherstellen:
+  #fetchIfRef(obj) {
+    try {
+      return obj instanceof Ref ? this.xref.fetch(obj) : obj;
+    } catch {
+      return obj;
+    }
+  }
+
+  // Helper: check if an action chain contains JavaScript
+  #chainContainsJavaScriptAction(action) {
+    const stack = [action];
+    while (stack.length) {
+      let a = stack.pop();
+      a = this.#fetchIfRef(a);
+      if (!(a instanceof Dict)) {
+        continue;
+      }
+      const s = this.#fetchIfRef(a.get("S"));
+      if (s instanceof Name && s.name === "JavaScript") {
+        return true;
+      }
+      const next = this.#fetchIfRef(a.get("Next"));
+      if (next instanceof Dict) {
+        stack.push(next);
+      } else if (Array.isArray(next)) {
+        for (const n of next) {
+          stack.push(this.#fetchIfRef(n));
+        }
+      }
+    }
+    return false;
+  }
+
+  #stripJavaScriptActionsInAADict(aaDict) {
+    const keys = aaDict.getKeys ? aaDict.getKeys() : [];
+    for (const key of keys) {
+      const val0 = aaDict.get(key);
+      const val = this.#fetchIfRef(val0);
+
+      if (val instanceof Dict) {
+        if (this.#chainContainsJavaScriptAction(val)) {
+          if (typeof aaDict.delete === "function") {
+            aaDict.delete(key);
+          } else {
+            aaDict.set(key, null);
+          }
+        }
+      } else if (Array.isArray(val)) {
+        const kept = [];
+        for (let v of val) {
+          v = this.#fetchIfRef(v);
+          if (v instanceof Dict && !this.#chainContainsJavaScriptAction(v)) {
+            kept.push(v);
+          }
+        }
+        if (kept.length) {
+          aaDict.set(key, kept);
+        } else if (typeof aaDict.delete === "function") {
+          aaDict.delete(key);
+        } else {
+          aaDict.set(key, null);
+        }
+      }
+    }
+  }
+
+  #sanitizeOpenAction() {
+    if (!this.disableOpenActionJavaScript) {
+      return;
+    }
+    const openAction = this.#catDict.get("OpenAction");
+    if (!(openAction instanceof Dict)) {
+      return;
+    }
+    if (this.#chainContainsJavaScriptAction(openAction)) {
+      // Remove the entire OpenAction entry from the catalog dictionary
+      this.#catDict.delete("OpenAction");
+    }
+  }
+
+  #sanitizeCatalogAA() {
+    if (!this.disableCatalogAAJavaScript) {
+      return;
+    }
+    const aa = this.#catDict.get("AA");
+    if (!(aa instanceof Dict)) {
+      return;
+    }
+    this.#stripJavaScriptActionsInAADict(aa);
+    try {
+      const empty = aa.getKeys ? aa.getKeys().length === 0 : false;
+      if (empty) {
+        this.#catDict.delete("AA");
+      }
+    } catch {}
+  }
+  // #2995 end of modification by ngx-extended-pdf-viewer
+}
 export { Catalog };

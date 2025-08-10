@@ -956,7 +956,12 @@ class PDFDocument {
 
   parse(recoveryMode) {
     this.xref.parse(recoveryMode);
-    this.catalog = new Catalog(this.pdfManager, this.xref);
+    // #2995 modified by ngx-extended-pdf-viewer
+    this.catalog = new Catalog(this.pdfManager, this.xref, {
+      disableOpenActionJavaScript: this.pdfManager.disableOpenActionJavaScript,
+      disableCatalogAAJavaScript: this.pdfManager.disableCatalogAAJavaScript,
+    });
+    // #2995 end of modification by ngx-extended-pdf-viewer
   }
 
   get linearization() {
