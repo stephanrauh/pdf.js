@@ -110,6 +110,18 @@ const defaultOptions = {
     kind: OptionKind.VIEWER,
   },
   // #2339 end of modification by ngx-extended-pdf-viewer
+  // #2995 modified by ngx-extended-pdf-viewer
+  disableOpenActionJavaScript: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.WORKER,
+  },
+  disableCatalogAAJavaScript: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.WORKER,
+  },
+  // #2995 end of modification by ngx-extended-pdf-viewer
   allowedGlobalEvents: {
     /** @type {Object} */
     value: null,

@@ -277,6 +277,9 @@ class Dict {
   }
 
   delete(key) {
+    // #2995 modified by ngx-extended-pdf-viewer
+    this._map.delete(key);
+    // #2995 end of modification by ngx-extended-pdf-viewer
     delete this._map[key];
   }
 }

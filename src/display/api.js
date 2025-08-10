@@ -76,6 +76,9 @@ import { PDFNodeStream } from "display-node_stream";
 import { PDFObjects } from "./pdf_objects.js";
 import { TextLayer } from "./text_layer.js";
 import { XfaText } from "./xfa_text.js";
+// #2995 modified by ngx-extended-pdf-viewer
+import { AppOptions } from "../../web/app_options.js";
+// #2995 end of modification by ngx-extended-pdf-viewer
 
 const RENDERING_CANCELLED_TIMEOUT = 100; // ms
 
@@ -427,6 +430,10 @@ function getDocument(src = {}) {
     length,
     docBaseUrl,
     enableXfa,
+    // #2995 modified by ngx-extended-pdf-viewer
+    disableOpenActionJavaScript: AppOptions.get("disableOpenActionJavaScript"),
+    disableCatalogAAJavaScript: AppOptions.get("disableCatalogAAJavaScript"),
+    // #2995 end of modification by ngx-extended-pdf-viewer
     evaluatorOptions: {
       maxImageSize,
       disableFontFace,

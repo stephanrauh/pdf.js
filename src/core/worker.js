@@ -225,7 +225,14 @@ class WorkerMessageHandler {
       docBaseUrl,
       enableXfa,
       evaluatorOptions,
+      disableOpenActionJavaScript,
+      disableCatalogAAJavaScript,
     }) {
+      // #2995 modified by ngx-extended-pdf-viewer
+      // Normalize flags (defensive)
+      disableOpenActionJavaScript = !!disableOpenActionJavaScript;
+      disableCatalogAAJavaScript = !!disableCatalogAAJavaScript;
+      // #2995 end of modification by ngx-extended-pdf-viewer
       const pdfManagerArgs = {
         source: null,
         disableAutoFetch,
@@ -237,6 +244,10 @@ class WorkerMessageHandler {
         length,
         password,
         rangeChunkSize,
+        // #2995 modified by ngx-extended-pdf-viewer
+        disableOpenActionJavaScript,
+        disableCatalogAAJavaScript,
+        // #2995 end of modification by ngx-extended-pdf-viewer
       };
 
       if (data) {
@@ -551,7 +562,12 @@ class WorkerMessageHandler {
         // #2943 modified by ngx-extended-pdf-viewer
         if (Array.isArray(pageOrder)) {
           const xref = await pdfManager.ensureDoc("xref");
-          const catalog = new Catalog(pdfManager, xref);
+          // #2995 modified by ngx-extended-pdf-viewer
+          const catalog = new Catalog(pdfManager, xref, {
+            disableOpenActionJavaScript: pdfManager.disableOpenActionJavaScript,
+            disableCatalogAAJavaScript: pdfManager.disableCatalogAAJavaScript,
+          });
+          // #2995 end of modification by ngx-extended-pdf-viewer
           const allPagesDicts = await catalog.getAllPageDicts();
           const pageEntries = Array.from(allPagesDicts.entries());
           const pagesRef = catalog.cloneDict().getRaw("Pages");
