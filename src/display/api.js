@@ -431,8 +431,8 @@ function getDocument(src = {}) {
     docBaseUrl,
     enableXfa,
     // #2995 modified by ngx-extended-pdf-viewer
-    disableOpenActionJavaScript: AppOptions.get("disableOpenActionJavaScript"),
-    disableCatalogAAJavaScript: AppOptions.get("disableCatalogAAJavaScript"),
+    enableOpenActionJavaScript: AppOptions.get("enableOpenActionJavaScript"),
+    enableCatalogAAJavaScript: AppOptions.get("enableCatalogAAJavaScript"),
     // #2995 end of modification by ngx-extended-pdf-viewer
     evaluatorOptions: {
       maxImageSize,

@@ -111,14 +111,14 @@ const defaultOptions = {
   },
   // #2339 end of modification by ngx-extended-pdf-viewer
   // #2995 modified by ngx-extended-pdf-viewer
-  disableOpenActionJavaScript: {
+  enableOpenActionJavaScript: {
     /** @type {boolean} */
-    value: true,
+    value: false,
     kind: OptionKind.WORKER,
   },
-  disableCatalogAAJavaScript: {
+  enableCatalogAAJavaScript: {
     /** @type {boolean} */
-    value: true,
+    value: false,
     kind: OptionKind.WORKER,
   },
   // #2995 end of modification by ngx-extended-pdf-viewer
@@ -304,7 +304,7 @@ const defaultOptions = {
   },
   enableScripting: {
     /** @type {boolean} */
-    value: typeof PDFJSDev === "undefined" || !PDFJSDev.test("CHROME"),
+    value: false, // #2995 modified by ngx-extended-pdf-viewer
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   enableSignatureEditor: {

@@ -958,8 +958,8 @@ class PDFDocument {
     this.xref.parse(recoveryMode);
     // #2995 modified by ngx-extended-pdf-viewer
     this.catalog = new Catalog(this.pdfManager, this.xref, {
-      disableOpenActionJavaScript: this.pdfManager.disableOpenActionJavaScript,
-      disableCatalogAAJavaScript: this.pdfManager.disableCatalogAAJavaScript,
+      enableOpenActionJavaScript: this.pdfManager.enableOpenActionJavaScript,
+      enableCatalogAAJavaScript: this.pdfManager.enableCatalogAAJavaScript,
     });
     // #2995 end of modification by ngx-extended-pdf-viewer
   }

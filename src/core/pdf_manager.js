@@ -52,8 +52,8 @@ class BasePdfManager {
     // length,
     password,
     // rangeChunkSize,
-    disableOpenActionJavaScript,
-    disableCatalogAAJavaScript,
+    enableOpenActionJavaScript,
+    enableCatalogAAJavaScript,
   }) {
     if (
       (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
@@ -66,8 +66,8 @@ class BasePdfManager {
     this._password = password;
     this.enableXfa = enableXfa;
     // #2995 modified by ngx-extended-pdf-viewer
-    this.disableOpenActionJavaScript = !!disableOpenActionJavaScript;
-    this.disableCatalogAAJavaScript = !!disableCatalogAAJavaScript;
+    this.enableOpenActionJavaScript = !!enableOpenActionJavaScript;
+    this.enableCatalogAAJavaScript = !!enableCatalogAAJavaScript;
     // #2995 end of modification by ngx-extended-pdf-viewer
 
     // Check `OffscreenCanvas` and `ImageDecoder` support once,
