@@ -225,13 +225,13 @@ class WorkerMessageHandler {
       docBaseUrl,
       enableXfa,
       evaluatorOptions,
-      disableOpenActionJavaScript,
-      disableCatalogAAJavaScript,
+      enableOpenActionJavaScript,
+      enableCatalogAAJavaScript,
     }) {
       // #2995 modified by ngx-extended-pdf-viewer
       // Normalize flags (defensive)
-      disableOpenActionJavaScript = !!disableOpenActionJavaScript;
-      disableCatalogAAJavaScript = !!disableCatalogAAJavaScript;
+      enableOpenActionJavaScript = !!enableOpenActionJavaScript;
+      enableCatalogAAJavaScript = !!enableCatalogAAJavaScript;
       // #2995 end of modification by ngx-extended-pdf-viewer
       const pdfManagerArgs = {
         source: null,
@@ -245,8 +245,8 @@ class WorkerMessageHandler {
         password,
         rangeChunkSize,
         // #2995 modified by ngx-extended-pdf-viewer
-        disableOpenActionJavaScript,
-        disableCatalogAAJavaScript,
+        enableOpenActionJavaScript,
+        enableCatalogAAJavaScript,
         // #2995 end of modification by ngx-extended-pdf-viewer
       };
 
@@ -564,8 +564,8 @@ class WorkerMessageHandler {
           const xref = await pdfManager.ensureDoc("xref");
           // #2995 modified by ngx-extended-pdf-viewer
           const catalog = new Catalog(pdfManager, xref, {
-            disableOpenActionJavaScript: pdfManager.disableOpenActionJavaScript,
-            disableCatalogAAJavaScript: pdfManager.disableCatalogAAJavaScript,
+            enableOpenActionJavaScript: pdfManager.enableOpenActionJavaScript,
+            enableCatalogAAJavaScript: pdfManager.enableCatalogAAJavaScript,
           });
           // #2995 end of modification by ngx-extended-pdf-viewer
           const allPagesDicts = await catalog.getAllPageDicts();

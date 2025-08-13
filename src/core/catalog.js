@@ -120,8 +120,8 @@ class Catalog {
     // #2995 modified by ngx-extended-pdf-viewer
     // New feature flags (defaults kept false for upstream-compat;
     // set to true in ngx-extendede-pdf-viewer)
-    this.disableOpenActionJavaScript = !!options.disableOpenActionJavaScript;
-    this.disableCatalogAAJavaScript = !!options.disableCatalogAAJavaScript;
+    this.enableOpenActionJavaScript = !!options.enableOpenActionJavaScript;
+    this.enableCatalogAAJavaScript = !!options.enableCatalogAAJavaScript;
     this.#sanitizeOpenAction();
     this.#sanitizeCatalogAA();
     // #2995 end of modification by ngx-extended-pdf-viewer
@@ -1843,7 +1843,7 @@ class Catalog {
   }
 
   #sanitizeOpenAction() {
-    if (!this.disableOpenActionJavaScript) {
+    if (!this.enableOpenActionJavaScript) {
       return;
     }
     const openAction = this.#catDict.get("OpenAction");
@@ -1857,7 +1857,7 @@ class Catalog {
   }
 
   #sanitizeCatalogAA() {
-    if (!this.disableCatalogAAJavaScript) {
+    if (!this.enableCatalogAAJavaScript) {
       return;
     }
     const aa = this.#catDict.get("AA");
