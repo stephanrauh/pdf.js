@@ -917,6 +917,7 @@ class PDFPageView extends BasePDFPageView {
   }
 
   _getRenderingContext(canvas, transform) {
+    const backgroundColor = AppOptions.get("backgroundColor");
     return {
       canvas,
       transform,
@@ -926,6 +927,7 @@ class PDFPageView extends BasePDFPageView {
       annotationCanvasMap: this._annotationCanvasMap,
       pageColors: this.pageColors,
       isEditing: this.#isEditing,
+      background: backgroundColor || null,
     };
   }
 
