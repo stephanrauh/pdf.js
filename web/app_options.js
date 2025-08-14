@@ -317,6 +317,11 @@ const defaultOptions = {
     value: true,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  backgroundColor: {
+    /** @type {string} */
+    value: "",
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
   enableUpdatedAddImage: {
     // We'll probably want to make some experiments before enabling this
     // in Firefox release, but it has to be temporary.
