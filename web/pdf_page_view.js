@@ -917,7 +917,7 @@ class PDFPageView extends BasePDFPageView {
   }
 
   _getRenderingContext(canvas, transform) {
-    const backgroundColor = AppOptions.get("backgroundColor");
+    const backgroundColor = AppOptions.get("pdfBackgroundColor");
     return {
       canvas,
       transform,

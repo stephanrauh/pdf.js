@@ -317,7 +317,7 @@ const defaultOptions = {
     value: true,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
-  backgroundColor: {
+  pdfBackgroundColor: {
     /** @type {string} */
     value: "",
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
@@ -770,7 +770,7 @@ class AppOptions {
           }
         }
         if (!(typeof userOpt === typeof defaultOpt.value || Type[(typeof userOpt).toUpperCase()] & defaultOpt.type)) {
-          if (!["maxZoom", "minZoom", "passwordPrompt", "defaultZoomValue", "findController"].includes(name)) {
+          if (!["maxZoom", "minZoom", "passwordPrompt", "defaultZoomValue", "findController", "pdfBackgroundColor"].includes(name)) {
             console.error("Invalid AppOptions value: " + name + " = " + userOpt);
             continue;
           }
