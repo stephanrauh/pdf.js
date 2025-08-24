@@ -1843,7 +1843,7 @@ class Catalog {
   }
 
   #sanitizeOpenAction() {
-    if (!this.enableOpenActionJavaScript) {
+    if (this.enableOpenActionJavaScript) {
       return;
     }
     const openAction = this.#catDict.get("OpenAction");
@@ -1857,7 +1857,7 @@ class Catalog {
   }
 
   #sanitizeCatalogAA() {
-    if (!this.enableCatalogAAJavaScript) {
+    if (this.enableCatalogAAJavaScript) {
       return;
     }
     const aa = this.#catDict.get("AA");
