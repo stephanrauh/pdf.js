@@ -1727,6 +1727,18 @@ appConfig: null,
           let scrollMode = AppOptions.get("scrollModeOnLoad");
           let spreadMode = AppOptions.get("spreadModeOnLoad");
 
+          // #2951 ngx-extended-pdf-viewer modification: Dispatch event with stored values for ngx-extended-pdf-viewer
+          if (this.eventBus) {
+            this.eventBus.dispatch('storedvaluesavailable', {
+              source: this,
+              fingerprint: pdfDocument.fingerprints[0],
+              storedZoom: stored?.zoom,
+              storedPage: stored?.page,
+              defaultZoom: AppOptions.get("defaultZoomValue")
+            });
+          }
+          // #2951 ngx-extended-pdf-viewer modification end
+
           if (stored?.page && viewOnLoad !== ViewOnLoad.INITIAL) {
             hash =
               `page=${stored.page}&zoom=${zoom || stored.zoom},` +
