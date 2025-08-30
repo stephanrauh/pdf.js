@@ -1889,6 +1889,14 @@ class AnnotationEditorUIManager {
       for (const editor of this.#selectedEditors) {
         editor.updateParams(type, value);
       }
+      // #2899 modified by ngx-extended-pdf-viewer
+      // Always update default params for highlight colors so new highlights use the selected color
+      if (type === AnnotationEditorParamsType.HIGHLIGHT_COLOR || type === AnnotationEditorParamsType.HIGHLIGHT_THICKNESS) {
+        for (const editorType of this.#editorTypes) {
+          editorType.updateDefaultParams(type, value);
+        }
+      }
+      // #2899 end of modification by ngx-extended-pdf-viewer
     } else {
       for (const editorType of this.#editorTypes) {
         editorType.updateDefaultParams(type, value);
