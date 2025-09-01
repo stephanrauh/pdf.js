@@ -34,7 +34,7 @@ import {
   PixelsPerInch,
   stopEvent,
 } from "../display_utils.js";
-import { HighlightToolbar } from "./toolbar.js";
+import { FloatingToolbar } from "./toolbar.js";
 
 function bindEvents(obj, element, names) {
   for (const name of names) {
@@ -593,6 +593,8 @@ class AnnotationEditorUIManager {
 
   #activeEditor = null;
 
+  #allEditableAnnotations = null;
+
   #allEditors = new Map();
 
   #allLayers = new Map();
@@ -639,11 +641,13 @@ class AnnotationEditorUIManager {
 
   #highlightWhenShiftUp = false;
 
-  #highlightToolbar = null;
+  #floatingToolbar = null;
 
   #idManager = new IdManager();
 
   #isEnabled = false;
+
+  #isPointerDown = false;
 
   #isWaiting = false;
 
@@ -668,6 +672,8 @@ class AnnotationEditorUIManager {
   #pageColors = null;
 
   #showAllStates = null;
+
+  #pdfDocument = null;
 
   #previousStates = {
     isEditing: false,
@@ -852,6 +858,7 @@ class AnnotationEditorUIManager {
     this.#altTextManager = altTextManager;
     this.#commentManager = commentManager;
     this.#signatureManager = signatureManager;
+    this.#pdfDocument = pdfDocument;
     this._eventBus = eventBus;
     eventBus._on("editingaction", this.onEditingAction.bind(this), { signal });
     eventBus._on("pagechanging", this.onPageChanging.bind(this), { signal });
@@ -864,6 +871,20 @@ class AnnotationEditorUIManager {
       "switchannotationeditorparams",
       evt => this.updateParams(evt.type, evt.value),
       { signal }
+    );
+    window.addEventListener(
+      "pointerdown",
+      () => {
+        this.#isPointerDown = true;
+      },
+      { capture: true, signal }
+    );
+    window.addEventListener(
+      "pointerup",
+      () => {
+        this.#isPointerDown = false;
+      },
+      { capture: true, signal }
     );
     this.#addSelectionListener();
     this.#addDragAndDropListeners();
@@ -916,10 +937,11 @@ class AnnotationEditorUIManager {
     this.#altTextManager?.destroy();
     this.#commentManager?.destroy();
     this.#signatureManager?.destroy();
-    this.#highlightToolbar?.hide();
-    this.#highlightToolbar = null;
+    this.#floatingToolbar?.hide();
+    this.#floatingToolbar = null;
     this.#mainHighlightColorPicker?.destroy();
     this.#mainHighlightColorPicker = null;
+    this.#allEditableAnnotations = null;
     if (this.#focusMainContainerTimeoutId) {
       clearTimeout(this.#focusMainContainerTimeoutId);
       this.#focusMainContainerTimeoutId = null;
@@ -929,6 +951,7 @@ class AnnotationEditorUIManager {
       this.#translationTimeoutId = null;
     }
     this._editorUndoBar?.destroy();
+    this.#pdfDocument = null;
   }
 
   combinedSignal(ac) {
@@ -1165,7 +1188,7 @@ class AnnotationEditorUIManager {
     return null;
   }
 
-  highlightSelection(methodOfCreation = "") {
+  highlightSelection(methodOfCreation = "", comment = false) {
     const selection = document.getSelection();
     if (!selection || selection.isCollapsed) {
       return;
@@ -1183,7 +1206,7 @@ class AnnotationEditorUIManager {
     const layer = this.#getLayerForTextLayer(textLayer);
     const isNoneMode = this.#mode === AnnotationEditorType.NONE;
     const callback = () => {
-      layer?.createAndAddNewEditor({ x: 0, y: 0 }, false, {
+      const editor = layer?.createAndAddNewEditor({ x: 0, y: 0 }, false, {
         methodOfCreation,
         boxes,
         anchorNode,
@@ -1195,6 +1218,9 @@ class AnnotationEditorUIManager {
       if (isNoneMode) {
         this.showAllEditors("highlight", true, /* updateButton = */ true);
       }
+      if (comment) {
+        editor?.editComment();
+      }
     };
     if (isNoneMode) {
       this.switchToMode(AnnotationEditorType.HIGHLIGHT, callback);
@@ -1203,7 +1229,11 @@ class AnnotationEditorUIManager {
     callback();
   }
 
-  #displayHighlightToolbar() {
+  commentSelection(methodOfCreation = "") {
+    this.highlightSelection(methodOfCreation, /* comment */ true);
+  }
+
+  #displayFloatingToolbar() {
     const selection = document.getSelection();
     if (!selection || selection.isCollapsed) {
       return;
@@ -1214,8 +1244,8 @@ class AnnotationEditorUIManager {
     if (!boxes) {
       return;
     }
-    this.#highlightToolbar ||= new HighlightToolbar(this);
-    this.#highlightToolbar.show(textLayer, boxes, this.direction === "ltr");
+    this.#floatingToolbar ||= new FloatingToolbar(this);
+    this.#floatingToolbar.show(textLayer, boxes, this.direction === "ltr");
   }
 
   /**
@@ -1249,7 +1279,7 @@ class AnnotationEditorUIManager {
     const selection = document.getSelection();
     if (!selection || selection.isCollapsed) {
       if (this.#selectedTextNode) {
-        this.#highlightToolbar?.hide();
+        this.#floatingToolbar?.hide();
         this.#selectedTextNode = null;
         this.#dispatchUpdateStates({
           hasSelectedText: false,
@@ -1266,7 +1296,7 @@ class AnnotationEditorUIManager {
     const textLayer = anchorElement.closest(".textLayer");
     if (!textLayer) {
       if (this.#selectedTextNode) {
-        this.#highlightToolbar?.hide();
+        this.#floatingToolbar?.hide();
         this.#selectedTextNode = null;
         this.#dispatchUpdateStates({
           hasSelectedText: false,
@@ -1275,7 +1305,7 @@ class AnnotationEditorUIManager {
       return;
     }
 
-    this.#highlightToolbar?.hide();
+    this.#floatingToolbar?.hide();
     this.#selectedTextNode = anchorNode;
     this.#dispatchUpdateStates({
       hasSelectedText: true,
@@ -1300,22 +1330,30 @@ class AnnotationEditorUIManager {
           : null;
       activeLayer?.toggleDrawing();
 
-      const ac = new AbortController();
-      const signal = this.combinedSignal(ac);
+      if (this.#isPointerDown) {
+        const ac = new AbortController();
+        const signal = this.combinedSignal(ac);
 
-      const pointerup = e => {
-        if (e.type === "pointerup" && e.button !== 0) {
-          // Do nothing on right click.
-          return;
-        }
-        ac.abort();
+        const pointerup = e => {
+          if (e.type === "pointerup" && e.button !== 0) {
+            // Do nothing on right click.
+            return;
+          }
+          ac.abort();
+          activeLayer?.toggleDrawing(true);
+          if (e.type === "pointerup") {
+            this.#onSelectEnd("main_toolbar");
+          }
+        };
+        window.addEventListener("pointerup", pointerup, { signal });
+        window.addEventListener("blur", pointerup, { signal });
+      } else {
+        // Here neither the shift key nor the pointer is down and we've
+        // something in the selection: we can be in the case where the user is
+        // using a screen reader (see bug 1976597).
         activeLayer?.toggleDrawing(true);
-        if (e.type === "pointerup") {
-          this.#onSelectEnd("main_toolbar");
-        }
-      };
-      window.addEventListener("pointerup", pointerup, { signal });
-      window.addEventListener("blur", pointerup, { signal });
+        this.#onSelectEnd("main_toolbar");
+      }
     }
   }
 
@@ -1323,7 +1361,7 @@ class AnnotationEditorUIManager {
     if (this.#mode === AnnotationEditorType.HIGHLIGHT) {
       this.highlightSelection(methodOfCreation);
     } else if (this.#enableHighlightFloatingButton) {
-      this.#displayHighlightToolbar();
+      this.#displayFloatingToolbar();
     }
   }
 
@@ -1639,6 +1677,9 @@ class AnnotationEditorUIManager {
       case "highlightSelection":
         this.highlightSelection("context_menu");
         break;
+      case "commentSelection":
+        this.commentSelection("context_menu");
+        break;
     }
   }
 
@@ -1789,6 +1830,10 @@ class AnnotationEditorUIManager {
     this.#updateModeCapability = Promise.withResolvers();
     this.#currentDrawingSession?.commitOrRemove();
 
+    if (this.#mode === AnnotationEditorType.POPUP) {
+      this.#commentManager?.hideSidebar();
+    }
+
     this.#mode = mode;
     if (mode === AnnotationEditorType.NONE) {
       this.setEditingState(false);
@@ -1799,9 +1844,18 @@ class AnnotationEditorUIManager {
       this.#updateModeCapability.resolve();
       return;
     }
+
     if (mode === AnnotationEditorType.SIGNATURE) {
       await this.#signatureManager?.loadSignatures();
     }
+    if (mode === AnnotationEditorType.POPUP) {
+      this.#allEditableAnnotations ||=
+        await this.#pdfDocument.getAnnotationsByType(
+          new Set(this.#editorTypes.map(editorClass => editorClass._editorType))
+        );
+      this.#commentManager?.showSidebar(this.#allEditableAnnotations);
+    }
+
     this.setEditingState(true);
     await this.#enableAll();
     this.unselectAll();

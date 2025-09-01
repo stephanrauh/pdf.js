@@ -144,7 +144,17 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
       offsetY += spot.top;
     }
     if (spot.left !== undefined) {
-      offsetX += spot.left;
+      if (scrollMatches) {
+        const elementWidth = element.getBoundingClientRect().width;
+        const padding = MathClamp(
+          (parent.clientWidth - elementWidth) / 2,
+          20,
+          400
+        );
+        offsetX += spot.left - padding;
+      } else {
+        offsetX += spot.left;
+      }
       parent.scrollLeft = offsetX;
     }
   // #1823 modified by ngx-extended-pdf-viewer

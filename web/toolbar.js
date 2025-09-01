@@ -103,6 +103,18 @@ class Toolbar {
       // because they're handled by TypeScript
       /*
       {
+        element: options.editorCommentButton,
+        eventName: "switchannotationeditormode",
+        eventDetails: {
+          get mode() {
+            const { classList } = options.editorCommentButton;
+            return classList.contains("toggled")
+              ? AnnotationEditorType.NONE
+              : AnnotationEditorType.POPUP;
+          },
+        },
+      },
+      {
         element: options.editorFreeTextButton,
         eventName: "switchannotationeditormode",
         eventDetails: {
@@ -345,6 +357,8 @@ class Toolbar {
 
   #editorModeChanged({ mode }) {
     const {
+      editorCommentButton,
+      editorCommentParamsToolbar,
       editorFreeTextButton,
       editorFreeTextParamsToolbar,
       editorHighlightButton,
@@ -357,6 +371,11 @@ class Toolbar {
       editorSignatureParamsToolbar,
     } = this.#opts;
 
+    toggleExpandedBtn(
+      editorCommentButton,
+      mode === AnnotationEditorType.POPUP,
+      editorCommentParamsToolbar
+    );
     toggleExpandedBtn(
       editorFreeTextButton,
       mode === AnnotationEditorType.FREETEXT,
@@ -383,12 +402,13 @@ class Toolbar {
       editorSignatureParamsToolbar
     );
 
-    const isDisable = mode === AnnotationEditorType.DISABLE;
-    editorFreeTextButton.disabled = isDisable;
-    editorHighlightButton.disabled = isDisable;
-    editorInkButton.disabled = isDisable;
-    editorStampButton.disabled = isDisable;
-    editorSignatureButton.disabled = isDisable;
+    editorCommentButton.disabled =
+      editorFreeTextButton.disabled =
+      editorHighlightButton.disabled =
+      editorInkButton.disabled =
+      editorStampButton.disabled =
+      editorSignatureButton.disabled =
+        mode === AnnotationEditorType.DISABLE;
   }
 
   #updateUIState(resetNumPages = false) {

@@ -1099,7 +1099,7 @@ class HighlightEditor extends AnnotationEditor {
       return this.serializeDeleted();
     }
 
-    const rect = this.getRect(0, 0);
+    const rect = this.getPDFRect();
     const color = AnnotationEditor._colorManager.convert(
       this._uiManager.getNonHCMColor(this.color)
     );
@@ -1135,8 +1135,12 @@ class HighlightEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   renderAnnotationElement(annotation) {
+    if (this.deleted) {
+      annotation.hide();
+      return null;
+    }
     const params = {
-      rect: this.getRect(0, 0),
+      rect: this.getPDFRect(),
     };
     if (this.hasEditedComment) {
       params.popup = this.comment;

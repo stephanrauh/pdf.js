@@ -37,6 +37,7 @@ import {
   kbModifierDown,
   kbModifierUp,
   kbRedo,
+  kbSelectAll,
   kbUndo,
   loadAndWait,
   moveEditor,
@@ -2591,7 +2592,7 @@ describe("FreeText Editor", () => {
           await commit(page);
 
           // Delete it in using the button.
-          await page.click(`${editorSelector} button.delete`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await page.waitForFunction(
             sel => !document.querySelector(sel),
             {},
@@ -2644,7 +2645,7 @@ describe("FreeText Editor", () => {
           await selectAll(page);
 
           // Delete it in using the button.
-          await page.focus(`${editorSelector} button.delete`);
+          await page.focus(`${editorSelector} button.deleteButton`);
           await page.keyboard.press("Enter");
           await page.waitForFunction(
             sel => !document.querySelector(sel),
@@ -2885,8 +2886,8 @@ describe("FreeText Editor", () => {
           await commit(page);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
 
           const twoToFourteen = Array.from(new Array(13).keys(), n => n + 2);
@@ -2935,8 +2936,8 @@ describe("FreeText Editor", () => {
           await commit(page);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
 
           const twoToOne = Array.from(new Array(13).keys(), n => n + 2).concat(
@@ -3271,8 +3272,8 @@ describe("FreeText Editor", () => {
           await commit(page);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
           await page.waitForSelector("#editorUndoBar", { visible: true });
 
@@ -3299,8 +3300,8 @@ describe("FreeText Editor", () => {
           await commit(page);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
 
           await page.waitForFunction(() => {
@@ -3332,8 +3333,8 @@ describe("FreeText Editor", () => {
           await commit(page);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
 
           await page.waitForSelector("#editorUndoBar", { visible: true });
@@ -3542,6 +3543,64 @@ describe("FreeText Editor", () => {
             },
             {},
             `${editorSelector} .internal`
+          );
+        })
+      );
+    });
+  });
+
+  describe("Delete some annotations, scroll to the end and then scroll to the beginning", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait(
+        "tracemonkey_with_annotations.pdf",
+        ".annotationEditorLayer"
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the annotations aren't displayed after scrolling", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+
+          await kbSelectAll(page);
+          await page.waitForFunction(
+            () => document.querySelectorAll(".selectedEditor").length === 4
+          );
+
+          await page.keyboard.press("Backspace");
+          await page.waitForFunction(() => {
+            const { map } =
+              window.PDFViewerApplication.pdfDocument.annotationStorage
+                .serializable;
+            return (
+              map.size === 4 && [...map.values()].every(entry => entry.deleted)
+            );
+          });
+
+          // Disable editing mode.
+          await switchToFreeText(page, /* disable = */ true);
+
+          const oneToOne = Array.from(new Array(13).keys(), n => n + 2).concat(
+            Array.from(new Array(13).keys(), n => 13 - n)
+          );
+          for (const pageNumber of oneToOne) {
+            await scrollIntoView(
+              page,
+              `.page[data-page-number = "${pageNumber}"]`
+            );
+          }
+
+          await page.waitForFunction(
+            () =>
+              document.querySelectorAll(
+                `.annotationLayer > section:is(.stampAnnotation, .inkAnnotation, .highlightAnnotation, .freeTextAnnotation)[hidden = ""]`
+              ).length === 4
           );
         })
       );

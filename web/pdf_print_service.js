@@ -359,6 +359,10 @@ function printPdf() {
     dispatchEvent("beforeprint");
   } finally {
     if (!activeService) {
+      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
+        // eslint-disable-next-line no-unsafe-finally
+        throw new Error("window.print() is not supported");
+      }
       NgxConsole.error("Expected print service to be initialized.");
       ensureOverlay().then(function () {
         overlayManager.closeIfActive(dialog);

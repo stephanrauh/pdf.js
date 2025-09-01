@@ -199,6 +199,7 @@ appConfig: null,
   // #2943 modified by ngx-extended-pdf-viewer
   pageOrder: null,
   // #2943 end of modification by ngx-extended-pdf-viewer
+  _printPermissionPromise: null,
 
   // Called once when the document is loaded.
   async initialize(appConfig) {
@@ -387,6 +388,7 @@ appConfig: null,
         enableAutoLinking: x => x === "true",
         enableFakeMLManager: x => x === "true",
         enableGuessAltText: x => x === "true",
+        enablePermissions: x => x === "true",
         enableUpdatedAddImage: x => x === "true",
         highlightEditorColors: x => x,
         maxCanvasPixels: x => parseInt(x),
@@ -425,6 +427,7 @@ appConfig: null,
           )
         : new EventBus();
     this.eventBus = AppOptions.eventBus = eventBus;
+
     mlManager?.setEventBus(eventBus, abortSignal);
 
     const overlayManager = (this.overlayManager = new OverlayManager());
@@ -536,7 +539,30 @@ appConfig: null,
         : null;
     const commentManager =
       AppOptions.get("enableComment") && appConfig.editCommentDialog
-        ? new CommentManager(appConfig.editCommentDialog, overlayManager)
+        ? new CommentManager(
+            appConfig.editCommentDialog,
+            {
+              sidebar:
+                appConfig.annotationEditorParams?.editorCommentsSidebar || null,
+              commentsList:
+                appConfig.annotationEditorParams?.editorCommentsSidebarList ||
+                null,
+              commentCount:
+                appConfig.annotationEditorParams?.editorCommentsSidebarCount ||
+                null,
+              sidebarTitle:
+                appConfig.annotationEditorParams?.editorCommentsSidebarTitle ||
+                null,
+              closeButton:
+                appConfig.annotationEditorParams
+                  ?.editorCommentsSidebarCloseButton || null,
+              commentToolbarButton:
+                appConfig.toolbar?.editorCommentButton || null,
+            },
+            eventBus,
+            linkService,
+            overlayManager
+          )
         : null;
 
     const enableHWA = AppOptions.get("enableHWA"),
@@ -582,6 +608,9 @@ appConfig: null,
       pageViewMode: AppOptions.get("pageViewMode"),
       /** end of modification */
       enablePermissions: AppOptions.get("enablePermissions"),
+      enableOptimizedPartialRendering: AppOptions.get(
+        "enableOptimizedPartialRendering"
+      ),
       pageColors,
       mlManager,
       abortSignal,
@@ -651,6 +680,11 @@ appConfig: null,
           }
         }
         // #2943 end of modification by ngx-extended-pdf-viewer
+
+        const editorCommentButton = appConfig.toolbar?.editorCommentButton;
+        if (editorCommentButton && AppOptions.get("enableComment")) {
+          editorCommentButton.parentElement.hidden = false;
+        }
         this.annotationEditorParams = new AnnotationEditorParams(
           appConfig.annotationEditorParams,
           eventBus
@@ -892,9 +926,19 @@ appConfig: null,
       });
     }
 
+    const togglePrintingButtons = visible => {
+      appConfig.toolbar?.print?.classList.toggle("hidden", !visible);
+      appConfig.secondaryToolbar?.printButton?.classList.toggle(
+        "hidden",
+        !visible
+      );
+    };
     if (!this.supportsPrinting) {
-      appConfig.toolbar?.print?.classList.add("hidden");
-      appConfig.secondaryToolbar?.printButton.classList.add("hidden");
+      togglePrintingButtons(false);
+    } else {
+      eventBus.on("printingallowed", ({ isAllowed }) =>
+        togglePrintingButtons(isAllowed)
+      );
     }
 
     if (!this.supportsFullscreen) {
@@ -1610,6 +1654,25 @@ appConfig: null,
   load(pdfDocument) {
     this.pdfDocument = pdfDocument;
 
+    this._printPermissionPromise = new Promise(resolve => {
+      this.eventBus.on(
+        "printingallowed",
+        ({ isAllowed }) => {
+          if (
+            typeof PDFJSDev !== "undefined" &&
+            PDFJSDev.test("MOZCENTRAL") &&
+            !isAllowed
+          ) {
+            window.print = () => {
+              console.warn("Printing is not allowed.");
+            };
+          }
+          resolve(isAllowed);
+        },
+        { once: true }
+      );
+    });
+
     pdfDocument.getDownloadInfo().then(({ length }) => {
       this._contentLength = length; // Ensure that the correct length is used.
       this.loadingBar?.hide();
@@ -2240,7 +2303,7 @@ appConfig: null,
       return;
     }
 
-    if (!this.supportsPrinting) {
+    if (!this.supportsPrinting || !this.pdfViewer.printingAllowed) {
       this._otherError("pdfjs-printing-not-supported");
       return;
     }
@@ -2313,8 +2376,8 @@ appConfig: null,
     this.pdfPresentationMode?.request();
   },
 
-  triggerPrinting() {
-    if (this.supportsPrinting) {
+  async triggerPrinting() {
+    if (this.supportsPrinting && (await this._printPermissionPromise)) {
       // #2337 modified by ngx-extended-pdf-viewer
       this.printPdf();
       // #2337 end of modification by ngx-extended-pdf-viewer
@@ -2586,19 +2649,18 @@ appConfig: null,
         mainContainer);
     }
 
+    let scrollendTimeoutID, scrollAbortController;
     const scrollend = () => {
       if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
         ({ scrollTop: this._lastScrollTop, scrollLeft: this._lastScrollLeft } =
           mainContainer);
       }
-
-      this._isScrolling = false;
-      mainContainer.addEventListener("scroll", scroll, {
-        passive: true,
-        signal,
-      });
-      mainContainer.removeEventListener("scrollend", scrollend);
-      mainContainer.removeEventListener("blur", scrollend);
+      clearTimeout(scrollendTimeoutID);
+      if (this._isScrolling) {
+        scrollAbortController.abort();
+        scrollAbortController = null;
+        this._isScrolling = false;
+      }
     };
     const scroll = () => {
       if (this._isCtrlKeyDown) {
@@ -2612,10 +2674,27 @@ appConfig: null,
         return;
       }
 
-      mainContainer.removeEventListener("scroll", scroll);
-      this._isScrolling = true;
-      mainContainer.addEventListener("scrollend", scrollend, { signal });
-      mainContainer.addEventListener("blur", scrollend, { signal });
+      if (!this._isScrolling) {
+        scrollAbortController = new AbortController();
+        const abortSignal = AbortSignal.any([
+          scrollAbortController.signal,
+          signal,
+        ]);
+
+        mainContainer.addEventListener("scrollend", scrollend, {
+          signal: abortSignal,
+        });
+        mainContainer.addEventListener("blur", scrollend, {
+          signal: abortSignal,
+        });
+        this._isScrolling = true;
+      }
+      clearTimeout(scrollendTimeoutID);
+      // Why 100 ? Because of:
+      // https://developer.chrome.com/blog/scrollend-a-new-javascript-event
+      // Maybe we could find a better value... ideally the `scrollend` event
+      // should be correctly fired.
+      scrollendTimeoutID = setTimeout(scrollend, 100);
     };
     mainContainer.addEventListener("scroll", scroll, {
       passive: true,

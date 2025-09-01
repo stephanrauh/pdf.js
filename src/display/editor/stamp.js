@@ -857,7 +857,7 @@ class StampEditor extends AnnotationEditor {
       annotationType: AnnotationEditorType.STAMP,
       bitmapId: this.#bitmapId,
       pageIndex: this.pageIndex,
-      rect: this.getRect(0, 0),
+      rect: this.getPDFRect(),
       rotation: this.rotation,
       isSvg: this.#isSvg,
       structTreeParentId: this._structTreeParentId,
@@ -942,8 +942,12 @@ class StampEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   renderAnnotationElement(annotation) {
+    if (this.deleted) {
+      annotation.hide();
+      return null;
+    }
     const params = {
-      rect: this.getRect(0, 0),
+      rect: this.getPDFRect(),
     };
     if (this.hasEditedComment) {
       params.popup = this.comment;

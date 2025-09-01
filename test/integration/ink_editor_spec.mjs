@@ -345,8 +345,8 @@ describe("Ink Editor", () => {
           await page.waitForSelector(editorSelector);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
 
           await kbUndo(page);
@@ -389,8 +389,8 @@ describe("Ink Editor", () => {
           await page.waitForSelector(editorSelector);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
 
           const twoToFourteen = Array.from(new Array(13).keys(), n => n + 2);
@@ -446,8 +446,8 @@ describe("Ink Editor", () => {
           await page.waitForSelector(editorSelector);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
 
           const twoToOne = Array.from(new Array(13).keys(), n => n + 2).concat(
@@ -897,8 +897,8 @@ describe("Ink Editor", () => {
           await page.waitForSelector(editorSelector);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
           await page.waitForSelector("#editorUndoBar", { visible: true });
 
@@ -931,8 +931,8 @@ describe("Ink Editor", () => {
           await page.waitForSelector(editorSelector);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
 
           await page.waitForFunction(() => {
@@ -970,8 +970,8 @@ describe("Ink Editor", () => {
           await page.waitForSelector(editorSelector);
           await waitForSerialized(page, 1);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 0);
           await page.waitForSelector("#editorUndoBar", { visible: true });
 
@@ -1101,8 +1101,8 @@ describe("Ink Editor", () => {
           await dragAndDrop(page, editorSelector, [[0, -30]], /* steps = */ 10);
           await waitForSerialized(page, 2);
 
-          await page.waitForSelector(`${editorSelector} button.delete`);
-          await page.click(`${editorSelector} button.delete`);
+          await page.waitForSelector(`${editorSelector} button.deleteButton`);
+          await page.click(`${editorSelector} button.deleteButton`);
           await waitForSerialized(page, 1);
           await page.waitForSelector("#editorUndoBar", { visible: true });
 
@@ -1216,6 +1216,13 @@ describe("The pen-drawn shape must maintain correct curvature regardless of the 
   it("must retain correct curvature regardless of the page or the curve's endpoint location", async () => {
     await Promise.all(
       pages.map(async ([browserName, page]) => {
+        if (browserName === "chrome" && navigator.platform.includes("Win")) {
+          // Skip the test for Chrome on Windows because it doesn't allow to
+          // have elements outside the viewport and thus permafails with e.g.
+          // `Cannot move beyond viewport (x: -32, y: 241)`.
+          return;
+        }
+
         await switchToInk(page);
 
         // Creating a reference curve on the first page with end
