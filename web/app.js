@@ -930,20 +930,15 @@ appConfig: null,
         source: window,
       },
     });
-    try {
-      // Attempt to dispatch the event at the embedding `document`,
-      // in order to support cases where the viewer is embedded in
-      // a *dynamically* created <iframe> element.
-      // #2070 modified by ngx-extended-pdf-viewer:
-      // send the event to the document by default instead to the parent
-      document.dispatchEvent(event);
-    } catch (ex) {
-      // The viewer could be in e.g. a cross-origin <iframe> element,
-      // fallback to dispatching the event at the current `document`.
-      NgxConsole.error(`webviewerinitialized: ${ex}`);
-      parent.document.dispatchEvent(event);
-      // #2070 end of modification
-    }
+
+    // #2070 + #2898 modified by ngx-extended-pdf-viewer:
+    // pdf.js tries to send the event to the parent of the document
+    // to cover scenarios where the PDF file is created in an iFrame,
+    // but the outer document has an event listener.
+    // ngx-extended-pdf-viewer controls the event itself,
+    // so we don't need that. We can (and must) ignore that scenario.
+    document.dispatchEvent(event);
+    // #2070 #2898 end of modification by ngx-extended-pdf-viewer
     // #2374 end of modification by ngx-extended-pdf-viewer
 
   },

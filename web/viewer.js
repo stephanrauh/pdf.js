@@ -333,17 +333,14 @@ function webViewerLoad(cspPolicyService) { // #2362 modified by ngx-extended-pdf
         source: window,
       },
     });
-    try {
-      // Attempt to dispatch the event at the embedding `document`,
-      // in order to support cases where the viewer is embedded in
-      // a *dynamically* created <iframe> element.
-      parent.document.dispatchEvent(event);
-    } catch (ex) {
-      // The viewer could be in e.g. a cross-origin <iframe> element,
-      // fallback to dispatching the event at the current `document`.
-      NgxConsole.error("webviewerloaded:", ex);
-      document.dispatchEvent(event);
-    }
+    // #2070 + #2898 modified by ngx-extended-pdf-viewer:
+    // pdf.js tries to send the event to the parent of the document
+    // to cover scenarios where the PDF file is created in an iFrame,
+    // but the outer document has an event listener.
+    // ngx-extended-pdf-viewer controls the event itself,
+    // so we don't need that. We can (and must) ignore that scenario.
+    document.dispatchEvent(event);
+    // #2070 #2898 end of modification by ngx-extended-pdf-viewer
   }
   config.cspPolicyService = cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
   PDFViewerApplication.run(config);
