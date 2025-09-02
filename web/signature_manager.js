@@ -21,6 +21,7 @@ import {
   stopEvent,
   SupportedImageMimeTypes,
 } from "pdfjs-lib";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 
 // Default height of the added signature in page coordinates.
 const DEFAULT_HEIGHT_IN_PAGE = 40;
@@ -624,7 +625,7 @@ class SignatureManager {
     try {
       data = await this.#uiManager.imageManager.getFromFile(file);
     } catch (e) {
-      console.error("SignatureManager.#extractSignature.", e);
+      NgxConsole.error("SignatureManager.#extractSignature.", e);
     }
     if (!data) {
       this.#showError("Upload");
@@ -959,7 +960,7 @@ class SignatureManager {
           description
         );
       } else {
-        console.warn("SignatureManager.add: cannot save the signature.");
+        NgxConsole.warn("SignatureManager.add: cannot save the signature.");
       }
     }
 

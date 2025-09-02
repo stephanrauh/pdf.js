@@ -88,7 +88,7 @@ async function renderPage( // modified by ngx-extended-pdf-viewer #530
 
     return renderTask.promise.catch(reason => {
       if (!(reason instanceof RenderingCancelledException)) {
-        console.error(reason);
+        NgxConsole.error(reason);
       }
       throw reason;
     });
@@ -527,7 +527,7 @@ class PDFPrintServiceFactory {
     }
     // #2337 modified by ngx-extended-pdf-viewer
     if (!PDFPrintServiceFactory.enablePrint) {
-      console.debug("The print service is disabled.");
+      NgxConsole.debug("The print service is disabled.");
     }
     return (activeService = new PDFPrintService(
       params,

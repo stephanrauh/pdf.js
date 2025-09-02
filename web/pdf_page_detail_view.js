@@ -16,6 +16,7 @@
 import { BasePDFPageView } from "./base_pdf_page_view.js";
 import { OutputScale } from "pdfjs-lib";
 import { RenderingStates } from "./ui_utils.js";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 
 /** @typedef {import("./interfaces").IRenderableView} IRenderableView */
 
@@ -249,7 +250,7 @@ class PDFPageDetailView extends BasePDFPageView {
       this.renderingState === RenderingStates.FINISHED;
 
     if (this.renderingState !== RenderingStates.INITIAL) {
-      console.error("Must be in new state before drawing");
+      NgxConsole.error("Must be in new state before drawing");
       this.reset(); // Ensure that we reset all state to prevent issues.
     }
     const { div, pdfPage, viewport } = this.pageView;

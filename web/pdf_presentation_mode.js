@@ -23,6 +23,7 @@ import {
   SpreadMode,
 } from "./ui_utils.js";
 import { AnnotationEditorType } from "pdfjs-lib";
+import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 
 const DELAY_BEFORE_HIDING_CONTROLS = 3000; // in ms
 const ACTIVE_SELECTOR = "pdfPresentationMode";
@@ -94,7 +95,7 @@ class PDFPresentationMode {
       pdfViewer.spreadMode !== SpreadMode.NONE &&
       !(pdfViewer.pageViewsReady && pdfViewer.hasEqualPageSizes)
     ) {
-      console.warn(
+      NgxConsole.warn(
         "Ignoring Spread modes when entering PresentationMode, " +
           "since the document may contain varying page sizes."
       );

@@ -398,7 +398,7 @@ class PDFPageView extends BasePDFPageView {
         structTreeLayer: this.structTreeLayer,
       });
     } catch (ex) {
-      console.error("#renderAnnotationLayer:", ex);
+      NgxConsole.error("#renderAnnotationLayer:", ex);
       error = ex;
     } finally {
       this.#dispatchLayerRendered("annotationlayerrendered", error, this.annotationLayer);
@@ -413,7 +413,7 @@ class PDFPageView extends BasePDFPageView {
         intent: "display",
       });
     } catch (ex) {
-      console.error("#renderAnnotationEditorLayer:", ex);
+      NgxConsole.error("#renderAnnotationEditorLayer:", ex);
       error = ex;
     } finally {
       this.#dispatchLayerRendered("annotationeditorlayerrendered", error, this.annotationEditorLayer);
@@ -426,7 +426,7 @@ class PDFPageView extends BasePDFPageView {
         intent: "display",
       });
     } catch (ex) {
-      console.error("#renderDrawLayer:", ex);
+      NgxConsole.error("#renderDrawLayer:", ex);
     }
   }
 
@@ -445,7 +445,7 @@ class PDFPageView extends BasePDFPageView {
         this.#buildXfaTextContentItems(result.textDivs);
       }
     } catch (ex) {
-      console.error("#renderXfaLayer:", ex);
+      NgxConsole.error("#renderXfaLayer:", ex);
       error = ex;
     } finally {
       if (this.xfaLayer?.div) {
@@ -471,7 +471,7 @@ class PDFPageView extends BasePDFPageView {
       if (ex instanceof AbortException) {
         return;
       }
-      console.error("#renderTextLayer:", ex);
+      NgxConsole.error("#renderTextLayer:", ex);
       error = ex;
     }
     this.#dispatchLayerRendered("textlayerrendered", error, this.textLayer);
@@ -528,7 +528,7 @@ class PDFPageView extends BasePDFPageView {
         structTreeLayer: this.structTreeLayer,
       });
     } catch (ex) {
-      console.error("#injectLinkAnnotations:", ex);
+      NgxConsole.error("#injectLinkAnnotations:", ex);
       error = ex;
     }
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
