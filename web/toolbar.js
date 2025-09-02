@@ -402,13 +402,27 @@ class Toolbar {
       editorSignatureParamsToolbar
     );
 
-    editorCommentButton.disabled =
-      editorFreeTextButton.disabled =
-      editorHighlightButton.disabled =
-      editorInkButton.disabled =
-      editorStampButton.disabled =
-      editorSignatureButton.disabled =
-        mode === AnnotationEditorType.DISABLE;
+    // modified by ngx-extended-pdf-viewer
+    const disableEditorsValue = mode === AnnotationEditorType.DISABLE;
+    if (editorCommentButton) {
+      editorCommentButton.disabled = disableEditorsValue;
+    }
+    if (editorFreeTextButton) {
+      editorFreeTextButton.disabled = disableEditorsValue;
+    }
+    if (editorHighlightButton) {
+      editorHighlightButton.disabled = disableEditorsValue;
+    }
+    if (editorInkButton) {
+      editorInkButton.disabled = disableEditorsValue;
+    }
+    if (editorStampButton) {
+      editorStampButton.disabled = disableEditorsValue;
+    }
+    if (editorSignatureButton) {
+      editorSignatureButton.disabled = disableEditorsValue;
+    }
+    // end of modification by ngx-extended-pdf-viewer
   }
 
   #updateUIState(resetNumPages = false) {
