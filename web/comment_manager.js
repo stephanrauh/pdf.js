@@ -15,6 +15,7 @@
 
 import {
   AnnotationEditorType,
+  changeLightness,
   getRGB,
   noContextMenu,
   PDFDateString,
@@ -170,6 +171,10 @@ class CommentManager {
     });
 
     overlayManager.register(dialog);
+  }
+
+  setSidebarUiManager(uiManager) {
+    this.#sidebar.setUIManager(uiManager);
   }
 
   showSidebar(annotations) {
@@ -355,9 +360,7 @@ class CommentManager {
       return null; // No color provided.
     }
     const [r, g, b] = getRGB(color);
-    const gray = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
-    const ratio = gray < 0.9 ? Math.round((0.9 - gray) * 100) : 0;
-    return `color-mix(in srgb, ${ratio}% white, ${color})`;
+    return changeLightness(r, g, b);
   }
 
   #setText(text) {
@@ -409,6 +412,7 @@ class CommentManager {
   destroy() {
     this.#uiManager = null;
     this.#finish();
+    this.#sidebar.hide();
   }
 }
 
@@ -434,6 +438,8 @@ class CommentSidebar {
   #elementsToAnnotations = null;
 
   #idsToElements = null;
+
+  #uiManager = null;
 
   constructor(
     {
@@ -472,12 +478,14 @@ class CommentSidebar {
     this.#sidebar.hidden = true;
   }
 
+  setUIManager(uiManager) {
+    this.#uiManager = uiManager;
+  }
+
   show(annotations) {
     this.#elementsToAnnotations = new WeakMap();
     this.#idsToElements = new Map();
-    this.#annotations = annotations = annotations.filter(
-      a => a.popupRef && a.contentsObj?.str
-    );
+    this.#annotations = annotations;
     annotations.sort(this.#sortComments.bind(this));
     if (annotations.length !== 0) {
       const fragment = document.createDocumentFragment();
@@ -621,6 +629,7 @@ class CommentSidebar {
 
   #createCommentElement(annotation) {
     const {
+      id,
       creationDate,
       modificationDate,
       contentsObj: { str: text },
@@ -646,11 +655,11 @@ class CommentSidebar {
     commentItem.addEventListener("keydown", this.#boundCommentKeydown);
 
     this.#elementsToAnnotations.set(commentItem, annotation);
-    this.#idsToElements.set(annotation.id, commentItem);
+    this.#idsToElements.set(id, commentItem);
     return commentItem;
   }
 
-  #commentClick({ currentTarget }) {
+  async #commentClick({ currentTarget }) {
     if (currentTarget.classList.contains("selected")) {
       return;
     }
@@ -658,14 +667,18 @@ class CommentSidebar {
     if (!annotation) {
       return;
     }
-    const { pageIndex, rect } = annotation;
+    const { id, pageIndex, rect } = annotation;
     const SPACE_ABOVE_ANNOTATION = 10;
+    const pageNumber = pageIndex + 1;
+    const pageVisiblePromise = this.#uiManager?.waitForPageRendered(pageNumber);
     this.#linkService?.goToXY(
-      pageIndex + 1,
+      pageNumber,
       rect[0],
       rect[3] + SPACE_ABOVE_ANNOTATION
     );
     this.selectComment(currentTarget);
+    await pageVisiblePromise;
+    this.#uiManager?.showComment(pageIndex, id);
   }
 
   #commentKeydown(e) {
