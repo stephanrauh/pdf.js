@@ -1052,6 +1052,11 @@ class PDFPageView extends BasePDFPageView {
     }
     canvas.width = canvasWidth;
     canvas.height = canvasHeight;
+    
+    // Debug logging for canvas resolution
+    const totalPixels = canvasWidth * canvasHeight;
+    console.log(`[PDFPageView] Rendering page ${this.id}: canvas ${Math.round(canvasWidth)}x${Math.round(canvasHeight)} (${totalPixels.toLocaleString()} pixels), maxCanvasPixels=${this.maxCanvasPixels?.toLocaleString() || 'undefined'}${divisor > 1 ? `, reduced by ${Math.round((divisor / 0.95 - 1) * 100)}%` : ''}`);
+    // end of debug logging
     // end of modification
     const pageWidth = floorToDivide(calcRound(width), sfx[1]);
     const pageHeight = floorToDivide(calcRound(height), sfy[1]);

@@ -60,6 +60,14 @@ async function renderPage( // modified by ngx-extended-pdf-viewer #530
       `Page ${pageNumber}: Reduced the maximum resolution by ${reduction}% because the browser can't render larger canvases. The resolution is now ${dpi} DPI.`
     );
   }
+  
+  // Debug logging for print service canvas resolution
+  const finalCanvasWidth = divisor > 1 ? Math.floor(size.width * PRINT_UNITS) : canvasWidth;
+  const finalCanvasHeight = divisor > 1 ? Math.floor(size.height * PRINT_UNITS) : canvasHeight;
+  const totalPixels = finalCanvasWidth * finalCanvasHeight;
+  const dpi = PRINT_UNITS * PixelsPerInch.PDF;
+  console.log(`[PDFPrintService] Rendering page ${pageNumber} for print: canvas ${finalCanvasWidth}x${finalCanvasHeight} (${totalPixels.toLocaleString()} pixels) at ${Math.round(dpi)} DPI${divisor > 1 ? `, reduced by ${Math.round((divisor - 1) * 100)}%` : ''}`);
+  // end of debug logging
   // #530 end of modification by ngx-extended-pdf-viewer
 
   scratchCanvas.width = Math.floor(size.width * PRINT_UNITS);
