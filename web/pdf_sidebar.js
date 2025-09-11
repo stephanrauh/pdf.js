@@ -512,11 +512,11 @@ class PDFSidebar {
   }
 
   #mouseMove(evt) {
-    let width = evt.clientX;
-    // For sidebar resizing to work correctly in RTL mode, invert the width.
-    if (this.#isRTL) {
-      width = this.outerContainerWidth - width;
-    }
+    // Get the mouse position relative to the outerContainer
+    const containerRect = this.outerContainer.getBoundingClientRect();
+
+    const width = this.#isRTL ? containerRect.right - evt.clientX : evt.clientX - containerRect.left;
+
     this.#updateWidth(width);
   }
 
