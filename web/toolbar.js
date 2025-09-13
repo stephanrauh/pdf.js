@@ -342,6 +342,18 @@ class Toolbar {
 
     eventBus._on("toolbardensity", this.#updateToolbarDensity.bind(this));
 
+    // #2843 modified by ngx-extended-pdf-viewer
+    // Listen for spread mode changes to update zoom dropdown display
+    eventBus._on("spreadmodechanged", () => {
+      this.#updateUIState(false);
+    });
+
+    // Listen for scroll mode (page mode) changes to update zoom dropdown display
+    eventBus._on("scrollmodechanged", () => {
+      this.#updateUIState(false);
+    });
+    // #2843 end of modification by ngx-extended-pdf-viewer
+
     if (editorHighlightColorPicker) {
       eventBus._on("annotationeditoruimanager", ({ uiManager }) => {
         const cp = (this.#colorPicker = new ColorPicker({ uiManager }));
@@ -477,23 +489,36 @@ class Toolbar {
     // #1315 modified by ngx-extended-pdf-viewer
     if (opts.scaleSelect.options) {
       for (const option of opts.scaleSelect.options) {
-        if (option.value !== pageScaleValue) {
+        // #2843 modified by ngx-extended-pdf-viewer
+        // Use numeric comparison with tolerance to handle
+        // floating-point precision issues
+        const optionValue = parseFloat(option.value);
+        const pageScaleValueNum = parseFloat(pageScaleValue);
+        const isNumericMatch = !isNaN(optionValue) && !isNaN(pageScaleValueNum) &&
+                               Math.abs(optionValue - pageScaleValueNum) < 0.0001;
+
+        if (!isNumericMatch && option.value !== pageScaleValue) {
           option.selected = false;
           continue;
         }
+        // #2843 end of modification by ngx-extended-pdf-viewer
         option.selected = true;
         predefinedValueFound = true;
       }
     } // #1315 end of modification by ngx-extended-pdf-viewer
     if (!predefinedValueFound) {
       opts.customScaleOption.selected = true;
-      opts.customScaleOption.setAttribute(
-        "data-l10n-args",
-        JSON.stringify({
-          scale: Math.round(pageScale * 10000) / 100,
-        })
-      );
+      // #2843 modified by ngx-extended-pdf-viewer:
+      // always set the custom value field
     }
+    opts.customScaleOption.setAttribute(
+      "data-l10n-args",
+      JSON.stringify({
+        scale: Math.round(pageScale * 10000) / 100,
+      })
+    );
+    // }
+    // #2843 end of modification by ngx-extended-pdf-viewer
     // modified by ngx-extended-pdf-viewer
     this.eventBus.dispatch("updateuistate", {
       source: this,
