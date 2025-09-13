@@ -512,10 +512,12 @@ class PDFSidebar {
   }
 
   #mouseMove(evt) {
+    // #3016 modified by ngx-extended-pdf-viewer
     // Get the mouse position relative to the outerContainer
     const containerRect = this.outerContainer.getBoundingClientRect();
 
     const width = this.#isRTL ? containerRect.right - evt.clientX : evt.clientX - containerRect.left;
+    // #3016 end of modification by ngx-extended-pdf-viewer
 
     this.#updateWidth(width);
   }

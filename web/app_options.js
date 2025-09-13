@@ -322,7 +322,7 @@ const defaultOptions = {
     value: true,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
-  pdfBackgroundColor: {
+  pdfBackgroundColor: { // #2997 modified by ngx-extended-pdf-viewer
     /** @type {string} */
     value: "",
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
@@ -775,7 +775,7 @@ class AppOptions {
           }
         }
         if (!(typeof userOpt === typeof defaultOpt.value || Type[(typeof userOpt).toUpperCase()] & defaultOpt.type)) {
-          if (!["maxZoom", "minZoom", "passwordPrompt", "defaultZoomValue", "findController", "pdfBackgroundColor"].includes(name)) {
+          if (!["maxZoom", "minZoom", "passwordPrompt", "defaultZoomValue", "findController", "pdfBackgroundColor"].includes(name)) { // #2997 modified by ngx-extended-pdf-viewer
             console.error("Invalid AppOptions value: " + name + " = " + userOpt);
             continue;
           }

@@ -930,7 +930,7 @@ class PDFPageView extends BasePDFPageView {
   }
 
   _getRenderingContext(canvas, transform) {
-    const backgroundColor = AppOptions.get("pdfBackgroundColor");
+    const backgroundColor = AppOptions.get("pdfBackgroundColor"); // #2997 modified by ngx-extended-pdf-viewer
     return {
       canvas,
       transform,
