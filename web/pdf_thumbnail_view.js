@@ -148,7 +148,7 @@ class PDFThumbnailView {
     } else {
       this.createThumbnail(this, linkService, id, container, this.#pageL10nArgs);
     }
-    // end of modification 
+    // end of modification
 
     // #2943 modified by ngx-extended-pdf-viewer
     if (AppOptions.get("enablePageReordering")) {
@@ -325,11 +325,6 @@ class PDFThumbnailView {
     );
     canvas.width = (width * outputScale.sx) | 0;
     canvas.height = (height * outputScale.sy) | 0;
-    
-    // Debug logging for thumbnail canvas resolution
-    const totalPixels = canvas.width * canvas.height;
-    console.log(`[PDFThumbnailView] Rendering thumbnail for page ${this.id}: canvas ${canvas.width}x${canvas.height} (${totalPixels.toLocaleString()} pixels), maxCanvasPixels=${this.maxCanvasPixels?.toLocaleString() || 'undefined'}`);
-    // end of debug logging
 
     const transform = outputScale.scaled
       ? [outputScale.sx, 0, 0, outputScale.sy, 0, 0]
