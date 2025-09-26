@@ -1242,12 +1242,14 @@ appConfig: null,
     if (!this.pdfLoadingTask) {
       return;
     }
+    // #2691 modified by ngx-extended-pdf-viewer
     if (
       (typeof PDFJSDev === "undefined" ||
         PDFJSDev.test("GENERIC && !TESTING")) &&
       this.pdfDocument?.annotationStorage.size > 0 &&
-      this._annotationStorageModified
+      this._hasRealAnnotationChanges()
     ) {
+    // #2691 end of modification by ngx-extended-pdf-viewer
       try {
         // Trigger saving, to prevent data loss in forms; see issue 12257.
         await this.save();
@@ -2177,6 +2179,11 @@ appConfig: null,
   /**
    * @private
    */
+  // #2691 modified by ngx-extended-pdf-viewer
+  // Store initial annotation values to detect real changes
+  _initialAnnotationValues: null,
+  // #2691 end of modification by ngx-extended-pdf-viewer
+
   _initializeAnnotationStorageCallbacks(pdfDocument) {
     if (pdfDocument !== this.pdfDocument) {
       return;
@@ -2201,7 +2208,110 @@ appConfig: null,
       this._hasAnnotationEditors = !!typeStr;
       this.setTitle();
     };
+
+    // #2691 modified by ngx-extended-pdf-viewer
+    // Capture initial form values after pages are loaded and form fields are rendered
+    this.eventBus._on("pagesloaded", () => {
+      // Wait for form fields to be fully initialized and populated
+      setTimeout(() => {
+        this._captureInitialAnnotationValues();
+      }, 200);
+    });
+    // #2691 end of modification by ngx-extended-pdf-viewer
   },
+
+  // #2691 modified by ngx-extended-pdf-viewer
+  /**
+   * Captures the initial state of all annotation storage values
+   * to compare against later for detecting real changes
+   * @private
+   */
+  _captureInitialAnnotationValues() {
+    if (!this.pdfDocument?.annotationStorage) {
+      return;
+    }
+    
+    const annotationStorage = this.pdfDocument.annotationStorage;
+    this._initialAnnotationValues = new Map();
+    
+    // Store deep copies of all current annotation values
+    for (const [key, value] of annotationStorage) {
+      // Create deep copy to avoid reference issues
+      this._initialAnnotationValues.set(key, JSON.parse(JSON.stringify(value)));
+    }
+  },
+
+  /**
+   * Sets the initial annotation values. This is intended to be called by 
+   * ngx-extended-pdf-viewer when formData is provided to override the
+   * PDF's default form values.
+   * @public
+   */
+  setInitialAnnotationValues() {
+    if (!this.pdfDocument?.annotationStorage) {
+      return;
+    }
+    
+    // Clear any existing initial values
+    this._initialAnnotationValues = new Map();
+    
+    // Capture current state as the new initial values
+    const annotationStorage = this.pdfDocument.annotationStorage;
+    for (const [key, value] of annotationStorage) {
+      // Create deep copy to avoid reference issues
+      this._initialAnnotationValues.set(key, JSON.parse(JSON.stringify(value)));
+    }
+  },
+
+  /**
+   * Checks if annotation storage has real changes compared to initial values
+   * @returns {boolean} true if there are real changes, false otherwise
+   * @private
+   */
+  _hasRealAnnotationChanges() {
+    if (!this.pdfDocument?.annotationStorage || !this._initialAnnotationValues) {
+      // If we don't have initial values, fall back to current behavior
+      return this._annotationStorageModified;
+    }
+    
+    const annotationStorage = this.pdfDocument.annotationStorage;
+    const currentValues = new Map();
+    
+    // Get current values
+    for (const [key, value] of annotationStorage) {
+      currentValues.set(key, value);
+    }
+    
+    // Check if sets have different sizes
+    if (currentValues.size !== this._initialAnnotationValues.size) {
+      return true;
+    }
+    
+    // Compare each value
+    for (const [key, currentValue] of currentValues) {
+      const initialValue = this._initialAnnotationValues.get(key);
+      
+      if (!initialValue) {
+        // New annotation that wasn't in initial state
+        return true;
+      }
+      
+      // Deep compare the values
+      if (JSON.stringify(currentValue) !== JSON.stringify(initialValue)) {
+        return true;
+      }
+    }
+    
+    // Check for removed annotations
+    for (const key of this._initialAnnotationValues.keys()) {
+      if (!currentValues.has(key)) {
+        return true;
+      }
+    }
+    
+    return false;
+  },
+  // #2691 end of modification by ngx-extended-pdf-viewer
 
   setInitialView(
     storedHash,
@@ -3683,11 +3793,21 @@ function viewerIsAllowedToCaptureKeyEvent(mainContainer) {
   return true;
 }
 
+// #2691 modified by ngx-extended-pdf-viewer
 function beforeUnload(evt) {
+  // Check if there are real changes compared to initial values
+  if (PDFViewerApplication._hasRealAnnotationChanges && 
+      !PDFViewerApplication._hasRealAnnotationChanges()) {
+    // No real changes detected, allow navigation without confirmation
+    return;
+  }
+  
+  // There are real changes, show confirmation dialog
   evt.preventDefault();
   evt.returnValue = "";
   return false;
 }
+// #2691 end of modification by ngx-extended-pdf-viewer
 
 
 // #2337 modified by ngx-extended-pdf-viewer
