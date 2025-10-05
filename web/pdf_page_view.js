@@ -22,6 +22,7 @@
 /** @typedef {import("./interfaces").IRenderableView} IRenderableView */
 // eslint-disable-next-line max-len
 /** @typedef {import("./pdf_rendering_queue").PDFRenderingQueue} PDFRenderingQueue */
+/** @typedef {import("./comment_manager.js").CommentManager} CommentManager */
 
 import {
   AbortException,
@@ -106,6 +107,7 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  *   the necessary layer-properties.
  * @property {boolean} [enableAutoLinking] - Enable creation of hyperlinks from
  *   text that look like URLs. The default value is `true`.
+ * @property {CommentManager} [commentManager] - The comment manager instance.
  */
 
 const DEFAULT_LAYER_PROPERTIES =
@@ -139,6 +141,8 @@ class PDFPageView extends BasePDFPageView {
   #annotationMode = AnnotationMode.ENABLE_FORMS;
 
   #canvasWrapper = null;
+
+  #commentManager = null;
 
   #enableAutoLinking = true;
 
@@ -201,6 +205,7 @@ class PDFPageView extends BasePDFPageView {
     this.capCanvasAreaFactor =
       options.capCanvasAreaFactor ?? AppOptions.get("capCanvasAreaFactor");
     this.#enableAutoLinking = options.enableAutoLinking !== false;
+    this.#commentManager = options.commentManager || null;
 
     this.l10n = options.l10n;
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
@@ -522,11 +527,9 @@ class PDFPageView extends BasePDFPageView {
       if (!this.annotationLayer) {
         return; // Rendering was cancelled while the textLayerPromise resolved.
       }
-      await this.annotationLayer.injectLinkAnnotations({
-        inferredLinks: Autolinker.processLinks(this),
-        viewport: this.viewport,
-        structTreeLayer: this.structTreeLayer,
-      });
+      await this.annotationLayer.injectLinkAnnotations(
+        Autolinker.processLinks(this)
+      );
     } catch (ex) {
       NgxConsole.error("#injectLinkAnnotations:", ex);
       error = ex;
@@ -804,6 +807,16 @@ class PDFPageView extends BasePDFPageView {
         this.maxCanvasDim,
         this.capCanvasAreaFactor
       );
+      if (this.#needsRestrictedScaling && this.enableDetailCanvas) {
+        // If we are going to have a high-res detail view, further reduce
+        // the canvas resolution to improve rendering performance.
+        // When enableOptimizedPartialRendering is enabled the factor can be
+        // higher since less data will be rendered and it's more acceptable to
+        // have a lower quality (the canvas is exposed less time to the user).
+        const factor = this.enableOptimizedPartialRendering ? 4 : 2;
+        outputScale.sx /= factor;
+        outputScale.sy /= factor;
+      }
     }
   }
 
@@ -929,7 +942,7 @@ class PDFPageView extends BasePDFPageView {
     return canvasWrapper;
   }
 
-  _getRenderingContext(canvas, transform) {
+  _getRenderingContext(canvas, transform, recordOperations) {
     const backgroundColor = AppOptions.get("pdfBackgroundColor"); // #2997 modified by ngx-extended-pdf-viewer
     return {
       canvas,
@@ -941,8 +954,7 @@ class PDFPageView extends BasePDFPageView {
       pageColors: this.pageColors,
       isEditing: this.#isEditing,
       background: backgroundColor || null,
-      recordOperations:
-        this.enableOptimizedPartialRendering && !this.recordedGroups,
+      recordOperations,
     };
   }
 
@@ -1014,6 +1026,7 @@ class PDFPageView extends BasePDFPageView {
         annotationCanvasMap: this._annotationCanvasMap,
         accessibilityManager: this._accessibilityManager,
         annotationEditorUIManager,
+        commentManager: this.#commentManager,
         onAppend: annotationLayerDiv => {
           this.#addLayer(annotationLayerDiv, "annotationLayer");
         },
@@ -1068,12 +1081,17 @@ class PDFPageView extends BasePDFPageView {
       this.#scaleRoundY = sfy[1];
     }
 
+    const recordBBoxes =
+      this.enableOptimizedPartialRendering &&
+      this.#hasRestrictedScaling &&
+      !this.recordedBBoxes;
+
     // Rendering area
     const transform = outputScale.scaled
       ? [outputScale.sx, 0, 0, outputScale.sy, 0, 0]
       : null;
     const resultPromise = this._drawCanvas(
-      this._getRenderingContext(canvas, transform),
+      this._getRenderingContext(canvas, transform, recordBBoxes),
       () => {
         prevCanvas?.remove();
         this._resetCanvas();
@@ -1090,6 +1108,10 @@ class PDFPageView extends BasePDFPageView {
         );
       }
     ).then(async () => {
+      if (this.renderingState !== RenderingStates.FINISHED) {
+        // The rendering has been cancelled.
+        return;
+      }
       this.structTreeLayer ||= new StructTreeLayerBuilder(
         pdfPage,
         viewport.rawDims
@@ -1116,21 +1138,26 @@ class PDFPageView extends BasePDFPageView {
       await this.#renderDrawLayer();
       this.drawLayer.setParent(canvasWrapper);
 
-      this.annotationEditorLayer ||= new AnnotationEditorLayerBuilder({
-        uiManager: annotationEditorUIManager,
-        pdfPage,
-        l10n,
-        structTreeLayer: this.structTreeLayer,
-        accessibilityManager: this._accessibilityManager,
-        annotationLayer: this.annotationLayer?.annotationLayer,
-        textLayer: this.textLayer,
-        drawLayer: this.drawLayer.getDrawLayer(),
-        onAppend: annotationEditorLayerDiv => {
-          this.#addLayer(annotationEditorLayerDiv, "annotationEditorLayer");
-        },
-        eventBus: this.eventBus // #2256 modified by ngx-extended-pdf-viewer
-      });
-      this.#renderAnnotationEditorLayer();
+      if (
+        this.annotationLayer ||
+        this.#annotationMode === AnnotationMode.DISABLE
+      ) {
+        this.annotationEditorLayer ||= new AnnotationEditorLayerBuilder({
+          uiManager: annotationEditorUIManager,
+          pdfPage,
+          l10n,
+          structTreeLayer: this.structTreeLayer,
+          accessibilityManager: this._accessibilityManager,
+          annotationLayer: this.annotationLayer?.annotationLayer,
+          textLayer: this.textLayer,
+          drawLayer: this.drawLayer.getDrawLayer(),
+          onAppend: annotationEditorLayerDiv => {
+            this.#addLayer(annotationEditorLayerDiv, "annotationEditorLayer");
+          },
+          eventBus: this.eventBus // #2256 modified by ngx-extended-pdf-viewer
+        });
+        this.#renderAnnotationEditorLayer();
+      }
     });
 
     if (pdfPage.isPureXfa) {

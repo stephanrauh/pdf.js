@@ -72,6 +72,7 @@ import { BaseStream } from "./base_stream.js";
 import { bidi } from "./bidi.js";
 import { ColorSpace } from "./colorspace.js";
 import { ColorSpaceUtils } from "./colorspace_utils.js";
+import { FontInfo } from "../shared/obj-bin-transform.js";
 import { getFontSubstitution } from "./font_substitutions.js";
 import { getGlyphsUnicode } from "./glyphlist.js";
 import { getMetrics } from "./metrics.js";
@@ -2931,7 +2932,7 @@ class PartialEvaluator {
 
       for (let i = 0, ii = glyphs.length; i < ii; i++) {
         const glyph = glyphs[i];
-        const { category } = glyph;
+        const { category, originalCharCode } = glyph;
 
         if (category.isInvisibleFormatMark) {
           continue;
@@ -2945,6 +2946,10 @@ class PartialEvaluator {
         }
         let scaledDim = glyphWidth * scale;
 
+        if (originalCharCode === 0x20) {
+          charSpacing += textState.wordSpacing;
+        }
+
         if (!keepWhiteSpace && category.isWhitespace) {
           // Don't push a " " in the textContentItem
           // (except when it's between two non-spaces chars),
@@ -2952,13 +2957,13 @@ class PartialEvaluator {
           // compareWithLastPosition.
           // This way we can merge real spaces and spaces due to cursor moves.
           if (!font.vertical) {
-            charSpacing += scaledDim + textState.wordSpacing;
+            charSpacing += scaledDim;
             textState.translateTextMatrix(
               charSpacing * textState.textHScale,
               0
             );
           } else {
-            charSpacing += -scaledDim + textState.wordSpacing;
+            charSpacing += -scaledDim;
             textState.translateTextMatrix(0, -charSpacing);
           }
           saveLastChar(" ");
@@ -3666,8 +3671,24 @@ class PartialEvaluator {
     if (baseEncodingName) {
       properties.defaultEncoding = getEncoding(baseEncodingName);
     } else {
-      const isSymbolicFont = !!(properties.flags & FontFlags.Symbolic);
+      let isSymbolicFont = !!(properties.flags & FontFlags.Symbolic);
       const isNonsymbolicFont = !!(properties.flags & FontFlags.Nonsymbolic);
+
+      // The PDF specs state that the flags Symbolic and Nonsymbolic must be
+      // mutually exclusive. However, some fonts are marked as both.
+      // In that case we ignore the Symbolic flag when there is a Differences
+      // entry (which indicates that the font is used as a non-symbolic
+      // font).
+      if (
+        properties.type === "TrueType" &&
+        isSymbolicFont &&
+        isNonsymbolicFont &&
+        differences.length !== 0
+      ) {
+        properties.flags &= ~FontFlags.Symbolic;
+        isSymbolicFont = false;
+      }
+
       // According to "Table 114" in section "9.6.6.1 General" (under
       // "9.6.6 Character Encoding") of the PDF specification, a Nonsymbolic
       // font should use the `StandardEncoding` if no encoding is specified.
@@ -4698,12 +4719,21 @@ class TranslatedFont {
       return;
     }
     this.#sent = true;
-
-    handler.send("commonobj", [
-      this.loadedName,
-      "Font",
-      this.font.exportData(),
-    ]);
+    const fontData = this.font.exportData();
+    const transfer = [];
+    if (fontData.data) {
+      if (fontData.data.charProcOperatorList) {
+        fontData.charProcOperatorList = fontData.data.charProcOperatorList;
+      }
+      fontData.data = FontInfo.write(fontData.data);
+      transfer.push(fontData.data);
+    }
+    handler.send("commonobj", [this.loadedName, "Font", fontData], transfer);
+    // future path: switch to a SharedArrayBuffer
+    // const sab = new SharedArrayBuffer(data.byteLength);
+    // const view = new Uint8Array(sab);
+    // view.set(new Uint8Array(data));
+    // handler.send("commonobj", [this.loadedName, "Font", sab]);
   }
 
   fallback(handler, evaluatorOptions) {

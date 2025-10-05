@@ -64,8 +64,6 @@ class HighlightEditor extends AnnotationEditor {
 
   #lastPoint = null;
 
-  #opacity;
-
   #outlineId = null;
 
   #text = "";
@@ -108,7 +106,7 @@ class HighlightEditor extends AnnotationEditor {
     super({ ...params, name: "highlightEditor" });
     this.color = params.color || HighlightEditor._defaultColor;
     this.#thickness = params.thickness || HighlightEditor._defaultThickness;
-    this.#opacity = params.opacity || HighlightEditor._defaultOpacity;
+    this.opacity = params.opacity || HighlightEditor._defaultOpacity;
     this.#boxes = params.boxes || null;
     this.#methodOfCreation = params.methodOfCreation || "";
     this.#text = params.text || "";
@@ -167,10 +165,6 @@ class HighlightEditor extends AnnotationEditor {
     };
   }
 
-  get commentColor() {
-    return this.color;
-  }
-
   static computeTelemetryFinalData(data) {
     // We want to know how many colors have been used.
     return { numberOfColors: data.get("color").size };
@@ -192,12 +186,13 @@ class HighlightEditor extends AnnotationEditor {
     );
     this.#focusOutlines = outlinerForOutline.getOutlines();
 
-    // The last point is in the pages coordinate system.
-    const { firstPoint, lastPoint } = this.#focusOutlines;
+    const { firstPoint } = this.#highlightOutlines;
     this.#firstPoint = [
       (firstPoint[0] - this.x) / this.width,
       (firstPoint[1] - this.y) / this.height,
     ];
+    // The last point is in the pages coordinate system.
+    const { lastPoint } = this.#focusOutlines;
     this.#lastPoint = [
       (lastPoint[0] - this.x) / this.width,
       (lastPoint[1] - this.y) / this.height,
@@ -288,11 +283,12 @@ class HighlightEditor extends AnnotationEditor {
       }
     }
 
-    const { firstPoint, lastPoint } = this.#focusOutlines;
+    const { firstPoint } = highlightOutlines;
     this.#firstPoint = [
       (firstPoint[0] - x) / width,
       (firstPoint[1] - y) / height,
     ];
+    const { lastPoint } = this.#focusOutlines;
     this.#lastPoint = [(lastPoint[0] - x) / width, (lastPoint[1] - y) / height];
   }
 
@@ -368,6 +364,18 @@ class HighlightEditor extends AnnotationEditor {
     ];
   }
 
+  /** @inheritdoc */
+  onUpdatedColor() {
+    this.parent?.drawLayer.updateProperties(this.#id, {
+      root: {
+        fill: this.color,
+        "fill-opacity": this.opacity,
+      },
+    });
+    this.#colorPicker?.updateColor(this.color);
+    super.onUpdatedColor();
+  }
+
   /**
    * Update the color and make this action undoable.
    * @param {string} color
@@ -375,17 +383,11 @@ class HighlightEditor extends AnnotationEditor {
   #updateColor(color) {
     const setColorAndOpacity = (col, opa) => {
       this.color = col;
-      this.#opacity = opa;
-      this.parent?.drawLayer.updateProperties(this.#id, {
-        root: {
-          fill: col,
-          "fill-opacity": opa,
-        },
-      });
-      this.#colorPicker?.updateColor(col);
+      this.opacity = opa;
+      this.onUpdatedColor();
     };
     const savedColor = this.color;
-    const savedOpacity = this.#opacity;
+    const savedOpacity = this.opacity;
     this.addCommands({
       cmd: setColorAndOpacity.bind(
         this,
@@ -559,8 +561,7 @@ class HighlightEditor extends AnnotationEditor {
       highlightOutlines: this.#highlightOutlines.getNewOutline(thickness / 2),
     });
     this.fixAndSetPosition();
-    const [parentWidth, parentHeight] = this.parentDimensions;
-    this.setDims(this.width * parentWidth, this.height * parentHeight);
+    this.setDims(this.width, this.height);
   }
 
   #cleanDrawLayer() {
@@ -583,7 +584,7 @@ class HighlightEditor extends AnnotationEditor {
         root: {
           viewBox: "0 0 1 1",
           fill: this.color,
-          "fill-opacity": this.#opacity,
+          "fill-opacity": this.opacity,
         },
         rootClass: {
           highlight: true,
@@ -679,8 +680,7 @@ class HighlightEditor extends AnnotationEditor {
     highlightDiv.setAttribute("aria-hidden", "true");
     highlightDiv.className = "internal";
     highlightDiv.style.clipPath = this.#clipPathId;
-    const [parentWidth, parentHeight] = this.parentDimensions;
-    this.setDims(this.width * parentWidth, this.height * parentHeight);
+    this.setDims(this.width, this.height);
 
     bindEvents(this, this.#highlightDiv, ["pointerover", "pointerleave"]);
     this.enableEditing();
@@ -927,7 +927,10 @@ class HighlightEditor extends AnnotationEditor {
           color,
           opacity,
           popupRef,
+          richText,
           contentsObj,
+          creationDate,
+          modificationDate,
         },
         parent: {
           page: { pageNumber },
@@ -946,7 +949,10 @@ class HighlightEditor extends AnnotationEditor {
         id,
         deleted: false,
         popupRef,
+        richText,
         comment: contentsObj?.str || null,
+        creationDate,
+        modificationDate,
       };
     } else if (data.annotationType && data.annotationType === AnnotationEditorType.HIGHLIGHT) {
       // eslint-disable-next-line prefer-const
@@ -1000,7 +1006,10 @@ class HighlightEditor extends AnnotationEditor {
           color,
           borderStyle: { rawWidth: thickness },
           popupRef,
+          richText,
           contentsObj,
+          creationDate,
+          modificationDate,
         },
         parent: {
           page: { pageNumber },
@@ -1019,7 +1028,10 @@ class HighlightEditor extends AnnotationEditor {
         id,
         deleted: false,
         popupRef,
+        richText,
         comment: contentsObj?.str || null,
+        creationDate,
+        modificationDate,
       };
     }
 
@@ -1027,13 +1039,13 @@ class HighlightEditor extends AnnotationEditor {
     const editor = await super.deserialize(data, parent, uiManager);
 
     editor.color = Util.makeHexColor(...color);
-    editor.#opacity = opacity || 1;
+    editor.opacity = opacity || 1;
     if (inkLists) {
       editor.#thickness = data.thickness;
     }
     editor._initialData = initialData;
     if (data.comment) {
-      editor.setCommentData(data.comment);
+      editor.setCommentData(data);
     }
 
     const [pageWidth, pageHeight] = editor.pageDimensions;
@@ -1114,23 +1126,17 @@ class HighlightEditor extends AnnotationEditor {
       return this.serializeDeleted();
     }
 
-    const rect = this.getPDFRect();
     const color = AnnotationEditor._colorManager.convert(
       this._uiManager.getNonHCMColor(this.color)
     );
-
-    const serialized = {
-      annotationType: AnnotationEditorType.HIGHLIGHT,
+    const serialized = super.serialize(isForCopying);
+    Object.assign(serialized, {
       color,
-      opacity: this.#opacity,
+      opacity: this.opacity,
       thickness: this.#thickness,
       quadPoints: this.#serializeBoxes(),
-      outlines: this.#serializeOutlines(rect),
-      pageIndex: this.pageIndex,
-      rect,
-      rotation: this.#getRotation(),
-      structTreeParentId: this._structTreeParentId,
-    };
+      outlines: this.#serializeOutlines(serialized.rect),
+    });
     this.addComment(serialized);
 
     if (this.annotationElementId && !this.#hasElementChanged(serialized)) {
@@ -1154,13 +1160,10 @@ class HighlightEditor extends AnnotationEditor {
       annotation.hide();
       return null;
     }
-    const params = {
+    annotation.updateEdited({
       rect: this.getPDFRect(),
-    };
-    if (this.hasEditedComment) {
-      params.popup = this.comment;
-    }
-    annotation.updateEdited(params);
+      popup: this.comment,
+    });
 
     return null;
   }

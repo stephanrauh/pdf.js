@@ -1076,28 +1076,54 @@ class AnnotationEditorUIManager {
     return !!this.#commentManager;
   }
 
-  editComment(editor, position) {
-    this.#commentManager?.open(this, editor, position);
+  editComment(editor, posX, posY, options) {
+    this.#commentManager?.showDialog(this, editor, posX, posY, options);
   }
 
-  showComment(pageIndex, uid) {
+  selectComment(pageIndex, uid) {
     const layer = this.#allLayers.get(pageIndex);
     const editor = layer?.getEditorByUID(uid);
-    editor?.showComment();
+    editor?.toggleComment(/* isSelected */ true, /* visibility */ true);
   }
 
-  async waitForPageRendered(pageNumber) {
+  updateComment(editor) {
+    this.#commentManager?.updateComment(editor.getData());
+  }
+
+  updatePopupColor(editor) {
+    this.#commentManager?.updatePopupColor(editor);
+  }
+
+  removeComment(editor) {
+    this.#commentManager?.removeComments([editor.uid]);
+  }
+
+  toggleComment(editor, isSelected, visibility = undefined) {
+    this.#commentManager?.toggleCommentPopup(editor, isSelected, visibility);
+  }
+
+  makeCommentColor(color, opacity) {
+    return (
+      (color && this.#commentManager?.makeCommentColor(color, opacity)) || null
+    );
+  }
+
+  getCommentDialogElement() {
+    return this.#commentManager?.dialogElement || null;
+  }
+
+  async waitForEditorsRendered(pageNumber) {
     if (this.#allLayers.has(pageNumber - 1)) {
       return;
     }
     const { resolve, promise } = Promise.withResolvers();
-    const onPageRendered = evt => {
+    const onEditorsRendered = evt => {
       if (evt.pageNumber === pageNumber) {
-        this._eventBus._off("annotationeditorlayerrendered", onPageRendered);
+        this._eventBus._off("editorsrendered", onEditorsRendered);
         resolve();
       }
     };
-    this._eventBus.on("annotationeditorlayerrendered", onPageRendered);
+    this._eventBus.on("editorsrendered", onEditorsRendered);
     await promise;
   }
 
@@ -1268,6 +1294,26 @@ class AnnotationEditorUIManager {
     }
     this.#floatingToolbar ||= new FloatingToolbar(this);
     this.#floatingToolbar.show(textLayer, boxes, this.direction === "ltr");
+  }
+
+  /**
+   * Some annotations may have been modified in the annotation layer
+   * (e.g. comments added or modified).
+   * So this function retrieves the data from the storage and removes
+   * them from the storage in order to be able to save them later.
+   * @param {string} annotationId
+   * @returns {Object|null} The data associated to the annotation or null.
+   */
+  getAndRemoveDataFromAnnotationStorage(annotationId) {
+    if (!this.#annotationStorage) {
+      return null;
+    }
+    const key = `${AnnotationEditorPrefix}${annotationId}`;
+    const storedValue = this.#annotationStorage.getRawValue(key);
+    if (storedValue) {
+      this.#annotationStorage.remove(key);
+    }
+    return storedValue;
   }
 
   /**
@@ -1854,20 +1900,26 @@ class AnnotationEditorUIManager {
 
     if (this.#mode === AnnotationEditorType.POPUP) {
       this.#commentManager?.hideSidebar();
-      for (const editor of this.#allEditors.values()) {
-        editor.removeStandaloneCommentButton();
-      }
     }
+    this.#commentManager?.destroyPopup();
 
     this.#mode = mode;
     if (mode === AnnotationEditorType.NONE) {
       this.setEditingState(false);
       this.#disableAll();
+      for (const editor of this.#allEditors.values()) {
+        editor.hideStandaloneCommentButton();
+      }
 
       this._editorUndoBar?.hide();
+      this.toggleComment(/* editor = */ null);
 
       this.#updateModeCapability.resolve();
       return;
+    }
+
+    for (const editor of this.#allEditors.values()) {
+      editor.addStandaloneCommentButton();
     }
 
     if (mode === AnnotationEditorType.SIGNATURE) {
@@ -1895,7 +1947,6 @@ class AnnotationEditorUIManager {
         }
         if (hasComment && !deleted) {
           allComments.push(editor.getData());
-          editor.addStandaloneCommentButton();
         }
       }
       for (const annotation of this.#allEditableAnnotations) {
@@ -1924,12 +1975,14 @@ class AnnotationEditorUIManager {
     }
 
     for (const editor of this.#allEditors.values()) {
-      if (editor.annotationElementId === editId || editor.id === editId) {
+      if (editor.uid === editId) {
         this.setSelected(editor);
         if (editComment) {
           editor.editComment();
         } else if (mustEnterInEditMode) {
           editor.enterInEditMode();
+        } else {
+          editor.focus();
         }
       } else {
         editor.unselect();
@@ -2077,16 +2130,14 @@ class AnnotationEditorUIManager {
   /**
    * Get all the editors belonging to a given page.
    * @param {number} pageIndex
-   * @returns {Array<AnnotationEditor>}
+   * @yields {AnnotationEditor}
    */
-  getEditors(pageIndex) {
-    const editors = [];
+  *getEditors(pageIndex) {
     for (const editor of this.#allEditors.values()) {
       if (editor.pageIndex === pageIndex) {
-        editors.push(editor);
+        yield editor;
       }
     }
-    return editors;
   }
 
   /**
@@ -2675,6 +2726,10 @@ class AnnotationEditorUIManager {
    */
   getMode() {
     return this.#mode;
+  }
+
+  isEditingMode() {
+    return this.#mode !== AnnotationEditorType.NONE;
   }
 
   get imageManager() {

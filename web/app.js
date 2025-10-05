@@ -386,6 +386,7 @@ appConfig: null,
         docBaseUrl: x => x,
         enableAltText: x => x === "true",
         enableAutoLinking: x => x === "true",
+        enableComment: x => x === "true",
         enableFakeMLManager: x => x === "true",
         enableGuessAltText: x => x === "true",
         enablePermissions: x => x === "true",
@@ -398,6 +399,7 @@ appConfig: null,
         forcePageColors: x => x === "true",
         pageColorsBackground: x => x,
         pageColorsForeground: x => x,
+        localeProperties: x => ({ lang: x }),
       });
     }
 
@@ -491,14 +493,15 @@ appConfig: null,
     const container = appConfig.mainContainer,
       viewer = appConfig.viewerContainer;
     const annotationEditorMode = AppOptions.get("annotationEditorMode");
-    const pageColors =
+    const hasForcedColors =
       AppOptions.get("forcePageColors") ||
-      window.matchMedia("(forced-colors: active)").matches
-        ? {
-            background: AppOptions.get("pageColorsBackground"),
-            foreground: AppOptions.get("pageColorsForeground"),
-          }
-        : null;
+      window.matchMedia("(forced-colors: active)").matches;
+    const pageColors = hasForcedColors
+      ? {
+          background: AppOptions.get("pageColorsBackground"),
+          foreground: AppOptions.get("pageColorsForeground"),
+        }
+      : null;
 
     let altTextManager;
     if (AppOptions.get("enableUpdatedAddImage")) {
@@ -537,13 +540,21 @@ appConfig: null,
             eventBus
           )
         : null;
+
+    const ltr = appConfig.viewerContainer
+      ? getComputedStyle(appConfig.viewerContainer).direction === "ltr"
+      : true;
     const commentManager =
       AppOptions.get("enableComment") && appConfig.editCommentDialog
         ? new CommentManager(
             appConfig.editCommentDialog,
             {
+              learnMoreUrl: AppOptions.get("commentLearnMoreUrl"),
               sidebar:
                 appConfig.annotationEditorParams?.editorCommentsSidebar || null,
+              sidebarResizer:
+                appConfig.annotationEditorParams
+                  ?.editorCommentsSidebarResizer || null,
               commentsList:
                 appConfig.annotationEditorParams?.editorCommentsSidebarList ||
                 null,
@@ -561,7 +572,9 @@ appConfig: null,
             },
             eventBus,
             linkService,
-            overlayManager
+            overlayManager,
+            ltr,
+            hasForcedColors
           )
         : null;
 
@@ -1452,12 +1465,13 @@ appConfig: null,
       this._saveInProgress = false;
     }
 
-    if (this._hasAnnotationEditors) {
+    const editorStats = this.pdfDocument?.annotationStorage.editorStats;
+    if (editorStats) {
       this.externalServices.reportTelemetry({
         type: "editing",
         data: {
           type: "save",
-          stats: this.pdfDocument?.annotationStorage.editorStats,
+          stats: editorStats,
         },
       });
     }

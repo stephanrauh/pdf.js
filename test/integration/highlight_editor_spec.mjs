@@ -16,6 +16,7 @@
 import {
   awaitPromise,
   closePages,
+  getAnnotationSelector,
   getEditorSelector,
   getFirstSerialized,
   getRect,
@@ -30,6 +31,7 @@ import {
   kbUndo,
   loadAndWait,
   scrollIntoView,
+  selectEditor,
   selectEditors,
   setCaretAt,
   switchToEditor,
@@ -1071,13 +1073,11 @@ describe("Highlight Editor", () => {
     it("must check that an highlight can be left with the keyboard", async () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
-          await switchToHighlight(page);
-
           if (browserName === "chrome") {
-            // Unfortunately, we can't test this on Chrome because we can't set
-            // the caret browsing mode to true.
-            return;
+            pending("Caret browsing mode cannot be used in Chrome.");
           }
+
+          await switchToHighlight(page);
 
           let rect = await getSpanRectFromText(
             page,
@@ -1854,9 +1854,7 @@ describe("Highlight Editor", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           if (navigator.platform.includes("Win")) {
-            // Skip the test on Windows because it permafails.
-            // TODO: Remove this check once #20136 is fixed.
-            return;
+            pending("Fails consistently on Windows (issue #20136).");
           }
 
           await switchToHighlight(page);
@@ -1981,7 +1979,7 @@ describe("Highlight Editor", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           const modeChangedHandle = await waitForAnnotationModeChanged(page);
-          await waitAndClick(page, "[data-annotation-id='687R']", { count: 2 });
+          await waitAndClick(page, getAnnotationSelector("687R"), { count: 2 });
           await awaitPromise(modeChangedHandle);
           await page.waitForSelector("#highlightParamsToolbarContainer");
 
@@ -2022,7 +2020,7 @@ describe("Highlight Editor", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           const modeChangedHandle = await waitForAnnotationModeChanged(page);
-          await waitAndClick(page, "[data-annotation-id='24R']", { count: 2 });
+          await waitAndClick(page, getAnnotationSelector("24R"), { count: 2 });
           await awaitPromise(modeChangedHandle);
           await page.waitForSelector("#highlightParamsToolbarContainer");
 
@@ -2072,7 +2070,7 @@ describe("Highlight Editor", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           const modeChangedHandle = await waitForAnnotationModeChanged(page);
-          await page.click("[data-annotation-id='693R']", { count: 2 });
+          await page.click(getAnnotationSelector("693R"), { count: 2 });
           await awaitPromise(modeChangedHandle);
           await page.waitForSelector("#highlightParamsToolbarContainer");
 
@@ -2860,6 +2858,168 @@ describe("Highlight Editor", () => {
           });
 
           expect(usedColor).withContext(`In ${browserName}`).toEqual("#AB0000");
+        })
+      );
+    });
+  });
+
+  describe("Highlight (edit existing and scroll)", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait(
+        "highlights.pdf",
+        ".annotationEditorLayer",
+        null,
+        null,
+        {
+          highlightEditorColors:
+            "yellow=#FFFF00,green=#00FF00,blue=#0000FF,pink=#FF00FF,red=#FF0102",
+        }
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that no extra annotations are added while in editing mode", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToHighlight(page);
+
+          const editorSelector = getEditorSelector(7);
+          await page.waitForSelector(editorSelector);
+
+          const oneToOne = Array.from(new Array(13).keys(), n => n + 2).concat(
+            Array.from(new Array(13).keys(), n => 13 - n)
+          );
+          for (const pageNumber of oneToOne) {
+            await scrollIntoView(
+              page,
+              `.page[data-page-number = "${pageNumber}"]`
+            );
+          }
+
+          await page.waitForSelector(editorSelector);
+
+          const count = await page.evaluate(
+            () =>
+              document.querySelectorAll(
+                `.page[data-page-number = "1"] .annotationEditorLayer .highlightEditor`
+              ).length
+          );
+          expect(count).withContext(`In ${browserName}`).toEqual(8);
+        })
+      );
+    });
+
+    it("must check that no extra annotations are added while in reading mode", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToHighlight(page);
+
+          const editorSelector = getEditorSelector(7);
+          await page.waitForSelector(editorSelector);
+
+          const oneToThirteen = Array.from(new Array(13).keys(), n => n + 2);
+          const thirteenToOne = Array.from(new Array(13).keys(), n => 13 - n);
+          for (const pageNumber of oneToThirteen) {
+            await scrollIntoView(
+              page,
+              `.page[data-page-number = "${pageNumber}"]`
+            );
+          }
+
+          await switchToHighlight(page, /* disable */ true);
+
+          for (const pageNumber of thirteenToOne) {
+            await scrollIntoView(
+              page,
+              `.page[data-page-number = "${pageNumber}"]`
+            );
+          }
+
+          await page.waitForSelector(
+            `.page[data-page-number = "1"] .annotationEditorLayer.disabled`
+          );
+
+          await page.waitForFunction(
+            () =>
+              document.querySelectorAll(
+                `.page[data-page-number = "1"] .annotationEditorLayer .highlightEditor`
+              ).length === 0
+          );
+        })
+      );
+    });
+  });
+
+  describe("An ink between two highlights and focus", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait(
+        "tracemonkey.pdf",
+        ".annotationEditorLayer",
+        null,
+        null,
+        { highlightEditorColors: "red=#AB0000" }
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that focus move from an editor to an other", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToHighlight(page);
+
+          let rect = await getSpanRectFromText(page, 1, "Languages");
+          await page.mouse.click(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2,
+            { count: 2, delay: 100 }
+          );
+          const editorSelector0 = getEditorSelector(0);
+          await page.waitForSelector(editorSelector0);
+
+          rect = await getSpanRectFromText(page, 1, "Abstract");
+          await page.mouse.click(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2,
+            { count: 2, delay: 100 }
+          );
+          const editorSelector1 = getEditorSelector(1);
+          await page.waitForSelector(editorSelector1);
+
+          await switchToEditor("Ink", page);
+
+          rect = await getSpanRectFromText(
+            page,
+            1,
+            "University of California, Irvine"
+          );
+
+          const clickHandle = await waitForPointerUp(page);
+          await page.mouse.move(rect.x, rect.y);
+          await page.mouse.down();
+          await page.mouse.move(rect.x + 50, rect.y + 50);
+          await page.mouse.up();
+          await awaitPromise(clickHandle);
+
+          await page.keyboard.press("Escape");
+          await page.waitForSelector(
+            ".inkEditor.selectedEditor.draggable.disabled"
+          );
+
+          await selectEditor(page, editorSelector0);
+          for (let i = 0; i < 6; i++) {
+            await page.keyboard.press("Tab", { delay: 100 });
+          }
+          await waitForSelectedEditor(page, editorSelector1);
         })
       );
     });

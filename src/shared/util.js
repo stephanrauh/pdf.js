@@ -376,11 +376,14 @@ function getVerbosityLevel() {
 function info(msg) {
   if (verbosity >= VerbosityLevel.INFOS) {
     if (typeof WorkerGlobalScope !== "undefined" && self instanceof WorkerGlobalScope) { // #804 ngx-extended-pdf-viewer
+      // eslint-disable-next-line no-console
       NgxConsole.log(`Info: ${msg}`);
     } else if (Window && NgxConsole) { // #804 ngx-extended-pdf-viewer
+      // eslint-disable-next-line no-console
       NgxConsole.log(`Info: ${msg}`); // #804 ngx-extended-pdf-viewer
     } else {
-      NgxConsole.log(`Info: ${msg}`);
+      // eslint-disable-next-line no-console
+      console.log(`Info: ${msg}`);
     }
   }
 }
