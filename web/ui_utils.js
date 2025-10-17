@@ -139,6 +139,22 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
       return; // no need to scroll
     }
   }
+
+  // #3055 modified by ngx-extended-pdf-viewer
+  // In horizontal scroll mode, #viewer has the scrollWidth but #viewerContainer
+  // is the actual scrollable element. Check if parent's offsetParent is scrollable.
+  if (parent.id === 'viewer' && parent.offsetParent) {
+    const container = parent.offsetParent;
+    const containerStyle = getComputedStyle(container);
+    if (containerStyle.overflow === 'auto' || containerStyle.overflow === 'scroll' ||
+        containerStyle.overflowX === 'auto' || containerStyle.overflowX === 'scroll') {
+      // Accumulate the offset and use the container as parent
+      offsetY += parent.offsetTop;
+      offsetX += parent.offsetLeft;
+      parent = container;
+    }
+  }
+  // #3055 end of modification
   if (spot) {
     if (spot.top !== undefined) {
       offsetY += spot.top;
