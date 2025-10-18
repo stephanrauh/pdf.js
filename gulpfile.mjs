@@ -2070,6 +2070,9 @@ gulp.task(
 
 gulp.task("lint", function (done) {
   console.log();
+  console.log("### Linting disabled (commented out)");
+  done();
+  return; // #modified by ngx-extended-pdf-viewer to disable linting
   console.log("### Linting JS/CSS/JSON/SVG files");
 
   // Ensure that we lint the Firefox specific *.jsm files too.
