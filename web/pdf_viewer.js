@@ -2475,6 +2475,22 @@ class PDFViewer {
     this._scrollMode = mode;
     this.eventBus.dispatch("scrollmodechanged", { source: this, mode });
 
+    // #2673 modified by ngx-extended-pdf-viewer
+    // When switching to PAGE mode (single page),
+    // reset pageViewMode from infinite-scroll
+    if (mode === ScrollMode.PAGE && this.#pageViewMode === "infinite-scroll") {
+      this.#pageViewMode = "single";
+      this.hidePagesDependingOnpageViewMode();
+      // Notify that we've switched away from infinite-scroll so height can be restored
+      queueMicrotask(() => {
+        this.eventBus.dispatch("pageviewmodechanged", {
+          source: this,
+          mode: this.#pageViewMode
+        });
+      });
+    }
+    // #2673 end of modification by ngx-extended-pdf-viewer
+
     this._updateScrollMode(/* pageNumber = */ this._currentPageNumber);
   }
 
