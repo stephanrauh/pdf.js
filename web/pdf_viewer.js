@@ -2987,6 +2987,7 @@ class PDFViewer {
   }
 
   // #1783 modified by ngx-extended-pdf-viewer
+  // Method added for ngx-extended-pdf-viewer to export editor annotations
   getSerializedAnnotations() {
     const annotationStorage = this.pdfDocument.annotationStorage;
 
@@ -2998,8 +2999,12 @@ class PDFViewer {
     const annotations = [];
 
     for (const [key, annotation] of annotationStorage) {
-      if (annotation && typeof annotation.serialize === 'function') {
-        const serialized = annotation.serialize();
+      if (annotation && typeof annotation.serialize === "function") {
+        // #3038 modified by ngx-extended-pdf-viewer
+        // Use isForCopying=true to ensure plain arrays instead of TypedArrays
+        // for proper JSON serialization
+        const serialized = annotation.serialize(true);
+        // #3038 end of modification by ngx-extended-pdf-viewer
         if (serialized && serialized.annotationType !== undefined) {
           annotations.push(serialized);
         }
@@ -3009,6 +3014,7 @@ class PDFViewer {
     return annotations.length > 0 ? annotations : null;
   }
 
+  // Method added for ngx-extended-pdf-viewer to import editor annotations
   async addEditorAnnotation(data) {
     try {
       // #1783 modified by ngx-extended-pdf-viewer
@@ -3024,11 +3030,60 @@ class PDFViewer {
       data = [data];
     }
 
-    data?.forEach(annotation => (annotation.isCopy = true));
+    // #3038 modified by ngx-extended-pdf-viewer
+    // Convert legacy object-with-numeric-keys format to arrays (backwards compatibility)
+    const convertArrayLikeObjectToArray = (obj) => {
+      if (!obj || typeof obj !== "object" || Array.isArray(obj)) {
+        return obj;
+      }
+      const keys = Object.keys(obj);
+      // Check if all keys are numeric indices
+      if (keys.length > 0 && keys.every(k => /^\d+$/.test(k))) {
+        const arr = [];
+        for (let i = 0; i < keys.length; i++) {
+          arr[i] = obj[i];
+        }
+        return arr;
+      }
+      return obj;
+    };
+
+    let hasLegacyFormat = false;
+    data?.forEach(annotation => {
+      annotation.isCopy = true;
+      // Fix ink editor annotations with legacy format
+      if (annotation.annotationType === 15 && annotation.paths) {
+        if (annotation.paths.lines) {
+          const convertedLines = annotation.paths.lines.map(convertArrayLikeObjectToArray);
+          if (convertedLines.some((line, i) => line !== annotation.paths.lines[i])) {
+            hasLegacyFormat = true;
+            annotation.paths.lines = convertedLines;
+          }
+        }
+        if (annotation.paths.points) {
+          const convertedPoints = annotation.paths.points.map(convertArrayLikeObjectToArray);
+          if (convertedPoints.some((point, i) => point !== annotation.paths.points[i])) {
+            hasLegacyFormat = true;
+            annotation.paths.points = convertedPoints;
+          }
+        }
+      }
+    });
+
+    if (hasLegacyFormat) {
+      NgxConsole.warn(
+        "Detected and converted legacy ink annotation format (object-with-numeric-keys) to arrays. " +
+        "This format was used in ngx-extended-pdf-viewer versions 22.x - 25.5.x. " +
+        "Please re-export or convert your annotations to use the correct format. " +
+        "The objects with numeric keys were always meant to be arrays."
+      );
+    }
+    // #3038 end of modification by ngx-extended-pdf-viewer
 
     await this.#annotationEditorUIManager.addSerializedEditor(data, true, true, false);
   }
 
+  // Method added for ngx-extended-pdf-viewer to remove editor annotations
   removeEditorAnnotations(filter = () => true) {
     this.#annotationEditorUIManager.removeEditors(filter);
   }
