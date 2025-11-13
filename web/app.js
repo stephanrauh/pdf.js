@@ -3655,6 +3655,31 @@ function onKeyDown(evt) {
           this.findBar.close();
           handled = true;
         }
+        // #3074 modified by ngx-extended-pdf-viewer
+        // Close editor params toolbars on Escape
+        if (!handled) {
+          const editorParamsToolbars = [
+            document.getElementById('editorHighlightParamsToolbar'),
+            document.getElementById('editorFreeTextParamsToolbar'),
+            document.getElementById('editorInkParamsToolbar'),
+            document.getElementById('editorStampParamsToolbar'),
+            document.getElementById('editorCommentParamsToolbar'),
+            document.getElementById('editorSignatureParamsToolbar'),
+          ];
+
+          const openToolbar = editorParamsToolbars.find(
+            toolbar => toolbar && !toolbar.classList.contains('hidden')
+          );
+
+          if (openToolbar) {
+            this.eventBus.dispatch('switchannotationeditormode', {
+              source: this,
+              mode: AnnotationEditorType.NONE,
+            });
+            handled = true;
+          }
+        }
+        // #3074 end of modification by ngx-extended-pdf-viewer
         break;
       case 40: // down arrow
         if (this.supportsCaretBrowsingMode) {
