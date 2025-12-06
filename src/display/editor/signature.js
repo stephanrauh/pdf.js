@@ -368,7 +368,7 @@ class SignatureEditor extends DrawingEditor {
   }
 
   /** @inheritdoc */
-  serialize(isForCopying = false) {
+  serialize(isForCopying = false, context = null, includeId = false) {
     if (this.isEmpty()) {
       return null;
     }
@@ -377,7 +377,7 @@ class SignatureEditor extends DrawingEditor {
     const {
       _drawingOptions: { "stroke-width": thickness },
     } = this;
-    const serialized = Object.assign(super.serialize(isForCopying), {
+    const serialized = Object.assign(super.serialize(isForCopying, context), {
       isSignature: true,
       areContours: this.#isExtracted,
       color: [0, 0, 0],
@@ -390,6 +390,12 @@ class SignatureEditor extends DrawingEditor {
       serialized.isCopy = true;
     } else {
       serialized.lines = lines;
+      // #3076 modified by ngx-extended-pdf-viewer
+      // Add ID for signature annotations when exporting
+      if (includeId) {
+        serialized.id = this.uid;
+      }
+      // #3076 end of modification by ngx-extended-pdf-viewer
     }
     if (this.#description) {
       serialized.accessibilityData = { type: "Figure", alt: this.#description };

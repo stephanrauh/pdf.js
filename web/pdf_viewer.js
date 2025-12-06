@@ -3028,8 +3028,8 @@ class PDFViewer {
       if (annotation && typeof annotation.serialize === "function") {
         // #3038 modified by ngx-extended-pdf-viewer
         // Use isForCopying=true to ensure plain arrays instead of TypedArrays
-        // for proper JSON serialization
-        const serialized = annotation.serialize(true);
+        // for proper JSON serialization, but pass includeId=true to get IDs
+        const serialized = annotation.serialize(true, null, true);
         // #3038 end of modification by ngx-extended-pdf-viewer
         if (serialized && serialized.annotationType !== undefined) {
           annotations.push(serialized);

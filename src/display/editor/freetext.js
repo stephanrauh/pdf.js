@@ -235,10 +235,12 @@ class FreeTextEditor extends AnnotationEditor {
       keepUndo: true,
     });
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "fontSizeChanged",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: fontSize,
       previousValue: this.#fontSize,
@@ -273,10 +275,12 @@ class FreeTextEditor extends AnnotationEditor {
       keepUndo: true,
     });
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "colorChanged",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: color,
       previousValue: savedColor,
@@ -523,10 +527,12 @@ class FreeTextEditor extends AnnotationEditor {
     });
     this.#setEditorDimensions();
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "commit",
       page: this.pageIndex + 1,
+      id: this.uid,
       value: newText,
       previousValue: savedText,
     });
@@ -866,7 +872,7 @@ class FreeTextEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
-  serialize(isForCopying = false) {
+  serialize(isForCopying = false, context = null, includeId = false) {
     if (this.isEmpty()) {
       return null;
     }
@@ -878,7 +884,7 @@ class FreeTextEditor extends AnnotationEditor {
     const color = AnnotationEditor._colorManager.convert(
       this.isAttachedToDOM ? getComputedStyle(this.editorDiv).color : this.color
     );
-    const serialized = Object.assign(super.serialize(isForCopying), {
+    const serialized = Object.assign(super.serialize(isForCopying, context), {
       color,
       fontSize: this.#fontSize,
       value: this.#serializeContent(),
@@ -886,8 +892,14 @@ class FreeTextEditor extends AnnotationEditor {
     this.addComment(serialized);
 
     if (isForCopying) {
-      // Don't add the id when copying because the pasted editor mustn't be
+      // #3076 modified by ngx-extended-pdf-viewer
+      // When exporting (includeId=true), add ID even when copying
+      // Don't add the id when copy/pasting because the pasted editor mustn't be
       // linked to an existing annotation.
+      if (includeId) {
+        serialized.id = this.uid;
+      }
+      // #3076 end of modification by ngx-extended-pdf-viewer
       serialized.isCopy = true;
       return serialized;
     }
@@ -896,7 +908,11 @@ class FreeTextEditor extends AnnotationEditor {
       return null;
     }
 
-    serialized.id = this.annotationElementId;
+    // #3076 modified by ngx-extended-pdf-viewer
+    // Use uid instead of annotationElementId to provide unique IDs for both
+    // existing annotations (annotationElementId) and new annotations (this.id)
+    serialized.id = this.uid;
+    // #3076 end of modification by ngx-extended-pdf-viewer
 
     return serialized;
   }

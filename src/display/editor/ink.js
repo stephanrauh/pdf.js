@@ -244,7 +244,7 @@ class InkEditor extends DrawingEditor {
   }
 
   /** @inheritdoc */
-  serialize(isForCopying = false) {
+  serialize(isForCopying = false, context = null, includeId = false) {
     if (this.isEmpty()) {
       return null;
     }
@@ -261,7 +261,7 @@ class InkEditor extends DrawingEditor {
         "stroke-width": thickness,
       },
     } = this;
-    const serialized = Object.assign(super.serialize(isForCopying), {
+    const serialized = Object.assign(super.serialize(isForCopying, context), {
       color: AnnotationEditor._colorManager.convert(stroke),
       opacity,
       thickness,
@@ -273,6 +273,14 @@ class InkEditor extends DrawingEditor {
     this.addComment(serialized);
 
     if (isForCopying) {
+      // #3076 modified by ngx-extended-pdf-viewer
+      // When exporting (includeId=true), add ID even when copying
+      // Don't add the id when copy/pasting because the pasted editor mustn't be
+      // linked to an existing annotation.
+      if (includeId) {
+        serialized.id = this.uid;
+      }
+      // #3076 end of modification by ngx-extended-pdf-viewer
       serialized.isCopy = true;
       return serialized;
     }
@@ -281,7 +289,11 @@ class InkEditor extends DrawingEditor {
       return null;
     }
 
-    serialized.id = this.annotationElementId;
+    // #3076 modified by ngx-extended-pdf-viewer
+    // Use uid instead of annotationElementId to provide unique IDs for both
+    // existing annotations (annotationElementId) and new annotations (this.id)
+    serialized.id = this.uid;
+    // #3076 end of modification by ngx-extended-pdf-viewer
     return serialized;
   }
 

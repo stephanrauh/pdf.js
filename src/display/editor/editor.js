@@ -457,13 +457,16 @@ class AnnotationEditor {
     }
     this.addToAnnotationStorage();
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "commit",
       page: this.pageIndex + 1,
       editorType: this.constructor.name,
       value: this,
+      id: this.uid,
     });
+    // #3076 end of modification by ngx-extended-pdf-viewer
     // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
@@ -597,10 +600,12 @@ class AnnotationEditor {
    */
   _onTranslated(x, y) {
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "moved",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: { x, y },
     });
@@ -916,10 +921,12 @@ class AnnotationEditor {
       return;
     }
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "sizeChanged",
       editorType: this.constructor.name,
+      id: this.uid,
       page: this.pageIndex + 1,
       value: {
         x: savedX,
@@ -1094,10 +1101,12 @@ class AnnotationEditor {
   altTextFinish() {
     this.#altText?.finish();
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "altTextChanged",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: this.#altText,
     });
@@ -1967,10 +1976,12 @@ class AnnotationEditor {
     }
     this.parent = null;
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "removed",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: this,
     });
