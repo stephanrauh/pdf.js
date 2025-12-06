@@ -480,10 +480,12 @@ class StampEditor extends AnnotationEditor {
       action: "inserted_image",
     });
         // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "imageAdded",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: canvas,
       width,
@@ -855,7 +857,7 @@ class StampEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
-  serialize(isForCopying = false, context = null) {
+  serialize(isForCopying = false, context = null, includeId = false) {
     if (this.isEmpty()) {
       return null;
     }
@@ -864,7 +866,7 @@ class StampEditor extends AnnotationEditor {
       return this.serializeDeleted();
     }
 
-    const serialized = Object.assign(super.serialize(isForCopying), {
+    const serialized = Object.assign(super.serialize(isForCopying, context), {
       bitmapId: this.#bitmapId,
       isSvg: this.#isSvg,
     });
@@ -876,6 +878,14 @@ class StampEditor extends AnnotationEditor {
       // hence we serialize the bitmap to a data url.
       serialized.bitmapUrl = this.#serializeBitmap(/* toUrl = */ true);
       serialized.accessibilityData = this.serializeAltText(true);
+      // #3076 modified by ngx-extended-pdf-viewer
+      // When exporting (includeId=true), add ID even when copying
+      // Don't add the id when copy/pasting because the pasted editor mustn't be
+      // linked to an existing annotation.
+      if (includeId) {
+        serialized.id = this.uid;
+      }
+      // #3076 end of modification by ngx-extended-pdf-viewer
       serialized.isCopy = true;
       return serialized;
     }
@@ -896,7 +906,11 @@ class StampEditor extends AnnotationEditor {
         serialized.accessibilityData.structParent =
           this._initialData.structParent ?? -1;
       }
-      serialized.id = this.annotationElementId;
+      // #3076 modified by ngx-extended-pdf-viewer
+      // Use uid instead of annotationElementId to provide unique IDs for both
+      // existing annotations (annotationElementId) and new annotations (this.id)
+      serialized.id = this.uid;
+      // #3076 end of modification by ngx-extended-pdf-viewer
       delete serialized.bitmapId;
       return serialized;
     }

@@ -250,6 +250,7 @@ class DrawingEditor extends AnnotationEditor {
       );
 
       // #2256 modified by ngx-extended-pdf-viewer
+      // #3076 modified by ngx-extended-pdf-viewer - added id field
       if (name === "stroke") {
         this.eventBus?.dispatch("annotation-editor-event", {
           source: this,
@@ -257,6 +258,7 @@ class DrawingEditor extends AnnotationEditor {
           page: this.pageIndex + 1,
           editorType: this.constructor.name,
           value,
+          id: this.uid,
         });
       } else if (name === "stroke-width") {
         this.eventBus?.dispatch("annotation-editor-event", {
@@ -265,6 +267,7 @@ class DrawingEditor extends AnnotationEditor {
           page: this.pageIndex + 1,
           editorType: this.constructor.name,
           value,
+          id: this.uid,
         });
       } else if (name === "stroke-opacity") {
         this.eventBus?.dispatch("annotation-editor-event", {
@@ -273,8 +276,10 @@ class DrawingEditor extends AnnotationEditor {
           page: this.pageIndex + 1,
           editorType: this.constructor.name,
           value,
+          id: this.uid,
         });
       }
+      // #3076 end of modification by ngx-extended-pdf-viewer
       // #2256 end of modification by ngx-extended-pdf-viewer
       if (type === this.colorType) {
         this.onUpdatedColor();
@@ -900,11 +905,13 @@ class DrawingEditor extends AnnotationEditor {
     }
 
     // #2256 modified by ngx-extended-pdf-viewerAdd commentMore actions
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "bezierPathChanged",
       page: this._currentParent ? this._currentParent.pageIndex + 1 : NaN,
       editorType: this.name,
+      id: this.uid,
       // value: editor.getOutlines(),
       // previousValue: currentPath,
     });

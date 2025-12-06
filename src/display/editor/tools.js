@@ -2630,11 +2630,13 @@ class AnnotationEditorUIManager {
         for (const [editor, { newX, newY, newPageIndex, savedX, savedY, savedPageIndex }] of map) { // #2256 modified by ngx-extended-pdf-viewer
           move(editor, newX, newY, newPageIndex);
           // #2256 modified by ngx-extended-pdf-viewer
+          // #3076 modified by ngx-extended-pdf-viewer - added id field
           this._eventBus?.dispatch("annotation-editor-event", {
             source: editor,
             type: "moved",
             page: newPageIndex + 1,
             editorType: editor.constructor.name,
+            id: editor.uid,
             previousValue: {
               x: savedX,
               y: savedY,

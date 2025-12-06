@@ -127,10 +127,12 @@ class HighlightEditor extends AnnotationEditor {
       this.rotate(this.rotation);
     }
     // #2256 / 2556 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "added",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: {
         color: this.color,
@@ -410,10 +412,12 @@ class HighlightEditor extends AnnotationEditor {
       /* mustWait = */ true
     );
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "colorChanged",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: color,
       previousValue: savedColor,
@@ -445,10 +449,12 @@ class HighlightEditor extends AnnotationEditor {
       /* mustWait = */ true
     );
     // #2256 modified by ngx-extended-pdf-viewer
+    // #3076 modified by ngx-extended-pdf-viewer - added id field
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
       type: "thicknessChanged",
       page: this.pageIndex + 1,
+      id: this.uid,
       editorType: this.constructor.name,
       value: thickness,
       previousValue: savedThickness,
@@ -1116,11 +1122,13 @@ class HighlightEditor extends AnnotationEditor {
   }
 
   /** @inheritdoc */
-  serialize(isForCopying = false) {
-    // It doesn't make sense to copy/paste a highlight annotation.
-    if (this.isEmpty() || isForCopying) {
+  serialize(isForCopying = false, context = null, includeId = false) {
+    // #3076 modified by ngx-extended-pdf-viewer
+    // It doesn't make sense to copy/paste a highlight annotation, unless we're exporting
+    if (this.isEmpty() || (isForCopying && !includeId)) {
       return null;
     }
+    // #3076 end of modification by ngx-extended-pdf-viewer
 
     if (this.deleted) {
       return this.serializeDeleted();
@@ -1129,7 +1137,7 @@ class HighlightEditor extends AnnotationEditor {
     const color = AnnotationEditor._colorManager.convert(
       this._uiManager.getNonHCMColor(this.color)
     );
-    const serialized = super.serialize(isForCopying);
+    const serialized = super.serialize(isForCopying, context);
     Object.assign(serialized, {
       color,
       opacity: this.opacity,
@@ -1139,11 +1147,24 @@ class HighlightEditor extends AnnotationEditor {
     });
     this.addComment(serialized);
 
+    // #3076 modified by ngx-extended-pdf-viewer
+    // When exporting with includeId=true, add ID even when isForCopying=true
+    if (isForCopying && includeId) {
+      serialized.id = this.uid;
+      serialized.isCopy = true;
+      return serialized;
+    }
+    // #3076 end of modification by ngx-extended-pdf-viewer
+
     if (this.annotationElementId && !this.#hasElementChanged(serialized)) {
       return null;
     }
 
-    serialized.id = this.annotationElementId;
+    // #3076 modified by ngx-extended-pdf-viewer
+    // Use uid instead of annotationElementId to provide unique IDs for both
+    // existing annotations (annotationElementId) and new annotations (this.id)
+    serialized.id = this.uid;
+    // #3076 end of modification by ngx-extended-pdf-viewer
     return serialized;
   }
 
