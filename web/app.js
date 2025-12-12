@@ -2217,6 +2217,11 @@ appConfig: null,
       if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
         delete this._annotationStorageModified;
       }
+      // #3100 modified by ngx-extended-pdf-viewer
+      // Clear initial annotation values when resetting modified state
+      // This prevents false change detection when switching documents
+      this._initialAnnotationValues = null;
+      // #3100 end of modification by ngx-extended-pdf-viewer
     };
     annotationStorage.onAnnotationEditor = typeStr => {
       this._hasAnnotationEditors = !!typeStr;
