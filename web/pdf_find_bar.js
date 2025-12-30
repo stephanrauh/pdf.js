@@ -235,8 +235,17 @@ class PDFFindBar {
       this.opened = true;
       toggleExpandedBtn(this.toggleButton, true, this.bar);
     }
-    this.findField.select();
-    this.findField.focus();
+    // #3111 modified by ngx-extended-pdf-viewer
+    // Add safety check - findField might not exist if find bar is hidden/not initialized
+    if (this.findField) {
+      if (typeof this.findField.select === 'function') {
+        this.findField.select();
+      }
+      if (typeof this.findField.focus === 'function') {
+        this.findField.focus();
+      }
+    }
+    // #3111 end of modification
     this.dispatchEvent(""); // #206
     this.eventBus.dispatch("findbaropen", { source: this }); // #1773 modified by ngx-extended-pdf-vieweer
   }

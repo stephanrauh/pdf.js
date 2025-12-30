@@ -18,7 +18,6 @@ import {
   Dependencies,
 } from "./canvas_dependency_tracker.js";
 import {
-  DrawOPS,
   FeatureTest,
   FONT_IDENTITY_MATRIX,
   ImageKind,
@@ -33,6 +32,7 @@ import {
 import {
   getCurrentTransform,
   getCurrentTransformInverse,
+  makePathFromDrawOPS,
   OutputScale,
   PixelsPerInch,
 } from "./display_utils.js";
@@ -1489,35 +1489,7 @@ class CanvasGraphics {
     }
 
     if (!(path instanceof Path2D)) {
-      // Using a SVG string is slightly slower than using the following loop.
-      const path2d = (data[0] = new Path2D());
-      for (let i = 0, ii = path.length; i < ii; ) {
-        switch (path[i++]) {
-          case DrawOPS.moveTo:
-            path2d.moveTo(path[i++], path[i++]);
-            break;
-          case DrawOPS.lineTo:
-            path2d.lineTo(path[i++], path[i++]);
-            break;
-          case DrawOPS.curveTo:
-            path2d.bezierCurveTo(
-              path[i++],
-              path[i++],
-              path[i++],
-              path[i++],
-              path[i++],
-              path[i++]
-            );
-            break;
-          case DrawOPS.closePath:
-            path2d.closePath();
-            break;
-          default:
-            warn(`Unrecognized drawing path operator: ${path[i - 1]}`);
-            break;
-        }
-      }
-      path = path2d;
+      path = data[0] = makePathFromDrawOPS(path);
     }
     Util.axialAlignedBoundingBox(
       minMax,
@@ -1843,7 +1815,9 @@ class CanvasGraphics {
   }
 
   setTextMatrix(opIdx, matrix) {
-    this.dependencyTracker?.recordSimpleData("textMatrix", opIdx);
+    this.dependencyTracker
+      ?.resetIncrementalData("sameLineText")
+      .recordSimpleData("textMatrix", opIdx);
     const { current } = this;
     current.textMatrix = matrix;
     current.textMatrixScale = Math.hypot(matrix[0], matrix[1]);
@@ -2088,7 +2062,20 @@ class CanvasGraphics {
     }
 
     let patternFillTransform, patternStrokeTransform;
-    if (current.patternFill) {
+
+    // Only compute pattern transforms if the text rendering mode actually
+    // uses fill/stroke. This avoids expensive pattern calculations each call
+    // when a patternFill/patternStroke is set, but unused.
+    const fillStrokeMode =
+      current.textRenderingMode & TextRenderingMode.FILL_STROKE_MASK;
+    const needsFill =
+      fillStrokeMode === TextRenderingMode.FILL ||
+      fillStrokeMode === TextRenderingMode.FILL_STROKE;
+    const needsStroke =
+      fillStrokeMode === TextRenderingMode.STROKE ||
+      fillStrokeMode === TextRenderingMode.FILL_STROKE;
+
+    if (needsFill && current.patternFill) {
       ctx.save();
       const pattern = current.fillColor.getPattern(
         ctx,
@@ -2102,7 +2089,7 @@ class CanvasGraphics {
       ctx.fillStyle = pattern;
     }
 
-    if (current.patternStroke) {
+    if (needsStroke && current.patternStroke) {
       ctx.save();
       const pattern = current.strokeColor.getPattern(
         ctx,
@@ -2119,12 +2106,7 @@ class CanvasGraphics {
     let lineWidth = current.lineWidth;
     const scale = current.textMatrixScale;
     if (scale === 0 || lineWidth === 0) {
-      const fillStrokeMode =
-        current.textRenderingMode & TextRenderingMode.FILL_STROKE_MASK;
-      if (
-        fillStrokeMode === TextRenderingMode.STROKE ||
-        fillStrokeMode === TextRenderingMode.FILL_STROKE
-      ) {
+      if (needsStroke) {
         lineWidth = this.getSinglePixelWidth();
       }
     } else {

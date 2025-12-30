@@ -27,6 +27,7 @@ import {
   Util,
 } from "pdfjs-lib";
 import { binarySearchFirstItem } from "./ui_utils.js";
+import { Sidebar } from "./sidebar.js";
 
 class CommentManager {
   #dialog;
@@ -141,7 +142,7 @@ class CommentManager {
   }
 }
 
-class CommentSidebar {
+class CommentSidebar extends Sidebar {
   #annotations = null;
 
   #eventBus;
@@ -149,8 +150,6 @@ class CommentSidebar {
   #boundCommentClick = this.#commentClick.bind(this);
 
   #boundCommentKeydown = this.#commentKeydown.bind(this);
-
-  #sidebar;
 
   #closeButton;
 
@@ -174,16 +173,6 @@ class CommentSidebar {
 
   #uiManager = null;
 
-  #minWidth = 0;
-
-  #maxWidth = 0;
-
-  #initialWidth = 0;
-
-  #width = 0;
-
-  #ltr;
-
   constructor(
     {
       learnMoreUrl,
@@ -201,7 +190,11 @@ class CommentSidebar {
     dateFormat,
     ltr
   ) {
-    this.#sidebar = sidebar;
+    super(
+      { sidebar, resizer: sidebarResizer, toggleButton: commentToolbarButton },
+      ltr,
+      /* isResizerOnTheLeft = */ true
+    );
     this.#sidebarTitle = sidebarTitle;
     this.#commentsList = commentsList;
     this.#commentCount = commentCount;
@@ -210,17 +203,8 @@ class CommentSidebar {
     this.#closeButton = closeButton;
     this.#popup = popup;
     this.#dateFormat = dateFormat;
-    this.#ltr = ltr;
     this.#eventBus = eventBus;
 
-    const style = window.getComputedStyle(sidebar);
-    this.#minWidth = parseFloat(style.getPropertyValue("--sidebar-min-width"));
-    this.#maxWidth = parseFloat(style.getPropertyValue("--sidebar-max-width"));
-    this.#initialWidth = this.#width = parseFloat(
-      style.getPropertyValue("--sidebar-width")
-    );
-
-    this.#makeSidebarResizable(sidebarResizer);
     closeButton.addEventListener("click", () => {
       eventBus.dispatch("switchannotationeditormode", {
         source: this,
@@ -238,64 +222,6 @@ class CommentSidebar {
     };
     commentToolbarButton.addEventListener("keydown", keyDownCallback);
     sidebar.addEventListener("keydown", keyDownCallback);
-    this.#sidebar.hidden = true;
-  }
-
-  #makeSidebarResizable(resizer) {
-    let pointerMoveAC;
-    const cancelResize = () => {
-      this.#width = MathClamp(this.#width, this.#minWidth, this.#maxWidth);
-      this.#sidebar.classList.remove("resizing");
-      pointerMoveAC?.abort();
-      pointerMoveAC = null;
-    };
-    resizer.addEventListener("pointerdown", e => {
-      if (pointerMoveAC) {
-        cancelResize();
-        return;
-      }
-      const { clientX } = e;
-      stopEvent(e);
-      let prevX = clientX;
-      pointerMoveAC = new AbortController();
-      const { signal } = pointerMoveAC;
-      const sign = this.#ltr ? -1 : 1;
-      const sidebar = this.#sidebar;
-      const sidebarStyle = sidebar.style;
-      sidebar.classList.add("resizing");
-      const parentStyle = sidebar.parentElement.style;
-      parentStyle.minWidth = 0;
-      window.addEventListener("contextmenu", noContextMenu, { signal });
-      window.addEventListener(
-        "pointermove",
-        ev => {
-          if (!pointerMoveAC) {
-            return;
-          }
-          stopEvent(ev);
-          const { clientX: x } = ev;
-          const newWidth = (this.#width += sign * (x - prevX));
-          prevX = x;
-          if (newWidth > this.#maxWidth || newWidth < this.#minWidth) {
-            return;
-          }
-          sidebarStyle.width = `${newWidth.toFixed(3)}px`;
-          parentStyle.insetInlineStart = `${(this.#initialWidth - newWidth).toFixed(3)}px`;
-        },
-        { signal, capture: true }
-      );
-      window.addEventListener("blur", cancelResize, { signal });
-      window.addEventListener(
-        "pointerup",
-        ev => {
-          if (pointerMoveAC) {
-            cancelResize();
-            stopEvent(ev);
-          }
-        },
-        { signal }
-      );
-    });
   }
 
   setUIManager(uiManager) {
@@ -318,7 +244,7 @@ class CommentSidebar {
     } else {
       this.#setCommentsCount();
     }
-    this.#sidebar.hidden = false;
+    this._sidebar.hidden = false;
     this.#eventBus.dispatch("reporttelemetry", {
       source: this,
       details: {
@@ -329,7 +255,7 @@ class CommentSidebar {
   }
 
   hide() {
-    this.#sidebar.hidden = true;
+    this._sidebar.hidden = true;
     this.#commentsList.replaceChildren();
     this.#elementsToAnnotations = null;
     this.#idsToElements = null;
@@ -356,7 +282,7 @@ class CommentSidebar {
     if (!element) {
       return;
     }
-    this.#sidebar.scrollTop = element.offsetTop - this.#sidebar.offsetTop;
+    this._sidebar.scrollTop = element.offsetTop - this._sidebar.offsetTop;
     for (const el of this.#commentsList.children) {
       el.classList.toggle("selected", el === element);
     }
@@ -392,8 +318,8 @@ class CommentSidebar {
       return;
     }
 
-    this.#setDate(element.firstChild, modificationDate || creationDate);
-    this.#setText(element.lastChild, richText, contentsObj);
+    this.#setDate(element.firstElementChild, modificationDate || creationDate);
+    this.#setText(element.lastElementChild, richText, contentsObj);
 
     this.#annotations.splice(index, 1);
     index = binarySearchFirstItem(
@@ -723,6 +649,15 @@ class CommentDialog {
     textInput.addEventListener("input", () => {
       saveButton.disabled = textInput.value === this.#previousText;
     });
+    textInput.addEventListener("keydown", e => {
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        e.key === "Enter" &&
+        !saveButton.disabled
+      ) {
+        this.#save();
+      }
+    });
 
     // Make the dialog draggable.
     let pointerMoveAC;
@@ -1048,6 +983,7 @@ class CommentPopup {
         },
       });
       this.#editor.comment = null;
+      this.#editor.focus();
       this.destroy();
     });
     del.addEventListener("contextmenu", noContextMenu);
@@ -1233,14 +1169,25 @@ class CommentPopup {
     if (!correctPosition) {
       this.#editor.commentPopupPosition = [x, y];
     } else {
-      const widthRatio =
-        this._popupWidth / this.#editor.parentBoundingClientRect.width;
+      const parentRect = this.#editor.parentBoundingClientRect;
+      const widthRatio = this._popupWidth / parentRect.width;
       if (
         (this.#isLTR && x + widthRatio > 1) ||
         (!this.#isLTR && x - widthRatio >= 0)
       ) {
         const buttonWidth = this.#editor.commentButtonWidth;
         x -= widthRatio - buttonWidth;
+      }
+      const margin = 0.01;
+      if (this.#isLTR) {
+        x = Math.max(x, -parentRect.x / parentRect.width + margin);
+      } else {
+        x = Math.min(
+          x,
+          (window.innerWidth - parentRect.x) / parentRect.width -
+            widthRatio -
+            margin
+        );
       }
     }
     this.#posX = x;

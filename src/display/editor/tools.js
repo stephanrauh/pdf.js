@@ -43,6 +43,87 @@ function bindEvents(obj, element, names) {
 }
 
 /**
+ * Class to store current pointers used by the editor to be able to handle
+ * multiple pointers (e.g. two fingers, a pen, a mouse, ...).
+ */
+class CurrentPointers {
+  // To manage the pointer events.
+
+  // The pointerId  and pointerIds are used to keep track of
+  // the pointers with a same type (e.g. two fingers).
+  static #pointerId = NaN;
+
+  static #pointerIds = null;
+
+  // Track the timestamp to know if the touchmove event is used.
+  static #moveTimestamp = NaN;
+
+  // The pointerType is used to know if we are using a mouse, a pen or a touch.
+  static #pointerType = null;
+
+  static initializeAndAddPointerId(pointerId) {
+    // Store pointer ids. For example, the user is using a second finger.
+    (CurrentPointers.#pointerIds ||= new Set()).add(pointerId);
+  }
+
+  static setPointer(pointerType, pointerId) {
+    CurrentPointers.#pointerId ||= pointerId;
+    CurrentPointers.#pointerType ??= pointerType;
+  }
+
+  static setTimeStamp(timeStamp) {
+    CurrentPointers.#moveTimestamp = timeStamp;
+  }
+
+  static isSamePointerId(pointerId) {
+    return CurrentPointers.#pointerId === pointerId;
+  }
+
+  // Check if it's the same pointer id, otherwise remove it from the set.
+  static isSamePointerIdOrRemove(pointerId) {
+    if (CurrentPointers.#pointerId === pointerId) {
+      return true;
+    }
+
+    CurrentPointers.#pointerIds?.delete(pointerId);
+    return false;
+  }
+
+  static isSamePointerType(pointerType) {
+    return CurrentPointers.#pointerType === pointerType;
+  }
+
+  static isInitializedAndDifferentPointerType(pointerType) {
+    return (
+      CurrentPointers.#pointerType !== null &&
+      !CurrentPointers.isSamePointerType(pointerType)
+    );
+  }
+
+  static isSameTimeStamp(timeStamp) {
+    return CurrentPointers.#moveTimestamp === timeStamp;
+  }
+
+  static isUsingMultiplePointers() {
+    // Check if the user is using multiple fingers
+    return CurrentPointers.#pointerIds?.size >= 1;
+  }
+
+  static clearPointerType() {
+    CurrentPointers.#pointerType = null;
+  }
+
+  static clearPointerIds() {
+    CurrentPointers.#pointerId = NaN;
+    CurrentPointers.#pointerIds = null;
+  }
+
+  static clearTimeStamp() {
+    CurrentPointers.#moveTimestamp = NaN;
+  }
+}
+
+/**
  * Class to create some unique ids for the different editors.
  */
 class IdManager {
@@ -52,6 +133,9 @@ class IdManager {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
       Object.defineProperty(this, "reset", {
         value: () => (this.#id = 0),
+      });
+      Object.defineProperty(this, "getNextId", {
+        value: () => this.#id,
       });
     }
   }
@@ -914,6 +998,9 @@ class AnnotationEditorUIManager {
           this.#idManager.reset();
         },
       });
+      Object.defineProperty(this, "getNextEditorId", {
+        value: () => this.#idManager.getNextId(),
+      });
     }
   }
 
@@ -1539,12 +1626,12 @@ class AnnotationEditorUIManager {
 
   addEditListeners() {
     this.#addKeyboardManager();
-    this.#addCopyPasteListeners();
+    this.setEditingState(true);
   }
 
   removeEditListeners() {
     this.#removeKeyboardManager();
-    this.#removeCopyPasteListeners();
+    this.setEditingState(false);
   }
 
   dragOver(event) {
@@ -1869,6 +1956,8 @@ class AnnotationEditorUIManager {
    * Change the editor mode (None, FreeText, Ink, ...)
    * @param {number} mode
    * @param {string|null} editId
+   * @param {boolean} [isFromUser] - true if the mode change is due to a
+   *   user action.
    * @param {boolean} [isFromKeyboard] - true if the mode change is due to a
    *   keyboard action.
    * @param {boolean} [mustEnterInEditMode] - true if the editor must enter in
@@ -1879,6 +1968,7 @@ class AnnotationEditorUIManager {
   async updateMode(
     mode,
     editId = null,
+    isFromUser = false,
     isFromKeyboard = false,
     mustEnterInEditMode = false,
     editComment = false
@@ -1924,6 +2014,11 @@ class AnnotationEditorUIManager {
 
     if (mode === AnnotationEditorType.SIGNATURE) {
       await this.#signatureManager?.loadSignatures();
+    }
+
+    if (isFromUser) {
+      // reinitialize the pointer type when the mode is changed by the user
+      CurrentPointers.clearPointerType();
     }
 
     this.setEditingState(true);
@@ -2294,7 +2389,7 @@ class AnnotationEditorUIManager {
   setSelected(editor) {
     this.updateToolbar({
       mode: editor.mode,
-      editId: editor.id,
+      editId: editor.uid,
     });
 
     this.#currentDrawingSession?.commitOrRemove();
@@ -2879,5 +2974,6 @@ export {
   bindEvents,
   ColorManager,
   CommandManager,
+  CurrentPointers,
   KeyboardManager,
 };

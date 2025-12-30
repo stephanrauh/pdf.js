@@ -21,14 +21,15 @@ import {
   isInsideNgxExtendedPdfViewer, // #2593 modified by ngx-extended-pdf-viewer
   PresentationModeState,
   SidebarView,
-  toggleCheckedBtn,
   toggleExpandedBtn,
+  toggleSelectedBtn,
 } from "./ui_utils.js";
+import { Menu } from "./menu.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
+import { Sidebar } from "./sidebar.js";
 
-const SIDEBAR_WIDTH_VAR = "--sidebar-width";
-const SIDEBAR_MIN_WIDTH = 200; // pixels
-const SIDEBAR_RESIZING_CLASS = "sidebarResizing";
+const SIDEBAR_WIDTH_VAR = "--viewsManager-width";
+const SIDEBAR_RESIZING_CLASS = "viewsManagerResizing";
 const UI_NOTIFICATION_CLASS = "pdfSidebarNotification";
 
 /**
@@ -68,19 +69,43 @@ const UI_NOTIFICATION_CLASS = "pdfSidebarNotification";
  *   find the current outline item.
  */
 
-class PDFSidebar {
-  #isRTL = false;
-
-  #mouseAC = null;
-
-  #outerContainerWidth = null;
-
-  #width = null;
+class ViewsManager extends Sidebar {
+  static #l10nDescription = null;
 
   /**
    * @param {PDFSidebarOptions} options
    */
-  constructor({ elements, eventBus, l10n }) {
+  constructor({
+    elements: {
+      outerContainer,
+      sidebarContainer,
+      toggleButton,
+      resizer,
+      thumbnailButton,
+      outlineButton,
+      attachmentsButton,
+      layersButton,
+      thumbnailsView,
+      outlinesView,
+      attachmentsView,
+      layersView,
+      viewsManagerCurrentOutlineButton,
+      viewsManagerSelectorButton,
+      viewsManagerSelectorOptions,
+      viewsManagerHeaderLabel,
+    },
+    eventBus,
+    l10n,
+  }) {
+    super(
+      {
+        sidebar: sidebarContainer,
+        resizer,
+        toggleButton,
+      },
+      l10n.getDirection() === "ltr",
+      /* isResizerOnTheLeft = */ false
+    );
     this.isOpen = false;
     this.active = SidebarView.THUMBS;
     this.isInitialViewSet = false;
@@ -93,26 +118,49 @@ class PDFSidebar {
     this.onToggled = null;
     this.onUpdateThumbnails = null;
 
-    this.outerContainer = elements.outerContainer;
-    this.sidebarContainer = elements.sidebarContainer;
-    this.toggleButton = elements.toggleButton;
-    this.resizer = elements.resizer;
+    this.outerContainer = outerContainer;
+    this.sidebarContainer = sidebarContainer;
+    this.toggleButton = toggleButton;
+    this.resizer = resizer;
 
-    this.thumbnailButton = elements.thumbnailButton;
-    this.outlineButton = elements.outlineButton;
-    this.attachmentsButton = elements.attachmentsButton;
-    this.layersButton = elements.layersButton;
+    this.thumbnailButton = thumbnailButton;
+    this.outlineButton = outlineButton;
+    this.attachmentsButton = attachmentsButton;
+    this.layersButton = layersButton;
 
-    this.thumbnailView = elements.thumbnailView;
-    this.outlineView = elements.outlineView;
-    this.attachmentsView = elements.attachmentsView;
-    this.layersView = elements.layersView;
+    this.thumbnailsView = thumbnailsView;
+    this.outlinesView = outlinesView;
+    this.attachmentsView = attachmentsView;
+    this.layersView = layersView;
 
-    this._currentOutlineItemButton = elements.currentOutlineItemButton;
+    this.viewsManagerCurrentOutlineButton = viewsManagerCurrentOutlineButton;
+    this.viewsManagerHeaderLabel = viewsManagerHeaderLabel;
 
     this.eventBus = eventBus;
 
-    this.#isRTL = l10n.getDirection() === "rtl";
+    // #modified by ngx-extended-pdf-viewer
+    // PDF.js v5.4.530 introduced a new Menu component for view selector
+    // ngx-extended-pdf-viewer's HTML doesn't include these elements yet, so we conditionally create the menu
+    if (viewsManagerSelectorOptions && viewsManagerSelectorButton) {
+      this.menu = new Menu(
+        viewsManagerSelectorOptions,
+        viewsManagerSelectorButton,
+        [thumbnailButton, outlineButton, attachmentsButton, layersButton]
+      );
+    } else {
+      this.menu = null;
+    }
+    // #end of modification by ngx-extended-pdf-viewer
+
+    ViewsManager.#l10nDescription ||= Object.freeze({
+      pagesTitle: "pdfjs-views-manager-pages-title",
+      outlinesTitle: "pdfjs-views-manager-outlines-title",
+      attachmentsTitle: "pdfjs-views-manager-attachments-title",
+      layersTitle: "pdfjs-views-manager-layers-title",
+      notificationButton: "pdfjs-toggle-views-manager-notification-button",
+      toggleButton: "pdfjs-toggle-views-manager-button",
+    });
+
     this.#addEventListeners();
   }
 
@@ -123,15 +171,21 @@ class PDFSidebar {
     this.#hideUINotification(/* reset = */ true);
     this.switchView(SidebarView.THUMBS);
 
-    this.outlineButton.disabled = false;
-    this.attachmentsButton.disabled = false;
-    this.layersButton.disabled = false;
+    this.outlineButton.disabled =
+      this.attachmentsButton.disabled =
+      this.layersButton.disabled =
+        false;
     // modified by ngx-extended-pdf-viewer
     this.outlineButton.hidden = false;
     this.attachmentsButton.hidden = false;
     this.layersButton.hidden = false;
     // end of modification
-    this._currentOutlineItemButton.disabled = true;
+    // #modified by ngx-extended-pdf-viewer
+    // viewsManagerCurrentOutlineButton may not exist in older HTML, add null check
+    if (this.viewsManagerCurrentOutlineButton) {
+      this.viewsManagerCurrentOutlineButton.disabled = true;
+    }
+    // #end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -175,6 +229,7 @@ class PDFSidebar {
   switchView(view, forceOpen = false) {
     const isViewChanged = view !== this.active;
     let forceRendering = false;
+    let titleL10nId = null;
 
     switch (view) {
       case SidebarView.NONE:
@@ -183,21 +238,25 @@ class PDFSidebar {
         }
         return; // Closing will trigger rendering and dispatch the event.
       case SidebarView.THUMBS:
+        titleL10nId = "pagesTitle";
         if (this.isOpen && isViewChanged) {
           forceRendering = true;
         }
         break;
       case SidebarView.OUTLINE:
+        titleL10nId = "outlinesTitle";
         if (this.outlineButton.disabled) {
           return;
         }
         break;
       case SidebarView.ATTACHMENTS:
+        titleL10nId = "attachmentsTitle";
         if (this.attachmentsButton.disabled) {
           return;
         }
         break;
       case SidebarView.LAYERS:
+        titleL10nId = "layersTitle";
         if (this.layersButton.disabled) {
           return;
         }
@@ -206,27 +265,41 @@ class PDFSidebar {
         NgxConsole.error(`PDFSidebar.switchView: "${view}" is not a valid view.`);
         return;
     }
+
+    // #modified by ngx-extended-pdf-viewer
+    // These elements may not exist in ngx-extended-pdf-viewer's HTML, add null checks for backward compatibility
+    if (this.viewsManagerCurrentOutlineButton) {
+      this.viewsManagerCurrentOutlineButton.hidden = view !== SidebarView.OUTLINE;
+    }
+    if (this.viewsManagerHeaderLabel) {
+      this.viewsManagerHeaderLabel.setAttribute(
+        "data-l10n-id",
+        ViewsManager.#l10nDescription[titleL10nId] || ""
+      );
+    }
+    // #end of modification by ngx-extended-pdf-viewer
+
     // Update the active view *after* it has been validated above,
     // in order to prevent setting it to an invalid state.
     this.active = view;
 
     // Update the CSS classes (and aria attributes), for all buttons and views.
-    toggleCheckedBtn(
+    toggleSelectedBtn(
       this.thumbnailButton,
       view === SidebarView.THUMBS,
-      this.thumbnailView
+      this.thumbnailsView
     );
-    toggleCheckedBtn(
+    toggleSelectedBtn(
       this.outlineButton,
       view === SidebarView.OUTLINE,
-      this.outlineView
+      this.outlinesView
     );
-    toggleCheckedBtn(
+    toggleSelectedBtn(
       this.attachmentsButton,
       view === SidebarView.ATTACHMENTS,
       this.attachmentsView
     );
-    toggleCheckedBtn(
+    toggleSelectedBtn(
       this.layersButton,
       view === SidebarView.LAYERS,
       this.layersView
@@ -250,10 +323,20 @@ class PDFSidebar {
       return;
     }
     this.isOpen = true;
+    this.onResizing(this.width);
+    this._sidebar.hidden = false;
     toggleExpandedBtn(this.toggleButton, true);
+    this.switchView(this.active);
 
-    this.outerContainer.classList.add("sidebarMoving", "sidebarOpen");
-
+    // Changing `hidden` above may cause a reflow which would prevent the
+    // CSS transition from being applied correctly, so we need to delay
+    // adding the relevant CSS classes.
+    queueMicrotask(() => {
+      this.outerContainer.classList.add(
+        "viewsManagerMoving",
+        "viewsManagerOpen"
+      );
+    });
     if (this.active === SidebarView.THUMBS) {
       this.onUpdateThumbnails();
     }
@@ -268,10 +351,11 @@ class PDFSidebar {
       return;
     }
     this.isOpen = false;
+    this._sidebar.hidden = true;
     toggleExpandedBtn(this.toggleButton, false);
 
-    this.outerContainer.classList.add("sidebarMoving");
-    this.outerContainer.classList.remove("sidebarOpen");
+    this.outerContainer.classList.add("viewsManagerMoving");
+    this.outerContainer.classList.remove("viewsManagerOpen");
 
     this.onToggled();
     this.#dispatchEvent();
@@ -283,6 +367,7 @@ class PDFSidebar {
   }
 
   toggle(evt = null) {
+    super.toggle();
     if (this.isOpen) {
       this.close(evt);
     } else {
@@ -304,7 +389,7 @@ class PDFSidebar {
   #showUINotification() {
     this.toggleButton.setAttribute(
       "data-l10n-id",
-      "pdfjs-toggle-sidebar-notification-button"
+      ViewsManager.#l10nDescription.notificationButton
     );
 
     if (!this.isOpen) {
@@ -324,7 +409,7 @@ class PDFSidebar {
     if (reset) {
       this.toggleButton.setAttribute(
         "data-l10n-id",
-        "pdfjs-toggle-sidebar-button"
+        ViewsManager.#l10nDescription.toggleButton
       );
     }
   }
@@ -332,50 +417,45 @@ class PDFSidebar {
   #addEventListeners() {
     const { eventBus, outerContainer } = this;
 
-    this.sidebarContainer.addEventListener("transitionend", evt => {
+    // #modified by ngx-extended-pdf-viewer
+    // Add null checks for all elements to support ngx-extended-pdf-viewer's custom HTML
+    // which may not have all the new viewsManager elements
+    this.sidebarContainer?.addEventListener("transitionend", evt => {
       if (evt.target === this.sidebarContainer) {
-        outerContainer.classList.remove("sidebarMoving");
+        outerContainer.classList.remove("viewsManagerMoving");
         // Ensure that rendering is triggered after opening/closing the sidebar.
         eventBus.dispatch("resize", { source: this });
       }
     });
 
-    // #2593 modified by ngx-extended-pdf-viewer
-    // the toggle button is already handled by the TypeScript code
-    if (!isInsideNgxExtendedPdfViewer(this.toggleButton)) {
-     this.toggleButton.addEventListener("click", evt => {
-      this.toggle(evt);
-     });
-    }
-    // #2593 end of modification by ngx-extended-pdf-viewer
-
     // Buttons for switching views.
-    this.thumbnailButton.addEventListener("click", () => {
+    this.thumbnailButton?.addEventListener("click", () => {
       this.switchView(SidebarView.THUMBS);
     });
 
-    this.outlineButton.addEventListener("click", () => {
+    this.outlineButton?.addEventListener("click", () => {
       this.switchView(SidebarView.OUTLINE);
     });
-    this.outlineButton.addEventListener("dblclick", () => {
+    this.outlineButton?.addEventListener("dblclick", () => {
       eventBus.dispatch("toggleoutlinetree", { source: this });
     });
 
-    this.attachmentsButton.addEventListener("click", () => {
+    this.attachmentsButton?.addEventListener("click", () => {
       this.switchView(SidebarView.ATTACHMENTS);
     });
 
-    this.layersButton.addEventListener("click", () => {
+    this.layersButton?.addEventListener("click", () => {
       this.switchView(SidebarView.LAYERS);
     });
-    this.layersButton.addEventListener("dblclick", () => {
+    this.layersButton?.addEventListener("dblclick", () => {
       eventBus.dispatch("resetlayers", { source: this });
     });
 
     // Buttons for view-specific options.
-    this._currentOutlineItemButton.addEventListener("click", () => {
+    this.viewsManagerCurrentOutlineButton?.addEventListener("click", () => {
       eventBus.dispatch("currentoutlineitem", { source: this });
     });
+    // #end of modification by ngx-extended-pdf-viewer
 
     // Disable/enable views.
     const onTreeLoaded = (count, button, view) => {
@@ -396,17 +476,17 @@ class PDFSidebar {
     eventBus._on("outlineloaded", evt => {
       onTreeLoaded(evt.outlineCount, this.outlineButton, SidebarView.OUTLINE);
 
-      if (evt.enableCurrentOutlineItemButton) {
-        // #645 modified by ngx-extended-pdf-viewer
-        if (evt.currentOutlineItemPromise) { // #645 modified by ngx-extended-pdf-viewer
-	      	evt.currentOutlineItemPromise.then(enabled => {
-            if (!this.isInitialViewSet) {
-              return;
-            }
-            this._currentOutlineItemButton.disabled = !enabled;
-          });
-        } // #645 modified by ngx-extended-pdf-viewer
-      }
+      evt.currentOutlineItemPromise.then(enabled => {
+        if (!this.isInitialViewSet) {
+          return;
+        }
+        // #modified by ngx-extended-pdf-viewer
+        // viewsManagerCurrentOutlineButton may not exist, add null check for backward compatibility
+        if (this.viewsManagerCurrentOutlineButton) {
+          this.viewsManagerCurrentOutlineButton.disabled = !enabled;
+        }
+        // #end of modification by ngx-extended-pdf-viewer
+      });
     });
 
     eventBus._on("attachmentsloaded", evt => {
@@ -430,107 +510,20 @@ class PDFSidebar {
         this.onUpdateThumbnails();
       }
     });
-
-    // Handle resizing of the sidebar.
-    this.resizer.addEventListener("mousedown", evt => {
-      if (evt.button !== 0) {
-        return;
-      }
-      // Disable the `transition-duration` rules when sidebar resizing begins,
-      // in order to improve responsiveness and to avoid visual glitches.
-      outerContainer.classList.add(SIDEBAR_RESIZING_CLASS);
-
-      this.#mouseAC = new AbortController();
-      const opts = { signal: this.#mouseAC.signal };
-
-      window.addEventListener("mousemove", this.#mouseMove.bind(this), opts);
-      window.addEventListener("mouseup", this.#mouseUp.bind(this), opts);
-      window.addEventListener("blur", this.#mouseUp.bind(this), opts);
-    });
-
-    eventBus._on("resize", evt => {
-      // When the *entire* viewer is resized, such that it becomes narrower,
-      // ensure that the sidebar doesn't end up being too wide.
-      if (evt.source !== window) {
-        return;
-      }
-      // Always reset the cached width when the viewer is resized.
-      this.#outerContainerWidth = null;
-
-      if (!this.#width) {
-        // The sidebar hasn't been resized, hence no need to adjust its width.
-        return;
-      }
-      // NOTE: If the sidebar is closed, we don't need to worry about
-      //       visual glitches nor ensure that rendering is triggered.
-      if (!this.isOpen) {
-        this.#updateWidth(this.#width);
-        return;
-      }
-      outerContainer.classList.add(SIDEBAR_RESIZING_CLASS);
-      const updated = this.#updateWidth(this.#width);
-
-      Promise.resolve().then(() => {
-        outerContainer.classList.remove(SIDEBAR_RESIZING_CLASS);
-        // Trigger rendering if the sidebar width changed, to avoid
-        // depending on the order in which 'resize' events are handled.
-        if (updated) {
-          eventBus.dispatch("resize", { source: this });
-        }
-      });
-    });
   }
 
-  /**
-   * @type {number}
-   */
-  get outerContainerWidth() {
-    return (this.#outerContainerWidth ||= this.outerContainer.clientWidth);
+  onStartResizing() {
+    this.outerContainer.classList.add(SIDEBAR_RESIZING_CLASS);
   }
 
-  /**
-   * returns {boolean} Indicating if the sidebar width was updated.
-   */
-  #updateWidth(width = 0) {
-    // Prevent the sidebar from becoming too narrow, or from occupying more
-    // than half of the available viewer width.
-    const maxWidth = Math.floor(this.outerContainerWidth / 2);
-    if (width > maxWidth) {
-      width = maxWidth;
-    }
-    if (width < SIDEBAR_MIN_WIDTH) {
-      width = SIDEBAR_MIN_WIDTH;
-    }
-    // Only update the UI when the sidebar width did in fact change.
-    if (width === this.#width) {
-      return false;
-    }
-    this.#width = width;
-
-    docStyle.setProperty(SIDEBAR_WIDTH_VAR, `${width}px`);
-    return true;
-  }
-
-  #mouseMove(evt) {
-    // #3016 modified by ngx-extended-pdf-viewer
-    // Get the mouse position relative to the outerContainer
-    const containerRect = this.outerContainer.getBoundingClientRect();
-
-    const width = this.#isRTL ? containerRect.right - evt.clientX : evt.clientX - containerRect.left;
-    // #3016 end of modification by ngx-extended-pdf-viewer
-
-    this.#updateWidth(width);
-  }
-
-  #mouseUp(evt) {
-    // Re-enable the `transition-duration` rules when sidebar resizing ends...
-    this.outerContainer.classList.remove(SIDEBAR_RESIZING_CLASS);
-    // ... and ensure that rendering will always be triggered.
+  onStopResizing() {
     this.eventBus.dispatch("resize", { source: this });
+    this.outerContainer.classList.remove(SIDEBAR_RESIZING_CLASS);
+  }
 
-    this.#mouseAC?.abort();
-    this.#mouseAC = null;
+  onResizing(newWidth) {
+    docStyle.setProperty(SIDEBAR_WIDTH_VAR, `${newWidth}px`);
   }
 }
 
-export { PDFSidebar };
+export { ViewsManager };

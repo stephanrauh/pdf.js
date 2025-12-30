@@ -41,6 +41,11 @@ import {
   lookupNormalRect,
 } from "./core_utils.js";
 import {
+  FontInfo,
+  FontPathInfo,
+  PatternInfo,
+} from "../shared/obj-bin-transform.js";
+import {
   getEncoding,
   MacRomanEncoding,
   StandardEncoding,
@@ -72,7 +77,6 @@ import { BaseStream } from "./base_stream.js";
 import { bidi } from "./bidi.js";
 import { ColorSpace } from "./colorspace.js";
 import { ColorSpaceUtils } from "./colorspace_utils.js";
-import { FontInfo } from "../shared/obj-bin-transform.js";
 import { getFontSubstitution } from "./font_substitutions.js";
 import { getGlyphsUnicode } from "./glyphlist.js";
 import { getMetrics } from "./metrics.js";
@@ -1522,7 +1526,10 @@ class PartialEvaluator {
     localShadingPatternCache.set(shading, id);
 
     if (this.parsingType3Font) {
-      this.handler.send("commonobj", [id, "Pattern", patternIR]);
+      const transfers = [];
+      const patternBuffer = PatternInfo.write(patternIR);
+      transfers.push(patternBuffer);
+      this.handler.send("commonobj", [id, "Pattern", patternBuffer], transfers);
     } else {
       this.handler.send("obj", [id, this.pageIndex, "Pattern", patternIR]);
     }
@@ -3586,7 +3593,7 @@ class PartialEvaluator {
     if (properties.composite) {
       // CIDSystemInfo helps to match CID to glyphs
       const cidSystemInfo = dict.get("CIDSystemInfo");
-      if (cidSystemInfo instanceof Dict) {
+      if (cidSystemInfo instanceof Dict && !properties.cidSystemInfo) {
         properties.cidSystemInfo = {
           registry: stringToPDFString(cidSystemInfo.get("Registry")),
           ordering: stringToPDFString(cidSystemInfo.get("Ordering")),
@@ -3666,6 +3673,51 @@ class PartialEvaluator {
     // symbol fonts (fixes issue16464.pdf).
     if (baseEncodingName && nonEmbeddedFont && isSymbolsFontName) {
       baseEncodingName = null;
+    }
+
+    // Ignore incorrectly specified WinAnsiEncoding for non-embedded CJK fonts
+    // (fixes issue20489). Some chinese fonts often have WinAnsiEncoding in the
+    // PDF even though they should use Identity-H or GB-EUC-H encoding.
+    if (
+      baseEncodingName === "WinAnsiEncoding" &&
+      nonEmbeddedFont &&
+      properties.name?.charCodeAt(0) >= 0xb7
+    ) {
+      const fontName = properties.name;
+      // This list is built from some names from Pdfium and mupdf:
+      //  - https://pdfium.googlesource.com/pdfium/+/master/core/fpdfapi/font/cpdf_font.cpp#41
+      //  - https://fossies.org/linux/mupdf/source/pdf/pdf-font.c#l_820
+      const chineseFontNames = [
+        "\xCB\xCE\xCC\xE5", // SimSun
+        "\xBA\xDA\xCC\xE5", // SimHei
+        "\xBF\xAC\xCC\xE5", // SimKai
+        "\xB7\xC2\xCB\xCE", // SimFang
+        "\xBF\xAC\xCC\xE5_GB2312", // SimKai
+        "\xB7\xC2\xCB\xCE_GB2312", // SimFang
+        "\xC1\xA5\xCA\xE9", // SimLi
+        "\xD0\xC2\xCB\xCE", // SimSun
+      ];
+
+      // Check for common Chinese font names and their GBK-encoded equivalents
+      // (which may appear as Latin-1 when incorrectly decoded).
+      if (chineseFontNames.includes(fontName)) {
+        baseEncodingName = null;
+        properties.defaultEncoding = "Adobe-GB1-UCS2";
+        properties.composite = true;
+        properties.cidEncoding = Name.get("GBK-EUC-H");
+        const cMap = await CMapFactory.create({
+          encoding: properties.cidEncoding,
+          fetchBuiltInCMap: this._fetchBuiltInCMapBound,
+          useCMap: null,
+        });
+        properties.cMap = cMap;
+        properties.vertical = properties.cMap.vertical;
+        properties.cidSystemInfo = {
+          registry: "Adobe",
+          ordering: "GB1",
+          supplement: 0,
+        };
+      }
     }
 
     if (baseEncodingName) {
@@ -4289,7 +4341,7 @@ class PartialEvaluator {
       hash.update(`${firstChar}-${lastChar}`); // Fixes issue10665_reduced.pdf
 
       if (toUnicode instanceof BaseStream) {
-        const stream = toUnicode.str || toUnicode;
+        const stream = toUnicode.stream || toUnicode;
         const uint8array = stream.buffer
           ? new Uint8Array(stream.buffer.buffer, 0, stream.bufferLength)
           : new Uint8Array(
@@ -4665,11 +4717,8 @@ class PartialEvaluator {
         if (font.renderer.hasBuiltPath(fontChar)) {
           return;
         }
-        handler.send("commonobj", [
-          glyphName,
-          "FontPath",
-          font.renderer.getPathJs(fontChar),
-        ]);
+        const buffer = FontPathInfo.write(font.renderer.getPathJs(fontChar));
+        handler.send("commonobj", [glyphName, "FontPath", buffer], [buffer]);
       } catch (reason) {
         if (evaluatorOptions.ignoreErrors) {
           warn(`buildFontPaths - ignoring ${glyphName} glyph: "${reason}".`);

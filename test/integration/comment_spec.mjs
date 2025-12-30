@@ -15,31 +15,28 @@
 
 import {
   awaitPromise,
+  clearInput,
   closePages,
   createPromise,
   dragAndDrop,
   getEditorSelector,
   getRect,
-  getSpanRectFromText,
+  highlightSpan,
+  kbModifierDown,
+  kbModifierUp,
   loadAndWait,
   scrollIntoView,
   selectEditor,
   switchToEditor,
   waitAndClick,
   waitForSerialized,
+  waitForTimeout,
 } from "./test_utils.mjs";
 
 const switchToHighlight = switchToEditor.bind(null, "Highlight");
 const switchToStamp = switchToEditor.bind(null, "Stamp");
 const switchToComment = switchToEditor.bind(null, "Comment");
-
-const highlightSpan = async (page, pageIndex, text) => {
-  const rect = await getSpanRectFromText(page, pageIndex, text);
-  const x = rect.x + rect.width / 2;
-  const y = rect.y + rect.height / 2;
-  await page.mouse.click(x, y, { count: 2, delay: 100 });
-  await page.waitForSelector(getEditorSelector(0));
-};
+const switchToFreeText = switchToEditor.bind(null, "FreeText");
 
 const editComment = async (page, editorSelector, comment) => {
   const commentButtonSelector = `${editorSelector} button.comment`;
@@ -80,16 +77,7 @@ describe("Comment", () => {
           await switchToHighlight(page);
 
           await scrollIntoView(page, ".textLayer span:last-of-type");
-          const rect = await getSpanRectFromText(page, 1, "...");
-          const x = rect.x + rect.width / 2;
-          const y = rect.y + rect.height / 2;
-          // Here and elsewhere, we add a small delay between press and release
-          // to make sure that a pointerup event is triggered after
-          // selectionchange.
-          // It works with a value of 1ms, but we use 100ms to be sure.
-          await page.mouse.click(x, y, { count: 2, delay: 100 });
-          await page.waitForSelector(getEditorSelector(0));
-
+          await highlightSpan(page, 1, "...");
           const commentButtonSelector = `${getEditorSelector(0)} button.comment`;
           await waitAndClick(page, commentButtonSelector);
 
@@ -135,12 +123,7 @@ describe("Comment", () => {
           await switchToHighlight(page);
 
           await scrollIntoView(page, ".textLayer span:nth-of-type(4)");
-          const rect = await getSpanRectFromText(page, 1, "World");
-          const x = rect.x + rect.width / 2;
-          const y = rect.y + rect.height / 2;
-          await page.mouse.click(x, y, { count: 2, delay: 100 });
-          await page.waitForSelector(getEditorSelector(0));
-
+          await highlightSpan(page, 1, "World");
           const commentButtonSelector = `${getEditorSelector(0)} button.comment`;
           await waitAndClick(page, commentButtonSelector);
 
@@ -270,7 +253,7 @@ describe("Comment", () => {
       pages = await loadAndWait(
         "tracemonkey.pdf",
         ".annotationEditorLayer",
-        "page-width",
+        "page-fit",
         null,
         { enableComment: true }
       );
@@ -284,12 +267,7 @@ describe("Comment", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           await switchToHighlight(page);
-
-          const rect = await getSpanRectFromText(page, 1, "Languages");
-          const x = rect.x + rect.width / 2;
-          const y = rect.y + rect.height / 2;
-          await page.mouse.click(x, y, { count: 2, delay: 100 });
-          await page.waitForSelector(getEditorSelector(0));
+          await highlightSpan(page, 1, "Languages");
 
           let commentButtonSelector = `${getEditorSelector(0)} button.comment`;
           await page.waitForSelector(commentButtonSelector, { visible: true });
@@ -297,9 +275,7 @@ describe("Comment", () => {
             selector => document.querySelector(selector).title,
             commentButtonSelector
           );
-          expect(title)
-            .withContext(`In ${browserName}`)
-            .toEqual("Edit comment");
+          expect(title).withContext(`In ${browserName}`).toEqual("Add comment");
           await page.click(commentButtonSelector);
 
           const textInputSelector = "#commentManagerTextInput";
@@ -329,12 +305,7 @@ describe("Comment", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           await switchToHighlight(page);
-
-          const rect = await getSpanRectFromText(page, 1, "Abstract");
-          const x = rect.x + rect.width / 2;
-          const y = rect.y + rect.height / 2;
-          await page.mouse.click(x, y, { count: 2, delay: 100 });
-          await page.waitForSelector(getEditorSelector(0));
+          await highlightSpan(page, 1, "Abstract");
 
           const comment = "Hello world!";
           await editComment(page, getEditorSelector(0), comment);
@@ -373,6 +344,36 @@ describe("Comment", () => {
         })
       );
     });
+
+    it("must check that the button is removed in the annotation layer", async () => {
+      await Promise.all(
+        pages.map(async ([, page]) => {
+          await switchToHighlight(page);
+
+          await highlightSpan(page, 1, "Abstract");
+          const editorSelector = getEditorSelector(0);
+          await editComment(page, editorSelector, "Hello world!");
+
+          await switchToHighlight(page, /* disable = */ true);
+          const buttonSelector = ".annotationLayer .annotationCommentButton";
+          await page.waitForSelector(buttonSelector, {
+            visible: true,
+          });
+
+          await switchToHighlight(page);
+          await selectEditor(page, editorSelector);
+          await waitAndClick(page, `${editorSelector} button.deleteButton`);
+          await waitForSerialized(page, 0);
+
+          await switchToHighlight(page, /* disable = */ true);
+          await page.waitForFunction(
+            sel => !document.querySelector(sel),
+            {},
+            buttonSelector
+          );
+        })
+      );
+    });
   });
 
   describe("Focused element after editing", () => {
@@ -396,12 +397,7 @@ describe("Comment", () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
           await switchToHighlight(page);
-
-          const rect = await getSpanRectFromText(page, 1, "Languages");
-          const x = rect.x + rect.width / 2;
-          const y = rect.y + rect.height / 2;
-          await page.mouse.click(x, y, { count: 2, delay: 100 });
-          await page.waitForSelector(getEditorSelector(0));
+          await highlightSpan(page, 1, "Languages");
 
           const commentButtonSelector = `${getEditorSelector(0)} button.comment`;
           await waitAndClick(page, commentButtonSelector);
@@ -509,7 +505,7 @@ describe("Comment", () => {
       pages = await loadAndWait(
         "comments.pdf",
         ".annotationEditorLayer",
-        "page-width",
+        "page-fit",
         null,
         { enableComment: true }
       );
@@ -552,6 +548,59 @@ describe("Comment", () => {
       );
     });
 
+    it("must check that the comment sidebar is resizable with the keyboard", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToComment(page);
+
+          const sidebarSelector = "#editorCommentParamsToolbar";
+          const handle = await createPromise(page, resolve => {
+            document
+              .getElementById("editorCommentsSidebarResizer")
+              .addEventListener("focus", () => resolve(), { once: true });
+          });
+          await page.focus(`${sidebarSelector} #editorCommentsSidebarResizer`);
+          await awaitPromise(handle);
+
+          // Use Ctrl+ArrowLeft/Right to resize the sidebar.
+          for (const extraWidth of [10, -10]) {
+            const rect = await getRect(page, sidebarSelector);
+            const arrowKey = extraWidth > 0 ? "ArrowLeft" : "ArrowRight";
+            for (let i = 0; i < Math.abs(extraWidth); i++) {
+              await kbModifierDown(page);
+              await page.keyboard.press(arrowKey);
+              await kbModifierUp(page);
+            }
+
+            const rectAfter = await getRect(page, sidebarSelector);
+            expect(Math.abs(rectAfter.width - (rect.width + 10 * extraWidth)))
+              .withContext(`In ${browserName}`)
+              .toBeLessThanOrEqual(1);
+            expect(Math.abs(rectAfter.x - (rect.x - 10 * extraWidth)))
+              .withContext(`In ${browserName}`)
+              .toBeLessThanOrEqual(1);
+          }
+
+          // Use ArrowLeft/Right to resize the sidebar.
+          for (const extraWidth of [10, -10]) {
+            const rect = await getRect(page, sidebarSelector);
+            const arrowKey = extraWidth > 0 ? "ArrowLeft" : "ArrowRight";
+            for (let i = 0; i < Math.abs(extraWidth); i++) {
+              await page.keyboard.press(arrowKey);
+            }
+
+            const rectAfter = await getRect(page, sidebarSelector);
+            expect(Math.abs(rectAfter.width - (rect.width + extraWidth)))
+              .withContext(`In ${browserName}`)
+              .toBeLessThanOrEqual(1);
+            expect(Math.abs(rectAfter.x - (rect.x - extraWidth)))
+              .withContext(`In ${browserName}`)
+              .toBeLessThanOrEqual(1);
+          }
+        })
+      );
+    });
+
     it("must check that comments are in chronological order", async () => {
       await Promise.all(
         pages.map(async ([browserName, page]) => {
@@ -577,7 +626,6 @@ describe("Comment", () => {
           await switchToHighlight(page);
           await highlightSpan(page, 1, "Languages");
           const editorSelector = getEditorSelector(9);
-          await page.waitForSelector(editorSelector);
           const commentButtonSelector = `${editorSelector} button.comment`;
           await waitAndClick(page, commentButtonSelector);
 
@@ -620,6 +668,299 @@ describe("Comment", () => {
           // Click again to unselect the comment.
           await waitAndClick(page, firstElementSelector);
           await page.waitForSelector(popupSelector, { visible: false });
+        })
+      );
+    });
+  });
+
+  describe("Comment popup", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait(
+        "tracemonkey.pdf",
+        ".annotationEditorLayer",
+        "page-fit",
+        null,
+        { enableComment: true }
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the popup is deleted when the editor is", async () => {
+      await Promise.all(
+        pages.map(async ([, page]) => {
+          await switchToHighlight(page);
+
+          await highlightSpan(page, 1, "Abstract");
+          const editorSelector = getEditorSelector(0);
+          await editComment(page, editorSelector, "Hello world!");
+
+          await waitAndClick(
+            page,
+            `${editorSelector} button.annotationCommentButton`
+          );
+
+          const popupSelector = "#commentPopup";
+          await page.waitForSelector(popupSelector, { visible: true });
+          await waitAndClick(page, `${editorSelector} button.deleteButton`);
+
+          // Check that the popup is removed from the DOM.
+          await page.waitForFunction(
+            sel => !document.querySelector(sel),
+            {},
+            popupSelector
+          );
+        })
+      );
+    });
+
+    it("must check that the focus is moved on the editor once the popup is deleted", async () => {
+      await Promise.all(
+        pages.map(async ([, page]) => {
+          await switchToHighlight(page);
+
+          await highlightSpan(page, 1, "Abstract");
+          const editorSelector = getEditorSelector(0);
+          await editComment(page, editorSelector, "Hello world!");
+
+          await waitAndClick(
+            page,
+            `${editorSelector} button.annotationCommentButton`
+          );
+
+          const popupSelector = "#commentPopup";
+          await page.waitForSelector(popupSelector, { visible: true });
+          const handle = await page.evaluateHandle(
+            sel => [
+              new Promise(resolve => {
+                document
+                  .querySelector(sel)
+                  .addEventListener("focusin", resolve, {
+                    once: true,
+                  });
+              }),
+            ],
+            editorSelector
+          );
+          await waitAndClick(
+            page,
+            `${popupSelector} button.commentPopupDelete`
+          );
+          await awaitPromise(handle);
+        })
+      );
+    });
+  });
+
+  describe("Annotations order in reading mode", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait(
+        "comments.pdf",
+        ".annotationEditorLayer",
+        "page-fit",
+        null,
+        { enableComment: true }
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the annotations are in the right order", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToHighlight(page);
+          await highlightSpan(
+            page,
+            1,
+            "method provides cheap inter-procedural type specialization, and an"
+          );
+          await editComment(page, getEditorSelector(9), "Hello world!");
+
+          await highlightSpan(page, 1, "Andreas Gal");
+          await editComment(page, getEditorSelector(10), "Hello world!");
+
+          await switchToHighlight(page, /* disable = */ true);
+          await page.waitForSelector(
+            ".annotationLayer section:nth-child(4).editorAnnotation"
+          );
+
+          const sectionIds = await page.evaluate(() =>
+            [
+              ...document.querySelectorAll(
+                ".page[data-page-number='1'] .annotationLayer > section:not(.popupAnnotation)"
+              ),
+            ].map(el => el.id.split("_").pop())
+          );
+          expect(sectionIds).withContext(`In ${browserName}`).toEqual([
+            "612R",
+            "693R",
+            "10", // shortcut for pdfjs_internal_id_pdfjs_internal_editor_10
+            "687R",
+            "690R",
+            "713R",
+            "9", // shortcut for pdfjs_internal_id_pdfjs_internal_editor_9
+            "673R",
+            "613R",
+            "680R",
+            "661R",
+          ]);
+        })
+      );
+    });
+  });
+
+  describe("Focus annotation after comment has been deleted (bug 1994738)", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait(
+        "tracemonkey.pdf",
+        ".annotationEditorLayer",
+        "page-fit",
+        null,
+        { enableComment: true }
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the annotation is focused", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToHighlight(page);
+          await highlightSpan(page, 1, "Abstract");
+          const editorSelector = getEditorSelector(0);
+          await editComment(page, editorSelector, "Hello world!");
+
+          await switchToHighlight(page, /* disable = */ true);
+          await waitAndClick(page, ".annotationLayer .annotationCommentButton");
+
+          const handle = await createPromise(page, resolve => {
+            document
+              .querySelector(".annotationLayer section.editorAnnotation")
+              .addEventListener("focus", resolve, { once: true });
+          });
+          await waitAndClick(page, "button.commentPopupDelete");
+          await awaitPromise(handle);
+        })
+      );
+    });
+  });
+
+  describe("FreeText annotation doesn't have a popup (bug 1995028)", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait(
+        "empty.pdf",
+        ".annotationEditorLayer",
+        "page-fit",
+        null,
+        { enableComment: true }
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that comment button isn't in the annotation toolbar", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          await switchToFreeText(page);
+
+          const rect = await getRect(page, ".annotationEditorLayer");
+          const editorSelector = getEditorSelector(0);
+          const data = "Hello PDF.js World !!";
+          await page.mouse.click(rect.x + 100, rect.y + 100);
+          await page.waitForSelector(editorSelector, { visible: true });
+          await page.type(`${editorSelector} .internal`, data);
+          await page.keyboard.press("Escape");
+
+          await page.waitForSelector(`${editorSelector} .editToolbar`, {
+            visible: true,
+          });
+
+          // We want to be sure that the comment button isn't rendered.
+          // eslint-disable-next-line no-restricted-syntax
+          await waitForTimeout(100);
+
+          const hasCommentButton = await page.evaluate(
+            selector =>
+              !!document.querySelector(
+                `${selector} .editToolbar button.comment`
+              ),
+            editorSelector
+          );
+          expect(hasCommentButton).withContext(`In ${browserName}`).toBe(false);
+        })
+      );
+    });
+  });
+
+  describe("Save a comment in using CTRL+Enter", () => {
+    let pages;
+
+    beforeEach(async () => {
+      pages = await loadAndWait(
+        "comments.pdf",
+        ".annotationEditorLayer",
+        "page-fit",
+        null,
+        { enableComment: true }
+      );
+    });
+
+    afterEach(async () => {
+      await closePages(pages);
+    });
+
+    it("must check that the comment is saved", async () => {
+      await Promise.all(
+        pages.map(async ([browserName, page]) => {
+          const commentButtonSelector = `[data-annotation-id="612R"] + button.annotationCommentButton`;
+          await waitAndClick(page, commentButtonSelector);
+          const commentPopupSelector = "#commentPopup";
+          const editButtonSelector = `${commentPopupSelector} button.commentPopupEdit`;
+          await waitAndClick(page, editButtonSelector);
+
+          const textInputSelector = "#commentManagerTextInput";
+          await page.waitForSelector(textInputSelector, {
+            visible: true,
+          });
+          await clearInput(page, textInputSelector, true);
+          const comment = "Comment saved using CTRL+Enter";
+          await page.type(textInputSelector, comment);
+          await page.focus(textInputSelector);
+
+          await page.keyboard.down("Control");
+          await page.keyboard.press("Enter");
+          await page.keyboard.up("Control");
+
+          await page.waitForSelector("#commentManagerDialog", {
+            visible: false,
+          });
+
+          await page.hover(commentButtonSelector);
+          await page.waitForSelector(commentPopupSelector, {
+            visible: true,
+          });
+          const popupTextSelector = `${commentPopupSelector} .commentPopupText`;
+          const popupText = await page.evaluate(
+            selector => document.querySelector(selector).textContent,
+            popupTextSelector
+          );
+          expect(popupText).withContext(`In ${browserName}`).toEqual(comment);
         })
       );
     });

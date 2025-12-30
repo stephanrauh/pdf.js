@@ -46,6 +46,11 @@ import {
 } from "./display_utils.js";
 import { FontFaceObject, FontLoader } from "./font_loader.js";
 import {
+  FontInfo,
+  FontPathInfo,
+  PatternInfo,
+} from "../shared/obj-bin-transform.js";
+import {
   getDataProp,
   getFactoryUrlProp,
   getUrlProp,
@@ -67,7 +72,6 @@ import { DOMCMapReaderFactory } from "display-cmap_reader_factory";
 import { DOMFilterFactory } from "./filter_factory.js";
 import { DOMStandardFontDataFactory } from "display-standard_fontdata_factory";
 import { DOMWasmFactory } from "display-wasm_factory";
-import { FontInfo } from "../shared/obj-bin-transform.js";
 import { GlobalWorkerOptions } from "./worker_options.js";
 import { Metadata } from "./metadata.js";
 import { OptionalContentConfig } from "./optional_content_config.js";
@@ -1049,6 +1053,24 @@ class PDFDocumentProxy {
     return this._transport.saveDocument(pageOrder);
   }
   // #2943 end of modification by ngx-extended-pdf-viewer
+
+  /**
+   * @typedef {Object} PageInfo
+   * @property {null|Uint8Array} document
+   * @property {Array<Array<number>|number>} [includePages]
+   *  included ranges or indices.
+   * @property {Array<Array<number>|number>} [excludePages]
+   *  excluded ranges or indices.
+   */
+
+  /**
+   * @param {Array<PageInfo>} pageInfos - The pages to extract.
+   * @returns {Promise<Uint8Array>} A promise that is resolved with a
+   *   {Uint8Array} containing the full data of the saved document.
+   */
+  extractPages(pageInfos) {
+    return this._transport.extractPages(pageInfos);
+  }
 
   /**
    * @returns {Promise<{ length: number }>} A promise that is resolved when the
@@ -2831,9 +2853,14 @@ class WorkerTransport {
           }
           break;
         case "FontPath":
+          this.commonObjs.resolve(id, new FontPathInfo(exportedData));
+          break;
         case "Image":
-        case "Pattern":
           this.commonObjs.resolve(id, exportedData);
+          break;
+        case "Pattern":
+          const pattern = new PatternInfo(exportedData);
+          this.commonObjs.resolve(id, pattern.getIR());
           break;
         default:
           throw new Error(`Got unknown common object type ${type}`);
@@ -2927,6 +2954,10 @@ class WorkerTransport {
       });
   }
   // #2943 end of modification by ngx-extended-pdf-viewer
+
+  extractPages(pageInfos) {
+    return this.messageHandler.sendWithPromise("ExtractPages", { pageInfos });
+  }
 
   getPage(pageNumber) {
     if (
@@ -3083,6 +3114,7 @@ class WorkerTransport {
         metadata: results[1] ? new Metadata(results[1]) : null,
         contentDispositionFilename: this._fullReader?.filename ?? null,
         contentLength: this._fullReader?.contentLength ?? null,
+        hasStructTree: results[2],
       }));
     this.#methodPromises.set(name, promise);
     return promise;

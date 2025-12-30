@@ -23,6 +23,7 @@ import {
   unreachable,
   warn,
 } from "../shared/util.js";
+import { makePathFromDrawOPS } from "./display_utils.js";
 
 class FontLoader {
   #systemFonts = new Set();
@@ -435,7 +436,7 @@ class FontFaceObject {
     } catch (ex) {
       warn(`getPathGenerator - ignoring character: "${ex}".`);
     }
-    const path = new Path2D(cmds || "");
+    const path = makePathFromDrawOPS(cmds?.path);
 
     if (!this.fontExtraProperties) {
       // Remove the raw path-string, since we don't need it anymore.
@@ -454,6 +455,10 @@ class FontFaceObject {
 
   get disableFontFace() {
     return this.#fontData.disableFontFace ?? false;
+  }
+
+  set disableFontFace(value) {
+    shadow(this, "disableFontFace", !!value);
   }
 
   get fontExtraProperties() {
@@ -498,6 +503,10 @@ class FontFaceObject {
 
   get bbox() {
     return this.#fontData.bbox;
+  }
+
+  set bbox(bbox) {
+    shadow(this, "bbox", bbox);
   }
 
   get fontMatrix() {

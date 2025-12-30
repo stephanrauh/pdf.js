@@ -192,6 +192,7 @@ class AnnotationEditor {
     this.annotationElementId = parameters.annotationElementId || null;
     this.creationDate = parameters.creationDate || new Date();
     this.modificationDate = parameters.modificationDate || null;
+    this.canAddComment = true;
 
     const {
       rotation,
@@ -1234,10 +1235,13 @@ class AnnotationEditor {
   }
 
   addCommentButton() {
-    return (this.#comment ||= new Comment(this));
+    return this.canAddComment ? (this.#comment ||= new Comment(this)) : null;
   }
 
   addStandaloneCommentButton() {
+    if (!this._uiManager.hasCommentManager()) {
+      return;
+    }
     if (this.#commentStandaloneButton) {
       if (this._uiManager.isEditingMode()) {
         this.#commentStandaloneButton.classList.remove("hidden");
@@ -1961,6 +1965,7 @@ class AnnotationEditor {
     } else {
       this._uiManager.removeEditor(this);
     }
+    this.hideCommentPopup();
 
     if (this.#moveInDOMTimeout) {
       clearTimeout(this.#moveInDOMTimeout);
@@ -1988,6 +1993,8 @@ class AnnotationEditor {
     // #2256 end of modification by ngx-extended-pdf-viewer
     this.#touchManager?.destroy();
     this.#touchManager = null;
+    this.#fakeAnnotation?.remove();
+    this.#fakeAnnotation = null;
   }
 
   /**
@@ -2058,7 +2065,7 @@ class AnnotationEditor {
   }
 
   setCommentButtonStates(options) {
-    this.#comment.setCommentButtonStates(options);
+    this.#comment?.setCommentButtonStates(options);
   }
 
   /**
@@ -2117,11 +2124,13 @@ class AnnotationEditor {
       // on the top-left one.
       if (nextFirstPosition < firstPosition) {
         for (let i = 0; i < firstPosition - nextFirstPosition; i++) {
-          this.#resizersDiv.append(this.#resizersDiv.firstChild);
+          this.#resizersDiv.append(this.#resizersDiv.firstElementChild);
         }
       } else if (nextFirstPosition > firstPosition) {
         for (let i = 0; i < nextFirstPosition - firstPosition; i++) {
-          this.#resizersDiv.firstChild.before(this.#resizersDiv.lastChild);
+          this.#resizersDiv.firstElementChild.before(
+            this.#resizersDiv.lastElementChild
+          );
         }
       }
 
@@ -2135,7 +2144,7 @@ class AnnotationEditor {
 
     this.#setResizerTabIndex(0);
     this.#isResizerEnabledForKeyboard = true;
-    this.#resizersDiv.firstChild.focus({ focusVisible: true });
+    this.#resizersDiv.firstElementChild.focus({ focusVisible: true });
     event.preventDefault();
     event.stopImmediatePropagation();
   }
@@ -2239,12 +2248,12 @@ class AnnotationEditor {
     }
     this._editToolbar?.hide();
     this.#altText?.toggleAltTextBadge(true);
+    this.hideCommentPopup();
+  }
+
+  hideCommentPopup() {
     if (this.hasComment) {
-      this._uiManager.toggleComment(
-        this,
-        /* isSelected = */ false,
-        /* visibility = */ false
-      );
+      this._uiManager.toggleComment(null);
     }
   }
 
@@ -2300,7 +2309,7 @@ class AnnotationEditor {
     this.enterInEditMode();
     this.parent.updateToolbar({
       mode: this.constructor._editorType,
-      editId: this.id,
+      editId: this.uid,
     });
   }
 
@@ -2463,12 +2472,12 @@ class AnnotationEditor {
   }
 
   resetAnnotationElement(annotation) {
-    const { firstChild } = annotation.container;
+    const { firstElementChild } = annotation.container;
     if (
-      firstChild?.nodeName === "DIV" &&
-      firstChild.classList.contains("annotationContent")
+      firstElementChild?.nodeName === "DIV" &&
+      firstElementChild.classList.contains("annotationContent")
     ) {
-      firstChild.remove();
+      firstElementChild.remove();
     }
   }
 }

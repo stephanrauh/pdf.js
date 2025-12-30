@@ -143,24 +143,41 @@ function getViewerConfiguration() {
       ),
       documentPropertiesButton: document.getElementById("documentProperties"),
     },
-    sidebar: {
-      // Divs (and sidebar button)
+    viewsManager: {
       outerContainer: document.getElementById("outerContainer"),
-      sidebarContainer: document.getElementById("sidebarContainer"),
-      toggleButton: document.getElementById("primarySidebarToggle")  ?? document.getElementById("sidebarToggleButton"), // modified by ngx-extended-pdf-viewer
-      resizer: document.getElementById("sidebarResizer"),
-      // Buttons
-      thumbnailButton: document.getElementById("viewThumbnail"),
-      outlineButton: document.getElementById("viewOutline"),
-      attachmentsButton: document.getElementById("viewAttachments"),
-      layersButton: document.getElementById("viewLayers"),
-      // Views
-      thumbnailView: document.getElementById("thumbnailView"),
-      outlineView: document.getElementById("outlineView"),
+      // #modified by ngx-extended-pdf-viewer - PDF.js renamed sidebar → viewsManager in v5.4.530
+      // ngx-extended-pdf-viewer still uses old element IDs, so we provide fallbacks for backward compatibility
+      toggleButton: document.getElementById("viewsManagerToggleButton") ?? document.getElementById("primarySidebarToggle") ?? document.getElementById("sidebarToggleButton"),
+      sidebarContainer: document.getElementById("viewsManager") ?? document.getElementById("sidebarContainer"),
+      resizer: document.getElementById("viewsManagerResizer") ?? document.getElementById("sidebarResizer"),
+      thumbnailButton: document.getElementById("thumbnailsViewMenu") ?? document.getElementById("viewThumbnail"),
+      outlineButton: document.getElementById("outlinesViewMenu") ?? document.getElementById("viewOutline"),
+      attachmentsButton: document.getElementById("attachmentsViewMenu") ?? document.getElementById("viewAttachments"),
+      layersButton: document.getElementById("layersViewMenu") ?? document.getElementById("viewLayers"),
+      // #end of modification by ngx-extended-pdf-viewer
+      viewsManagerSelectorButton: document.getElementById(
+        "viewsManagerSelectorButton"
+      ),
+      viewsManagerSelectorOptions: document.getElementById(
+        "viewsManagerSelectorOptions"
+      ),
+      // #modified by ngx-extended-pdf-viewer - fallback to old view container IDs for backward compatibility
+      thumbnailsView: document.getElementById("thumbnailsView") ?? document.getElementById("thumbnailView"),
+      outlinesView: document.getElementById("outlinesView") ?? document.getElementById("outlineView"),
+      // #end of modification by ngx-extended-pdf-viewer
       attachmentsView: document.getElementById("attachmentsView"),
       layersView: document.getElementById("layersView"),
-      // View-specific options
-      currentOutlineItemButton: document.getElementById("currentOutlineItem"),
+      viewsManagerAddFileButton: document.getElementById(
+        "viewsManagerAddFileButton"
+      ),
+      // #modified by ngx-extended-pdf-viewer - fallback to old currentOutlineItem ID for backward compatibility
+      viewsManagerCurrentOutlineButton: document.getElementById(
+        "viewsManagerCurrentOutlineButton"
+      ) ?? document.getElementById("currentOutlineItem"),
+      // #end of modification by ngx-extended-pdf-viewer
+      viewsManagerHeaderLabel: document.getElementById(
+        "viewsManagerHeaderLabel"
+      ),
     },
     findBar: {
       bar: document.getElementById("findbar"),

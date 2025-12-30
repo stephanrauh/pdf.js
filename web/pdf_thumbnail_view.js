@@ -23,7 +23,11 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("./pdf_rendering_queue").PDFRenderingQueue} PDFRenderingQueue */
 
-import { OutputScale, RenderingCancelledException } from "pdfjs-lib";
+import {
+  FeatureTest,
+  OutputScale,
+  RenderingCancelledException,
+} from "pdfjs-lib";
 import { AppOptions } from "./app_options.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { RenderingStates } from "./ui_utils.js";
@@ -33,17 +37,10 @@ import { PDFViewerApplication } from "./app.js";
 
 const DRAW_UPSCALE_FACTOR = 2; // See comment in `PDFThumbnailView.draw` below.
 const MAX_NUM_SCALING_STEPS = 3;
-const THUMBNAIL_WIDTH = 98; // px
+const THUMBNAIL_WIDTH = 126; // px
 // #2943 modified by ngx-extended-pdf-viewer
 let initialDragY = 0;
 // #2943 end of modification by ngx-extended-pdf-viewer
-
-function zeroCanvas(c) {
-  // Zeroing the width and height causes Firefox to release graphics
-  // resources immediately, which can greatly reduce memory consumption.
-  c.width = 0;
-  c.height = 0;
-}
 
 /**
  * @typedef {Object} PDFThumbnailViewOptions
@@ -68,12 +65,15 @@ function zeroCanvas(c) {
  */
 
 class TempImageFactory {
-  static #tempCanvas = null;
-
   static getCanvas(width, height) {
-    const tempCanvas = (this.#tempCanvas ||= document.createElement("canvas"));
-    tempCanvas.width = width;
-    tempCanvas.height = height;
+    let tempCanvas;
+    if (FeatureTest.isOffscreenCanvasSupported) {
+      tempCanvas = new OffscreenCanvas(width, height);
+    } else {
+      tempCanvas = document.createElement("canvas");
+      tempCanvas.width = width;
+      tempCanvas.height = height;
+    }
 
     // Since this is a temporary canvas, we need to fill it with a white
     // background ourselves. `#getPageDrawContext` uses CSS rules for this.
@@ -82,14 +82,7 @@ class TempImageFactory {
     ctx.fillStyle = "rgb(255, 255, 255)";
     ctx.fillRect(0, 0, width, height);
     ctx.restore();
-    return [tempCanvas, tempCanvas.getContext("2d")];
-  }
-
-  static destroyCanvas() {
-    if (this.#tempCanvas) {
-      zeroCanvas(this.#tempCanvas);
-    }
-    this.#tempCanvas = null;
+    return [tempCanvas, ctx];
   }
 }
 
@@ -128,13 +121,15 @@ class PDFThumbnailView {
     this.eventBus = eventBus;
     this.linkService = linkService;
     this.renderingQueue = renderingQueue;
-    this.eventBus = eventBus; // #1696 modified by ngx-extended-pdf-viewer
 
     this.renderTask = null;
     this.renderingState = RenderingStates.INITIAL;
     this.resume = null;
 
-    // modified by ngx-extended-pdf-viewer
+    // #1696 modified by ngx-extended-pdf-viewer
+    // PDF.js v5.4.530 changed thumbnail creation from anchor/div to direct div/checkbox/img structure
+    // We preserve the custom thumbnail event dispatch and adapt to the new structure
+    // Dispatch custom thumbnail event to allow ngx-extended-pdf-viewer to customize thumbnails
     eventBus.dispatch("rendercustomthumbnail", {
       pdfThumbnailView: this,
       linkService,
@@ -143,22 +138,73 @@ class PDFThumbnailView {
       thumbPageTitlePromiseOrPageL10nArgs: this.#pageL10nArgs,
     });
 
-    if (container.querySelector(`.${this.renderingId}`)) {
-      this._placeholderImg = container.querySelector(`.${this.renderingId} .thumbnailImage`);
+    // Check if custom thumbnail was already created by ngx-extended-pdf-viewer
+    const existingThumbnail = container.querySelector(`.${this.renderingId}`);
+    if (existingThumbnail) {
+      // Use the existing custom thumbnail
+      this.div = existingThumbnail;
+      this.image = this.div.querySelector(".thumbnailImage");
+      this.checkbox = this.div.querySelector("input[type='checkbox']");
+      // #3111 modified by ngx-extended-pdf-viewer - debug logging
+      NgxConsole.log(`Thumbnail ${id}: Found existing thumbnail. div=${!!this.div}, image=${!!this.image}, checkbox=${!!this.checkbox}`);
+      // #3111 end of modification
+      if (!this.image) {
+        // Fallback: create standard thumbnail if custom one is malformed
+        this.#createStandardThumbnail(container);
+      }
     } else {
-      this.createThumbnail(this, linkService, id, container, this.#pageL10nArgs);
+      // Create standard thumbnail using new PDF.js v5.4.530 structure
+      // #3111 modified by ngx-extended-pdf-viewer - debug logging
+      NgxConsole.log(`Thumbnail ${id}: No existing thumbnail found, creating standard thumbnail`);
+      // #3111 end of modification
+      this.#createStandardThumbnail(container);
     }
-    // end of modification
+    // #1696 end of modification by ngx-extended-pdf-viewer
 
     // #2943 modified by ngx-extended-pdf-viewer
-    if (AppOptions.get("enablePageReordering")) {
+    // Enable drag-and-drop for page reordering functionality
+    // Adapted to new thumbnail structure (div instead of anchor)
+    if (AppOptions.get("enablePageReordering") && this.div) {
       this.div.addEventListener('dragstart', this._dragStartHandler.bind(this));
       this.div.addEventListener('dragover', this._dragOverHandler.bind(this));
       this.div.addEventListener('drop', this._dropHandler.bind(this));
       this.div.addEventListener('mousedown', this._mouseDownHandler.bind(this));
     }
+    // #2943 end of modification by ngx-extended-pdf-viewer
   }
 
+  // #1696 modified by ngx-extended-pdf-viewer
+  // Helper method to create standard PDF.js v5.4.530 thumbnail structure
+  // This method creates the new direct div/checkbox/img structure (no anchor element)
+  #createStandardThumbnail(container) {
+    const imageContainer = (this.div = document.createElement("div"));
+    imageContainer.className = "thumbnail";
+    imageContainer.setAttribute("page-number", this.#pageNumber);
+
+    // #2943 modified by ngx-extended-pdf-viewer
+    // Make thumbnail draggable for page reordering
+    if (AppOptions.get("enablePageReordering")) {
+      imageContainer.draggable = true;
+    }
+    // #2943 end of modification by ngx-extended-pdf-viewer
+
+    const checkbox = (this.checkbox = document.createElement("input"));
+    checkbox.type = "checkbox";
+    checkbox.tabIndex = -1;
+
+    const image = (this.image = document.createElement("img"));
+    image.classList.add("thumbnailImage", "missingThumbnailImage");
+    image.role = "button";
+    image.tabIndex = -1;
+    this.#updateDims();
+
+    imageContainer.append(checkbox, image);
+    container.append(imageContainer);
+  }
+  // #1696 end of modification by ngx-extended-pdf-viewer
+
+  // #2943 modified by ngx-extended-pdf-viewer
+  // Page reordering drag-and-drop handlers
   _dragStartHandler(event) {
     event.dataTransfer.setData('text/plain', this.id.toString());
   }
@@ -210,7 +256,8 @@ class PDFThumbnailView {
   }
 
   _movePage(draggedId, targetId) {
-    const thumbnailsContainer = this.div.parentNode.parentNode;
+    // Adapted for new thumbnail structure - thumbnails are direct children of container
+    const thumbnailsContainer = this.div.parentNode;
     const draggedThumbnail = thumbnailsContainer.children[draggedId - 1];
     const targetThumbnail = thumbnailsContainer.children[targetId - 1];
     if (draggedThumbnail && targetThumbnail) {
@@ -219,48 +266,15 @@ class PDFThumbnailView {
   }
   // #2943 end of modification by ngx-extended-pdf-viewer
 
-  // modified by ngx-extended-pdf-viewer
-  createThumbnail(pdfThumbnailView, linkService, id, container, pageL10nArgs) {
-    const anchor = document.createElement("a");
-    anchor.href = linkService.getAnchorUrl("#page=" + id);
-    anchor.setAttribute("data-l10n-id", "pdfjs-thumb-page-title");
-    anchor.setAttribute("data-l10n-args", this.#pageL10nArgs);
-    anchor.className = this.renderingId;
-    anchor.onclick = function () {
-      linkService.goToPage(id);
-      return false;
-    };
-    this.anchor = anchor;
-
-    const div = document.createElement("div");
-    div.className = "thumbnail";
-    div.setAttribute("data-page-number", this.id);
-    if (AppOptions.get("enablePageReordering")) {
-      div.draggable = true;
-    }
-    this.div = div;
-    this.#updateDims();
-
-    const img = document.createElement("div");
-    img.className = "thumbnailImage";
-    this._placeholderImg = img;
-
-    div.append(img);
-    anchor.append(div);
-    container.append(anchor);
-  }
-
   #updateDims() {
     const { width, height } = this.viewport;
     const ratio = width / height;
 
-    this.canvasWidth = THUMBNAIL_WIDTH;
-    this.canvasHeight = (this.canvasWidth / ratio) | 0;
-    this.scale = this.canvasWidth / width;
+    const canvasWidth = (this.canvasWidth = THUMBNAIL_WIDTH);
+    const canvasHeight = (this.canvasHeight = (canvasWidth / ratio) | 0);
+    this.scale = canvasWidth / width;
 
-    const { style } = this.div;
-    style.setProperty("--thumbnail-width", `${this.canvasWidth}px`);
-    style.setProperty("--thumbnail-height", `${this.canvasHeight}px`);
+    this.image.style.height = `${canvasHeight}px`;
   }
 
   // #2943 modified by ngx-extended-pdf-viewer
@@ -280,14 +294,16 @@ class PDFThumbnailView {
   reset() {
     this.cancelRendering();
     this.renderingState = RenderingStates.INITIAL;
-
-    this.div.removeAttribute("data-loaded");
-    this.image?.replaceWith(this._placeholderImg);
     this.#updateDims();
 
-    if (this.image) {
-      this.image.removeAttribute("src");
-      delete this.image;
+    const { image } = this;
+    const url = image.src;
+    if (url) {
+      URL.revokeObjectURL(url);
+      image.removeAttribute("data-l10n-id");
+      image.removeAttribute("data-l10n-args");
+      image.src = "";
+      this.image.classList.add("missingThumbnailImage");
     }
   }
 
@@ -301,6 +317,16 @@ class PDFThumbnailView {
       rotation: totalRotation,
     });
     this.reset();
+  }
+
+  toggleCurrent(isCurrent) {
+    if (isCurrent) {
+      this.image.ariaCurrent = "page";
+      this.image.tabIndex = 0;
+    } else {
+      this.image.ariaCurrent = false;
+      this.image.tabIndex = -1;
+    }
   }
 
   /**
@@ -318,7 +344,6 @@ class PDFThumbnailView {
   #getPageDrawContext(upscaleFactor = 1) {
     // Keep the no-thumbnail outline visible, i.e. `data-loaded === false`,
     // until rendering/image conversion is complete, to avoid display issues.
-    const canvas = document.createElement("canvas");
     const outputScale = new OutputScale();
     const width = upscaleFactor * this.canvasWidth,
       height = upscaleFactor * this.canvasHeight;
@@ -329,6 +354,9 @@ class PDFThumbnailView {
       this.maxCanvasPixels,
       this.maxCanvasDim
     );
+    // Because of: https://bugzilla.mozilla.org/show_bug.cgi?id=2003060
+    // we need use a HTMLCanvasElement here.
+    const canvas = document.createElement("canvas");
     canvas.width = (width * outputScale.sx) | 0;
     canvas.height = (height * outputScale.sy) | 0;
 
@@ -339,24 +367,23 @@ class PDFThumbnailView {
     return { canvas, transform };
   }
 
-  #convertCanvasToImage(canvas) {
+  async #convertCanvasToImage(canvas) {
     if (this.renderingState !== RenderingStates.FINISHED) {
       throw new Error("#convertCanvasToImage: Rendering has not finished.");
     }
     const reducedCanvas = this.#reduceImage(canvas);
-
-    const image = document.createElement("img");
-    image.className = "thumbnailImage";
+    const { image } = this;
+    const { promise, resolve } = Promise.withResolvers();
+    reducedCanvas.toBlob(resolve);
+    const blob = await promise;
+    image.src = URL.createObjectURL(blob);
     image.setAttribute("data-l10n-id", "pdfjs-thumb-page-canvas");
     image.setAttribute("data-l10n-args", this.#pageL10nArgs);
-    image.src = reducedCanvas.toDataURL();
-    this.image = image;
-
-    this.div.setAttribute("data-loaded", true);
-    this._placeholderImg.replaceWith(image);
-
-    zeroCanvas(reducedCanvas);
-    this.eventBus.dispatch("thumbnailRendered", this.id);   // #1696 modified by ngx-extended-pdf-viewer
+    image.classList.remove("missingThumbnailImage");
+    if (!FeatureTest.isOffscreenCanvasSupported) {
+      // Clean up the canvas element since it is no longer needed.
+      reducedCanvas.width = reducedCanvas.height = 0;
+    }
   }
 
   async draw() {
@@ -409,7 +436,6 @@ class PDFThumbnailView {
       await renderTask.promise;
     } catch (e) {
       if (e instanceof RenderingCancelledException) {
-        zeroCanvas(canvas);
         return;
       }
       error = e;
@@ -423,8 +449,7 @@ class PDFThumbnailView {
     }
     this.renderingState = RenderingStates.FINISHED;
 
-    this.#convertCanvasToImage(canvas);
-    zeroCanvas(canvas);
+    await this.#convertCanvasToImage(canvas);
 
     this.eventBus.dispatch("thumbnailrendered", {
       source: this,
@@ -550,19 +575,17 @@ class PDFThumbnailView {
     return JSON.stringify({ page: this.pageLabel ?? this.id });
   }
 
+  get #pageNumber() {
+    return this.pageLabel ?? this.id;
+  }
+
   /**
    * @param {string|null} label
    */
   setPageLabel(label) {
     this.pageLabel = typeof label === "string" ? label : null;
-
-    this.anchor.setAttribute("data-l10n-args", this.#pageL10nArgs);
-
-    if (this.renderingState !== RenderingStates.FINISHED) {
-      return;
-    }
-    this.image?.setAttribute("data-l10n-args", this.#pageL10nArgs);
+    this.image.setAttribute("data-l10n-args", this.#pageL10nArgs);
   }
 }
 
-export { PDFThumbnailView, TempImageFactory };
+export { PDFThumbnailView };

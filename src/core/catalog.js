@@ -275,6 +275,10 @@ class Catalog {
     return markInfo;
   }
 
+  get hasStructTree() {
+    return this.#catDict.has("StructTreeRoot");
+  }
+
   get structTreeRoot() {
     let structTree = null;
     try {
@@ -743,6 +747,16 @@ class Catalog {
     return rawDests;
   }
 
+  get rawPageLabels() {
+    const obj = this.#catDict.getRaw("PageLabels");
+    if (!obj) {
+      return null;
+    }
+
+    const numberTree = new NumberTree(obj, this.xref);
+    return numberTree.getAll();
+  }
+
   get pageLabels() {
     let obj = null;
     try {
@@ -757,8 +771,8 @@ class Catalog {
   }
 
   #readPageLabels() {
-    const obj = this.#catDict.getRaw("PageLabels");
-    if (!obj) {
+    const nums = this.rawPageLabels;
+    if (!nums) {
       return null;
     }
 
@@ -766,8 +780,6 @@ class Catalog {
     let style = null,
       prefix = "";
 
-    const numberTree = new NumberTree(obj, this.xref);
-    const nums = numberTree.getAll();
     let currentLabel = "",
       currentIndex = 1;
 

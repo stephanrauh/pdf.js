@@ -86,8 +86,7 @@ const DIACRITICS_EXCEPTION = new Set([
 let DIACRITICS_EXCEPTION_STR; // Lazily initialized, see below.
 
 const DIACRITICS_REG_EXP = /\p{M}+/gu;
-const SPECIAL_CHARS_REG_EXP =
-  /([.*+?^${}()|[\]\\])|(\p{P})|(\s+)|(\p{M})|(\p{L})/gu;
+const SPECIAL_CHARS_REG_EXP = /([+^$|])|(\p{P}+)|(\s+)|(\p{M})|(\p{L})/gu;
 const NOT_DIACRITIC_FROM_END_REG_EXP = /([^\p{M}])\p{M}*$/u;
 const NOT_DIACRITIC_FROM_START_REG_EXP = /^\p{M}*([^\p{M}])/u;
 
@@ -773,6 +772,18 @@ class PDFFindController {
   _convertToRegExpString(query, hasDiacritics) {
     const { matchDiacritics } = this.#state;
     let isUnicode = false;
+    const addExtraWhitespaces = (original, fixed) => {
+      if (original === query) {
+        return fixed;
+      }
+      if (query.startsWith(original)) {
+        return `${fixed}[ ]*`;
+      }
+      if (query.endsWith(original)) {
+        return `[ ]*${fixed}`;
+      }
+      return `[ ]*${fixed}[ ]*`;
+    };
     query = query.replaceAll(
       SPECIAL_CHARS_REG_EXP,
       (
@@ -788,11 +799,11 @@ class PDFFindController {
 
         if (p1) {
           // Escape characters like *+?... to not interfere with regexp syntax.
-          return `[ ]*\\${p1}[ ]*`;
+          return addExtraWhitespaces(p1, RegExp.escape(p1));
         }
         if (p2) {
-          // Allow whitespaces around punctuation signs.
-          return `[ ]*${p2}[ ]*`;
+          // Allow whitespaces around group of punctuation signs.
+          return addExtraWhitespaces(p2, RegExp.escape(p2));
         }
         if (p3) {
           // Replace spaces by \s+ to be sure to match any spaces.

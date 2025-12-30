@@ -908,6 +908,13 @@ function toggleCheckedBtn(button, toggle, view = null) {
   view?.classList.toggle("hidden", !toggle);
 }
 
+function toggleSelectedBtn(button, toggle, view = null) {
+  button.classList.toggle("selected", toggle);
+  button.setAttribute("aria-selected", toggle);
+
+  view?.classList.toggle("hidden", !toggle);
+}
+
 function toggleExpandedBtn(button, toggle, view = null) {
   // modified by ngx-extended-pdf-viewer
   button?.classList.toggle("toggled", toggle);
@@ -1003,6 +1010,7 @@ export {
   TextLayerMode,
   toggleCheckedBtn,
   toggleExpandedBtn,
+  toggleSelectedBtn,
   UNKNOWN_SCALE,
   VERTICAL_PADDING,
   watchScroll,
