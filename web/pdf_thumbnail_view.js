@@ -263,13 +263,19 @@ class PDFThumbnailView {
     style.setProperty("--thumbnail-height", `${this.canvasHeight}px`);
   }
 
+  // #2943 modified by ngx-extended-pdf-viewer
   setPdfPage(pdfPage) {
+    if (!pdfPage) {
+      // Handle case where pdfPage is null (thumbnails not yet initialized)
+      return;
+    }
     this.pdfPage = pdfPage;
     this.pdfPageRotate = pdfPage.rotate;
     const totalRotation = (this.rotation + this.pdfPageRotate) % 360;
     this.viewport = pdfPage.getViewport({ scale: 1, rotation: totalRotation });
     this.reset();
   }
+  // #2943 end of modification by ngx-extended-pdf-viewer
 
   reset() {
     this.cancelRendering();
