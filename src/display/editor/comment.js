@@ -321,6 +321,16 @@ class Comment {
     this.#richText = richText;
   }
 
+  // modified by ngx-extended-pdf-viewer
+  setDate(date) {
+    const dateObj = date && new Date(date);
+    if (!dateObj || isNaN(dateObj)) {
+      this.#date = new Date();
+    } else {
+      this.#date = dateObj;
+    }
+  }
+
   shown() {}
 
   destroy() {
