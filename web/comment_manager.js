@@ -838,6 +838,17 @@ class CommentDialog {
         },
       },
     });
+    // modified by ngx-extended-pdf-viewer
+    if (edited) {
+      this.#eventBus?.dispatch("annotation-editor-event", {
+        source: this,
+        type: this.#textInput.value ? 'commented' : 'commentRemoved',
+        page: this.#editor.pageIndex + 1,
+        id: this.#editor.uid,
+        editorType: this.#editor.constructor.name,
+        value: this.#editor,
+      });
+    }
 
     this.#editor?.focusCommentButton();
     this.#editor = null;
@@ -983,6 +994,15 @@ class CommentPopup {
         },
       });
       this.#editor.comment = null;
+      // modified by ngx-extended-pdf-viewer
+      this.#eventBus?.dispatch("annotation-editor-event", {
+        source: this,
+        type: 'commentRemoved',
+        page: this.#editor.pageIndex + 1,
+        id: this.#editor.uid,
+        editorType: this.#editor.constructor.name,
+        value: this.#editor,
+      });
       this.#editor.focus();
       this.destroy();
     });
