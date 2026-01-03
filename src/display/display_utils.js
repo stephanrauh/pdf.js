@@ -794,7 +794,8 @@ class ColorScheme {
 
 class CSSConstants {
   static get commentForegroundColor() {
-    // modified by ngx-extended-pdf-viewer
+    // #3113 modified by ngx-extended-pdf-viewer
+    // Wrap element in ngx-extended-pdf-viewer component to resolve CSS variables within Angular scoped styles
     const dummyComponent = document.createElement("ngx-extended-pdf-viewer");
     dummyComponent.style.display = "block";
     const element = document.createElement("span");
@@ -807,6 +808,7 @@ class CSSConstants {
     document.body.append(dummyComponent);
     const { color } = window.getComputedStyle(element);
     dummyComponent.remove();
+    // #3113 end of modification by ngx-extended-pdf-viewer
     return shadow(this, "commentForegroundColor", getRGB(color));
   }
 }

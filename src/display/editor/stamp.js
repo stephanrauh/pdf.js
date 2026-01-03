@@ -822,7 +822,8 @@ class StampEditor extends AnnotationEditor {
         modificationDate,
       };
     } else {
-      // modified by ngx-extended-pdf-viewer
+      // #3113 modified by ngx-extended-pdf-viewer
+      // Extract comment data from popup annotation for stamp annotations when deserializing from PDF
       const { popup, popupRef } = data;
 
       initialData = data = {
@@ -831,6 +832,7 @@ class StampEditor extends AnnotationEditor {
         comment: (!popup?.deleted && popup?.contents) || null,
         commentDate: (!popup?.deleted && popup?.date) || null,
       }
+      // #3113 end of modification by ngx-extended-pdf-viewer
     }
     const editor = await super.deserialize(data, parent, uiManager);
     const { rect, bitmap, bitmapUrl, bitmapId, isSvg, accessibilityData } =

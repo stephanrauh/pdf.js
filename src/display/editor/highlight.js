@@ -962,7 +962,8 @@ class HighlightEditor extends AnnotationEditor {
       };
     } else if (data.annotationType && data.annotationType === AnnotationEditorType.HIGHLIGHT) {
       // eslint-disable-next-line prefer-const
-      // modified by ngx-extended-pdf-viewer
+      // #3113 modified by ngx-extended-pdf-viewer
+      // Extract popup object from data to deserialize comment information
       let { quadPoints, outlines, rect, rotation, id, color, opacity, popup, popupRef, pageIndex, thickness } = data;
 
       // Ensure quadPoints is an array
@@ -1001,10 +1002,12 @@ class HighlightEditor extends AnnotationEditor {
         rotation,
         id,
         deleted: false,
-        // modified by ngx-extended-pdf-viewer
+        // #3113 modified by ngx-extended-pdf-viewer
+        // Extract comment data from popup annotation for deserialization
         popupRef: popupRef || !!(popup && popup.contents && !popup.deleted) || null,
         comment: (!popup?.deleted && popup?.contents) || null,
         commentDate: (!popup?.deleted && popup?.date) || null,
+        // #3113 end of modification by ngx-extended-pdf-viewer
       };
     } else if (data instanceof InkAnnotationElement) {
       const {

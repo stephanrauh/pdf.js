@@ -1292,17 +1292,19 @@ class AnnotationEditor {
     }
   }
 
-  // modified by ngx-extended-pdf-viewer
+  // #3113 modified by ngx-extended-pdf-viewer
+  // Accept commentDate parameter to restore original comment timestamp when deserializing
   setCommentData({ comment, popupRef, richText, commentDate }) {
     if (!popupRef) {
       return;
     }
     this.#comment ||= new Comment(this);
     this.#comment.setInitialText(comment, richText);
-    // modified by ngx-extended-pdf-viewer
+    // Set the date from deserialized data if available
     if (commentDate) {
       this.#comment.setDate(commentDate);
     }
+    // #3113 end of modification by ngx-extended-pdf-viewer
 
     if (!this.annotationElementId) {
       return;
@@ -1358,8 +1360,10 @@ class AnnotationEditor {
         contents: this.comment.text,
         deleted: this.comment.deleted,
         rect: [blX, blY, trX, trY],
-        // modified by ngx-extended-pdf-viewer
+        // #3113 modified by ngx-extended-pdf-viewer
+        // Serialize comment date to enable round-trip preservation of original timestamp
         date: this.comment.date?.toISOString()
+        // #3113 end of modification by ngx-extended-pdf-viewer
       };
     }
   }

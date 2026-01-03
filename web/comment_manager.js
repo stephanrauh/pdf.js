@@ -838,7 +838,8 @@ class CommentDialog {
         },
       },
     });
-    // modified by ngx-extended-pdf-viewer
+    // #3113 modified by ngx-extended-pdf-viewer
+    // Emit custom events for ngx-extended-pdf-viewer to enable comment lifecycle tracking
     if (edited) {
       this.#eventBus?.dispatch("annotation-editor-event", {
         source: this,
@@ -849,6 +850,7 @@ class CommentDialog {
         value: this.#editor,
       });
     }
+    // #3113 end of modification by ngx-extended-pdf-viewer
 
     this.#editor?.focusCommentButton();
     this.#editor = null;
@@ -908,7 +910,8 @@ class CommentPopup {
   }
 
   get _popupWidth() {
-    // modified by ngx-extended-pdf-viewer
+    // #3113 modified by ngx-extended-pdf-viewer
+    // Wrap popup in ngx-extended-pdf-viewer component and zoom container to properly calculate width with Angular scoped styles
     const dummyComponent = document.createElement("ngx-extended-pdf-viewer");
     dummyComponent.style.opacity = "0";
     dummyComponent.style.display = "block";
@@ -926,6 +929,7 @@ class CommentPopup {
     const width = popupContainer.getBoundingClientRect().width;
     popupContainer.remove();
     dummyComponent.remove();
+    // #3113 end of modification by ngx-extended-pdf-viewer
     popupContainer.style.display = "";
     return shadow(this, "_popupWidth", width);
   }
@@ -1005,7 +1009,8 @@ class CommentPopup {
         },
       });
       this.#editor.comment = null;
-      // modified by ngx-extended-pdf-viewer
+      // #3113 modified by ngx-extended-pdf-viewer
+      // Emit commentRemoved event when user clicks delete button on comment popup
       this.#eventBus?.dispatch("annotation-editor-event", {
         source: this,
         type: 'commentRemoved',
@@ -1014,6 +1019,7 @@ class CommentPopup {
         editorType: this.#editor.constructor.name,
         value: this.#editor,
       });
+      // #3113 end of modification by ngx-extended-pdf-viewer
       this.#editor.focus();
       this.destroy();
     });
@@ -1209,7 +1215,8 @@ class CommentPopup {
         const buttonWidth = this.#editor.commentButtonWidth;
         x -= widthRatio - buttonWidth;
       }
-      // modified by ngx-extended-pdf-viewer
+      // #3113 modified by ngx-extended-pdf-viewer
+      // Add margin to prevent popup from being cut off at page edges
       const margin = 0.02;
       if (this.#isLTR) {
         x = Math.max(x, -parentRect.x / parentRect.width + margin);
@@ -1221,6 +1228,7 @@ class CommentPopup {
             margin
         );
       }
+      // #3113 end of modification by ngx-extended-pdf-viewer
     }
     this.#posX = x;
     this.#posY = y;

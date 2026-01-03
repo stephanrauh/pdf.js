@@ -321,7 +321,8 @@ class Comment {
     this.#richText = richText;
   }
 
-  // modified by ngx-extended-pdf-viewer
+  // #3113 modified by ngx-extended-pdf-viewer
+  // Set comment date from deserialized data when loading PDFs with existing comments
   setDate(date) {
     const dateObj = date && new Date(date);
     if (!dateObj || isNaN(dateObj)) {
@@ -330,6 +331,7 @@ class Comment {
       this.#date = dateObj;
     }
   }
+  // #3113 end of modification by ngx-extended-pdf-viewer
 
   shown() {}
 
