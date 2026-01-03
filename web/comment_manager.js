@@ -838,6 +838,17 @@ class CommentDialog {
         },
       },
     });
+    // modified by ngx-extended-pdf-viewer
+    if (edited) {
+      this.#eventBus?.dispatch("annotation-editor-event", {
+        source: this,
+        type: this.#textInput.value ? 'commented' : 'commentRemoved',
+        page: this.#editor.pageIndex + 1,
+        id: this.#editor.uid,
+        editorType: this.#editor.constructor.name,
+        value: this.#editor,
+      });
+    }
 
     this.#editor?.focusCommentButton();
     this.#editor = null;
@@ -897,14 +908,25 @@ class CommentPopup {
   }
 
   get _popupWidth() {
-    const container = this.#createPopup();
-    const { style } = container;
-    style.opacity = "0";
-    style.display = "block";
-    document.body.append(container);
-    const width = container.getBoundingClientRect().width;
-    container.remove();
-    style.opacity = style.display = "";
+    // modified by ngx-extended-pdf-viewer
+    const dummyComponent = document.createElement("ngx-extended-pdf-viewer");
+    dummyComponent.style.opacity = "0";
+    dummyComponent.style.display = "block";
+
+    const zoomContainer = document.createElement("div");
+    zoomContainer.classList.add("zoom");
+    dummyComponent.append(zoomContainer);
+
+    const popupContainer = this.#createPopup();
+    popupContainer.style.display = "block";
+    zoomContainer.append(popupContainer);
+
+    document.body.append(dummyComponent);
+
+    const width = popupContainer.getBoundingClientRect().width;
+    popupContainer.remove();
+    dummyComponent.remove();
+    popupContainer.style.display = "";
     return shadow(this, "_popupWidth", width);
   }
 
@@ -983,6 +1005,15 @@ class CommentPopup {
         },
       });
       this.#editor.comment = null;
+      // modified by ngx-extended-pdf-viewer
+      this.#eventBus?.dispatch("annotation-editor-event", {
+        source: this,
+        type: 'commentRemoved',
+        page: this.#editor.pageIndex + 1,
+        id: this.#editor.uid,
+        editorType: this.#editor.constructor.name,
+        value: this.#editor,
+      });
       this.#editor.focus();
       this.destroy();
     });
@@ -1178,7 +1209,8 @@ class CommentPopup {
         const buttonWidth = this.#editor.commentButtonWidth;
         x -= widthRatio - buttonWidth;
       }
-      const margin = 0.01;
+      // modified by ngx-extended-pdf-viewer
+      const margin = 0.02;
       if (this.#isLTR) {
         x = Math.max(x, -parentRect.x / parentRect.width + margin);
       } else {

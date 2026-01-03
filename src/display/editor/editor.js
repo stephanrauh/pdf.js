@@ -1292,12 +1292,17 @@ class AnnotationEditor {
     }
   }
 
-  setCommentData({ comment, popupRef, richText }) {
+  // modified by ngx-extended-pdf-viewer
+  setCommentData({ comment, popupRef, richText, commentDate }) {
     if (!popupRef) {
       return;
     }
     this.#comment ||= new Comment(this);
     this.#comment.setInitialText(comment, richText);
+    // modified by ngx-extended-pdf-viewer
+    if (commentDate) {
+      this.#comment.setDate(commentDate);
+    }
 
     if (!this.annotationElementId) {
       return;
@@ -1353,6 +1358,8 @@ class AnnotationEditor {
         contents: this.comment.text,
         deleted: this.comment.deleted,
         rect: [blX, blY, trX, trY],
+        // modified by ngx-extended-pdf-viewer
+        date: this.comment.date?.toISOString()
       };
     }
   }

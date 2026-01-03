@@ -794,15 +794,19 @@ class ColorScheme {
 
 class CSSConstants {
   static get commentForegroundColor() {
+    // modified by ngx-extended-pdf-viewer
+    const dummyComponent = document.createElement("ngx-extended-pdf-viewer");
+    dummyComponent.style.display = "block";
     const element = document.createElement("span");
-    element.classList.add("comment", "sidebar");
+    element.classList.add("commentPopup", "comment", "sidebar");
     const { style } = element;
     style.width = style.height = "0";
     style.display = "none";
     style.color = "var(--comment-fg-color)";
-    document.body.append(element);
+    dummyComponent.append(element);
+    document.body.append(dummyComponent);
     const { color } = window.getComputedStyle(element);
-    element.remove();
+    dummyComponent.remove();
     return shadow(this, "commentForegroundColor", getRGB(color));
   }
 }

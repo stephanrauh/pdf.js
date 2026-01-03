@@ -962,7 +962,8 @@ class HighlightEditor extends AnnotationEditor {
       };
     } else if (data.annotationType && data.annotationType === AnnotationEditorType.HIGHLIGHT) {
       // eslint-disable-next-line prefer-const
-      let { quadPoints, outlines, rect, rotation, id, color, opacity, popupRef, pageIndex, thickness } = data;
+      // modified by ngx-extended-pdf-viewer
+      let { quadPoints, outlines, rect, rotation, id, color, opacity, popup, popupRef, pageIndex, thickness } = data;
 
       // Ensure quadPoints is an array
       if (quadPoints) {
@@ -1000,7 +1001,10 @@ class HighlightEditor extends AnnotationEditor {
         rotation,
         id,
         deleted: false,
-        popupRef: popupRef || null,
+        // modified by ngx-extended-pdf-viewer
+        popupRef: popupRef || !!(popup && popup.contents && !popup.deleted) || null,
+        comment: (!popup?.deleted && popup?.contents) || null,
+        commentDate: (!popup?.deleted && popup?.date) || null,
       };
     } else if (data instanceof InkAnnotationElement) {
       const {

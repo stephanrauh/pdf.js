@@ -178,6 +178,16 @@ class InkEditor extends DrawingEditor {
         creationDate,
         modificationDate,
       };
+    } else {
+      // modified by ngx-extended-pdf-viewer
+      const { popup, popupRef } = data;
+
+      initialData = data = {
+        ...data,
+        popupRef: popupRef || !!(popup && popup.contents && !popup.deleted) || null,
+        comment: (!popup?.deleted && popup?.contents) || null,
+        commentDate: (!popup?.deleted && popup?.date) || null,
+      }
     }
 
     const editor = await super.deserialize(data, parent, uiManager);
