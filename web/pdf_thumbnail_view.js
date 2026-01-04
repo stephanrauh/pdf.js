@@ -145,18 +145,12 @@ class PDFThumbnailView {
       this.div = existingThumbnail;
       this.image = this.div.querySelector(".thumbnailImage");
       this.checkbox = this.div.querySelector("input[type='checkbox']");
-      // #3111 modified by ngx-extended-pdf-viewer - debug logging
-      NgxConsole.log(`Thumbnail ${id}: Found existing thumbnail. div=${!!this.div}, image=${!!this.image}, checkbox=${!!this.checkbox}`);
-      // #3111 end of modification
       if (!this.image) {
         // Fallback: create standard thumbnail if custom one is malformed
         this.#createStandardThumbnail(container);
       }
     } else {
       // Create standard thumbnail using new PDF.js v5.4.530 structure
-      // #3111 modified by ngx-extended-pdf-viewer - debug logging
-      NgxConsole.log(`Thumbnail ${id}: No existing thumbnail found, creating standard thumbnail`);
-      // #3111 end of modification
       this.#createStandardThumbnail(container);
     }
     // #1696 end of modification by ngx-extended-pdf-viewer
