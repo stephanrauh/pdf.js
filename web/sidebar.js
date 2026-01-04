@@ -55,6 +55,16 @@ class Sidebar {
    * @param {boolean} isResizerOnTheLeft
    */
   constructor({ sidebar, resizer, toggleButton }, ltr, isResizerOnTheLeft) {
+    // #modified by ngx-extended-pdf-viewer
+    // Add null check for sidebar to support ngx-extended-pdf-viewer's custom HTML
+    // where sidebar elements may not be present during initial render in some browsers (Firefox)
+    if (!sidebar) {
+      console.warn("[Sidebar] sidebar element is null, skipping initialization");
+      this._sidebar = null;
+      return;
+    }
+    // #end of modification by ngx-extended-pdf-viewer
+
     this._sidebar = sidebar;
     this.#coefficient = ltr === isResizerOnTheLeft ? -1 : 1;
     this.#resizer = resizer;
@@ -97,6 +107,9 @@ class Sidebar {
   }
 
   #makeSidebarResizable() {
+    // #modified by ngx-extended-pdf-viewer
+    if (!this._sidebar) return;
+    // #end of modification by ngx-extended-pdf-viewer
     const sidebarStyle = this._sidebar.style;
     let pointerMoveAC;
     const cancelResize = () => {
@@ -171,7 +184,13 @@ class Sidebar {
     this.#width = newWidth;
     this.#resizer.ariaValueNow = Math.round(newWidth);
     if (this.#isResizerOnTheLeft) {
-      this._sidebar.parentElement.style.insetInlineStart = `${(this.#initialWidth - newWidth).toFixed(3)}px`;
+      // #modified by ngx-extended-pdf-viewer
+      if (this._sidebar?.parentElement) {
+      // #end of modification by ngx-extended-pdf-viewer
+        this._sidebar.parentElement.style.insetInlineStart = `${(this.#initialWidth - newWidth).toFixed(3)}px`;
+      // #modified by ngx-extended-pdf-viewer
+      }
+      // #end of modification by ngx-extended-pdf-viewer
     }
     this.onResizing(newWidth);
   }
@@ -189,6 +208,9 @@ class Sidebar {
    * @param {number} newWidth
    */
   set width(newWidth) {
+    // #modified by ngx-extended-pdf-viewer
+    if (!this._sidebar) return;
+    // #end of modification by ngx-extended-pdf-viewer
     this._sidebar.style.width = `${newWidth}px`;
   }
 
@@ -213,6 +235,9 @@ class Sidebar {
    * @param {boolean} [visibility] - The visibility state to set.
    */
   toggle(visibility = !this._isOpen) {
+    // #modified by ngx-extended-pdf-viewer
+    if (!this._sidebar) return;
+    // #end of modification by ngx-extended-pdf-viewer
     this._sidebar.hidden = !(this._isOpen = visibility);
   }
 
