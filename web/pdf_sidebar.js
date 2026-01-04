@@ -332,7 +332,11 @@ class PDFSidebar {
   #addEventListeners() {
     const { eventBus, outerContainer } = this;
 
-    this.sidebarContainer.addEventListener("transitionend", evt => {
+    // #2984 modified by ngx-extended-pdf-viewer
+    // Add null check for sidebarContainer to support ngx-extended-pdf-viewer's custom HTML
+    // where sidebar elements may not be present during initial render in some browsers (Firefox)
+    this.sidebarContainer?.addEventListener("transitionend", evt => {
+    // #2984 end of modification by ngx-extended-pdf-viewer
       if (evt.target === this.sidebarContainer) {
         outerContainer.classList.remove("sidebarMoving");
         // Ensure that rendering is triggered after opening/closing the sidebar.
