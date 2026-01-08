@@ -1152,7 +1152,11 @@ class HighlightEditor extends AnnotationEditor {
       quadPoints: this.#serializeBoxes(),
       outlines: this.#serializeOutlines(serialized.rect),
     });
-    this.addComment(serialized);
+    // #3116 modified by ngx-extended-pdf-viewer
+    // Skip the hasEdited check when serializing a copy. Otherwise, the comment
+    // would disappear from the serialized data after a save-load-save cycle.
+    this.addComment(serialized, this._isCopy);
+    // #3116 end of modification by ngx-extended-pdf-viewer
 
     // #3076 modified by ngx-extended-pdf-viewer
     // When exporting with includeId=true, add ID even when isForCopying=true

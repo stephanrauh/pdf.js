@@ -882,7 +882,11 @@ class StampEditor extends AnnotationEditor {
       bitmapId: this.#bitmapId,
       isSvg: this.#isSvg,
     });
-    this.addComment(serialized);
+    // #3116 modified by ngx-extended-pdf-viewer
+    // Skip the hasEdited check when serializing a copy. Otherwise, the comment
+    // would disappear from the serialized data after a save-load-save cycle.
+    this.addComment(serialized, this._isCopy);
+    // #3116 end of modification by ngx-extended-pdf-viewer
 
     if (isForCopying) {
       // We don't know what's the final destination (this pdf or another one)

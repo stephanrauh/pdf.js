@@ -890,7 +890,11 @@ class FreeTextEditor extends AnnotationEditor {
       fontSize: this.#fontSize,
       value: this.#serializeContent(),
     });
-    this.addComment(serialized);
+    // #3116 modified by ngx-extended-pdf-viewer
+    // Skip the hasEdited check when serializing a copy. Otherwise, the comment
+    // would disappear from the serialized data after a save-load-save cycle.
+    this.addComment(serialized, this._isCopy);
+    // #3116 end of modification by ngx-extended-pdf-viewer
 
     if (isForCopying) {
       // #3076 modified by ngx-extended-pdf-viewer
