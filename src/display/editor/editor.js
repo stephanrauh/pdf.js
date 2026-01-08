@@ -1346,8 +1346,11 @@ class AnnotationEditor {
     this.#comment.setSelectedButton(selected);
   }
 
-  addComment(serialized) {
-    if (this.hasEditedComment) {
+  // #3116 modified by ngx-extended-pdf-viewer
+  // Allow skipping the hasEditedComment check
+  addComment(serialized, addUnconditionally = false) {
+    if (this.hasEditedComment || (addUnconditionally && this.hasComment)) {
+      // #3116 end of modification by ngx-extended-pdf-viewer
       const DEFAULT_POPUP_WIDTH = 180;
       const DEFAULT_POPUP_HEIGHT = 100;
       const [, , , trY] = serialized.rect;
