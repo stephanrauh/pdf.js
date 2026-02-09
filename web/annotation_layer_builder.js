@@ -233,14 +233,15 @@ class AnnotationLayerBuilder {
    *   are added to the annotation layer.
    */
   async injectLinkAnnotations(inferredLinks) {
-    if (this.#annotations === null) {
-      throw new Error(
-        "`render` method must be called before `injectLinkAnnotations`."
-      );
-    }
-    if (this._cancelled || this.#linksInjected) {
+    // #3175 modified by ngx-extended-pdf-viewer
+    // When navigating between pages, a race condition can cause this method
+    // to be called on a new AnnotationLayerBuilder instance before render()
+    // has set #annotations. Return early instead of throwing — there is
+    // nothing to inject links into.
+    if (this.#annotations === null || this._cancelled || this.#linksInjected) {
       return;
     }
+    // #3175 end of modification by ngx-extended-pdf-viewer
     this.#linksInjected = true;
 
     const newLinks = this.#annotations.length
