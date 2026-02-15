@@ -518,6 +518,13 @@ class AnnotationEditorLayer {
       );
       this.#textLayer.div.classList.add("free");
       this.toggleDrawing();
+      // #3136 modified by ngx-extended-pdf-viewer
+      this.eventBus?.dispatch("annotation-editor-event", {
+        source: this,
+        type: "drawingStarted",
+        editorType: "HighlightEditor",
+      });
+      // #3136 end of modification by ngx-extended-pdf-viewer
       HighlightEditor.startHighlighting(
         this,
         this.#uiManager.direction === "ltr",
@@ -528,6 +535,13 @@ class AnnotationEditorLayer {
         () => {
           this.#textLayer.div.classList.remove("free");
           this.toggleDrawing(true);
+          // #3136 modified by ngx-extended-pdf-viewer
+          this.eventBus?.dispatch("annotation-editor-event", {
+            source: this,
+            type: "drawingStopped",
+            editorType: "HighlightEditor",
+          });
+          // #3136 end of modification by ngx-extended-pdf-viewer
         },
         { once: true, signal: this.#uiManager._signal }
       );
