@@ -790,6 +790,13 @@ class DrawingEditor extends AnnotationEditor {
       { signal }
     );
     parent.toggleDrawing();
+    // #3136 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "drawingStarted",
+      editorType: this.name,
+    });
+    // #3136 end of modification by ngx-extended-pdf-viewer
     uiManager._editorUndoBar?.hide();
 
     if (DrawingEditor.#currentDraw) {
@@ -875,6 +882,13 @@ class DrawingEditor extends AnnotationEditor {
     }
 
     parent.toggleDrawing(true);
+    // #3136 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "drawingStopped",
+      editorType: this.name,
+    });
+    // #3136 end of modification by ngx-extended-pdf-viewer
     this._cleanup(false);
 
     if (event?.target === parent.div) {
