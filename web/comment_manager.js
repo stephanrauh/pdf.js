@@ -220,7 +220,11 @@ class CommentSidebar extends Sidebar {
         stopEvent(e);
       }
     };
-    commentToolbarButton.addEventListener("keydown", keyDownCallback);
+    // #modified by ngx-extended-pdf-viewer
+    // Add null check for commentToolbarButton to support custom toolbars
+    // where the editorCommentButton element may not be present in the DOM
+    commentToolbarButton?.addEventListener("keydown", keyDownCallback);
+    // #end of modification by ngx-extended-pdf-viewer
     sidebar.addEventListener("keydown", keyDownCallback);
   }
 
