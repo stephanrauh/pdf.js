@@ -1090,11 +1090,23 @@ class PDFPageView extends BasePDFPageView {
     const transform = outputScale.scaled
       ? [outputScale.sx, 0, 0, outputScale.sy, 0, 0]
       : null;
+    // #3131 modified by ngx-extended-pdf-viewer
+    // Capture a reference to the canvas from this draw() call so that the
+    // onCancel callback can verify it is still the current canvas before
+    // calling _resetCanvas(). Without this guard, a delayed cancellation of
+    // an earlier render task could remove a canvas that belongs to a newer
+    // draw() cycle, leaving the canvasWrapper permanently empty.
+    const canvasForThisDraw = canvas;
+    // #3131 end of modification by ngx-extended-pdf-viewer
     const resultPromise = this._drawCanvas(
       this._getRenderingContext(canvas, transform, recordBBoxes),
       () => {
         prevCanvas?.remove();
-        this._resetCanvas();
+        // #3131 modified by ngx-extended-pdf-viewer
+        if (this.canvas === canvasForThisDraw) {
+          this._resetCanvas();
+        }
+        // #3131 end of modification by ngx-extended-pdf-viewer
       },
       renderTask => {
         // Ensure that the thumbnails won't become partially (or fully) blank,
