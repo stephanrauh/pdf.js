@@ -161,7 +161,17 @@ class BasePDFPageView {
       }
 
       if (prevCanvas) {
-        prevCanvas.replaceWith(canvas);
+        // #3131 modified by ngx-extended-pdf-viewer
+        // If prevCanvas was never inserted into the DOM (e.g., because a
+        // previous render was cancelled before #showCanvas could add it),
+        // replaceWith on a detached element is a no-op — the new canvas
+        // would end up detached too, leaving canvasWrapper permanently empty.
+        if (prevCanvas.parentNode) {
+          prevCanvas.replaceWith(canvas);
+        } else {
+          onShow(canvas);
+        }
+        // #3131 end of modification by ngx-extended-pdf-viewer
         prevCanvas.width = prevCanvas.height = 0;
       } else {
         onShow(canvas);
