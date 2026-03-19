@@ -1917,7 +1917,11 @@ class WidgetAnnotation extends Annotation {
       data.fieldValue = data.defaultFieldValue;
     }
 
-    data.alternativeText = stringToPDFString(dict.get("TU") || "");
+    // #3158 modified by ngx-extended-pdf-viewer
+    data.alternativeText = stringToPDFString(
+      getInheritableProperty({ dict, key: "TU" }) || ""
+    );
+    // #3158 end of modification by ngx-extended-pdf-viewer
 
     this.setDefaultAppearance(params);
 
