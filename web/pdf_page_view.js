@@ -534,9 +534,11 @@ class PDFPageView extends BasePDFPageView {
       NgxConsole.error("#injectLinkAnnotations:", ex);
       error = ex;
     }
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-      this.#dispatchLayerRendered("linkannotationsadded", error);
-    }
+    // #3134 modified by ngx-extended-pdf-viewer
+    // if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+    this.#dispatchLayerRendered("linkannotationsadded", error);
+    // }
+    // #3134 end of modification by ngx-extended-pdf-viewer
   }
 
   _resetCanvas() {
