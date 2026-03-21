@@ -243,6 +243,13 @@ class SecondaryToolbar {
     eventBus._on("cursortoolchanged", this.#cursorToolChanged.bind(this));
     eventBus._on("scrollmodechanged", this.#scrollModeChanged.bind(this));
     eventBus._on("spreadmodechanged", this.#spreadModeChanged.bind(this));
+    // #3084 modified by ngx-extended-pdf-viewer
+    eventBus._on("closeopenpopovers", ({ source }) => {
+      if (source !== this) {
+        this.close();
+      }
+    });
+    // #3084 end of modification by ngx-extended-pdf-viewer
   }
 
   #cursorToolChanged({ tool, disabled }) {
@@ -300,6 +307,9 @@ class SecondaryToolbar {
     if (this.opened) {
       return;
     }
+    // #3084 modified by ngx-extended-pdf-viewer
+    this.eventBus.dispatch("closeopenpopovers", { source: this });
+    // #3084 end of modification by ngx-extended-pdf-viewer
     this.opened = true;
 
     const { toggleButton, toolbar } = this.#opts;

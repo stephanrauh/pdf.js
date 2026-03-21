@@ -332,6 +332,16 @@ class Toolbar {
       "annotationeditormodechanged",
       this.#editorModeChanged.bind(this)
     );
+    // #3084 modified by ngx-extended-pdf-viewer
+    eventBus._on("closeopenpopovers", ({ source }) => {
+      if (source !== this) {
+        eventBus.dispatch("switchannotationeditormode", {
+          source: this,
+          mode: AnnotationEditorType.NONE,
+        });
+      }
+    });
+    // #3084 end of modification by ngx-extended-pdf-viewer
     eventBus._on("showannotationeditorui", ({ mode }) => {
       switch (mode) {
         case AnnotationEditorType.HIGHLIGHT:
@@ -368,6 +378,12 @@ class Toolbar {
   }
 
   #editorModeChanged({ mode }) {
+    // #3084 modified by ngx-extended-pdf-viewer
+    if (mode !== AnnotationEditorType.NONE && mode !== AnnotationEditorType.DISABLE) {
+      this.eventBus.dispatch("closeopenpopovers", { source: this });
+    }
+    // #3084 end of modification by ngx-extended-pdf-viewer
+
     const {
       editorCommentButton,
       editorCommentParamsToolbar,

@@ -51,6 +51,14 @@ class PDFFindBar {
     this.eventBus = eventBus;
     this.#mainContainer = mainContainer;
 
+    // #3084 modified by ngx-extended-pdf-viewer
+    eventBus._on("closeopenpopovers", ({ source }) => {
+      if (source !== this) {
+        this.close();
+      }
+    });
+    // #3084 end of modification by ngx-extended-pdf-viewer
+
     const checkedInputs = new Map(
       Array.from([
         [this.highlightAll, "highlightallchange"],
@@ -224,6 +232,9 @@ class PDFFindBar {
   }
 
   open() {
+    // #3084 modified by ngx-extended-pdf-viewer
+    this.eventBus.dispatch("closeopenpopovers", { source: this });
+    // #3084 end of modification by ngx-extended-pdf-viewer
     if (!this.opened) {
       // Potentially update the findbar layout, row vs column, when:
       //  - The width of the viewer itself changes.
