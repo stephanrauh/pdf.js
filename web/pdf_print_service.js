@@ -265,21 +265,36 @@ class PDFPrintService {
     return new Promise(renderNextPage);
   }
 
+  // #3126 modified by ngx-extended-pdf-viewer
   useRenderedPage() {
     this.throwIfInactive();
     const img = document.createElement("img");
-    this.scratchCanvas.toBlob(blob => {
-      img.src = URL.createObjectURL(blob);
-    });
+
+    const { promise, resolve, reject } = Promise.withResolvers();
+    img.onload = resolve;
+    img.onerror = () => {
+      NgxConsole.error("Failed to load printed page image.");
+      reject(new Error("Failed to load printed page image."));
+    };
+
+    try {
+      this.scratchCanvas.toBlob(blob => {
+        if (!blob) {
+          NgxConsole.error("Print failed: could not render page to image. The canvas may be too large or tainted.");
+          reject(new Error("toBlob returned null"));
+          return;
+        }
+        img.src = URL.createObjectURL(blob);
+      });
+    } catch (e) {
+      NgxConsole.error("Print failed: could not convert canvas to blob.", e);
+      reject(e);
+    }
 
     const wrapper = document.createElement("div");
     wrapper.className = "printedPage";
     wrapper.append(img);
     this.printContainer.append(wrapper);
-
-    const { promise, resolve, reject } = Promise.withResolvers();
-    img.onload = resolve;
-    img.onerror = reject;
 
     promise
       .catch(() => {
@@ -290,6 +305,7 @@ class PDFPrintService {
       });
     return promise;
   }
+  // #3126 end of modification by ngx-extended-pdf-viewer
 
   performPrint() {
     this.throwIfInactive();
