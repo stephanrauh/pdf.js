@@ -3771,6 +3771,12 @@ function onKeyDown(evt) {
         break;
     }
 
+    // #3155 modified by ngx-extended-pdf-viewer
+    if (turnPage !== 0 && AppOptions.get("readingDirection") === "rtl") {
+      turnPage = -turnPage;
+    }
+    // #3155 end of modification by ngx-extended-pdf-viewer
+
     if (
       turnPage !== 0 &&
       (!turnOnlyIfPageFit || pdfViewer.currentScaleValue === "page-fit")

@@ -428,6 +428,13 @@ const defaultOptions = {
     value: -1,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  // #3155 modified by ngx-extended-pdf-viewer
+  readingDirection: {
+    /** @type {string} */
+    value: "ltr",
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
+  // #3155 end of modification by ngx-extended-pdf-viewer
   spreadModeOnLoad: {
     /** @type {number} */
     value: -1,
