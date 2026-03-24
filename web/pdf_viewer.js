@@ -1665,7 +1665,15 @@ class PDFViewer {
         pageSpot = { left: 0, top: 0 };
       }
     }
-    scrollIntoView(div, pageSpot, false, this.pageViewMode === "infinite-scroll");
+    // #3155 modified by ngx-extended-pdf-viewer
+    if (this._isContainerRtl && (this._scrollMode === ScrollMode.HORIZONTAL || this._scrollMode === ScrollMode.WRAPPED)) {
+      // Position the target page at the right edge of the viewport,
+      // which is the reading start position in RTL.
+      div.scrollIntoView({ block: "nearest", inline: "end" });
+    } else {
+      scrollIntoView(div, pageSpot, false, this.pageViewMode === "infinite-scroll");
+    }
+    // #3155 end of modification by ngx-extended-pdf-viewer
 
     // Ensure that the correct *initial* document position is set, when any
     // OpenParameters are used, for documents with non-default Scroll/Spread
@@ -2275,6 +2283,15 @@ class PDFViewer {
       horizontal = this._scrollMode === ScrollMode.HORIZONTAL,
       rtl = horizontal && this._isContainerRtl;
 
+    // #3155 modified by ngx-extended-pdf-viewer
+    // In RTL horizontal/wrapped mode, the offset-based visibility calculation
+    // in getVisibleElements breaks because scrollLeft and offsetLeft use
+    // incompatible coordinate systems. Use getBoundingClientRect instead.
+    if (this._isContainerRtl && (horizontal || this._scrollMode === ScrollMode.WRAPPED)) {
+      return this._getVisiblePagesRtl(views);
+    }
+    // #3155 end of modification by ngx-extended-pdf-viewer
+
     return getVisibleElements({
       scrollEl: this.container,
       views,
@@ -2283,6 +2300,53 @@ class PDFViewer {
       rtl,
     });
   }
+
+  // #3155 modified by ngx-extended-pdf-viewer
+  _getVisiblePagesRtl(views) {
+    const containerRect = this.container.getBoundingClientRect();
+    const visible = [];
+    const ids = new Set();
+
+    for (const view of views) {
+      const element = view.div;
+      const rect = element.getBoundingClientRect();
+
+      const overlapLeft = Math.max(rect.left, containerRect.left);
+      const overlapRight = Math.min(rect.right, containerRect.right);
+      const overlapTop = Math.max(rect.top, containerRect.top);
+      const overlapBottom = Math.min(rect.bottom, containerRect.bottom);
+
+      const visibleWidth = Math.max(0, overlapRight - overlapLeft);
+      const visibleHeight = Math.max(0, overlapBottom - overlapTop);
+
+      if (visibleWidth === 0 || visibleHeight === 0) {
+        continue;
+      }
+
+      const fractionWidth = visibleWidth / rect.width;
+      const fractionHeight = visibleHeight / rect.height;
+      const percent = (fractionWidth * fractionHeight * 100) | 0;
+
+      visible.push({
+        id: view.id,
+        x: rect.left - containerRect.left,
+        y: rect.top - containerRect.top,
+        view,
+        percent,
+        widthPercent: (fractionWidth * 100) | 0,
+      });
+      ids.add(view.id);
+    }
+
+    // Sort by position: rightmost first (highest x = first in RTL reading order)
+    visible.sort((a, b) => b.x - a.x);
+
+    const first = visible[0];
+    const last = visible.at(-1);
+
+    return { first, last, views: visible, ids };
+  }
+  // #3155 end of modification by ngx-extended-pdf-viewer
 
   cleanup() {
     for (const pageView of this._pages) {
