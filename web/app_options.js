@@ -431,7 +431,7 @@ const defaultOptions = {
   // #3155 modified by ngx-extended-pdf-viewer
   readingDirection: {
     /** @type {string} */
-    value: "ltr",
+    value: "auto",
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   // #3155 end of modification by ngx-extended-pdf-viewer
