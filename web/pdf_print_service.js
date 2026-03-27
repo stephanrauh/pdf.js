@@ -135,6 +135,9 @@ class PDFPrintService {
     this.isInPDFPrintRange = isInPDFPrintRange;
     // #2377 end of modification by ngx-extended-pdf-viewer
     this.cspPolicyService = cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
+    // #3126 modified by ngx-extended-pdf-viewer
+    this._blobUrls = [];
+    // #3126 end of modification by ngx-extended-pdf-viewer
   }
 
   layout() {
@@ -204,6 +207,12 @@ class PDFPrintService {
     }
     this.scratchCanvas.width = this.scratchCanvas.height = 0;
     this.scratchCanvas = null;
+    // #3126 modified by ngx-extended-pdf-viewer
+    for (const url of this._blobUrls) {
+      URL.revokeObjectURL(url);
+    }
+    this._blobUrls = [];
+    // #3126 end of modification by ngx-extended-pdf-viewer
     activeService = null;
     ensureOverlay().then(function () {
       overlayManager.closeIfActive(dialog);
@@ -273,22 +282,48 @@ class PDFPrintService {
     const { promise, resolve, reject } = Promise.withResolvers();
     img.onload = resolve;
     img.onerror = () => {
-      NgxConsole.error("Failed to load printed page image.");
-      reject(new Error("Failed to load printed page image."));
+      NgxConsole.error("Failed to load printed page image via blob URL, falling back to data URL.");
+      // Fallback: use toDataURL instead of toBlob + createObjectURL.
+      // Firefox may fail to print blob URL images under certain conditions
+      // (e.g. with Service Workers or when accessed from a remote server).
+      try {
+        img.onerror = () => {
+          NgxConsole.error("Print failed: could not load page image even with data URL fallback.");
+          reject(new Error("Failed to load printed page image."));
+        };
+        img.src = this.scratchCanvas.toDataURL();
+      } catch (e) {
+        NgxConsole.error("Print failed: toDataURL fallback also failed.", e);
+        reject(e);
+      }
     };
 
     try {
       this.scratchCanvas.toBlob(blob => {
         if (!blob) {
-          NgxConsole.error("Print failed: could not render page to image. The canvas may be too large or tainted.");
-          reject(new Error("toBlob returned null"));
+          NgxConsole.warn("Print: toBlob returned null, falling back to data URL.");
+          try {
+            img.src = this.scratchCanvas.toDataURL();
+          } catch (e) {
+            NgxConsole.error("Print failed: both toBlob and toDataURL failed.", e);
+            reject(e);
+          }
           return;
         }
-        img.src = URL.createObjectURL(blob);
+        const blobUrl = URL.createObjectURL(blob);
+        // Defer revoking blob URLs until after printing to prevent
+        // Firefox from showing grey placeholders in print preview.
+        this._blobUrls.push(blobUrl);
+        img.src = blobUrl;
       });
     } catch (e) {
-      NgxConsole.error("Print failed: could not convert canvas to blob.", e);
-      reject(e);
+      NgxConsole.warn("Print: toBlob threw, falling back to data URL.", e);
+      try {
+        img.src = this.scratchCanvas.toDataURL();
+      } catch (e2) {
+        NgxConsole.error("Print failed: both toBlob and toDataURL failed.", e2);
+        reject(e2);
+      }
     }
 
     const wrapper = document.createElement("div");
@@ -296,13 +331,9 @@ class PDFPrintService {
     wrapper.append(img);
     this.printContainer.append(wrapper);
 
-    promise
-      .catch(() => {
-        // Avoid "Uncaught promise" messages in the console.
-      })
-      .then(() => {
-        URL.revokeObjectURL(img.src);
-      });
+    promise.catch(() => {
+      // Avoid "Uncaught promise" messages in the console.
+    });
     return promise;
   }
   // #3126 end of modification by ngx-extended-pdf-viewer
