@@ -207,7 +207,16 @@ class TouchManager {
       return;
     }
 
-    const origin = [(screen0X + screen1X) / 2, (screen0Y + screen1Y) / 2];
+    // #3069 modified by ngx-extended-pdf-viewer
+    // Use clientX/Y (viewport coords) for the origin, not screenX/Y.
+    // The zoom scroll adjustment uses getBoundingClientRect (viewport coords),
+    // so the origin must be in the same coordinate space. screenX/Y includes
+    // browser chrome offset, which causes drift in embedded viewers.
+    const origin = [
+      (touch0.clientX + touch1.clientX) / 2,
+      (touch0.clientY + touch1.clientY) / 2,
+    ];
+    // #3069 end of modification by ngx-extended-pdf-viewer
     this.#onPinching?.(origin, pDistance, distance);
   }
 
