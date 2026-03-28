@@ -108,6 +108,55 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
   }
   // #716 end of modification
 
+  // #3069 modified by ngx-extended-pdf-viewer
+  // In infinite-scroll mode, the PDF container and its parents all expand
+  // to full content height (no scrollbars). The actual scrollbar is on an
+  // outer element (e.g. <main>) which may not be an offsetParent.
+  // Use getBoundingClientRect + scrollTop on the outer container instead.
+  if (infiniteScroll) {
+    // Use setTimeout to defer the scroll until after the browser has
+    // finished handling focus changes (e.g., Tab key moving focus to
+    // the next element, which causes the browser to auto-scroll the
+    // container to show the focused element). Without this, our scroll
+    // is immediately overridden by the browser's focus-scroll.
+    setTimeout(() => {
+      // Find the outer scroll container by walking up via parentElement
+      let scrollParent = element.parentElement;
+      while (scrollParent) {
+        if (scrollParent === document.body || scrollParent === document.documentElement) {
+          break;
+        }
+        const style = getComputedStyle(scrollParent);
+        const overflowY = style.overflowY;
+        if ((overflowY === "auto" || overflowY === "scroll") &&
+            scrollParent.scrollHeight > scrollParent.clientHeight) {
+          // Found the scrollable ancestor.
+          const elementRect = element.getBoundingClientRect();
+          const scrollRect = scrollParent.getBoundingClientRect();
+          let targetY = scrollParent.scrollTop + (elementRect.top - scrollRect.top);
+          let targetX = scrollParent.scrollLeft + (elementRect.left - scrollRect.left);
+          if (spot) {
+            if (spot.top !== undefined) targetY += spot.top;
+            if (spot.left !== undefined) targetX += spot.left;
+          }
+          scrollParent.scrollTop = targetY;
+          if (spot?.left !== undefined) {
+            scrollParent.scrollLeft = targetX;
+          }
+          return;
+        }
+        scrollParent = scrollParent.parentElement;
+      }
+      // Fallback: scroll the window
+      const elementRect = element.getBoundingClientRect();
+      let targetY = window.scrollY + elementRect.top;
+      if (spot?.top !== undefined) targetY += spot.top;
+      window.scrollTo(window.scrollX, targetY);
+    }, 0);
+    return;
+  }
+  // #3069 end of modification by ngx-extended-pdf-viewer
+
   let parent = element.offsetParent;
   if (!parent) {
     NgxConsole.error("offsetParent is not set -- cannot scroll");
@@ -127,15 +176,6 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll=fal
 
     parent = parent.offsetParent;
     if (!parent) {
-      // modified by ngx-extended-pdf-viewer #492
-      if (infiniteScroll) {
-        if (document.body.clientHeight > offsetY) {
-          // infinite scroll
-          offsetY -= 32;
-          window.scrollTo(window.scrollX, offsetY);
-        }
-      }
-      // end of modification #492
       return; // no need to scroll
     }
   }

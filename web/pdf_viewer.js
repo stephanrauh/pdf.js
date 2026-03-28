@@ -293,6 +293,10 @@ class PDFViewer {
   // to ensure rendering in infinite-scroll-mode
   #outerScrollContainer = undefined;
 
+  // #3069: Timestamp of last programmatic navigation. Used to suppress
+  // page-number resets in update() while the scroll is still settling.
+  #lastNavigationTime = 0;
+
   #pageViewMode = "multiple";
   // #1989 end of modification by ngx-extended-pdf-viewer
 
@@ -486,17 +490,38 @@ class PDFViewer {
 
   set pageViewMode(viewMode) {
     if (this.#pageViewMode !== viewMode) {
+      // #3069 modified by ngx-extended-pdf-viewer
+      // Save the current page before switching modes so we can restore
+      // the scroll position after the layout changes.
+      const previousPage = this._currentPageNumber;
+      // #3069 end of modification by ngx-extended-pdf-viewer
+
       this.#pageViewMode = viewMode;
-      if (!this.#outerScrollContainer && viewMode === "infinite-scroll") {
-        this.#outerScrollContainer = this.#findParentWithScrollbar(this.container.offsetParent);
-        if (this.#outerScrollContainer) {
-          watchScroll(this.#outerScrollContainer, this._scrollUpdate.bind(this));
-        }
+      // Clear cached scroll container — the viewerContainer itself may
+      // have been cached from the previous mode when it had a scrollbar.
+      this.#outerScrollContainer = undefined;
+      if (viewMode === "infinite-scroll") {
+        this.#initOuterScrollListener();
       }
 
       // #2503 modified by ngx-extended-pdf-viewer: inform the find controller about changes of the pageViewMode
       this.eventBus.dispatch("pageviewmodechanged", { source: this, pageViewMode: viewMode });
       // #2503 end of modification by ngx-extended-pdf-viewer
+
+      // #3069 modified by ngx-extended-pdf-viewer
+      // After switching to infinite-scroll, the viewerContainer expands
+      // and update() would reset the page to 1. Prevent this by setting
+      // the navigation guard and scrolling to the previously visible page.
+      if (viewMode === "infinite-scroll" && previousPage > 1) {
+        this.#lastNavigationTime = Date.now();
+        // Use a longer delay to ensure the layout has settled and
+        // <main> has its scrollbar before we try to scroll.
+        setTimeout(() => {
+          this.#lastNavigationTime = Date.now();
+          this.#scrollIntoView(this._pages[previousPage - 1]);
+        }, 200);
+      }
+      // #3069 end of modification by ngx-extended-pdf-viewer
     }
   }
 
@@ -508,6 +533,54 @@ class PDFViewer {
       element = element.parentElement;
     }
     return null;
+  }
+
+  // Walk up from an element via parentElement to find the nearest ancestor
+  // with a REAL scrollbar (scrollHeight > clientHeight, meaning content is
+  // clipped and scrollable). Skips the container itself and body/html.
+  #findAncestorWithScrollbar(element) {
+    // Start above the container — the container itself expands in
+    // infinite-scroll mode (no scrollbar), so we must skip it.
+    let el = element?.parentElement;
+    while (el) {
+      if (el === document.body || el === document.documentElement) {
+        return null; // use window fallback
+      }
+      // Only consider elements that actually clip their content
+      // (overflow auto/scroll with content overflowing).
+      const style = getComputedStyle(el);
+      const overflowY = style.overflowY;
+      const hasOverflowClip = overflowY === "auto" || overflowY === "scroll";
+      if (hasOverflowClip && el.scrollHeight > el.clientHeight) {
+        return el;
+      }
+      el = el.parentElement;
+    }
+    return null;
+  }
+
+  #outerScrollListenerActive = false;
+
+  #initOuterScrollListener() {
+    if (this.#outerScrollListenerActive) {
+      return;
+    }
+    this.#outerScrollListenerActive = true;
+    // Use a capturing scroll listener on the document to catch scroll
+    // events from ANY ancestor element (could be <main>, a custom
+    // container, <body>, or the window). This avoids the fragile approach
+    // of trying to find the specific scrollable ancestor at init time,
+    // which fails when the DOM isn't fully laid out yet.
+    document.addEventListener("scroll", (evt) => {
+      // Only react if the scroll target is an ancestor of our container.
+      const target = evt.target;
+      if (target === document || target === document.documentElement ||
+          target === document.body || target?.contains?.(this.container)) {
+        this._scrollUpdate();
+      }
+    }, { capture: true });
+    // Also listen for window scroll (for body/html scrolling).
+    window.addEventListener("scroll", () => this._scrollUpdate());
   }
   // #1989 end of modification by ngx-extended-pdf-viewer
 
@@ -1597,7 +1670,19 @@ class PDFViewer {
       this.update();
     }, 100);
 
-    this.update();
+    // #3069 modified by ngx-extended-pdf-viewer
+    // In infinite-scroll mode, the immediate update() call happens before
+    // the scroll has visually taken effect. This causes _getVisiblePages
+    // to return stale results, resetting the page number back to page 1
+    // after a programmatic navigation (e.g., entering a page number).
+    // Use noScroll=true for the immediate call to prevent the page number
+    // reset; the debounced call at 100ms will update it correctly.
+    if (this.pageViewMode === "infinite-scroll") {
+      this.update(true);
+    } else {
+      this.update();
+    }
+    // #3069 end of modification by ngx-extended-pdf-viewer
   }
 
   // #1301 modified by ngx-extended-pdf-viewer:
@@ -1638,6 +1723,13 @@ class PDFViewer {
     if (!pageView) {
       return;
     }
+    // #3069 modified by ngx-extended-pdf-viewer
+    // Mark that a programmatic navigation is in progress so that
+    // update() doesn't reset the page number while the scroll settles.
+    if (this.pageViewMode === "infinite-scroll") {
+      this.#lastNavigationTime = Date.now();
+    }
+    // #3069 end of modification by ngx-extended-pdf-viewer
     // end of modification by ngx-extended-pdf-viewer
     const { div, id } = pageView;
 
@@ -1740,34 +1832,92 @@ class PDFViewer {
     this._currentScale = newScale;
 
     if (!noScroll) {
-      let page = this._currentPageNumber,
-        dest;
-      if (
-        this._location &&
-        !(this.isInPresentationMode || this.isChangingPresentationMode)
-      ) {
-        page = this._location.pageNumber;
-        dest = [
-          null,
-          { name: "XYZ" },
-          this._location.left,
-          this._location.top,
-          null,
-        ];
-      }
-      this.scrollPageIntoView({
-        pageNumber: page,
-        destArray: dest,
-        allowNegativeOffset: true,
-      });
-      if (Array.isArray(origin)) {
-        // If the origin of the scaling transform is specified, preserve its
-        // location on screen. If not specified, scaling will fix the top-left
-        // corner of the visible PDF area.
-        const scaleDiff = newScale / previousScale - 1;
-        const [top, left] = this.containerTopLeft;
-        this.container.scrollLeft += (origin[0] - left) * scaleDiff;
-        this.container.scrollTop += (origin[1] - top) * scaleDiff;
+      // #3069 modified by ngx-extended-pdf-viewer
+      if (this.pageViewMode === "infinite-scroll") {
+        // In infinite-scroll mode, the viewer container is tall enough to show
+        // all pages (no internal scrollbar). The actual scrolling happens on an
+        // outer container or the window. We must adjust THAT scroll position,
+        // not this.container's (which is always 0).
+        // Lazily find the outer scroll container if not yet cached.
+        if (!this.#outerScrollContainer) {
+          this.#outerScrollContainer =
+            this.#findAncestorWithScrollbar(this.container);
+        }
+        const scrollEl = this.#outerScrollContainer;
+        const ratio = newScale / previousScale;
+        if (scrollEl) {
+          // Only the PDF content scales — the header/tabs above the PDF
+          // viewer in the scroll container do NOT scale. Use the PDF
+          // container's bounding rect (not the scroll container's) to
+          // compute the mouse offset within the scaling content.
+          const containerRect = this.container.getBoundingClientRect();
+          if (Array.isArray(origin)) {
+            // origin is [clientX, clientY] in viewport coords.
+            // Distance from mouse to PDF container top = the offset
+            // within the scaling content. Only this part scales.
+            scrollEl.scrollTop += (ratio - 1) * (origin[1] - containerRect.top);
+            scrollEl.scrollLeft += (ratio - 1) * (origin[0] - containerRect.left);
+          } else {
+            // No origin — scale around the top of the visible PDF area.
+            const scrollRect = scrollEl.getBoundingClientRect();
+            scrollEl.scrollTop += (ratio - 1) * (scrollRect.top - containerRect.top);
+            scrollEl.scrollLeft += (ratio - 1) * (scrollRect.left - containerRect.left);
+          }
+        } else {
+          // Fallback: the window is the scrolling element.
+          // Same principle: only the PDF content scales.
+          const containerRect = this.container.getBoundingClientRect();
+          if (Array.isArray(origin)) {
+            const scaleDiff = ratio - 1;
+            window.scrollBy(
+              scaleDiff * (origin[0] - containerRect.left),
+              scaleDiff * (origin[1] - containerRect.top)
+            );
+          } else {
+            const scaleDiff = ratio - 1;
+            window.scrollBy(
+              scaleDiff * (0 - containerRect.left),
+              scaleDiff * (0 - containerRect.top)
+            );
+          }
+        }
+      } else {
+        // #3069 end of modification by ngx-extended-pdf-viewer
+        let page = this._currentPageNumber,
+          dest;
+        if (
+          this._location &&
+          !(this.isInPresentationMode || this.isChangingPresentationMode)
+        ) {
+          page = this._location.pageNumber;
+          dest = [
+            null,
+            { name: "XYZ" },
+            this._location.left,
+            this._location.top,
+            null,
+          ];
+        }
+        this.scrollPageIntoView({
+          pageNumber: page,
+          destArray: dest,
+          allowNegativeOffset: true,
+        });
+        if (Array.isArray(origin)) {
+          // If the origin of the scaling transform is specified, preserve its
+          // location on screen. If not specified, scaling will fix the top-left
+          // corner of the visible PDF area.
+          const scaleDiff = newScale / previousScale - 1;
+          // #3069 modified by ngx-extended-pdf-viewer
+          // Use getBoundingClientRect() instead of containerTopLeft (offsetTop/
+          // offsetLeft). origin is [clientX, clientY] in viewport coords, but
+          // offsetTop/offsetLeft are relative to offsetParent — wrong when the
+          // viewer is embedded in a page with content above/beside it.
+          const rect = this.container.getBoundingClientRect();
+          this.container.scrollLeft += (origin[0] - rect.left) * scaleDiff;
+          this.container.scrollTop += (origin[1] - rect.top) * scaleDiff;
+          // #3069 end of modification by ngx-extended-pdf-viewer
+        }
       }
     }
 
@@ -2101,9 +2251,34 @@ class PDFViewer {
     const pageNumber = firstPage.id;
     const currentPageView = this._pages[pageNumber - 1];
     const container = this.container;
+    // #3069 modified by ngx-extended-pdf-viewer
+    // In infinite-scroll mode, container.scrollTop/Left are always 0.
+    // Compute the effective scroll offset from the outer scroll container
+    // or the window, translated to container-relative coordinates.
+    let scrollLeft, scrollTop;
+    if (this.pageViewMode === "infinite-scroll") {
+      const containerRect = container.getBoundingClientRect();
+      if (!this.#outerScrollContainer) {
+        this.#outerScrollContainer =
+          this.#findAncestorWithScrollbar(this.container);
+      }
+      const scrollEl = this.#outerScrollContainer;
+      if (scrollEl) {
+        const scrollRect = scrollEl.getBoundingClientRect();
+        scrollLeft = scrollRect.left - containerRect.left;
+        scrollTop = scrollRect.top - containerRect.top;
+      } else {
+        scrollLeft = -containerRect.left;
+        scrollTop = -containerRect.top;
+      }
+    } else {
+      scrollLeft = container.scrollLeft;
+      scrollTop = container.scrollTop;
+    }
+    // #3069 end of modification by ngx-extended-pdf-viewer
     const topLeft = currentPageView.getPagePoint(
-      container.scrollLeft - firstPage.x,
-      container.scrollTop - firstPage.y
+      scrollLeft - firstPage.x,
+      scrollTop - firstPage.y
     );
     const intLeft = Math.round(topLeft[0]);
     const intTop = Math.round(topLeft[1]);
@@ -2174,11 +2349,19 @@ class PDFViewer {
     }
     // #1808 modified by ngx-extended-pdf-viewer
     // stop the infinite loop in presentation mode with [(page)]
-    if (this.scrollMode !== ScrollMode.PAGE && !noScroll) { // #2275 modified by ngx-extended-pdf-viewer
+    // #3069 modified by ngx-extended-pdf-viewer
+    // In infinite-scroll mode, suppress page-number resets for 500ms
+    // after a programmatic navigation. Without this, the debounced
+    // update() call sees stale visible pages and resets back to page 1,
+    // which triggers Angular's pagechanging handler to navigate back.
+    const navigationSettling = this.pageViewMode === "infinite-scroll" &&
+      Date.now() - this.#lastNavigationTime < 500;
+    if (this.scrollMode !== ScrollMode.PAGE && !noScroll && !navigationSettling) { // #2275 modified by ngx-extended-pdf-viewer
       this._setCurrentPageNumber(
         stillFullyVisible ? currentId : visiblePages[0].id
       );
     }
+    // #3069 end of modification by ngx-extended-pdf-viewer
 
     // #2828 modified by ngx-extended-pdf-viewer - now the location is always
     // updated, preventing the page to jump to page 1 after zooming
@@ -2284,13 +2467,16 @@ class PDFViewer {
       rtl = horizontal && this._isContainerRtl;
 
     // #3155 modified by ngx-extended-pdf-viewer
-    // In RTL horizontal/wrapped mode, the offset-based visibility calculation
-    // in getVisibleElements breaks because scrollLeft and offsetLeft use
-    // incompatible coordinate systems. Use getBoundingClientRect instead.
     if (this._isContainerRtl && (horizontal || this._scrollMode === ScrollMode.WRAPPED)) {
       return this._getVisiblePagesRtl(views);
     }
     // #3155 end of modification by ngx-extended-pdf-viewer
+
+    // #3069 modified by ngx-extended-pdf-viewer
+    if (this.pageViewMode === "infinite-scroll") {
+      return this.#getVisiblePagesInfiniteScroll(views);
+    }
+    // #3069 end of modification by ngx-extended-pdf-viewer
 
     return getVisibleElements({
       scrollEl: this.container,
@@ -2347,6 +2533,89 @@ class PDFViewer {
     return { first, last, views: visible, ids };
   }
   // #3155 end of modification by ngx-extended-pdf-viewer
+
+  // #3069 modified by ngx-extended-pdf-viewer
+  // In infinite-scroll mode, determine visibility using the outer scroll
+  // container's (or window's) viewport via getBoundingClientRect, since
+  // the inner container has no scrollbar.
+  #getVisiblePagesInfiniteScroll(views) {
+    if (!this.#outerScrollContainer) {
+      this.#outerScrollContainer =
+        this.#findAncestorWithScrollbar(this.container);
+    }
+    const scrollEl = this.#outerScrollContainer;
+    let viewportRect;
+    if (scrollEl) {
+      viewportRect = scrollEl.getBoundingClientRect();
+    } else {
+      // Fallback: use the window as the viewport
+      viewportRect = {
+        top: 0,
+        left: 0,
+        bottom: window.innerHeight,
+        right: window.innerWidth,
+      };
+    }
+    const visible = [];
+    const ids = new Set();
+
+    for (const view of views) {
+      const element = view.div;
+      const rect = element.getBoundingClientRect();
+
+      const overlapLeft = Math.max(rect.left, viewportRect.left);
+      const overlapRight = Math.min(rect.right, viewportRect.right);
+      const overlapTop = Math.max(rect.top, viewportRect.top);
+      const overlapBottom = Math.min(rect.bottom, viewportRect.bottom);
+
+      const visibleWidth = Math.max(0, overlapRight - overlapLeft);
+      const visibleHeight = Math.max(0, overlapBottom - overlapTop);
+
+      if (visibleWidth === 0 || visibleHeight === 0) {
+        continue;
+      }
+
+      const fractionWidth = visibleWidth / rect.width;
+      const fractionHeight = visibleHeight / rect.height;
+      const percent = (fractionWidth * fractionHeight * 100) | 0;
+
+      // Compute visibleArea for partial-page rendering support.
+      // Coordinates are relative to the page element's top-left.
+      const minX = Math.max(0, viewportRect.left - rect.left);
+      const minY = Math.max(0, viewportRect.top - rect.top);
+      const maxX = Math.min(rect.width, viewportRect.right - rect.left);
+      const maxY = Math.min(rect.height, viewportRect.bottom - rect.top);
+
+      // Use offsetLeft/offsetTop (relative to container) for x/y so that
+      // _updateLocation and other consumers get container-relative coords,
+      // consistent with the normal getVisibleElements path.
+      visible.push({
+        id: view.id,
+        x: element.offsetLeft + element.clientLeft,
+        y: element.offsetTop + element.clientTop,
+        visibleArea: percent === 100 ? null : { minX, minY, maxX, maxY },
+        view,
+        percent,
+        widthPercent: (fractionWidth * 100) | 0,
+      });
+      ids.add(view.id);
+    }
+
+    // Sort by visibility percentage (most visible first), stable by id.
+    visible.sort((a, b) => {
+      const pc = a.percent - b.percent;
+      if (Math.abs(pc) > 0.001) {
+        return -pc;
+      }
+      return a.id - b.id;
+    });
+
+    const first = visible[0];
+    const last = visible.at(-1);
+
+    return { first, last, views: visible, ids };
+  }
+  // #3069 end of modification by ngx-extended-pdf-viewer
 
   cleanup() {
     for (const pageView of this._pages) {
