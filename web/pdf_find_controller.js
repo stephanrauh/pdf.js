@@ -476,6 +476,12 @@ class PDFFindController {
     return this._pageMatchesLength;
   }
 
+  // #3168 modified by ngx-extended-pdf-viewer
+  get pageMatchesColor() {
+    return this._pageMatchesColor;
+  }
+  // #3168 end of modification by ngx-extended-pdf-viewer
+
   get selected() {
     return this._selected;
   }
@@ -648,6 +654,9 @@ class PDFFindController {
     this._pdfDocument = null;
     this._pageMatches = [];
     this._pageMatchesLength = [];
+    // #3168 modified by ngx-extended-pdf-viewer
+    this._pageMatchesColor = [];
+    // #3168 end of modification by ngx-extended-pdf-viewer
     this.#visitedPagesCount = 0;
     this.#state = null;
     // Currently selected match.
@@ -864,13 +873,19 @@ class PDFFindController {
 
     const matches = (this._pageMatches[pageIndex] = []);
     const matchesLength = (this._pageMatchesLength[pageIndex] = []);
+    // #3168 modified by ngx-extended-pdf-viewer
+    const matchesColor = (this._pageMatchesColor[pageIndex] = []);
+    // #3168 end of modification by ngx-extended-pdf-viewer
     const diffs = this._pageDiffs[pageIndex];
 
-    matcherResult?.forEach(({ index, length }) => {
+    matcherResult?.forEach(({ index, length, color }) => {
       const [matchPos, matchLen] = getOriginalIndex(diffs, index, length);
       if (matchLen) {
         matches.push(matchPos);
         matchesLength.push(matchLen);
+        // #3168 modified by ngx-extended-pdf-viewer
+        matchesColor.push(color || 0);
+        // #3168 end of modification by ngx-extended-pdf-viewer
       }
     });
 
@@ -921,6 +936,10 @@ class PDFFindController {
     if (findMultiple && typeof query === "string") {
       query = query.trim().split(/\s+/);
     }
+    // #3168 modified by ngx-extended-pdf-viewer
+    // Track the original word order for multi-color highlights.
+    let originalWordOrder = null;
+    // #3168 end of modification by ngx-extended-pdf-viewer
     if (matchRegExp && typeof query === "string") {
       query = new RegExp(query, caseSensitive ? "g" : "gi");
       isUnicode = hasDiacritics;
@@ -928,6 +947,11 @@ class PDFFindController {
       // #2339 end of modification by ngx-extended-pdf-viewer
       [isUnicode, query] = this._convertToRegExpString(query, hasDiacritics); // #2339 modified by ngx-extended-pdf-viewer
     } else {
+      // #3168 modified by ngx-extended-pdf-viewer
+      // Remember original word order before sorting, so color indices
+      // match the order the user typed the search terms.
+      const originalWords = [...query];
+      // #3168 end of modification by ngx-extended-pdf-viewer
       // Words are sorted in reverse order to be sure that "foobar" is matched
       // before "foo" in case the query is "foobar foo".
       query = query
@@ -942,6 +966,11 @@ class PDFFindController {
           return `(${queryPart})`;
         })
         .join("|");
+      // #3168 modified by ngx-extended-pdf-viewer
+      // Build a mapping from sorted capture group index to original word index.
+      const sortedWords = [...originalWords].sort().reverse();
+      originalWordOrder = sortedWords.map(w => originalWords.indexOf(w));
+      // #3168 end of modification by ngx-extended-pdf-viewer
     }
     if (!query) {
       // The query can be empty because some chars like diacritics could have
@@ -962,7 +991,19 @@ class PDFFindController {
       ) {
         continue;
       }
-      matches.push({ index: match.index, length: match[0].length });
+      // #3168 modified by ngx-extended-pdf-viewer
+      // Determine which search term matched by checking capture groups.
+      let colorIndex = 0;
+      if (originalWordOrder) {
+        for (let g = 1; g < match.length; g++) {
+          if (match[g] !== undefined) {
+            colorIndex = originalWordOrder[g - 1] % 5;
+            break;
+          }
+        }
+      }
+      matches.push({ index: match.index, length: match[0].length, color: colorIndex });
+      // #3168 end of modification by ngx-extended-pdf-viewer
     }
     return matches;
   }

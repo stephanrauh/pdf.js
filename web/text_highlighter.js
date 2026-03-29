@@ -113,7 +113,8 @@ class TextHighlighter {
     cssClass = "highlight",       // #2488 modified by ngx-extended-pdf-viewer
     highlightAll = false,         // #2488 modified by ngx-extended-pdf-viewer
     isPageWithSelection = false,  // #2488 modified by ngx-extended-pdf-viewer
-    selectedMatchIdx = -1         // #2488 modified by ngx-extended-pdf-viewer
+    selectedMatchIdx = -1,        // #2488 modified by ngx-extended-pdf-viewer
+    matchesColor = null           // #3168 modified by ngx-extended-pdf-viewer
   ) {
     // Early exit if there is nothing to convert.
     if (!matches) {
@@ -140,12 +141,17 @@ class TextHighlighter {
         NgxConsole.error("Could not find a matching mapping");
       }
 
+      // #3168 modified by ngx-extended-pdf-viewer
+      // Add color class for multi-word search highlighting.
+      const colorClass = matchesColor ? ` color${matchesColor[m]}` : "";
+      // #3168 end of modification by ngx-extended-pdf-viewer
+
       const match = {
         begin: {
           divIdx: i,
           offset: matchIdx - iIndex,
         },
-        cssClass, // #2488 modified by ngx-extended-pdf-viewer
+        cssClass: cssClass + colorClass, // #2488 + #3168 modified by ngx-extended-pdf-viewer
         highlightAll, // #2488 modified by ngx-extended-pdf-viewer
         selected: isPageWithSelection && m === selectedMatchIdx, // #2488 modified by ngx-extended-pdf-viewer
       };
@@ -328,6 +334,9 @@ class TextHighlighter {
     // used for the textLayer.
     const customPageMatches = customFindController.pageMatches[pageIdx] || null;
     const customPageMatchesLength = customFindController.pageMatchesLength[pageIdx] || null;
+    // #3168 modified by ngx-extended-pdf-viewer
+    const customPageMatchesColor = customFindController.pageMatchesColor?.[pageIdx] || null;
+    // #3168 end of modification by ngx-extended-pdf-viewer
     const pageMatches = findController.pageMatches[pageIdx] || null;
 
     const customMatches = this._convertMatches(
@@ -336,7 +345,8 @@ class TextHighlighter {
       "customHighlight",
       customFindController.state?.highlightAll,
       pageIdx === customFindController.selected.pageIdx,
-      customFindController.selected.matchIdx
+      customFindController.selected.matchIdx,
+      customPageMatchesColor // #3168 modified by ngx-extended-pdf-viewer
     );
     this.matches = [...customMatches];
     // #2488 end of modification by ngx-extended-pdf-viewer
@@ -351,6 +361,9 @@ class TextHighlighter {
     // Convert the matches on the `findController` into the match format
     // used for the textLayer.
     const pageMatchesLength = findController.pageMatchesLength[pageIdx] || null;
+    // #3168 modified by ngx-extended-pdf-viewer
+    const pageMatchesColor = findController.pageMatchesColor?.[pageIdx] || null;
+    // #3168 end of modification by ngx-extended-pdf-viewer
 
     // #2488 modified by ngx-extended-pdf-viewer
     const convertedMatches = this._convertMatches(
@@ -359,7 +372,8 @@ class TextHighlighter {
       "highlight",
       findController.state?.highlightAll,
       pageIdx === findController.selected.pageIdx,
-      findController.selected.matchIdx
+      findController.selected.matchIdx,
+      pageMatchesColor // #3168 modified by ngx-extended-pdf-viewer
     );
     this.matches.push(...convertedMatches);
     this.matches.sort((a, b) => {
