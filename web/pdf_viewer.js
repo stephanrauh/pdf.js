@@ -1913,11 +1913,17 @@ class PDFViewer {
             null,
           ];
         }
+        // #3069 modified by ngx-extended-pdf-viewer — debug logging
+        const _scrollBefore = this.container.scrollTop;
+        // #3069 end debug logging
         this.scrollPageIntoView({
           pageNumber: page,
           destArray: dest,
           allowNegativeOffset: true,
         });
+        // #3069 modified by ngx-extended-pdf-viewer — debug logging
+        const _scrollAfterSPIV = this.container.scrollTop;
+        // #3069 end debug logging
         if (Array.isArray(origin)) {
           // If the origin of the scaling transform is specified, preserve its
           // location on screen. If not specified, scaling will fix the top-left
@@ -1928,6 +1934,25 @@ class PDFViewer {
           this.container.scrollLeft += (origin[0] - containerRect.left) * scaleDiff;
           this.container.scrollTop += (origin[1] - containerRect.top) * scaleDiff;
           // #3069 end of modification by ngx-extended-pdf-viewer
+          // #3069 modified by ngx-extended-pdf-viewer — debug logging
+          const _scrollAfterOrigin = this.container.scrollTop;
+          this.eventBus.dispatch("_debug_scroll_adjust", {
+            source: this,
+            locPage: page,
+            locLeft: this._location?.left,
+            locTop: this._location?.top,
+            scrollBefore: _scrollBefore,
+            scrollAfterSPIV: _scrollAfterSPIV,
+            scrollAfterOrigin: _scrollAfterOrigin,
+            originX: origin[0],
+            originY: origin[1],
+            rectTop: containerRect.top,
+            rectLeft: containerRect.left,
+            scaleDiff,
+            newScale,
+            previousScale,
+          });
+          // #3069 end debug logging
         }
       }
     }
