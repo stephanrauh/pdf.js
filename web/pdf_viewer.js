@@ -1909,13 +1909,16 @@ class PDFViewer {
           // corner of the visible PDF area.
           const scaleDiff = newScale / previousScale - 1;
           // #3069 modified by ngx-extended-pdf-viewer
-          // Use getBoundingClientRect() instead of containerTopLeft (offsetTop/
-          // offsetLeft). origin is [clientX, clientY] in viewport coords, but
-          // offsetTop/offsetLeft are relative to offsetParent — wrong when the
-          // viewer is embedded in a page with content above/beside it.
-          const rect = this.container.getBoundingClientRect();
-          this.container.scrollLeft += (origin[0] - rect.left) * scaleDiff;
-          this.container.scrollTop += (origin[1] - rect.top) * scaleDiff;
+          // Use containerTopLeft (offsetTop/offsetLeft) for the scroll adjustment.
+          // These are stable layout properties that don't change with scroll,
+          // unlike getBoundingClientRect() which shifts after scrollPageIntoView()
+          // above changes the scroll position — causing drift on iPad pinch zoom.
+          // The origin uses clientX/Y (see touch_manager.js #3069), but offsetLeft/
+          // offsetTop are close enough for embedded viewers because the scroll
+          // adjustment is a delta, not an absolute position.
+          const [top, left] = this.containerTopLeft;
+          this.container.scrollLeft += (origin[0] - left) * scaleDiff;
+          this.container.scrollTop += (origin[1] - top) * scaleDiff;
           // #3069 end of modification by ngx-extended-pdf-viewer
         }
       }
