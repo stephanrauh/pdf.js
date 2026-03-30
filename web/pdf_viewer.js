@@ -1883,76 +1883,41 @@ class PDFViewer {
         }
       } else {
         // #3069 end of modification by ngx-extended-pdf-viewer
-
-        // #3069 modified by ngx-extended-pdf-viewer
-        // Read the container's viewport position BEFORE scrollPageIntoView()
-        // changes the scroll. getBoundingClientRect() reflects the current scroll
-        // position, so reading it after scrollPageIntoView() gives a shifted value
-        // that causes cumulative drift during iPad pinch zoom.
-        // origin uses clientX/clientY (viewport coords), so the container position
-        // must also be in viewport coords — getBoundingClientRect() is correct here,
-        // but only if read before scroll changes.
-        let containerRect;
         if (Array.isArray(origin)) {
-          containerRect = this.container.getBoundingClientRect();
-        }
-        // #3069 end of modification by ngx-extended-pdf-viewer
-
-        let page = this._currentPageNumber,
-          dest;
-        if (
-          this._location &&
-          !(this.isInPresentationMode || this.isChangingPresentationMode)
-        ) {
-          page = this._location.pageNumber;
-          dest = [
-            null,
-            { name: "XYZ" },
-            this._location.left,
-            this._location.top,
-            null,
-          ];
-        }
-        // #3069 modified by ngx-extended-pdf-viewer — debug logging
-        const _scrollBefore = this.container.scrollTop;
-        // #3069 end debug logging
-        this.scrollPageIntoView({
-          pageNumber: page,
-          destArray: dest,
-          allowNegativeOffset: true,
-        });
-        // #3069 modified by ngx-extended-pdf-viewer — debug logging
-        const _scrollAfterSPIV = this.container.scrollTop;
-        // #3069 end debug logging
-        if (Array.isArray(origin)) {
-          // If the origin of the scaling transform is specified, preserve its
-          // location on screen. If not specified, scaling will fix the top-left
-          // corner of the visible PDF area.
-          const scaleDiff = newScale / previousScale - 1;
           // #3069 modified by ngx-extended-pdf-viewer
-          // Use the containerRect captured BEFORE scrollPageIntoView() above.
+          // During pinch/wheel zoom (origin is provided), skip scrollPageIntoView()
+          // and use only the origin-based scroll adjustment. scrollPageIntoView()
+          // causes scroll drift on iPad because refresh() (which resizes pages via
+          // CSS --scale-factor) triggers the browser to recalculate scrollTop,
+          // undoing the previous frame's adjustment. Then scrollPageIntoView() jumps
+          // by a large delta from the wrong starting position, causing cumulative drift.
+          // The origin-based adjustment alone keeps the pinch center stable.
+          const scaleDiff = newScale / previousScale - 1;
+          const containerRect = this.container.getBoundingClientRect();
           this.container.scrollLeft += (origin[0] - containerRect.left) * scaleDiff;
           this.container.scrollTop += (origin[1] - containerRect.top) * scaleDiff;
           // #3069 end of modification by ngx-extended-pdf-viewer
-          // #3069 modified by ngx-extended-pdf-viewer — debug logging
-          const _scrollAfterOrigin = this.container.scrollTop;
-          this.eventBus.dispatch("_debug_scroll_adjust", {
-            source: this,
-            locPage: page,
-            locLeft: this._location?.left,
-            locTop: this._location?.top,
-            scrollBefore: _scrollBefore,
-            scrollAfterSPIV: _scrollAfterSPIV,
-            scrollAfterOrigin: _scrollAfterOrigin,
-            originX: origin[0],
-            originY: origin[1],
-            rectTop: containerRect.top,
-            rectLeft: containerRect.left,
-            scaleDiff,
-            newScale,
-            previousScale,
+        } else {
+          let page = this._currentPageNumber,
+            dest;
+          if (
+            this._location &&
+            !(this.isInPresentationMode || this.isChangingPresentationMode)
+          ) {
+            page = this._location.pageNumber;
+            dest = [
+              null,
+              { name: "XYZ" },
+              this._location.left,
+              this._location.top,
+              null,
+            ];
+          }
+          this.scrollPageIntoView({
+            pageNumber: page,
+            destArray: dest,
+            allowNegativeOffset: true,
           });
-          // #3069 end debug logging
         }
       }
     }
