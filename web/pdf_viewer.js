@@ -1883,6 +1883,21 @@ class PDFViewer {
         }
       } else {
         // #3069 end of modification by ngx-extended-pdf-viewer
+
+        // #3069 modified by ngx-extended-pdf-viewer
+        // Read the container's viewport position BEFORE scrollPageIntoView()
+        // changes the scroll. getBoundingClientRect() reflects the current scroll
+        // position, so reading it after scrollPageIntoView() gives a shifted value
+        // that causes cumulative drift during iPad pinch zoom.
+        // origin uses clientX/clientY (viewport coords), so the container position
+        // must also be in viewport coords — getBoundingClientRect() is correct here,
+        // but only if read before scroll changes.
+        let containerRect;
+        if (Array.isArray(origin)) {
+          containerRect = this.container.getBoundingClientRect();
+        }
+        // #3069 end of modification by ngx-extended-pdf-viewer
+
         let page = this._currentPageNumber,
           dest;
         if (
@@ -1909,16 +1924,9 @@ class PDFViewer {
           // corner of the visible PDF area.
           const scaleDiff = newScale / previousScale - 1;
           // #3069 modified by ngx-extended-pdf-viewer
-          // Use containerTopLeft (offsetTop/offsetLeft) for the scroll adjustment.
-          // These are stable layout properties that don't change with scroll,
-          // unlike getBoundingClientRect() which shifts after scrollPageIntoView()
-          // above changes the scroll position — causing drift on iPad pinch zoom.
-          // The origin uses clientX/Y (see touch_manager.js #3069), but offsetLeft/
-          // offsetTop are close enough for embedded viewers because the scroll
-          // adjustment is a delta, not an absolute position.
-          const [top, left] = this.containerTopLeft;
-          this.container.scrollLeft += (origin[0] - left) * scaleDiff;
-          this.container.scrollTop += (origin[1] - top) * scaleDiff;
+          // Use the containerRect captured BEFORE scrollPageIntoView() above.
+          this.container.scrollLeft += (origin[0] - containerRect.left) * scaleDiff;
+          this.container.scrollTop += (origin[1] - containerRect.top) * scaleDiff;
           // #3069 end of modification by ngx-extended-pdf-viewer
         }
       }
