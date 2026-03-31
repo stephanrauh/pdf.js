@@ -691,6 +691,21 @@ class PDFPageView extends BasePDFPageView {
     if (typeof rotation === "number") {
       this.rotation = rotation; // The rotation may be zero.
     }
+
+    // #3069 modified by ngx-extended-pdf-viewer
+    // During pinch/wheel zoom (drawingDelay >= 0), pages without a canvas
+    // only need their scale updated. Page div dimensions resize automatically
+    // via CSS calc(var(--total-scale-factor) * pageWidth), so we can skip
+    // viewport.clone(), #setDimensions(), #computeScale(), cssTransform(),
+    // and most importantly reset() (which makes pages eligible for rendering
+    // and causes stutter). The deferred refresh (400ms after the gesture
+    // ends) will do the full update at the final scale.
+    const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
+    if (postponeDrawing && !this.canvas) {
+      return;
+    }
+    // #3069 end of modification by ngx-extended-pdf-viewer
+
     if (optionalContentConfigPromise instanceof Promise) {
       this._optionalContentConfigPromise = optionalContentConfigPromise;
 
@@ -727,7 +742,10 @@ class PDFPageView extends BasePDFPageView {
     if (this.canvas) {
       const onlyCssZoom =
         this.#hasRestrictedScaling && this.#needsRestrictedScaling;
-      const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
+
+      if (this.id <= 20) {
+        console.log(`[pinch-page${this.id}] drawingDelay=${drawingDelay} postpone=${postponeDrawing} cssOnly=${onlyCssZoom} canvas=true`);
+      }
 
       if (postponeDrawing || onlyCssZoom) {
         if (
@@ -772,6 +790,9 @@ class PDFPageView extends BasePDFPageView {
         }
         return;
       }
+    }
+    if (this.id <= 20) {
+      console.log(`[pinch-page${this.id}] FULL RE-RENDER drawingDelay=${drawingDelay}`);
     }
     this.cssTransform({});
     this.reset({

@@ -2290,7 +2290,11 @@ gulp.task(
       }
 
       const { WebServer } = await import("./test/webserver.mjs");
-      const server = new WebServer({ port });
+      // #3069 modified by ngx-extended-pdf-viewer
+      // Listen on 0.0.0.0 so the server is reachable from other devices
+      // (e.g. iPad on the same network) for testing.
+      const server = new WebServer({ port, host: "0.0.0.0" });
+      // #3069 end of modification by ngx-extended-pdf-viewer
       server.start();
     }
   )

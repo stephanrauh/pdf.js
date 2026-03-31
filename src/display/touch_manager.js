@@ -208,15 +208,18 @@ class TouchManager {
     }
 
     // #3069 modified by ngx-extended-pdf-viewer
-    // Use clientX/Y (viewport coords) for the origin, not screenX/Y.
-    // The zoom scroll adjustment uses getBoundingClientRect (viewport coords),
-    // so the origin must be in the same coordinate space. screenX/Y includes
-    // browser chrome offset, which causes drift in embedded viewers.
+    // Reverted to native pdf.js: use screenX/Y for the origin, matching
+    // containerTopLeft (offsetTop/offsetLeft) in the scroll adjustment.
+    // Both are stable values that don't change with scroll or layout.
+    // A previous attempt used clientX/Y + getBoundingClientRect(), but
+    // getBoundingClientRect() is unstable (changes after scroll/layout),
+    // causing cumulative scroll drift during pinch zoom on iPad.
     const origin = [
-      (touch0.clientX + touch1.clientX) / 2,
-      (touch0.clientY + touch1.clientY) / 2,
+      (touch0.screenX + touch1.screenX) / 2,
+      (touch0.screenY + touch1.screenY) / 2,
     ];
     // #3069 end of modification by ngx-extended-pdf-viewer
+    console.log(`[pinch-touch] factor=${(distance / pDistance).toFixed(4)} dist=${distance.toFixed(1)} pDist=${pDistance.toFixed(1)} t0=(${Math.round(touch0.screenX)},${Math.round(touch0.screenY)}) t1=(${Math.round(touch1.screenX)},${Math.round(touch1.screenY)}) origin=(${Math.round(origin[0])},${Math.round(origin[1])})`);
     this.#onPinching?.(origin, pDistance, distance);
   }
 

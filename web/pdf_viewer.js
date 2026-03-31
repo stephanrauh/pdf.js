@@ -283,6 +283,17 @@ class PDFViewer {
 
   #scaleTimeoutId = null;
 
+  // #3069 modified by ngx-extended-pdf-viewer
+  // Frozen copy of _location captured at the start of a pinch/wheel zoom
+  // gesture. During the gesture, scroll events fire _scrollUpdate() →
+  // update() → _updateLocation(), which overwrites _location with the
+  // current (drifted) scroll position. Using this drifted _location in
+  // scrollPageIntoView() causes cumulative drift. By freezing the location
+  // at gesture start and reusing it for every frame, the scroll correction
+  // targets the same position throughout the gesture.
+  #frozenLocation = null;
+  // #3069 end of modification by ngx-extended-pdf-viewer
+
   #signatureManager = null;
 
   #supportsPinchToZoom = true;
@@ -1808,23 +1819,37 @@ class PDFViewer {
           noScroll,
         });
       }
+      console.log(`[pinch-scale] SAME scale=${newScale.toFixed(4)} — skipped`);
       return;
     }
+
+    const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
+    console.log(`[pinch-scale] scale=${newScale.toFixed(4)} prev=${previousScale?.toFixed(4)} drawingDelay=${drawingDelay} postpone=${postponeDrawing} origin=${Array.isArray(origin)}`);
 
     this.viewer.style.setProperty(
       "--scale-factor",
       newScale * PixelsPerInch.PDF_TO_CSS_UNITS
     );
 
-    const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
     this.refresh(true, {
       scale: newScale,
       drawingDelay: postponeDrawing ? drawingDelay : -1,
     });
 
     if (postponeDrawing) {
+      // #3069 modified by ngx-extended-pdf-viewer
+      // Freeze _location on the first frame of a zoom gesture. Scroll events
+      // during the gesture overwrite _location with drifted values; using a
+      // frozen copy prevents cumulative scroll drift.
+      if (!this.#frozenLocation && this._location) {
+        this.#frozenLocation = { ...this._location };
+      }
+      // #3069 end of modification by ngx-extended-pdf-viewer
       this.#scaleTimeoutId = setTimeout(() => {
         this.#scaleTimeoutId = null;
+        // #3069 modified by ngx-extended-pdf-viewer
+        this.#frozenLocation = null;
+        // #3069 end of modification by ngx-extended-pdf-viewer
         this.refresh();
       }, drawingDelay);
     }
@@ -1883,33 +1908,30 @@ class PDFViewer {
         }
       } else {
         // #3069 end of modification by ngx-extended-pdf-viewer
-        if (Array.isArray(origin)) {
+        // #3069 modified by ngx-extended-pdf-viewer
+        // Reverted to native pdf.js approach: scrollPageIntoView() + origin
+        // adjustment using containerTopLeft (offsetTop/offsetLeft).
+        // The origin now uses screenX/Y (reverted in touch_manager.js).
+        // Both are stable values that don't change with scroll or layout,
+        // unlike getBoundingClientRect() which caused cumulative drift.
+        {
+          const c = this.container;
+
           // #3069 modified by ngx-extended-pdf-viewer
-          // During pinch/wheel zoom (origin is provided), skip scrollPageIntoView()
-          // and use only the origin-based scroll adjustment. scrollPageIntoView()
-          // causes scroll drift on iPad because refresh() (which resizes pages via
-          // CSS --scale-factor) triggers the browser to recalculate scrollTop,
-          // undoing the previous frame's adjustment. Then scrollPageIntoView() jumps
-          // by a large delta from the wrong starting position, causing cumulative drift.
-          // The origin-based adjustment alone keeps the pinch center stable.
-          const scaleDiff = newScale / previousScale - 1;
-          const containerRect = this.container.getBoundingClientRect();
-          this.container.scrollLeft += (origin[0] - containerRect.left) * scaleDiff;
-          this.container.scrollTop += (origin[1] - containerRect.top) * scaleDiff;
-          // #3069 end of modification by ngx-extended-pdf-viewer
-        } else {
+          // Use frozen location during gesture to prevent _location drift.
+          const loc = this.#frozenLocation || this._location;
           let page = this._currentPageNumber,
             dest;
           if (
-            this._location &&
+            loc &&
             !(this.isInPresentationMode || this.isChangingPresentationMode)
           ) {
-            page = this._location.pageNumber;
+            page = loc.pageNumber;
             dest = [
               null,
               { name: "XYZ" },
-              this._location.left,
-              this._location.top,
+              loc.left,
+              loc.top,
               null,
             ];
           }
@@ -1918,7 +1940,16 @@ class PDFViewer {
             destArray: dest,
             allowNegativeOffset: true,
           });
+          // #3069 end of modification by ngx-extended-pdf-viewer
+
+          if (Array.isArray(origin)) {
+            const scaleDiff = newScale / previousScale - 1;
+            const [top, left] = this.containerTopLeft;
+            c.scrollLeft += (origin[0] - left) * scaleDiff;
+            c.scrollTop += (origin[1] - top) * scaleDiff;
+          }
         }
+        // #3069 end of modification by ngx-extended-pdf-viewer
       }
     }
 
@@ -1960,6 +1991,7 @@ class PDFViewer {
     let scale = parseFloat(value);
     // #1095 modified by ngx-extended-pdf-viewer: prevent duplicate rendering
     if (this._currentScale === scale) {
+      console.log(`[pinch-setScale] #1095 SKIP — scale=${scale} === _currentScale`);
       return; // nothing to do
     }
     // #1095 end of modification
@@ -3129,7 +3161,10 @@ class PDFViewer {
     }
     let newScale = this._currentScale;
     if (scaleFactor > 0 && scaleFactor !== 1) {
-      newScale = Math.round(newScale * scaleFactor * 100) / 100;
+      // #3069 modified by ngx-extended-pdf-viewer
+      // Use 10000 instead of 100 for 0.01% precision during pinch/wheel zoom.
+      newScale = Math.round(newScale * scaleFactor * 10000) / 10000;
+      // #3069 end of modification by ngx-extended-pdf-viewer
     } else if (steps) {
       const delta = steps > 0 ? DEFAULT_SCALE_DELTA : 1 / DEFAULT_SCALE_DELTA;
       const round = steps > 0 ? Math.ceil : Math.floor;
@@ -3142,6 +3177,7 @@ class PDFViewer {
     const minScale = Number(this.minZoom) ?? MIN_SCALE;
     const maxScale = Number(this.maxZoom) ?? MAX_SCALE;
     newScale = MathClamp(newScale, minScale, maxScale);
+    console.log(`[pinch-updateScale] cur=${this._currentScale.toFixed(4)} factor=${scaleFactor?.toFixed(4)} new=${newScale.toFixed(4)} delay=${drawingDelay}`);
     this.#setScale(newScale, { noScroll: false, drawingDelay, origin });
     // #367 end of modification by ngx-extended-pdf-viewer
   }
