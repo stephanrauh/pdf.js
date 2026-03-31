@@ -1811,6 +1811,15 @@ class PDFViewer {
       return;
     }
 
+    // #3069 modified by ngx-extended-pdf-viewer
+    // Save scroll position BEFORE CSS scale change and refresh(), because both
+    // cause the browser to recalculate scrollTop unpredictably. During pinch zoom,
+    // we restore scroll proportionally from this saved position instead of relying
+    // on scrollPageIntoView() (which uses _location that drifts to wrong pages).
+    const savedScrollTop = this.container.scrollTop;
+    const savedScrollLeft = this.container.scrollLeft;
+    // #3069 end of modification by ngx-extended-pdf-viewer
+
     this.viewer.style.setProperty(
       "--scale-factor",
       newScale * PixelsPerInch.PDF_TO_CSS_UNITS
@@ -1885,15 +1894,20 @@ class PDFViewer {
         // #3069 end of modification by ngx-extended-pdf-viewer
         if (Array.isArray(origin)) {
           // #3069 modified by ngx-extended-pdf-viewer
-          // During pinch/wheel zoom (origin is provided), skip scrollPageIntoView()
-          // and use only the origin-based scroll adjustment. scrollPageIntoView()
-          // causes scroll drift on iPad because refresh() (which resizes pages via
-          // CSS --scale-factor) triggers the browser to recalculate scrollTop,
-          // undoing the previous frame's adjustment. Then scrollPageIntoView() jumps
-          // by a large delta from the wrong starting position, causing cumulative drift.
-          // The origin-based adjustment alone keeps the pinch center stable.
-          const scaleDiff = newScale / previousScale - 1;
+          // During pinch/wheel zoom (origin is provided), restore scroll position
+          // proportionally from the SAVED position (captured before refresh() and
+          // the CSS scale change). refresh() resizes pages which causes the browser
+          // to recalculate scrollTop unpredictably, and _location drifts to wrong
+          // pages. Instead, we scale the saved scroll position by the zoom ratio
+          // and then apply the origin-based adjustment to keep the pinch center
+          // fixed on screen.
+          const ratio = newScale / previousScale;
+          const scaleDiff = ratio - 1;
           const containerRect = this.container.getBoundingClientRect();
+          // Step 1: Scale scroll position proportionally to the content size change.
+          this.container.scrollTop = savedScrollTop * ratio;
+          this.container.scrollLeft = savedScrollLeft * ratio;
+          // Step 2: Adjust so the pinch center (origin) stays fixed on screen.
           this.container.scrollLeft += (origin[0] - containerRect.left) * scaleDiff;
           this.container.scrollTop += (origin[1] - containerRect.top) * scaleDiff;
           // #3069 end of modification by ngx-extended-pdf-viewer
