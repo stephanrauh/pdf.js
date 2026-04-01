@@ -292,6 +292,7 @@ class PDFViewer {
   // at gesture start and reusing it for every frame, the scroll correction
   // targets the same position throughout the gesture.
   #frozenLocation = null;
+  #frozenScale = null;
   // #3069 end of modification by ngx-extended-pdf-viewer
 
   #signatureManager = null;
@@ -1819,12 +1820,10 @@ class PDFViewer {
           noScroll,
         });
       }
-      console.log(`[pinch-scale] SAME scale=${newScale.toFixed(4)} — skipped`);
       return;
     }
 
     const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
-    console.log(`[pinch-scale] scale=${newScale.toFixed(4)} prev=${previousScale?.toFixed(4)} drawingDelay=${drawingDelay} postpone=${postponeDrawing} origin=${Array.isArray(origin)}`);
 
     this.viewer.style.setProperty(
       "--scale-factor",
@@ -1843,12 +1842,31 @@ class PDFViewer {
       // frozen copy prevents cumulative scroll drift.
       if (!this.#frozenLocation && this._location) {
         this.#frozenLocation = { ...this._location };
+        this.#frozenScale = previousScale;
+      }
+      // #3069 end of modification by ngx-extended-pdf-viewer
+      // #3069 modified by ngx-extended-pdf-viewer
+      // Reset the timeout on each pinch step. Without this, the timeout
+      // fires mid-gesture if pinching pauses for >400ms, triggering a
+      // full re-render that causes a gray flash.
+      if (this.#scaleTimeoutId !== null) {
+        clearTimeout(this.#scaleTimeoutId);
       }
       // #3069 end of modification by ngx-extended-pdf-viewer
       this.#scaleTimeoutId = setTimeout(() => {
         this.#scaleTimeoutId = null;
         // #3069 modified by ngx-extended-pdf-viewer
         this.#frozenLocation = null;
+        this.#frozenScale = null;
+        // Snap scale to whole percent after gesture ends.
+        // During the gesture we use 0.1% precision for smoothness.
+        // Use #setScale so the scalechanging event fires and the
+        // toolbar dropdown updates to a clean percentage.
+        const snapped = Math.round(this._currentScale * 100) / 100;
+        if (snapped !== this._currentScale) {
+          this.#setScale(snapped, { noScroll: true, drawingDelay: -1 });
+          return;
+        }
         // #3069 end of modification by ngx-extended-pdf-viewer
         this.refresh();
       }, drawingDelay);
@@ -1942,15 +1960,29 @@ class PDFViewer {
           });
           // #3069 end of modification by ngx-extended-pdf-viewer
 
+          // #3069 modified by ngx-extended-pdf-viewer
+          // Two fixes vs native pdf.js:
+          // 1. Use getBoundingClientRect() instead of containerTopLeft
+          //    (offsetTop/offsetLeft). In ngx-extended-pdf-viewer the viewer is
+          //    embedded in Angular layout, so offsetTop/Left are relative to the
+          //    offset parent, not the viewport. The origin from wheel events uses
+          //    clientX/Y (viewport-relative), so we need viewport-relative coords.
+          // 2. Use cumulative scale change from gesture start, not incremental.
+          //    scrollPageIntoView() above resets scroll to the frozen baseline
+          //    every frame, so we must apply the FULL adjustment from the initial
+          //    scale, not just the last step's delta.
           if (Array.isArray(origin)) {
-            const scaleDiff = newScale / previousScale - 1;
-            const [top, left] = this.containerTopLeft;
-            c.scrollLeft += (origin[0] - left) * scaleDiff;
-            c.scrollTop += (origin[1] - top) * scaleDiff;
+            const baseScale = this.#frozenScale || previousScale;
+            const scaleDiff = newScale / baseScale - 1;
+            const rect = c.getBoundingClientRect();
+            c.scrollLeft += (origin[0] - rect.left) * scaleDiff;
+            c.scrollTop += (origin[1] - rect.top) * scaleDiff;
           }
+          // #3069 end of modification by ngx-extended-pdf-viewer
         }
         // #3069 end of modification by ngx-extended-pdf-viewer
       }
+
     }
 
     this.eventBus.dispatch("scalechanging", {
@@ -1991,7 +2023,6 @@ class PDFViewer {
     let scale = parseFloat(value);
     // #1095 modified by ngx-extended-pdf-viewer: prevent duplicate rendering
     if (this._currentScale === scale) {
-      console.log(`[pinch-setScale] #1095 SKIP — scale=${scale} === _currentScale`);
       return; // nothing to do
     }
     // #1095 end of modification
@@ -3162,8 +3193,9 @@ class PDFViewer {
     let newScale = this._currentScale;
     if (scaleFactor > 0 && scaleFactor !== 1) {
       // #3069 modified by ngx-extended-pdf-viewer
-      // Use 10000 instead of 100 for 0.01% precision during pinch/wheel zoom.
-      newScale = Math.round(newScale * scaleFactor * 10000) / 10000;
+      // Use 0.1% precision (1000) during pinch for smoother increments.
+      // The scale snaps to whole percentages when the gesture ends.
+      newScale = Math.round(newScale * scaleFactor * 1000) / 1000;
       // #3069 end of modification by ngx-extended-pdf-viewer
     } else if (steps) {
       const delta = steps > 0 ? DEFAULT_SCALE_DELTA : 1 / DEFAULT_SCALE_DELTA;
@@ -3177,7 +3209,6 @@ class PDFViewer {
     const minScale = Number(this.minZoom) ?? MIN_SCALE;
     const maxScale = Number(this.maxZoom) ?? MAX_SCALE;
     newScale = MathClamp(newScale, minScale, maxScale);
-    console.log(`[pinch-updateScale] cur=${this._currentScale.toFixed(4)} factor=${scaleFactor?.toFixed(4)} new=${newScale.toFixed(4)} delay=${drawingDelay}`);
     this.#setScale(newScale, { noScroll: false, drawingDelay, origin });
     // #367 end of modification by ngx-extended-pdf-viewer
   }
