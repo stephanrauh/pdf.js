@@ -2898,13 +2898,11 @@ appConfig: null,
     }
 
     // #3069 modified by ngx-extended-pdf-viewer
-    // Use 10000 instead of 100 for 0.01% precision during pinch/wheel zoom.
-    // 1% steps (100) cause visible page jumping during pinch gestures because
-    // each scale jump changes the scroll height significantly and the scroll
-    // correction can't compensate perfectly for large jumps.
+    // Use 0.1% precision (1000) during pinch for smoother increments.
+    // The scale snaps to whole percentages when the gesture ends.
     const newFactor =
-      Math.floor(previousScale * factor * this[prop] * 10000) /
-      (10000 * previousScale);
+      Math.floor(previousScale * factor * this[prop] * 1000) /
+      (1000 * previousScale);
     // #3069 end of modification by ngx-extended-pdf-viewer
     this[prop] = factor / newFactor;
 

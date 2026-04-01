@@ -219,7 +219,6 @@ class TouchManager {
       (touch0.screenY + touch1.screenY) / 2,
     ];
     // #3069 end of modification by ngx-extended-pdf-viewer
-    console.log(`[pinch-touch] factor=${(distance / pDistance).toFixed(4)} dist=${distance.toFixed(1)} pDist=${pDistance.toFixed(1)} t0=(${Math.round(touch0.screenX)},${Math.round(touch0.screenY)}) t1=(${Math.round(touch1.screenX)},${Math.round(touch1.screenY)}) origin=(${Math.round(origin[0])},${Math.round(origin[1])})`);
     this.#onPinching?.(origin, pDistance, distance);
   }
 

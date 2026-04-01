@@ -743,10 +743,6 @@ class PDFPageView extends BasePDFPageView {
       const onlyCssZoom =
         this.#hasRestrictedScaling && this.#needsRestrictedScaling;
 
-      if (this.id <= 20) {
-        console.log(`[pinch-page${this.id}] drawingDelay=${drawingDelay} postpone=${postponeDrawing} cssOnly=${onlyCssZoom} canvas=true`);
-      }
-
       if (postponeDrawing || onlyCssZoom) {
         if (
           postponeDrawing &&
@@ -790,9 +786,6 @@ class PDFPageView extends BasePDFPageView {
         }
         return;
       }
-    }
-    if (this.id <= 20) {
-      console.log(`[pinch-page${this.id}] FULL RE-RENDER drawingDelay=${drawingDelay}`);
     }
     this.cssTransform({});
     this.reset({
