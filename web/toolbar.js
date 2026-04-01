@@ -168,6 +168,10 @@ class Toolbar {
       },
       */
       // #2900 end of modification by ngx-extended-pdf-viewer
+      // #3069 modified by ngx-extended-pdf-viewer
+      // Commented out because Angular handles the click via PdfEditorSignatureComponent.onClick().
+      // Having both handlers causes the mode to toggle back to NONE immediately.
+      /*
       {
         element: options.editorSignatureButton,
         eventName: "switchannotationeditormode",
@@ -180,6 +184,8 @@ class Toolbar {
           },
         },
       },
+      */
+      // #3069 end of modification by ngx-extended-pdf-viewer
     ];
 
     // Bind the event listeners for click and various other actions.
