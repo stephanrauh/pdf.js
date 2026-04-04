@@ -14,7 +14,7 @@
  */
 
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
-import { isPdfFile, PDFDataRangeTransport } from "pdfjs-lib";
+import { isPdfFile, MathClamp, PDFDataRangeTransport } from "pdfjs-lib";
 import { AppOptions } from "./app_options.js";
 import { BaseExternalServices } from "./external_services.js";
 import { BasePreferences } from "./preferences.js";
@@ -628,7 +628,13 @@ class ExternalServices extends BaseExternalServices {
           pdfDataRangeTransport?.onDataProgressiveDone();
           break;
         case "progress":
-          viewerApp.progress(args.loaded / args.total);
+          const percent = MathClamp(
+            Math.round((args.loaded / args.total) * 100),
+            0,
+            100
+          );
+
+          viewerApp.progress(percent);
           break;
         case "complete":
           if (!args.data) {

@@ -1012,20 +1012,26 @@ class CommentPopup {
           },
         },
       });
-      this.#editor.comment = null;
+      const editor = this.#editor;
+      const savedData = editor.comment;
       // #3113 modified by ngx-extended-pdf-viewer
       // Emit commentRemoved event when user clicks delete button on comment popup
       this.#eventBus?.dispatch("annotation-editor-event", {
         source: this,
         type: 'commentRemoved',
-        page: this.#editor.pageIndex + 1,
-        id: this.#editor.uid,
-        editorType: this.#editor.constructor.name,
-        value: this.#editor,
+        page: editor.pageIndex + 1,
+        id: editor.uid,
+        editorType: editor.constructor.name,
+        value: editor,
       });
       // #3113 end of modification by ngx-extended-pdf-viewer
-      this.#editor.focus();
       this.destroy();
+      if (savedData?.text) {
+        editor._uiManager.deleteComment(editor, savedData);
+      } else {
+        editor.comment = null;
+      }
+      editor.focus();
     });
     del.addEventListener("contextmenu", noContextMenu);
     buttons.append(edit, del);

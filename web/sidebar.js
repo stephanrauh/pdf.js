@@ -74,12 +74,10 @@ class Sidebar {
     this.#initialWidth = this.#width = parseFloat(
       style.getPropertyValue("--sidebar-width")
     );
-    resizer.ariaValueMin = parseFloat(
-      style.getPropertyValue("--sidebar-min-width")
-    );
-    resizer.ariaValueMax = parseFloat(
-      style.getPropertyValue("--sidebar-max-width")
-    );
+    resizer.ariaValueMin =
+      parseFloat(style.getPropertyValue("--sidebar-min-width")) || 0;
+    resizer.ariaValueMax =
+      parseFloat(style.getPropertyValue("--sidebar-max-width")) || Infinity;
     resizer.ariaValueNow = this.#width;
 
     this.#makeSidebarResizable();
@@ -140,7 +138,7 @@ class Sidebar {
       window.addEventListener(
         "pointermove",
         ev => {
-          if (!pointerMoveAC) {
+          if (!pointerMoveAC || Math.abs(ev.clientX - this.#prevX) < 1) {
             return;
           }
           stopEvent(ev);

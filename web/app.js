@@ -395,6 +395,7 @@ appConfig: null,
         enableFakeMLManager: x => x === "true",
         enableGuessAltText: x => x === "true",
         enablePermissions: x => x === "true",
+        enableSplitMerge: x => x === "true",
         enableUpdatedAddImage: x => x === "true",
         highlightEditorColors: x => x,
         maxCanvasPixels: x => parseInt(x),
@@ -404,7 +405,7 @@ appConfig: null,
         forcePageColors: x => x === "true",
         pageColorsBackground: x => x,
         pageColorsForeground: x => x,
-        localeProperties: x => ({ lang: x }),
+        sidebarViewOnLoad: x => parseInt(x),
       });
     }
 
@@ -657,6 +658,8 @@ appConfig: null,
         pageColors,
         abortSignal,
         enableHWA,
+        enableSplitMerge: AppOptions.get("enableSplitMerge"),
+        manageMenu: appConfig.viewsManager.manageMenu,
       });
       renderingQueue.setThumbnailViewer(this.pdfThumbnailViewer);
     }
@@ -1392,17 +1395,18 @@ appConfig: null,
       this.passwordPrompt.open();
     };
 
-    loadingTask.onProgress = ({ loaded, total }) => {
-        this.progress(loaded / total);
-        // #588 modified by ngx-extended-pdf-viewer
+    // #588 modified by ngx-extended-pdf-viewer
+    loadingTask.onProgress = evt => {
+        this.progress(evt.percent);
         this.eventBus?.dispatch("progress", {
           source: this,
           type: "load",
-          total,
-          loaded,
-          percent: (100 * loaded) / total,
+          total: evt.total,
+          loaded: evt.loaded,
+          percent: evt.percent,
         });
     };
+    // #588 end of modification by ngx-extended-pdf-viewer
 
     const showUnverifiedSignatures = this.serviceWorkerOptions.showUnverifiedSignatures;
     return loadingTask.promise.then(
@@ -1649,8 +1653,7 @@ appConfig: null,
     return message;
   },
 
-  progress(level) {
-    const percent = Math.round(level * 100);
+  progress(percent) {
     // When we transition from full request to range requests, it's possible
     // that we discard some of the loaded data. This can cause the loading
     // bar to move backwards. So prevent this by only updating the bar if it
@@ -2670,6 +2673,17 @@ appConfig: null,
         opts
       );
     }
+    eventBus._on("pagesedited", this.onPagesEdited.bind(this), opts);
+    eventBus._on(
+      "beforepagesedited",
+      this.onBeforePagesEdited.bind(this),
+      opts
+    );
+    eventBus._on(
+      "savepageseditedpdf",
+      this.onSavePagesEditedPDF.bind(this),
+      opts
+    );
   },
 
   bindWindowEvents() {
@@ -2875,6 +2889,43 @@ appConfig: null,
     this.findBar?.close();
 
     await Promise.all([this.l10n?.destroy(), this.close()]);
+  },
+
+  onBeforePagesEdited(data) {
+    this.pdfViewer.onBeforePagesEdited(data);
+  },
+
+  onPagesEdited(data) {
+    this.pdfViewer.onPagesEdited(data);
+  },
+
+  async onSavePagesEditedPDF({
+    data: { includePages, excludePages, pageIndices },
+  }) {
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
+      return;
+    }
+    if (!this.pdfDocument) {
+      return;
+    }
+    const pageInfo = {
+      document: null, // For now, no merge.
+      includePages,
+      excludePages,
+      pageIndices,
+    };
+    const modifiedPdfBytes = await this.pdfDocument.extractPages([pageInfo]);
+    if (!modifiedPdfBytes) {
+      console.error(
+        "Something wrong happened when saving the edited PDF.\nPlease file a bug."
+      );
+      return;
+    }
+    this.downloadManager.download(
+      modifiedPdfBytes,
+      this._downloadUrl,
+      this._docFilename
+    );
   },
 
   _accumulateTicks(ticks, prop) {

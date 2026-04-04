@@ -104,9 +104,10 @@ class PDFThumbnailView {
     maxCanvasPixels,
     maxCanvasDim,
     pageColors,
+    enableSplitMerge = false,
   }) {
     this.id = id;
-    this.renderingId = "thumbnail" + id;
+    this.renderingId = `thumbnail${id}`;
     this.pageLabel = null;
 
     this.pdfPage = null;
@@ -125,6 +126,7 @@ class PDFThumbnailView {
     this.renderTask = null;
     this.renderingState = RenderingStates.INITIAL;
     this.resume = null;
+    this.placeholder = null;
 
     // #1696 modified by ngx-extended-pdf-viewer
     // PDF.js v5.4.530 changed thumbnail creation from anchor/div to direct div/checkbox/img structure
@@ -173,7 +175,8 @@ class PDFThumbnailView {
   #createStandardThumbnail(container) {
     const imageContainer = (this.div = document.createElement("div"));
     imageContainer.className = "thumbnail";
-    imageContainer.setAttribute("page-number", this.#pageNumber);
+    imageContainer.setAttribute("page-number", id);
+    imageContainer.setAttribute("page-id", id);
 
     // #2943 modified by ngx-extended-pdf-viewer
     // Make thumbnail draggable for page reordering
@@ -182,17 +185,21 @@ class PDFThumbnailView {
     }
     // #2943 end of modification by ngx-extended-pdf-viewer
 
-    const checkbox = (this.checkbox = document.createElement("input"));
-    checkbox.type = "checkbox";
-    checkbox.tabIndex = -1;
+    if (enableSplitMerge) {
+      const checkbox = (this.checkbox = document.createElement("input"));
+      checkbox.type = "checkbox";
+      checkbox.tabIndex = -1;
+      imageContainer.append(checkbox);
+    }
 
     const image = (this.image = document.createElement("img"));
     image.classList.add("thumbnailImage", "missingThumbnailImage");
     image.role = "button";
     image.tabIndex = -1;
+    image.draggable = false;
     this.#updateDims();
 
-    imageContainer.append(checkbox, image);
+    imageContainer.append(image);
     container.append(imageContainer);
   }
   // #1696 end of modification by ngx-extended-pdf-viewer
@@ -259,6 +266,14 @@ class PDFThumbnailView {
     }
   }
   // #2943 end of modification by ngx-extended-pdf-viewer
+
+  updateId(newId) {
+    this.id = newId;
+    this.renderingId = `thumbnail${newId}`;
+    this.div.setAttribute("page-number", newId);
+    // TODO: do we set the page label ?
+    this.setPageLabel(this.pageLabel);
+  }
 
   #updateDims() {
     const { width, height } = this.viewport;
@@ -567,10 +582,6 @@ class PDFThumbnailView {
 
   get #pageL10nArgs() {
     return JSON.stringify({ page: this.pageLabel ?? this.id });
-  }
-
-  get #pageNumber() {
-    return this.pageLabel ?? this.id;
   }
 
   /**

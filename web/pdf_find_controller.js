@@ -461,6 +461,7 @@ class PDFFindController {
     if (listenToEventBus) { // #2339 modified by ngx-extended-pdf-viewer
       eventBus._on("find", this.#onFind.bind(this));
       eventBus._on("findbarclose", this.#onFindBarClose.bind(this));
+      eventBus._on("pagesedited", this.#onPagesEdited.bind(this));
     } // #2339 modified by ngx-extended-pdf-viewer
   }
 
@@ -1242,6 +1243,25 @@ class PDFFindController {
       this._scrollMatches = true;
 
       this.#updatePage(this._selected.pageIdx);
+    }
+  }
+
+  #onPagesEdited({ pagesMapper }) {
+    if (this._extractTextPromises.length === 0) {
+      return;
+    }
+    this.#onFindBarClose();
+    this._dirtyMatch = true;
+    const prevTextPromises = this._extractTextPromises;
+    const extractTextPromises = (this._extractTextPromises.length = []);
+    for (let i = 0, ii = pagesMapper.length; i < ii; i++) {
+      const prevPageIndex = pagesMapper.getPrevPageNumber(i + 1) - 1;
+      if (prevPageIndex === -1) {
+        continue;
+      }
+      extractTextPromises.push(
+        prevTextPromises[prevPageIndex] || Promise.resolve()
+      );
     }
   }
 

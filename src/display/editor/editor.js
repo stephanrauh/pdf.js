@@ -214,6 +214,10 @@ class AnnotationEditor {
     this.eventBus = parameters.eventBus; // #2256 modified by ngx-extended-pdf-viewer
   }
 
+  updatePageIndex(newPageIndex) {
+    this.pageIndex = newPageIndex;
+  }
+
   get editorType() {
     return Object.getPrototypeOf(this).constructor._type;
   }
@@ -1265,6 +1269,9 @@ class AnnotationEditor {
   }
 
   get comment() {
+    if (!this.#comment) {
+      return null;
+    }
     const {
       data: { richText, text, date, deleted },
     } = this.#comment;
@@ -1278,9 +1285,14 @@ class AnnotationEditor {
     };
   }
 
-  set comment(text) {
+  set comment(value) {
     this.#comment ||= new Comment(this);
-    this.#comment.data = text;
+    if (typeof value === "object" && value !== null) {
+      // Restore full comment data (used for undo).
+      this.#comment.restoreData(value);
+    } else {
+      this.#comment.data = value;
+    }
     if (this.hasComment) {
       this.removeCommentButtonFromToolbar();
       this.addStandaloneCommentButton();

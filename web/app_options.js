@@ -37,19 +37,15 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
 
   // Limit canvas size to 5 mega-pixels on mobile.
   // Support: Android, iOS
-  (function () {
-    if (isIOS || isAndroid) {
-      compatParams.set("maxCanvasPixels", 5242880);
-    }
-  })();
+  if (isIOS || isAndroid) {
+    compatParams.set("maxCanvasPixels", 5242880);
+  }
 
   // Don't use system fonts on Android (issue 18210).
   // Support: Android
-  (function () {
-    if (isAndroid) {
-      compatParams.set("useSystemFonts", false);
-    }
-  })();
+  if (isAndroid) {
+    compatParams.set("useSystemFonts", false);
+  }
 }
 
 const OptionKind = {
@@ -328,6 +324,11 @@ const defaultOptions = {
   enablePageReordering: {
     /** @type {boolean} */
     value: true,
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
+  enableSplitMerge: {
+    /** @type {boolean} */
+    value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   pdfBackgroundColor: { // #2997 modified by ngx-extended-pdf-viewer
@@ -657,7 +658,7 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
   };
 }
 
-if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING || LIB")) {
+if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
   // Ensure that the `defaultOptions` are correctly specified.
   for (const name in defaultOptions) {
     const { value, kind, type } = defaultOptions[name];

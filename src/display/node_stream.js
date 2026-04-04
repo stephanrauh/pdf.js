@@ -14,7 +14,12 @@
  */
 /* globals process */
 
-import { AbortException, assert } from "../shared/util.js";
+import { AbortException, assert, warn } from "../shared/util.js";
+import {
+  BasePDFStream,
+  BasePDFStreamRangeReader,
+  BasePDFStreamReader,
+} from "../shared/base_pdf_stream.js";
 import { createResponseError } from "./network_utils.js";
 
 if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
@@ -33,263 +38,147 @@ function parseUrlOrPath(sourceUrl) {
   return new URL(url.pathToFileURL(sourceUrl));
 }
 
-class PDFNodeStream {
+function getReadableStream(readStream) {
+  const { Readable } = process.getBuiltinModule("stream");
+
+  if (typeof Readable.toWeb === "function") {
+    // See https://nodejs.org/api/stream.html#streamreadabletowebstreamreadable-options
+    return Readable.toWeb(readStream);
+  }
+  // Fallback to support Node.js versions older than `24.0.0` and `22.17.0`.
+  const require = process
+    .getBuiltinModule("module")
+    .createRequire(import.meta.url);
+
+  const polyfill = require("node-readable-to-web-readable-stream");
+  return polyfill.makeDefaultReadableStreamFromNodeReadable(readStream);
+}
+
+function getArrayBuffer(val) {
+  if (val instanceof Uint8Array) {
+    return val.buffer;
+  }
+  if (val instanceof ArrayBuffer) {
+    return val;
+  }
+  warn(`getArrayBuffer - unexpected data format: ${val}`);
+  return new Uint8Array(val).buffer;
+}
+
+class PDFNodeStream extends BasePDFStream {
   constructor(source) {
-    this.source = source;
+    super(source, PDFNodeStreamReader, PDFNodeStreamRangeReader);
     this.url = parseUrlOrPath(source.url);
     assert(
       this.url.protocol === "file:",
       "PDFNodeStream only supports file:// URLs."
     );
-
-    this._fullRequestReader = null;
-    this._rangeRequestReaders = [];
-  }
-
-  get _progressiveDataLength() {
-    return this._fullRequestReader?._loaded ?? 0;
-  }
-
-  getFullReader() {
-    assert(
-      !this._fullRequestReader,
-      "PDFNodeStream.getFullReader can only be called once."
-    );
-    this._fullRequestReader = new PDFNodeStreamFsFullReader(this);
-    return this._fullRequestReader;
-  }
-
-  getRangeReader(start, end) {
-    if (end <= this._progressiveDataLength) {
-      return null;
-    }
-    const rangeReader = new PDFNodeStreamFsRangeReader(this, start, end);
-    this._rangeRequestReaders.push(rangeReader);
-    return rangeReader;
-  }
-
-  cancelAllRequests(reason) {
-    this._fullRequestReader?.cancel(reason);
-
-    for (const reader of this._rangeRequestReaders.slice(0)) {
-      reader.cancel(reason);
-    }
   }
 }
 
-class PDFNodeStreamFsFullReader {
+class PDFNodeStreamReader extends BasePDFStreamReader {
+  _reader = null;
+
   constructor(stream) {
-    this._url = stream.url;
-    this._done = false;
-    this._storedError = null;
-    this.onProgress = null;
-    const source = stream.source;
-    this._contentLength = source.length; // optional
-    this._loaded = 0;
-    this._filename = null;
+    super(stream);
+    const { disableRange, disableStream, length, rangeChunkSize } =
+      stream._source;
 
-    this._disableRange = source.disableRange || false;
-    this._rangeChunkSize = source.rangeChunkSize;
-    if (!this._rangeChunkSize && !this._disableRange) {
-      this._disableRange = true;
-    }
+    this._contentLength = length;
+    this._isStreamingSupported = !disableStream;
+    this._isRangeSupported = !disableRange;
 
-    this._isStreamingSupported = !source.disableStream;
-    this._isRangeSupported = !source.disableRange;
-
-    this._readableStream = null;
-    this._readCapability = Promise.withResolvers();
-    this._headersCapability = Promise.withResolvers();
-
+    const url = stream.url;
     const fs = process.getBuiltinModule("fs");
-    fs.promises.lstat(this._url).then(
-      stat => {
-        // Setting right content length.
-        this._contentLength = stat.size;
+    fs.promises
+      .lstat(url)
+      .then(stat => {
+        const readStream = fs.createReadStream(url);
+        const readableStream = getReadableStream(readStream);
 
-        this._setReadableStream(fs.createReadStream(this._url));
-        this._headersCapability.resolve();
-      },
-      error => {
-        if (error.code === "ENOENT") {
-          error = createResponseError(/* status = */ 0, this._url.href);
+        this._reader = readableStream.getReader();
+
+        const { size } = stat;
+        if (size <= 2 * rangeChunkSize) {
+          // The file size is smaller than the size of two chunks, so it doesn't
+          // make any sense to abort the request and retry with a range request.
+          this._isRangeSupported = false;
         }
-        this._storedError = error;
+        // Setting right content length.
+        this._contentLength = size;
+
+        // We need to stop reading when range is supported and streaming is
+        // disabled.
+        if (!this._isStreamingSupported && this._isRangeSupported) {
+          this.cancel(new AbortException("Streaming is disabled."));
+        }
+
+        this._headersCapability.resolve();
+      })
+      .catch(error => {
+        if (error.code === "ENOENT") {
+          error = createResponseError(/* status = */ 0, url.href);
+        }
         this._headersCapability.reject(error);
-      }
-    );
-  }
-
-  get headersReady() {
-    return this._headersCapability.promise;
-  }
-
-  get filename() {
-    return this._filename;
-  }
-
-  get contentLength() {
-    return this._contentLength;
-  }
-
-  get isRangeSupported() {
-    return this._isRangeSupported;
-  }
-
-  get isStreamingSupported() {
-    return this._isStreamingSupported;
+      });
   }
 
   async read() {
-    await this._readCapability.promise;
-    if (this._done) {
-      return { value: undefined, done: true };
+    await this._headersCapability.promise;
+    const { value, done } = await this._reader.read();
+    if (done) {
+      return { value, done };
     }
-    if (this._storedError) {
-      throw this._storedError;
-    }
-
-    const chunk = this._readableStream.read();
-    if (chunk === null) {
-      this._readCapability = Promise.withResolvers();
-      return this.read();
-    }
-    this._loaded += chunk.length;
+    this._loaded += value.length;
     this.onProgress?.({
       loaded: this._loaded,
       total: this._contentLength,
     });
 
-    // Ensure that `read()` method returns ArrayBuffer.
-    const buffer = new Uint8Array(chunk).buffer;
-    return { value: buffer, done: false };
+    return { value: getArrayBuffer(value), done: false };
   }
 
   cancel(reason) {
-    // Call `this._error()` method when cancel is called
-    // before _readableStream is set.
-    if (!this._readableStream) {
-      this._error(reason);
-      return;
-    }
-    this._readableStream.destroy(reason);
-  }
-
-  _error(reason) {
-    this._storedError = reason;
-    this._readCapability.resolve();
-  }
-
-  _setReadableStream(readableStream) {
-    this._readableStream = readableStream;
-    readableStream.on("readable", () => {
-      this._readCapability.resolve();
-    });
-
-    readableStream.on("end", () => {
-      // Destroy readable to minimize resource usage.
-      readableStream.destroy();
-      this._done = true;
-      this._readCapability.resolve();
-    });
-
-    readableStream.on("error", reason => {
-      this._error(reason);
-    });
-
-    // We need to stop reading when range is supported and streaming is
-    // disabled.
-    if (!this._isStreamingSupported && this._isRangeSupported) {
-      this._error(new AbortException("streaming is disabled"));
-    }
-
-    // Destroy ReadableStream if already in errored state.
-    if (this._storedError) {
-      this._readableStream.destroy(this._storedError);
-    }
+    this._reader?.cancel(reason);
   }
 }
 
-class PDFNodeStreamFsRangeReader {
-  constructor(stream, start, end) {
-    this._url = stream.url;
-    this._done = false;
-    this._storedError = null;
-    this.onProgress = null;
-    this._loaded = 0;
-    this._readableStream = null;
-    this._readCapability = Promise.withResolvers();
-    const source = stream.source;
-    this._isStreamingSupported = !source.disableStream;
+class PDFNodeStreamRangeReader extends BasePDFStreamRangeReader {
+  _readCapability = Promise.withResolvers();
 
+  _reader = null;
+
+  constructor(stream, begin, end) {
+    super(stream, begin, end);
+
+    const url = stream.url;
     const fs = process.getBuiltinModule("fs");
-    this._setReadableStream(
-      fs.createReadStream(this._url, { start, end: end - 1 })
-    );
-  }
+    try {
+      const readStream = fs.createReadStream(url, {
+        start: begin,
+        end: end - 1,
+      });
+      const readableStream = getReadableStream(readStream);
 
-  get isStreamingSupported() {
-    return this._isStreamingSupported;
+      this._reader = readableStream.getReader();
+
+      this._readCapability.resolve();
+    } catch (error) {
+      this._readCapability.reject(error);
+    }
   }
 
   async read() {
     await this._readCapability.promise;
-    if (this._done) {
-      return { value: undefined, done: true };
+    const { value, done } = await this._reader.read();
+    if (done) {
+      return { value, done };
     }
-    if (this._storedError) {
-      throw this._storedError;
-    }
-
-    const chunk = this._readableStream.read();
-    if (chunk === null) {
-      this._readCapability = Promise.withResolvers();
-      return this.read();
-    }
-    this._loaded += chunk.length;
-    this.onProgress?.({ loaded: this._loaded });
-
-    // Ensure that `read()` method returns ArrayBuffer.
-    const buffer = new Uint8Array(chunk).buffer;
-    return { value: buffer, done: false };
+    return { value: getArrayBuffer(value), done: false };
   }
 
   cancel(reason) {
-    // Call `this._error()` method when cancel is called
-    // before _readableStream is set.
-    if (!this._readableStream) {
-      this._error(reason);
-      return;
-    }
-    this._readableStream.destroy(reason);
-  }
-
-  _error(reason) {
-    this._storedError = reason;
-    this._readCapability.resolve();
-  }
-
-  _setReadableStream(readableStream) {
-    this._readableStream = readableStream;
-    readableStream.on("readable", () => {
-      this._readCapability.resolve();
-    });
-
-    readableStream.on("end", () => {
-      // Destroy readableStream to minimize resource usage.
-      readableStream.destroy();
-      this._done = true;
-      this._readCapability.resolve();
-    });
-
-    readableStream.on("error", reason => {
-      this._error(reason);
-    });
-
-    // Destroy readableStream if already in errored state.
-    if (this._storedError) {
-      this._readableStream.destroy(this._storedError);
-    }
+    this._reader?.cancel(reason);
   }
 }
 

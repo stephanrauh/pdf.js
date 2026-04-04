@@ -256,23 +256,23 @@ class WorkerMessageHandler {
 
         return new LocalPdfManager(pdfManagerArgs);
       }
-      const pdfStream = new PDFWorkerStream(handler),
-        fullRequest = pdfStream.getFullReader();
+      const pdfStream = new PDFWorkerStream({ msgHandler: handler }),
+        fullReader = pdfStream.getFullReader();
 
       const pdfManagerCapability = Promise.withResolvers();
       let newPdfManager,
         cachedChunks = [],
         loaded = 0;
 
-      fullRequest.headersReady
+      fullReader.headersReady
         .then(function () {
-          if (!fullRequest.isRangeSupported) {
+          if (!fullReader.isRangeSupported) {
             return;
           }
           pdfManagerArgs.source = pdfStream;
-          pdfManagerArgs.length = fullRequest.contentLength;
+          pdfManagerArgs.length = fullReader.contentLength;
           // We don't need auto-fetch when streaming is enabled.
-          pdfManagerArgs.disableAutoFetch ||= fullRequest.isStreamingSupported;
+          pdfManagerArgs.disableAutoFetch ||= fullReader.isStreamingSupported;
 
           newPdfManager = new NetworkPdfManager(pdfManagerArgs);
           // There may be a chance that `newPdfManager` is not initialized for
@@ -319,10 +319,10 @@ class WorkerMessageHandler {
             }
             loaded += value.byteLength;
 
-            if (!fullRequest.isStreamingSupported) {
+            if (!fullReader.isStreamingSupported) {
               handler.send("DocProgress", {
                 loaded,
-                total: Math.max(loaded, fullRequest.contentLength || 0),
+                total: Math.max(loaded, fullReader.contentLength || 0),
               });
             }
 
@@ -331,12 +331,12 @@ class WorkerMessageHandler {
             } else {
               cachedChunks.push(value);
             }
-            fullRequest.read().then(readChunk, reject);
+            fullReader.read().then(readChunk, reject);
           } catch (e) {
             reject(e);
           }
         };
-        fullRequest.read().then(readChunk, reject);
+        fullReader.read().then(readChunk, reject);
       }).catch(function (e) {
         pdfManagerCapability.reject(e);
         cancelXHRs = null;
@@ -920,8 +920,8 @@ class WorkerMessageHandler {
     );
 
     handler.on("GetOperatorList", function (data, sink) {
-      const pageIndex = data.pageIndex;
-      pdfManager.getPage(pageIndex).then(function (page) {
+      const { pageId, pageIndex } = data;
+      pdfManager.getPage(pageId).then(function (page) {
         const task = new WorkerTask(`GetOperatorList: page ${pageIndex}`);
         startWorkerTask(task);
 
@@ -938,6 +938,7 @@ class WorkerMessageHandler {
             cacheKey: data.cacheKey,
             annotationStorage: data.annotationStorage,
             modifiedIds: data.modifiedIds,
+            pageIndex,
           })
           .then(
             function (operatorListInfo) {
@@ -966,9 +967,10 @@ class WorkerMessageHandler {
     });
 
     handler.on("GetTextContent", function (data, sink) {
-      const { pageIndex, includeMarkedContent, disableNormalization } = data;
+      const { pageId, pageIndex, includeMarkedContent, disableNormalization } =
+        data;
 
-      pdfManager.getPage(pageIndex).then(function (page) {
+      pdfManager.getPage(pageId).then(function (page) {
         const task = new WorkerTask("GetTextContent: page " + pageIndex);
         startWorkerTask(task);
 

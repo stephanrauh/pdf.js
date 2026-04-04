@@ -179,6 +179,10 @@ class AnnotationEditorLayer {
     this.eventBus = eventBus; // modified by ngx-extended-pdf-viewer #2256
   }
 
+  updatePageIndex(newPageIndex) {
+    this.pageIndex = newPageIndex;
+  }
+
   get isEmpty() {
     return this.#editors.size === 0;
   }

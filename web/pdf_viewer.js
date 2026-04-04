@@ -34,6 +34,7 @@ import {
   AnnotationEditorUIManager,
   AnnotationMode,
   MathClamp,
+  PagesMapper,
   PermissionFlag,
   PixelsPerInch,
   shadow,
@@ -320,6 +321,8 @@ class PDFViewer {
 
   #viewerAlert = null;
 
+  #pagesMapper = PagesMapper.instance;
+
   /**
    * @param {PDFViewerOptions} options
    */
@@ -331,6 +334,10 @@ class PDFViewer {
         `The API version "${version}" does not match the Viewer version "${viewerVersion}".`
       );
     }
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+      this.pagesMapper = PagesMapper.instance;
+    }
+
     this.container = options.container;
     this.viewer = options.viewer || options.container.firstElementChild;
     this.#viewerAlert = options.viewerAlert || null;
@@ -1231,6 +1238,7 @@ class PDFViewer {
       this.#annotationEditorMode = AnnotationEditorType.NONE;
 
       this.#printingAllowed = true;
+      this.#pagesMapper.pagesNumber = 0;
     }
 
     this.pdfDocument = pdfDocument;
@@ -1538,6 +1546,42 @@ class PDFViewer {
 
         this._pagesCapability.reject(reason);
       });
+  }
+
+  async onBeforePagesEdited({ pagesMapper }) {
+    await this._pagesCapability.promise;
+    this._currentPageId = pagesMapper.getPageId(this._currentPageNumber);
+  }
+
+  onPagesEdited({ pagesMapper }) {
+    this._currentPageNumber = pagesMapper.getPageNumber(this._currentPageId);
+    const prevPages = this._pages;
+    const newPages = (this._pages = []);
+    for (let i = 0, ii = pagesMapper.pagesNumber; i < ii; i++) {
+      const prevPageNumber = pagesMapper.getPrevPageNumber(i + 1) - 1;
+      if (prevPageNumber === -1) {
+        continue;
+      }
+      const page = prevPages[prevPageNumber];
+      newPages[i] = page;
+      page.updatePageNumber(i + 1);
+    }
+
+    const viewerElement =
+      this._scrollMode === ScrollMode.PAGE ? null : this.viewer;
+    if (viewerElement) {
+      viewerElement.replaceChildren();
+      const fragment = document.createDocumentFragment();
+      for (let i = 0, ii = pagesMapper.pagesNumber; i < ii; i++) {
+        const { div } = newPages[i];
+        div.setAttribute("data-page-number", i + 1);
+        fragment.append(div);
+      }
+      viewerElement.append(fragment);
+    }
+    setTimeout(() => {
+      this.forceRendering();
+    });
   }
 
   /**
@@ -2399,14 +2443,14 @@ class PDFViewer {
       this._spreadMode === SpreadMode.NONE &&
       (this._scrollMode === ScrollMode.PAGE ||
         this._scrollMode === ScrollMode.VERTICAL);
-    const currentId = this._currentPageNumber;
+    const currentPageNumber = this._currentPageNumber;
     let stillFullyVisible = false;
 
     for (const page of visiblePages) {
       if (page.percent < 100) {
         break;
       }
-      if (page.id === currentId && isSimpleLayout) {
+      if (page.id === currentPageNumber && isSimpleLayout) {
         stillFullyVisible = true;
         break;
       }
@@ -2422,7 +2466,7 @@ class PDFViewer {
       Date.now() - this.#lastNavigationTime < 500;
     if (this.scrollMode !== ScrollMode.PAGE && !noScroll && !navigationSettling) { // #2275 modified by ngx-extended-pdf-viewer
       this._setCurrentPageNumber(
-        stillFullyVisible ? currentId : visiblePages[0].id
+        stillFullyVisible ? this._currentPageNumber : visiblePages[0].id
       );
     }
     // #3069 end of modification by ngx-extended-pdf-viewer

@@ -27,7 +27,6 @@ import {
   stringToBytes,
   stringToPDFString,
   stringToUTF8String,
-  toHexUtil,
   unreachable,
   Util,
   warn,
@@ -61,6 +60,7 @@ import {
   RefSetCache,
 } from "./primitives.js";
 import { getXfaFontDict, getXfaFontName } from "./xfa_fonts.js";
+import { NullStream, Stream } from "./stream.js";
 import { BaseStream } from "./base_stream.js";
 import { calculateMD5 } from "./calculate_md5.js";
 import { Catalog } from "./catalog.js";
@@ -68,7 +68,6 @@ import { clearGlobalCaches } from "./cleanup_helper.js";
 import { DatasetReader } from "./dataset_reader.js";
 import { Intersector } from "./intersector.js";
 import { Linearization } from "./parser.js";
-import { NullStream } from "./stream.js";
 import { ObjectLoader } from "./object_loader.js";
 import { OperatorList } from "./operator_list.js";
 import { PartialEvaluator } from "./evaluator.js";
@@ -270,10 +269,32 @@ class Page {
   async getContentStream() {
     const content = await this.pdfManager.ensure(this, "content");
 
-    if (content instanceof BaseStream) {
+    if (content instanceof BaseStream && !content.isImageStream) {
+      if (content.isAsync) {
+        const bytes = await content.asyncGetBytes();
+        if (bytes) {
+          return new Stream(bytes, 0, bytes.length, content.dict);
+        }
+      }
       return content;
     }
     if (Array.isArray(content)) {
+      const promises = [];
+      for (let i = 0, ii = content.length; i < ii; i++) {
+        const item = content[i];
+        if (item instanceof BaseStream && item.isAsync) {
+          promises.push(
+            item.asyncGetBytes().then(bytes => {
+              if (bytes) {
+                content[i] = new Stream(bytes, 0, bytes.length, item.dict);
+              }
+            })
+          );
+        }
+      }
+      if (promises.length > 0) {
+        await Promise.all(promises);
+      }
       return new StreamsSequenceStream(
         content,
         this.#onSubStreamError.bind(this)
@@ -442,6 +463,8 @@ class Page {
     task,
     intent,
     cacheKey,
+    pageId = this.pageIndex,
+    pageIndex = this.pageIndex,
     annotationStorage = null,
     modifiedIds = null,
   }) {
@@ -527,13 +550,12 @@ class Page {
         RESOURCES_KEYS_OPERATOR_LIST
       );
       const opList = new OperatorList(intent, sink);
-
       handler.send("StartRenderPage", {
         transparency: partialEvaluator.hasBlendModes(
           resources,
           this.nonBlendModesSet
         ),
-        pageIndex: this.pageIndex,
+        pageIndex,
         cacheKey,
       });
 
@@ -1610,8 +1632,8 @@ class PDFDocument {
     }
 
     return shadow(this, "fingerprints", [
-      toHexUtil(hashOriginal),
-      hashModified ? toHexUtil(hashModified) : null,
+      hashOriginal.toHex(),
+      hashModified?.toHex() ?? null,
     ]);
   }
 

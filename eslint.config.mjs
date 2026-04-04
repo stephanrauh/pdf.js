@@ -35,6 +35,7 @@ export default [
       "external/builder/fixtures_babel/",
       "external/openjpeg/",
       "external/qcms/",
+      "external/jbig2/",
       "external/quickjs/",
       "test/stats/results/",
       "test/tmp/",
@@ -116,6 +117,7 @@ export default [
             "web",
             "fluent-bundle",
             "fluent-dom",
+            "postcss-values-parser",
             // See https://github.com/firebase/firebase-admin-node/discussions/1359.
             "eslint-plugin-perfectionist",
           ],
