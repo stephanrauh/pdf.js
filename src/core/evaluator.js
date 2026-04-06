@@ -32,6 +32,10 @@ import {
 import { CMapFactory, IdentityCMap } from "./cmap.js";
 import { Cmd, Dict, EOF, isName, Name, Ref, RefSet } from "./primitives.js";
 import {
+  compileFontPathInfo,
+  compilePatternInfo,
+} from "./obj_bin_transform_core.js";
+import {
   compileType3Glyph,
   FontFlags,
   normalizeFontName,
@@ -44,11 +48,6 @@ import {
   lookupMatrix,
   lookupNormalRect,
 } from "./core_utils.js";
-import {
-  FontInfo,
-  FontPathInfo,
-  PatternInfo,
-} from "../shared/obj-bin-transform.js";
 import {
   getEncoding,
   MacRomanEncoding,
@@ -103,9 +102,11 @@ const DefaultPartialEvaluatorOptions = Object.freeze({
   useWasm: true,
   useWorkerFetch: true,
   cMapUrl: null,
+  cMapPacked: true,
   iccUrl: null,
   standardFontDataUrl: null,
   wasmUrl: null,
+  prepareWebGPU: null,
 });
 
 const PatternType = {
@@ -414,11 +415,17 @@ class PartialEvaluator {
         isCompressed: true,
       };
     } else {
+      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+        throw new Error("Only worker-thread fetching supported.");
+      }
       // Get the data on the main-thread instead.
-      data = await this.handler.sendWithPromise("FetchBinaryData", {
-        type: "cMapReaderFactory",
-        name,
-      });
+      data = {
+        cMapData: await this.handler.sendWithPromise("FetchBinaryData", {
+          kind: "cMapUrl",
+          filename: `${name}${this.options.cMapPacked ? ".bcmap" : ""}`,
+        }),
+        isCompressed: this.options.cMapPacked,
+      };
     }
     // Cache the CMap data, to avoid fetching it repeatedly.
     this.builtInCMapCache.set(name, data);
@@ -452,9 +459,12 @@ class PartialEvaluator {
           `${this.options.standardFontDataUrl}${filename}`
         );
       } else {
+        if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+          throw new Error("Only worker-thread fetching supported.");
+        }
         // Get the data on the main-thread instead.
         data = await this.handler.sendWithPromise("FetchBinaryData", {
-          type: "standardFontDataFactory",
+          kind: "standardFontDataUrl",
           filename,
         });
       }
@@ -482,6 +492,10 @@ class PartialEvaluator {
     const { dict } = xobj;
     const matrix = lookupMatrix(dict.getArray("Matrix"), null);
     const bbox = lookupNormalRect(dict.getArray("BBox"), null);
+    let f32bbox = bbox && new Float32Array(bbox);
+    if (f32bbox?.some(x => !isFinite(x))) {
+      f32bbox = null;
+    }
 
     let optionalContent, groupOptions;
     if (dict.has("OC")) {
@@ -497,7 +511,7 @@ class PartialEvaluator {
     if (group) {
       groupOptions = {
         matrix,
-        bbox,
+        bbox: f32bbox,
         smask,
         isolated: false,
         knockout: false,
@@ -531,8 +545,7 @@ class PartialEvaluator {
     // bounding box and translated to the correct position so we don't need to
     // apply the bounding box to it.
     const f32matrix = matrix && new Float32Array(matrix);
-    const f32bbox = (!group && bbox && new Float32Array(bbox)) || null;
-    const args = [f32matrix, f32bbox];
+    const args = [f32matrix, (!group && f32bbox) || null];
     operatorList.addOp(OPS.paintFormXObjectBegin, args);
 
     const localResources = dict.get("Resources");
@@ -1513,7 +1526,8 @@ class PartialEvaluator {
         resources,
         this._pdfFunctionFactory,
         this.globalColorSpaceCache,
-        localColorSpaceCache
+        localColorSpaceCache,
+        this.options.prepareWebGPU
       );
       patternIR = shadingFill.getIR();
     } catch (reason) {
@@ -1536,10 +1550,8 @@ class PartialEvaluator {
     localShadingPatternCache.set(shading, id);
 
     if (this.parsingType3Font) {
-      const transfers = [];
-      const patternBuffer = PatternInfo.write(patternIR);
-      transfers.push(patternBuffer);
-      this.handler.send("commonobj", [id, "Pattern", patternBuffer], transfers);
+      const buffer = compilePatternInfo(patternIR);
+      this.handler.send("commonobj", [id, "Pattern", buffer], [buffer]);
     } else {
       this.handler.send("obj", [id, this.pageIndex, "Pattern", patternIR]);
     }
@@ -2451,6 +2463,7 @@ class PartialEvaluator {
       height: 0,
       vertical: false,
       prevTransform: null,
+      prevTextRise: 0,
       textAdvanceScale: 0,
       spaceInFlowMin: 0,
       spaceInFlowMax: 0,
@@ -2899,7 +2912,19 @@ class PartialEvaluator {
         return true;
       }
 
-      if (Math.abs(advanceY) > textContentItem.height) {
+      // Compensate for a textRise change (e.g. superscript/subscript dropping
+      // back to baseline): textRise is baked into posY/lastPosY via tsm[5] in
+      // getCurrentTextTransform(), scaled by the Y component of the CTM×TM
+      // product, which equals currentTransform[3] / textState.fontSize.
+      // Without this correction a superscript whose textRise exceeds the line
+      // height triggers a spurious EOL when the rise returns to 0.
+      const textRiseDelta = textState.textRise - textContentItem.prevTextRise;
+      const advanceYCorrected =
+        textRiseDelta === 0
+          ? advanceY
+          : advanceY -
+            (currentTransform[3] / textState.fontSize) * textRiseDelta;
+      if (Math.abs(advanceYCorrected) > textContentItem.height) {
         appendEOL();
         return true;
       }
@@ -2942,17 +2967,22 @@ class PartialEvaluator {
     function buildTextContentItem({ chars, extraSpacing }) {
       if (
         currentTextState !== textState &&
-        (currentTextState.fontName !== textState.fontName ||
-          currentTextState.fontSize !== textState.fontSize)
+        (currentTextState.fontSize !== textState.fontSize ||
+          (currentTextState.fontName !== textState.fontName &&
+            (currentTextState.font.name !== textState.font.name ||
+              currentTextState.font.vertical !== textState.font.vertical)))
       ) {
         flushTextContentItem();
         currentTextState = textState.clone();
       }
 
       const font = textState.font;
+      const baseCharSpacing = font.vertical
+        ? -textState.charSpacing
+        : textState.charSpacing;
       if (!chars) {
         // Just move according to the space we have.
-        const charSpacing = textState.charSpacing + extraSpacing;
+        const charSpacing = baseCharSpacing + extraSpacing;
         if (charSpacing) {
           if (!font.vertical) {
             textState.translateTextMatrix(
@@ -2981,8 +3011,7 @@ class PartialEvaluator {
         if (category.isInvisibleFormatMark) {
           continue;
         }
-        let charSpacing =
-          textState.charSpacing + (i + 1 === ii ? extraSpacing : 0);
+        let charSpacing = baseCharSpacing + (i + 1 === ii ? extraSpacing : 0);
 
         let glyphWidth = glyph.width;
         if (font.vertical) {
@@ -3059,6 +3088,7 @@ class PartialEvaluator {
         if (scaledDim) {
           // Save the position of the last visible character.
           textChunk.prevTransform = getCurrentTextTransform();
+          textChunk.prevTextRise = textState.textRise;
         }
 
         const glyphUnicode = glyph.unicode;
@@ -3203,6 +3233,9 @@ class PartialEvaluator {
         if (!preprocessor.read(operation)) {
           break;
         }
+
+        // preprocessor.read() already handles save, restore and transform
+        // operations, so we don't need to worry about them here.
 
         textState = stateManager.state;
         currentTextState ||= textState.clone();
@@ -3577,12 +3610,6 @@ class PartialEvaluator {
               });
             }
             break;
-          case OPS.restore:
-            stateManager.restore();
-            break;
-          case OPS.save:
-            stateManager.save();
-            break;
         } // switch
         if (textContent.items.length >= (sink?.desiredSize ?? 1)) {
           // Wait for ready, if we reach highWaterMark.
@@ -3728,6 +3755,8 @@ class PartialEvaluator {
         "\xB7\xC2\xCB\xCE_GB2312", // SimFang
         "\xC1\xA5\xCA\xE9", // SimLi
         "\xD0\xC2\xCB\xCE", // SimSun
+        "\xB7\xC2\xCB\xCE\xCC\xE5", // SimFang variant
+        "\xD0\xA1\xB1\xEA\xCB\xCE", // XiaoBiaoSong
       ];
 
       // Check for common Chinese font names and their GBK-encoded equivalents
@@ -4758,7 +4787,7 @@ class PartialEvaluator {
         if (font.renderer.hasBuiltPath(fontChar)) {
           return;
         }
-        const buffer = FontPathInfo.write(font.renderer.getPathJs(fontChar));
+        const buffer = compileFontPathInfo(font.renderer.getPathJs(fontChar));
         handler.send("commonobj", [glyphName, "FontPath", buffer], [buffer]);
       } catch (reason) {
         if (evaluatorOptions.ignoreErrors) {
@@ -4809,16 +4838,11 @@ class TranslatedFont {
       return;
     }
     this.#sent = true;
-    const fontData = this.font.exportData();
-    const transfer = [];
-    if (fontData.data) {
-      if (fontData.data.charProcOperatorList) {
-        fontData.charProcOperatorList = fontData.data.charProcOperatorList;
-      }
-      fontData.data = FontInfo.write(fontData.data);
-      transfer.push(fontData.data);
-    }
-    handler.send("commonobj", [this.loadedName, "Font", fontData], transfer);
+
+    const fontData = this.font.exportData(),
+      transfers = fontData.buffer ? [fontData.buffer] : null;
+
+    handler.send("commonobj", [this.loadedName, "Font", fontData], transfers);
     // future path: switch to a SharedArrayBuffer
     // const sab = new SharedArrayBuffer(data.byteLength);
     // const view = new Uint8Array(sab);

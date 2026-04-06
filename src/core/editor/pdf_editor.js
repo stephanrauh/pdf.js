@@ -16,14 +16,23 @@
 /** @typedef {import("../document.js").PDFDocument} PDFDocument */
 /** @typedef {import("../document.js").Page} Page */
 /** @typedef {import("../xref.js").XRef} XRef */
+/** @typedef {import("../worker.js").WorkerTask} WorkerTask */
+// eslint-disable-next-line max-len
+/** @typedef {import("../../shared/message_handler.js").MessageHandler} MessageHandler */
 
+import {
+  deepCompare,
+  getInheritableProperty,
+  getNewAnnotationsMap,
+  stringToAsciiOrUTF16BE,
+} from "../core_utils.js";
 import { Dict, isName, Name, Ref, RefSet, RefSetCache } from "../primitives.js";
 import { getModificationDate, stringToPDFString } from "../../shared/util.js";
 import { incrementalUpdate, writeValue } from "../writer.js";
 import { NameTree, NumberTree } from "../name_number_tree.js";
+import { AnnotationFactory } from "../annotation.js";
 import { BaseStream } from "../base_stream.js";
 import { StringStream } from "../stream.js";
-import { stringToAsciiOrUTF16BE } from "../core_utils.js";
 
 const MAX_LEAVES_PER_PAGES_NODE = 16;
 const MAX_IN_NAME_TREE_NODE = 64;
@@ -60,21 +69,47 @@ class DocumentData {
     this.namespaces = null;
     this.structTreeAF = null;
     this.structTreePronunciationLexicon = [];
+    this.acroForm = null;
+    this.acroFormDefaultAppearance = "";
+    this.acroFormDefaultResources = null;
+    this.acroFormQ = 0;
+    this.hasSignatureAnnotations = false;
+    this.fieldToParent = new RefSetCache();
+    this.outline = null;
   }
 }
 
 class XRefWrapper {
-  constructor(entries) {
+  constructor(entries, getNewRef) {
     this.entries = entries;
+    this._getNewRef = getNewRef;
   }
 
   fetch(ref) {
     return ref instanceof Ref ? this.entries[ref.num] : ref;
   }
+
+  fetchIfRefAsync(ref) {
+    return Promise.resolve(this.fetch(ref));
+  }
+
+  fetchIfRef(ref) {
+    return this.fetch(ref);
+  }
+
+  fetchAsync(ref) {
+    return Promise.resolve(this.fetch(ref));
+  }
+
+  getNewTemporaryRef() {
+    return this._getNewRef();
+  }
 }
 
 class PDFEditor {
   hasSingleFile = false;
+
+  #newAnnotationsParams = null;
 
   currentDocument = null;
 
@@ -84,7 +119,7 @@ class PDFEditor {
 
   xref = [null];
 
-  xrefWrapper = new XRefWrapper(this.xref);
+  xrefWrapper = new XRefWrapper(this.xref, () => this.newRef);
 
   newRefCount = 1;
 
@@ -111,6 +146,22 @@ class PDFEditor {
   structTreeAF = [];
 
   structTreePronunciationLexicon = [];
+
+  fields = [];
+
+  acroFormDefaultAppearance = "";
+
+  acroFormDefaultResources = null;
+
+  acroFormNeedAppearances = false;
+
+  acroFormSigFlags = 0;
+
+  acroFormCalculationOrder = null;
+
+  acroFormQ = 0;
+
+  outlineItems = null;
 
   constructor({ useObjectStreams = true, title = "", author = "" } = {}) {
     [this.rootRef, this.rootDict] = this.newDict;
@@ -210,7 +261,8 @@ class PDFEditor {
         obj = obj.slice();
       }
       for (let i = 0, ii = obj.length; i < ii; i++) {
-        const postponedActions = postponedRefCopies.get(obj[i]);
+        const postponedActions =
+          obj[i] instanceof Ref && postponedRefCopies.get(obj[i]);
         if (postponedActions) {
           // The object is a reference that needs to be copied later.
           postponedActions.push(ref => (obj[i] = ref));
@@ -238,7 +290,8 @@ class PDFEditor {
     }
     if (dict) {
       for (const [key, rawObj] of dict.getRawEntries()) {
-        const postponedActions = postponedRefCopies.get(rawObj);
+        const postponedActions =
+          rawObj instanceof Ref && postponedRefCopies.get(rawObj);
         if (postponedActions) {
           // The object is a reference that needs to be copied later.
           postponedActions.push(ref => dict.set(key, ref));
@@ -496,13 +549,33 @@ class PDFEditor {
   /**
    * Extract pages from the given documents.
    * @param {Array<PageInfo>} pageInfos
+   * @param {Object} annotationStorage - The annotation storage containing the
+   *  annotations to be merged into the new document.
+   * @param {MessageHandler} handler - The message handler to use for processing
+   *  the annotations.
+   * @param {WorkerTask} task - The worker task to use for reporting progress
+   *  and cancellation.
    * @return {Promise<void>}
    */
-  async extractPages(pageInfos) {
+  async extractPages(pageInfos, annotationStorage, handler, task) {
     const promises = [];
     let newIndex = 0;
     this.hasSingleFile = pageInfos.length === 1;
     const allDocumentData = [];
+
+    if (annotationStorage) {
+      this.#newAnnotationsParams = {
+        handler,
+        task,
+        newAnnotationsByPage: getNewAnnotationsMap(annotationStorage),
+        imagesPromises: AnnotationFactory.generateImages(
+          annotationStorage.values(),
+          this.xrefWrapper,
+          true
+        ),
+      };
+    }
+
     for (const {
       document,
       includePages,
@@ -577,15 +650,20 @@ class PDFEditor {
           if (newIndex !== -1) {
             newPageIndex = newIndex++;
           } else {
+            // Find the first available index in the newPages array.
+            // This is needed when the pageIndices option is used since the
+            // pages can be added in any order.
             for (
               newPageIndex = 0;
-              this.oldPages[newPageIndex] === undefined;
+              this.oldPages[newPageIndex] !== undefined;
               newPageIndex++
             ) {
               /* empty */
             }
           }
         }
+        // Reserve the slot immediately because the page fetch is async.
+        this.oldPages[newPageIndex] = null;
         promises.push(
           document.getPage(i).then(page => {
             this.oldPages[newPageIndex] = new PageData(page, documentData);
@@ -597,6 +675,7 @@ class PDFEditor {
     promises.length = 0;
 
     this.#collectValidDestinations(allDocumentData);
+    this.#collectOutlineDestinations(allDocumentData);
     this.#collectPageLabels();
 
     for (const page of this.oldPages) {
@@ -613,6 +692,8 @@ class PDFEditor {
 
     this.#fixPostponedRefCopies(allDocumentData);
     await this.#mergeStructTrees(allDocumentData);
+    await this.#mergeAcroForms(allDocumentData);
+    this.#buildOutline(allDocumentData);
 
     return this.writePDF();
   }
@@ -636,6 +717,12 @@ class PDFEditor {
       pdfManager
         .ensureCatalog("structTreeRoot")
         .then(structTreeRoot => (documentData.structTreeRoot = structTreeRoot)),
+      pdfManager
+        .ensureCatalog("acroForm")
+        .then(acroForm => (documentData.acroForm = acroForm)),
+      pdfManager
+        .ensureCatalog("documentOutlineForEditor")
+        .then(outline => (documentData.outline = outline)),
     ]);
     const structTreeRoot = documentData.structTreeRoot;
     if (structTreeRoot) {
@@ -671,7 +758,12 @@ class PDFEditor {
   async #postCollectPageData(pageData) {
     const {
       page: { xref, annotations },
-      documentData: { pagesMap, destinations, usedNamedDestinations },
+      documentData: {
+        pagesMap,
+        destinations,
+        usedNamedDestinations,
+        fieldToParent,
+      },
     } = pageData;
 
     if (!annotations) {
@@ -681,6 +773,7 @@ class PDFEditor {
     const promises = [];
     let newAnnotations = [];
     let newIndex = 0;
+    let { hasSignatureAnnotations } = pageData.documentData;
 
     // Filter out annotations that are linking to deleted pages.
     for (const annotationRef of annotations) {
@@ -688,6 +781,20 @@ class PDFEditor {
       promises.push(
         xref.fetchIfRefAsync(annotationRef).then(async annotationDict => {
           if (!isName(annotationDict.get("Subtype"), "Link")) {
+            if (isName(annotationDict.get("Subtype"), "Widget")) {
+              hasSignatureAnnotations ||= isName(
+                annotationDict.get("FT"),
+                "Sig"
+              );
+              const parentRef = annotationDict.get("Parent") || null;
+              // We remove the parent to avoid visiting it when cloning the
+              // annotation.
+              // It'll be fixed later in #mergeAcroForms when merging the
+              // AcroForms.
+              annotationDict.delete("Parent");
+              fieldToParent.put(annotationRef, parentRef);
+            }
+
             newAnnotations[newAnnotationIndex] = annotationRef;
             return;
           }
@@ -723,6 +830,7 @@ class PDFEditor {
     await Promise.all(promises);
     newAnnotations = newAnnotations.filter(annot => !!annot);
     pageData.annotations = newAnnotations.length > 0 ? newAnnotations : null;
+    pageData.documentData.hasSignatureAnnotations ||= hasSignatureAnnotations;
   }
 
   /**
@@ -801,46 +909,52 @@ class PDFEditor {
       }
       const pageRef = this.newPages[i];
       const pageDict = this.xref[pageRef.num];
+      const visited = new RefSet();
+      visited.put(pageRef);
 
       // Visit the new page in order to collect used StructParent entries.
-      this.#visitObject(pageDict, dict => {
-        const structParent =
-          dict.get("StructParent") ?? dict.get("StructParents");
-        if (typeof structParent !== "number") {
-          return;
-        }
-        usedStructParents.add(structParent);
-        let parent = parentTree.get(structParent);
-        const parentRef = parent instanceof Ref ? parent : null;
-        if (parentRef) {
-          const array = xref.fetch(parentRef);
-          if (Array.isArray(array)) {
-            parent = array;
+      this.#visitObject(
+        pageDict,
+        dict => {
+          const structParent =
+            dict.get("StructParent") ?? dict.get("StructParents");
+          if (typeof structParent !== "number") {
+            return;
           }
-        }
-        if (Array.isArray(parent) && parent.every(ref => ref === null)) {
-          parent = null;
-        }
-        if (!parent) {
+          usedStructParents.add(structParent);
+          let parent = parentTree.get(structParent);
+          const parentRef = parent instanceof Ref ? parent : null;
+          if (parentRef) {
+            const array = xref.fetch(parentRef);
+            if (Array.isArray(array)) {
+              parent = array;
+            }
+          }
+          if (Array.isArray(parent) && parent.every(ref => ref === null)) {
+            parent = null;
+          }
+          if (!parent) {
+            if (dict.has("StructParent")) {
+              dict.delete("StructParent");
+            } else {
+              dict.delete("StructParents");
+            }
+            return;
+          }
+          let newStructParent = oldStructParentMapping.get(structParent);
+          if (newStructParent === undefined) {
+            newStructParent = newStructParentId++;
+            oldStructParentMapping.set(structParent, newStructParent);
+            newParentTree.set(newStructParent, [oldRefMapping, parent]);
+          }
           if (dict.has("StructParent")) {
-            dict.delete("StructParent");
+            dict.set("StructParent", newStructParent);
           } else {
-            dict.delete("StructParents");
+            dict.set("StructParents", newStructParent);
           }
-          return;
-        }
-        let newStructParent = oldStructParentMapping.get(structParent);
-        if (newStructParent === undefined) {
-          newStructParent = newStructParentId++;
-          oldStructParentMapping.set(structParent, newStructParent);
-          newParentTree.set(newStructParent, [oldRefMapping, parent]);
-        }
-        if (dict.has("StructParent")) {
-          dict.set("StructParent", newStructParent);
-        } else {
-          dict.set("StructParents", newStructParent);
-        }
-      });
+        },
+        visited
+      );
     }
 
     const {
@@ -1003,7 +1117,7 @@ class PDFEditor {
 
       // Fix the ID tree.
       for (const [id, nodeRef] of idTree || []) {
-        const newNodeRef = oldRefMapping.get(nodeRef);
+        const newNodeRef = nodeRef instanceof Ref && oldRefMapping.get(nodeRef);
         const newId = dedupIDs.get(id) || id;
         if (newNodeRef) {
           newIdTree.set(newId, newNodeRef);
@@ -1057,7 +1171,7 @@ class PDFEditor {
       const newDestinations = (documentData.destinations = new Map());
       for (const [key, dest] of Object.entries(destinations)) {
         const pageRef = dest[0];
-        const pageData = pagesMap.get(pageRef);
+        const pageData = pageRef instanceof Ref && pagesMap.get(pageRef);
         if (!pageData) {
           continue;
         }
@@ -1072,6 +1186,17 @@ class PDFEditor {
    */
   #findDuplicateNamedDestinations() {
     const { namedDestinations } = this;
+    const getUniqueDestinationName = name => {
+      if (!namedDestinations.has(name)) {
+        return name;
+      }
+      for (let i = 1; ; i++) {
+        const dedupedName = `${name}_${i}`;
+        if (!namedDestinations.has(dedupedName)) {
+          return dedupedName;
+        }
+      }
+    };
     for (let i = 0, ii = this.oldPages.length; i < ii; i++) {
       const page = this.oldPages[i];
       const {
@@ -1104,7 +1229,7 @@ class PDFEditor {
           continue;
         }
         // Create a new unique named destination.
-        const newName = `${pointingDest}_p${i + 1}`;
+        const newName = getUniqueDestinationName(`${pointingDest}_p${i + 1}`);
         dedupNamedDestinations.set(pointingDest, newName);
         namedDestinations.set(newName, dest);
       }
@@ -1144,6 +1269,588 @@ class PDFEditor {
       }
       const dest = annotDict.get("Dest");
       fixDestination(annotDict, "Dest", dest);
+    }
+  }
+
+  /**
+   * Collect named destinations referenced in the outlines so they are kept
+   * when filtering duplicate named destinations.
+   * @param {Array<DocumentData>} allDocumentData
+   */
+  #collectOutlineDestinations(allDocumentData) {
+    const collect = (items, destinations, usedNamedDestinations) => {
+      for (const item of items) {
+        if (typeof item.dest === "string" && destinations?.has(item.dest)) {
+          usedNamedDestinations.add(item.dest);
+        }
+        if (item.items.length > 0) {
+          collect(item.items, destinations, usedNamedDestinations);
+        }
+      }
+    };
+    for (const documentData of allDocumentData) {
+      const { outline, destinations, usedNamedDestinations } = documentData;
+      if (outline?.length) {
+        collect(outline, destinations, usedNamedDestinations);
+      }
+    }
+  }
+
+  /**
+   * Check whether an outline item has a valid destination in the output doc.
+   * @param {Object} item
+   * @param {DocumentData} documentData
+   * @returns {boolean}
+   */
+  #isValidOutlineDest(item, documentData) {
+    const { dest, action, url, unsafeUrl, attachment, setOCGState } = item;
+    // External links (including relative URLs that can't be made absolute),
+    // named actions, attachments and OCG state changes are always kept.
+    if (action || url || unsafeUrl || attachment || setOCGState) {
+      return true;
+    }
+    if (!dest) {
+      return false;
+    }
+    if (typeof dest === "string") {
+      const name = documentData.dedupNamedDestinations.get(dest) || dest;
+      return this.namedDestinations.has(name);
+    }
+    if (Array.isArray(dest) && dest[0] instanceof Ref) {
+      return !!documentData.oldRefMapping.get(dest[0]);
+    }
+    return false;
+  }
+
+  /**
+   * Recursively filter outline items, removing those with no valid destination
+   * and no remaining children.
+   * @param {Array} items
+   * @param {DocumentData} documentData
+   * @returns {Array}
+   */
+  #filterOutlineItems(items, documentData) {
+    const result = [];
+    for (const item of items) {
+      const filteredChildren = this.#filterOutlineItems(
+        item.items,
+        documentData
+      );
+      const hasValidOwnDest = this.#isValidOutlineDest(item, documentData);
+      if (hasValidOwnDest || filteredChildren.length > 0) {
+        result.push({
+          ...item,
+          // When the item's own destination is invalid (but it has surviving
+          // children), clear the destination so the output item is a plain
+          // container rather than a broken link.
+          dest: hasValidOwnDest ? item.dest : null,
+          items: filteredChildren,
+          _documentData: documentData,
+        });
+      }
+    }
+    return result;
+  }
+
+  /**
+   * Filter outline trees and collect the result into this.outlineItems.
+   * Must be called after page copies are made (oldRefMapping is populated).
+   * @param {Array<DocumentData>} allDocumentData
+   */
+  #buildOutline(allDocumentData) {
+    const outlineItems = [];
+    for (const documentData of allDocumentData) {
+      const { outline } = documentData;
+      if (!outline?.length) {
+        continue;
+      }
+      outlineItems.push(...this.#filterOutlineItems(outline, documentData));
+    }
+    this.outlineItems = outlineItems.length > 0 ? outlineItems : null;
+  }
+
+  /**
+   * Write the destination or action of an outline item into the given dict.
+   * @param {Dict} itemDict
+   * @param {Object} item
+   * @returns {Promise<void>}
+   */
+  async #setOutlineItemDest(itemDict, item) {
+    const { dest, rawDict } = item;
+    const documentData = item._documentData;
+    if (dest) {
+      if (typeof dest === "string") {
+        const name = documentData.dedupNamedDestinations.get(dest) || dest;
+        itemDict.set("Dest", stringToAsciiOrUTF16BE(name));
+      } else if (Array.isArray(dest)) {
+        const newDest = dest.slice();
+        if (newDest[0] instanceof Ref) {
+          newDest[0] = documentData.oldRefMapping.get(newDest[0]) || newDest[0];
+        }
+        itemDict.set("Dest", newDest);
+      }
+      return;
+    }
+    // For all other action types (URI, GoToR, Named, SetOCGState, ...) clone
+    // the raw action dict from the original document.
+    const actionDict = rawDict?.get("A");
+    if (actionDict instanceof Dict) {
+      this.currentDocument = documentData;
+      const actionRef = await this.#cloneObject(
+        actionDict,
+        documentData.document.xref
+      );
+      this.currentDocument = null;
+      itemDict.set("A", actionRef);
+    }
+  }
+
+  /**
+   * Build and write the document outline (bookmarks) into the output PDF.
+   * @returns {Promise<void>}
+   */
+  async #makeOutline() {
+    const { outlineItems } = this;
+    if (!outlineItems?.length) {
+      return;
+    }
+
+    const [outlineRootRef, outlineRootDict] = this.newDict;
+    outlineRootDict.setIfName("Type", "Outlines");
+
+    // First pass: allocate a new Ref for every item in the tree.
+    const assignRefs = items => {
+      for (const item of items) {
+        [item._ref] = this.newDict;
+        if (item.items.length > 0) {
+          assignRefs(item.items);
+        }
+      }
+    };
+    assignRefs(outlineItems);
+
+    // Second pass: fill each Dict and return the total visible item count.
+    const fillItems = async (items, parentRef) => {
+      let totalCount = 0;
+      for (let i = 0; i < items.length; i++) {
+        const item = items[i];
+        const dict = this.xref[item._ref.num];
+
+        dict.set("Title", stringToAsciiOrUTF16BE(item.title));
+        dict.set("Parent", parentRef);
+        if (i > 0) {
+          dict.set("Prev", items[i - 1]._ref);
+        }
+        if (i < items.length - 1) {
+          dict.set("Next", items[i + 1]._ref);
+        }
+
+        if (item.items.length > 0) {
+          dict.set("First", item.items[0]._ref);
+          dict.set("Last", item.items.at(-1)._ref);
+          const childCount = await fillItems(item.items, item._ref);
+          if (item.count !== undefined) {
+            // Preserve the original expanded/collapsed state while updating
+            // the number of visible descendants after filtering.
+            dict.set("Count", item.count < 0 ? -childCount : childCount);
+          }
+          // A closed item (count < 0) hides its descendants, so it only
+          // contributes 1 to the parent's visible-item tally.
+          totalCount +=
+            item.count !== undefined && item.count < 0 ? 1 : childCount + 1;
+        } else {
+          totalCount += 1;
+        }
+
+        await this.#setOutlineItemDest(dict, item);
+
+        const flags = (item.bold ? 2 : 0) | (item.italic ? 1 : 0);
+        if (flags !== 0) {
+          dict.set("F", flags);
+        }
+        if (
+          item.color &&
+          (item.color[0] !== 0 || item.color[1] !== 0 || item.color[2] !== 0)
+        ) {
+          dict.set("C", [
+            item.color[0] / 255,
+            item.color[1] / 255,
+            item.color[2] / 255,
+          ]);
+        }
+      }
+      return totalCount;
+    };
+
+    const totalCount = await fillItems(outlineItems, outlineRootRef);
+    outlineRootDict.set("First", outlineItems[0]._ref);
+    outlineRootDict.set("Last", outlineItems.at(-1)._ref);
+    outlineRootDict.set("Count", totalCount);
+
+    this.rootDict.set("Outlines", outlineRootRef);
+  }
+
+  async #mergeAcroForms(allDocumentData) {
+    this.#setAcroFormDefaultBasicValues(allDocumentData);
+    this.#setAcroFormDefaultAppearance(allDocumentData);
+    this.#setAcroFormQ(allDocumentData);
+    await this.#setAcroFormDefaultResources(allDocumentData);
+    const newFields = this.fields;
+    for (const documentData of allDocumentData) {
+      let fields = documentData.acroForm?.get("Fields") || null;
+      if (!fields && documentData.fieldToParent.size > 0) {
+        fields = this.#fixFields(
+          documentData.fieldToParent,
+          documentData.document.xref
+        );
+      }
+      if (Array.isArray(fields) && fields.length > 0) {
+        this.currentDocument = documentData;
+        await this.#cloneFields(newFields, fields);
+        this.currentDocument = null;
+      }
+    }
+    this.#setAcroFormCalculationOrder(allDocumentData);
+  }
+
+  #setAcroFormQ(allDocumentData) {
+    let firstQ = 0;
+    let firstDocData = null;
+    for (const documentData of allDocumentData) {
+      const q = documentData.acroForm?.get("Q");
+      if (typeof q !== "number" || q === 0) {
+        continue;
+      }
+      if (firstDocData?.acroFormQ > 0) {
+        documentData.acroFormQ = q;
+        continue;
+      }
+      if (firstQ === 0) {
+        firstQ = q;
+        firstDocData = documentData;
+        continue;
+      }
+      if (q === firstQ) {
+        continue;
+      }
+      firstDocData.acroFormQ ||= firstQ;
+      documentData.acroFormQ = q;
+      firstQ = 0;
+    }
+
+    if (firstQ > 0) {
+      this.acroFormQ = firstQ;
+    }
+  }
+
+  #setAcroFormDefaultBasicValues(allDocumentData) {
+    let sigFlags = 0;
+    let needAppearances = false;
+    for (const documentData of allDocumentData) {
+      if (!documentData.acroForm) {
+        continue;
+      }
+      const sf = documentData.acroForm.get("SigFlags");
+      if (typeof sf === "number" && documentData.hasSignatureAnnotations) {
+        sigFlags |= sf;
+      }
+      if (documentData.acroForm.get("NeedAppearances") === true) {
+        needAppearances = true;
+      }
+    }
+    this.acroFormSigFlags = sigFlags;
+    this.acroFormNeedAppearances = needAppearances;
+  }
+
+  #setAcroFormCalculationOrder(allDocumentData) {
+    const calculationOrder = [];
+    for (const documentData of allDocumentData) {
+      const co = documentData.acroForm?.get("CO") || null;
+      if (!Array.isArray(co)) {
+        continue;
+      }
+      const { oldRefMapping } = documentData;
+      for (const coRef of co) {
+        const newCoRef = coRef instanceof Ref && oldRefMapping.get(coRef);
+        if (newCoRef) {
+          calculationOrder.push(newCoRef);
+        }
+      }
+    }
+    this.acroFormCalculationOrder =
+      calculationOrder.length > 0 ? calculationOrder : null;
+  }
+
+  #setAcroFormDefaultAppearance(allDocumentData) {
+    // If all the DAs are the same we just use it in the AcroForm. Otherwise, we
+    // set the DA for each documentData and use for any annotations that don't
+    // have their own DA.
+    let firstDA = null;
+    let firstDocData = null;
+    for (const documentData of allDocumentData) {
+      const da = documentData.acroForm?.get("DA") || null;
+      if (!da || typeof da !== "string") {
+        continue;
+      }
+      if (firstDocData?.acroFormDefaultAppearance) {
+        documentData.acroFormDefaultAppearance = da;
+        continue;
+      }
+      if (!firstDA) {
+        firstDA = da;
+        firstDocData = documentData;
+        continue;
+      }
+      if (da === firstDA) {
+        continue;
+      }
+      firstDocData.acroFormDefaultAppearance ||= firstDA;
+      documentData.acroFormDefaultAppearance = da;
+      firstDA = null;
+    }
+
+    if (firstDA) {
+      this.acroFormDefaultAppearance = firstDA;
+    }
+  }
+
+  async #setAcroFormDefaultResources(allDocumentData) {
+    let firstDR = null;
+    let firstDRRef = null;
+    let firstDocData = null;
+    for (const documentData of allDocumentData) {
+      const dr = documentData.acroForm?.get("DR") || null;
+      if (!dr || !(dr instanceof Dict)) {
+        continue;
+      }
+      if (firstDocData?.acroFormDefaultResources) {
+        documentData.acroFormDefaultResources = dr;
+        continue;
+      }
+      if (!firstDR) {
+        firstDR = dr;
+        firstDRRef = documentData.acroForm.getRaw("DR");
+        firstDocData = documentData;
+        continue;
+      }
+      if (deepCompare(firstDR, dr)) {
+        continue;
+      }
+      firstDocData.acroFormDefaultResources ||= firstDR;
+      documentData.acroFormDefaultResources = dr;
+      firstDR = null;
+      firstDRRef = null;
+    }
+
+    if (firstDR) {
+      this.currentDocument = firstDocData;
+      this.acroFormDefaultResources = await this.#collectDependencies(
+        firstDRRef,
+        true,
+        firstDocData.document.xref
+      );
+      this.currentDocument = null;
+    }
+  }
+
+  /**
+   * If the document has some fields but no Fields entry in the AcroForm, we
+   * need to fix that by creating a Fields entry with the oldest parent field
+   * for each field.
+   * @param {Map<Ref, Ref>} fieldToParent
+   * @param {XRef} xref
+   * @returns {Array<Ref>}
+   */
+  #fixFields(fieldToParent, xref) {
+    const newFields = [];
+    const processed = new RefSet();
+    for (const [fieldRef, parentRef] of fieldToParent) {
+      if (!parentRef) {
+        newFields.push(fieldRef);
+        continue;
+      }
+      let parent = parentRef;
+      let lastNonNullParent = parentRef;
+      while (true) {
+        parent = xref.fetchIfRef(parent)?.getRaw("Parent") || null;
+        if (!parent) {
+          break;
+        }
+        lastNonNullParent = parent;
+      }
+      if (
+        lastNonNullParent instanceof Ref &&
+        !processed.has(lastNonNullParent)
+      ) {
+        newFields.push(lastNonNullParent);
+        processed.put(lastNonNullParent);
+      }
+    }
+    return newFields;
+  }
+
+  async #cloneFields(newFields, fields) {
+    const processed = new RefSet();
+    const stack = [
+      {
+        kids: fields,
+        newKids: newFields,
+        pos: 0,
+        oldParentRef: null,
+        parentRef: null,
+        parent: null,
+      },
+    ];
+    const {
+      document: { xref },
+      oldRefMapping,
+      fieldToParent,
+      acroFormDefaultAppearance,
+      acroFormDefaultResources,
+      acroFormQ,
+    } = this.currentDocument;
+    const daToFix = [];
+    const drToFix = [];
+
+    while (stack.length > 0) {
+      const data = stack.at(-1);
+      const { kids, newKids, parent, pos } = data;
+      if (pos === kids.length) {
+        stack.pop();
+        if (newKids.length === 0 || !parent) {
+          continue;
+        }
+
+        const parentDict = (this.xref[data.parentRef.num] =
+          this.cloneDict(parent));
+        parentDict.delete("Parent");
+        parentDict.delete("Kids");
+        await this.#collectDependencies(parentDict, false, xref);
+        parentDict.set("Kids", newKids);
+
+        if (stack.length > 0) {
+          const lastData = stack.at(-1);
+          if (!lastData.parentRef && lastData.oldParentRef) {
+            const parentRef = (lastData.parentRef = this.newRef);
+            parentDict.set("Parent", parentRef);
+            oldRefMapping.put(lastData.oldParentRef, parentRef);
+          }
+          lastData.newKids.push(data.parentRef);
+        }
+        continue;
+      }
+      const oldKidRef = kids[data.pos++];
+      if (!(oldKidRef instanceof Ref) || processed.has(oldKidRef)) {
+        continue;
+      }
+      processed.put(oldKidRef);
+      const kid = xref.fetchIfRef(oldKidRef);
+      if (kid.has("Kids")) {
+        const kidsArray = kid.get("Kids");
+        if (!Array.isArray(kidsArray)) {
+          continue;
+        }
+        stack.push({
+          kids: kidsArray,
+          newKids: [],
+          pos: 0,
+          oldParentRef: oldKidRef,
+          parentRef: null,
+          parent: kid,
+        });
+
+        continue;
+      }
+
+      if (!fieldToParent.has(oldKidRef)) {
+        continue;
+      }
+      const newRef = oldRefMapping.get(oldKidRef);
+      if (!newRef) {
+        continue;
+      }
+      newKids.push(newRef);
+      if (!data.parentRef && data.oldParentRef) {
+        data.parentRef = this.newRef;
+        oldRefMapping.put(data.oldParentRef, data.parentRef);
+      }
+      const newKid = this.xref[newRef.num];
+      if (data.parentRef) {
+        newKid.set("Parent", data.parentRef);
+      }
+      if (
+        acroFormDefaultAppearance &&
+        isName(newKid.get("FT"), "Tx") &&
+        !newKid.has("DA")
+      ) {
+        // Fix the DA later since we need to have all the fields tree.
+        daToFix.push(newKid);
+      }
+      if (
+        acroFormDefaultResources &&
+        !newKid.has("Kids") &&
+        newKid.get("AP") instanceof Dict
+      ) {
+        // Fix the DR later since we need to have all the fields tree.
+        drToFix.push(newKid);
+      }
+      if (acroFormQ && !newKid.has("Q")) {
+        newKid.set("Q", acroFormQ);
+      }
+    }
+
+    for (const field of daToFix) {
+      const da = getInheritableProperty({ dict: field, key: "DA" });
+      if (!da) {
+        // No DA in a parent field, we can set the default one.
+        field.set("DA", acroFormDefaultAppearance);
+      }
+    }
+    const resourcesValuesCache = new Map();
+    for (const field of drToFix) {
+      const ap = field.get("AP");
+      for (const value of ap.getValues()) {
+        if (!(value instanceof BaseStream)) {
+          continue;
+        }
+        let resources = value.dict.getRaw("Resources");
+        if (!resources) {
+          const newResourcesRef =
+            await resourcesValuesCache.getOrInsertComputed(
+              acroFormDefaultResources,
+              () => this.#cloneObject(acroFormDefaultResources, xref)
+            );
+          value.dict.set("Resources", newResourcesRef);
+          continue;
+        }
+
+        resources = xref.fetchIfRef(resources);
+        for (const [
+          resKey,
+          resValue,
+        ] of acroFormDefaultResources.getRawEntries()) {
+          if (!resources.has(resKey)) {
+            let newResValue = resValue;
+            if (resValue instanceof Ref) {
+              newResValue = await this.#collectDependencies(
+                resValue,
+                true,
+                xref
+              );
+            } else if (
+              resValue instanceof Dict ||
+              resValue instanceof BaseStream ||
+              Array.isArray(resValue)
+            ) {
+              newResValue = await resourcesValuesCache.getOrInsertComputed(
+                resValue,
+                () => this.#cloneObject(resValue, xref)
+              );
+            }
+            resources.set(resKey, newResValue);
+          }
+        }
+      }
     }
   }
 
@@ -1257,6 +1964,8 @@ class PDFEditor {
       await this.#collectDependencies(resources, true, xref)
     );
 
+    let newAnnots = null;
+
     if (annotations) {
       const newAnnotations = await this.#collectDependencies(
         annotations,
@@ -1264,8 +1973,34 @@ class PDFEditor {
         xref
       );
       this.#fixNamedDestinations(newAnnotations, dedupNamedDestinations);
-      pageDict.setIfArray("Annots", newAnnotations);
+      if (Array.isArray(newAnnotations) && newAnnotations.length > 0) {
+        newAnnots = newAnnotations;
+      }
     }
+
+    const newAnnotations =
+      this.#newAnnotationsParams?.newAnnotationsByPage?.get(pageIndex);
+    if (newAnnotations) {
+      const { handler, task, imagesPromises } = this.#newAnnotationsParams;
+      const changes = new RefSetCache();
+      const newData = await AnnotationFactory.saveNewAnnotations(
+        page.createAnnotationEvaluator(handler),
+        this.xrefWrapper,
+        task,
+        newAnnotations,
+        imagesPromises,
+        changes
+      );
+      for (const [ref, { data }] of changes.items()) {
+        this.xref[ref.num] = data;
+      }
+      newAnnots ||= [];
+      for (const { ref } of newData.annotations) {
+        newAnnots.push(ref);
+      }
+    }
+
+    pageDict.setIfArray("Annots", newAnnots);
 
     if (this.useObjectStreams) {
       const newLastRef = this.newRefCount;
@@ -1472,6 +2207,33 @@ class PDFEditor {
     rootDict.set("StructTreeRoot", structTreeRef);
   }
 
+  #makeAcroForm() {
+    if (this.fields.length === 0) {
+      return;
+    }
+    const { rootDict } = this;
+    const acroFormRef = this.newRef;
+    const acroForm = (this.xref[acroFormRef.num] = new Dict());
+    rootDict.set("AcroForm", acroFormRef);
+    acroForm.set("Fields", this.fields);
+    if (this.acroFormNeedAppearances) {
+      acroForm.set("NeedAppearances", true);
+    }
+    if (this.acroFormSigFlags > 0) {
+      acroForm.set("SigFlags", this.acroFormSigFlags);
+    }
+    acroForm.setIfArray("CO", this.acroFormCalculationOrder);
+    acroForm.setIfDict("DR", this.acroFormDefaultResources);
+    if (this.acroFormDefaultAppearance) {
+      acroForm.set("DA", this.acroFormDefaultAppearance);
+    }
+    if (this.acroFormQ > 0) {
+      acroForm.set("Q", this.acroFormQ);
+    }
+    // We don't merge XFA stuff because it'd require to parse, extract and merge
+    // all the data, which is a lot of work for a deprecated feature (i.e. XFA).
+  }
+
   /**
    * Create the root dictionary.
    * @returns {Promise<void>}
@@ -1480,10 +2242,12 @@ class PDFEditor {
     const { rootDict } = this;
     rootDict.setIfName("Type", "Catalog");
     rootDict.setIfName("Version", this.version);
+    this.#makeAcroForm();
     this.#makePageTree();
     this.#makePageLabelsTree();
     this.#makeDestinationsTree();
     this.#makeStructTree();
+    await this.#makeOutline();
   }
 
   /**

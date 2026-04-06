@@ -120,6 +120,7 @@
     rgb(0 98 250 / 0.08),
     rgb(0 202 219 / 0.08)
   );
+  --image-dragging-placeholder-border: var(--image-outline);
   --multiple-dragging-bg: white;
   --image-multiple-dragging-shadow:
     0 0 0 var(--image-border-width) var(--image-current-border-color),
@@ -171,6 +172,8 @@
     --multiple-dragging-bg: Canvas;
     --multiple-dragging-indicator-bg: ButtonBorder;
     --multiple-dragging-text-color: Canvas;
+    --image-dragging-placeholder-bg: Canvas;
+    --image-dragging-placeholder-border: 1px GrayText solid;
   }
 
   display: flex;
@@ -226,10 +229,11 @@
     }
 
     &.viewsCloseButton {
-      width: 32px;
-      height: 32px;
+      width: 26px;
+      height: 26px;
       padding: 4px;
       border-radius: 8px;
+      background: none;
 
       &::before {
         mask-image: var(--close-button-icon);
@@ -248,7 +252,7 @@
     background-color: var(--header-bg);
 
     .viewsManagerLabel {
-      flex: 0;
+      flex: 1 1 auto;
       color: var(--text-color);
       text-align: center;
       height: fit-content;
@@ -270,6 +274,17 @@
       justify-content: space-between;
       width: auto;
       padding: 12px 16px 12px 8px;
+
+      &:not(:has(#viewsManagerHeaderLabel ~ button:not([hidden])))::after {
+        /* If one of the following buttons is visible, hide the placeholder
+             button to avoid unnecessary space in the header. */
+
+        content: "";
+        flex: 0 0 auto;
+        width: 32px;
+        height: 32px;
+        pointer-events: none;
+      }
 
       #viewsManagerSelector {
         width: 48px;
@@ -322,7 +337,7 @@
           min-width: 182px;
           z-index: 1;
 
-          > li > button {
+          > button {
             &#thumbnailsViewMenu::before {
               mask-image: var(--menuitem-thumbnailsView-icon);
             }
@@ -402,15 +417,30 @@
         align-self: stretch;
         background-color: var(--status-actions-bg);
 
-        > span.selected::before {
-          content: "";
-          display: inline-block;
+        #viewsManagerStatusActionLabelContainer > button {
+          position: relative;
           width: var(--icon-size);
           height: var(--icon-size);
-          mask-repeat: no-repeat;
-          mask-position: center;
-          background-color: var(--indicator-color);
-          mask-image: var(--pages-selected-icon);
+          border: none;
+          padding: 0;
+          flex: 0 0 auto;
+
+          &::before {
+            content: "";
+            position: absolute;
+            inset: 0;
+            mask-repeat: no-repeat;
+            mask-position: center;
+            background-color: var(--indicator-color);
+            mask-image: var(--pages-selected-icon);
+          }
+
+          &#viewsManagerStatusActionDeselectButton:focus-visible {
+            outline: 2px solid var(--button-focus-outline-color);
+            border: 1px solid var(--button-focus-border-color);
+            border-radius: 2px;
+            outline-offset: 1px;
+          }
         }
 
         #actionSelector {
@@ -543,6 +573,7 @@
 
     #thumbnailsView {
       --thumbnail-width: 126px;
+      --gap-between-input-and-thumbnail: 16px;
 
       display: flex;
       flex-flow: row wrap;
@@ -581,6 +612,8 @@
       }
 
       &.pasteMode {
+        gap: var(--gap-between-input-and-thumbnail);
+
         > .thumbnail {
           flex-direction: column;
 
@@ -611,14 +644,21 @@
 
       > .thumbnail {
         --input-dim: 16px;
-        --gap-between-input-and-thumbnail: 16px;
+
+        &:not(&:has(input)) {
+          --input-dim: 0px;
+          --gap-between-input-and-thumbnail: 0px;
+        }
 
         display: inline-flex;
         justify-content: flex-end;
         align-items: center;
         flex-direction: row-reverse;
         gap: var(--gap-between-input-and-thumbnail);
-        width: 190px;
+        width: calc(
+          var(--thumbnail-width) + 2 *
+            (var(--input-dim) + var(--gap-between-input-and-thumbnail))
+        );
         height: auto;
         position: relative;
         scroll-margin-top: 20px;
@@ -786,6 +826,7 @@
           &.placeholder {
             background-color: var(--image-dragging-placeholder-bg);
             box-shadow: none !important;
+            outline: var(--image-dragging-placeholder-border);
           }
 
           &.draggingThumbnail {

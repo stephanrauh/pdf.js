@@ -15,6 +15,7 @@
 
 import {
   babelPluginPDFJSPreprocessor,
+  babelPluginStripSrcPath,
   preprocessPDFJSCode,
 } from "./external/builder/babel-plugin-pdfjs-preprocessor.mjs";
 import { exec, execSync, spawn, spawnSync } from "child_process";
@@ -40,7 +41,6 @@ import { preprocess } from "./external/builder/builder.mjs";
 import relative from "metalsmith-html-relative";
 import rename from "gulp-rename";
 import replace from "gulp-replace";
-import sourcemaps from "gulp-sourcemaps";
 import stream from "stream";
 import TerserPlugin from "terser-webpack-plugin";
 import Vinyl from "vinyl";
@@ -65,6 +65,7 @@ const IMAGE_DECODERS_LEGACY_DIR = BUILD_DIR + "image_decoders-legacy/";
 const DEFAULT_PREFERENCES_DIR = BUILD_DIR + "default_preferences/";
 const MINIFIED_DIR = BUILD_DIR + "minified/";
 const MINIFIED_LEGACY_DIR = BUILD_DIR + "minified-legacy/";
+const INTERNAL_VIEWER_DIR = BUILD_DIR + "internal-viewer/";
 const JSDOC_BUILD_DIR = BUILD_DIR + "jsdoc/";
 const GH_PAGES_DIR = BUILD_DIR + "gh-pages/";
 const DIST_DIR = BUILD_DIR + "dist/";
@@ -119,6 +120,7 @@ const DEFINES = Object.freeze({
   COMPONENTS: false,
   LIB: false,
   IMAGE_DECODERS: false,
+  INTERNAL_VIEWER: false,
 });
 
 function transform(charEncoding, transformFunction) {
@@ -197,12 +199,8 @@ function createWebpackAlias(defines) {
     // end of modification by ngx-extended-pdf-viewer
   };
   const libraryAlias = {
-    "display-cmap_reader_factory": "src/display/stubs.js",
-    "display-standard_fontdata_factory": "src/display/stubs.js",
-    "display-wasm_factory": "src/display/stubs.js",
-    "display-fetch_stream": "src/display/stubs.js",
-    "display-network": "src/display/stubs.js",
-    "display-node_stream": "src/display/stubs.js",
+    "display-binary_data_factory": "src/display/stubs.js",
+    "display-network_stream": "src/display/stubs.js",
     "display-node_utils": "src/display/stubs.js",
   };
   const viewerAlias = {
@@ -229,13 +227,9 @@ function createWebpackAlias(defines) {
   };
 
   if (defines.CHROME) {
-    libraryAlias["display-cmap_reader_factory"] =
-      "src/display/cmap_reader_factory.js";
-    libraryAlias["display-standard_fontdata_factory"] =
-      "src/display/standard_fontdata_factory.js";
-    libraryAlias["display-wasm_factory"] = "src/display/wasm_factory.js";
-    libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
-    libraryAlias["display-network"] = "src/display/network.js";
+    libraryAlias["display-binary_data_factory"] =
+      "src/display/binary_data_factory.js";
+    libraryAlias["display-network_stream"] = "src/display/network_stream.js";
 
     viewerAlias["web-download_manager"] = "web/chromecom.js";
     viewerAlias["web-external_services"] = "web/chromecom.js";
@@ -246,14 +240,9 @@ function createWebpackAlias(defines) {
     // Aliases defined here must also be replicated in the paths section of
     // the tsconfig.json file for the type generation to work.
     // In the tsconfig.json files, the .js extension must be omitted.
-    libraryAlias["display-cmap_reader_factory"] =
-      "src/display/cmap_reader_factory.js";
-    libraryAlias["display-standard_fontdata_factory"] =
-      "src/display/standard_fontdata_factory.js";
-    libraryAlias["display-wasm_factory"] = "src/display/wasm_factory.js";
-    libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
-    libraryAlias["display-network"] = "src/display/network.js";
-    libraryAlias["display-node_stream"] = "src/display/node_stream.js";
+    libraryAlias["display-binary_data_factory"] =
+      "src/display/binary_data_factory.js";
+    libraryAlias["display-network_stream"] = "src/display/network_stream.js";
     libraryAlias["display-node_utils"] = "src/display/node_utils.js";
 
     viewerAlias["web-download_manager"] = "web/download_manager.js";
@@ -699,7 +688,7 @@ function getTempFile(prefix, suffix) {
   return filePath;
 }
 
-function runTests(testsName, { bot = false, xfaOnly = false } = {}) {
+function runTests(testsName, { bot = false } = {}) {
   return new Promise((resolve, reject) => {
     console.log("\n### Running " + testsName + " tests");
 
@@ -714,9 +703,6 @@ function runTests(testsName, { bot = false, xfaOnly = false } = {}) {
           // The browser-tests are too slow in Google Chrome on the bots,
           // causing a timeout, hence disabling them for now.
           forceNoChrome = true;
-        }
-        if (xfaOnly) {
-          args.push("--xfaOnly");
         }
         args.push("--manifestFile=" + PDF_TEST);
         collectArgs(
@@ -1592,12 +1578,8 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     defines: bundleDefines,
     map: {
       "pdfjs-lib": "../pdf.js",
-      "display-cmap_reader_factory": "./cmap_reader_factory.js",
-      "display-standard_fontdata_factory": "./standard_fontdata_factory.js",
-      "display-wasm_factory": "./wasm_factory.js",
-      "display-fetch_stream": "./fetch_stream.js",
-      "display-network": "./network.js",
-      "display-node_stream": "./node_stream.js",
+      "display-binary_data_factory": "./binary_data_factory.js",
+      "display-network_stream": "./network_stream.js",
       "display-node_utils": "./node_utils.js",
       "fluent-bundle": "../../../node_modules/@fluent/bundle/esm/index.js",
       "fluent-dom": "../../../node_modules/@fluent/dom/esm/index.js",
@@ -1639,6 +1621,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
             ],
         plugins: [
           [babelPluginPDFJSPreprocessor, ctx],
+          [babelPluginStripSrcPath],
           [
             "add-header-comment",
             {
@@ -1651,13 +1634,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
         sourceFileName: relativeSourcePath,
       });
 
-      let code = result.code;
-      code = code.replaceAll(
-        /(\sfrom\s".*?)(?:\/src)(\/[^"]*"?;)$/gm,
-        (all, prefix, suffix) => prefix + suffix
-      );
-
-      file.contents = Buffer.from(code);
+      file.contents = Buffer.from(result.code);
       // Attach the source map to the file for gulp-sourcemaps
       if (result.map) {
         file.sourceMap = result.map;
@@ -1669,20 +1646,15 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     }
   }
 
-  let pipeline = inputStream;
-  if (enableSourceMaps) {
-    pipeline = pipeline.pipe(sourcemaps.init({ loadMaps: true }));
-  }
-  pipeline = pipeline.pipe(
+  const pipeline = inputStream.pipe(
     new stream.Transform({
       objectMode: true,
       transform: preprocessLib,
     })
   );
-  if (enableSourceMaps) {
-    pipeline = pipeline.pipe(sourcemaps.write("."));
-  }
-  return pipeline.pipe(gulp.dest(outputDir));
+  return pipeline.pipe(
+    gulp.dest(outputDir, enableSourceMaps ? { sourcemaps: "." } : {})
+  );
 }
 
 function buildLib(defines, dir) {
@@ -1696,23 +1668,45 @@ function buildLib(defines, dir) {
     DEFAULT_FTL: getDefaultFtl(),
   };
 
+  const enableSourceMaps = bundleDefines.TESTING;
   const inputStream = ordered([
     gulp.src(
       [
         "src/{core,display,shared}/**/*.js",
         "src/{pdf,pdf.image_decoders,pdf.worker}.js",
       ],
-      { base: "src/", encoding: false }
+      { base: "src/", encoding: false, sourcemaps: enableSourceMaps }
     ),
     gulp.src(["web/*.js", "!web/{pdfjs,viewer}.js"], {
       base: ".",
       encoding: false,
+      sourcemaps: enableSourceMaps,
     }),
-    gulp.src("test/unit/*.js", { base: ".", encoding: false }),
-    gulp.src("external/openjpeg/*.js", { base: "openjpeg/", encoding: false }),
-    gulp.src("external/qcms/*.js", { base: "qcms/", encoding: false }),
-    gulp.src("external/jbig2/*.js", { base: "jbig2/", encoding: false }),
-    gulp.src("external/brotli/*.js", { base: "brotli/", encoding: false }),
+    gulp.src("test/unit/*.js", {
+      base: ".",
+      encoding: false,
+      sourcemaps: enableSourceMaps,
+    }),
+    gulp.src("external/openjpeg/*.js", {
+      base: "openjpeg/",
+      encoding: false,
+      sourcemaps: enableSourceMaps,
+    }),
+    gulp.src("external/qcms/*.js", {
+      base: "qcms/",
+      encoding: false,
+      sourcemaps: enableSourceMaps,
+    }),
+    gulp.src("external/jbig2/*.js", {
+      base: "jbig2/",
+      encoding: false,
+      sourcemaps: enableSourceMaps,
+    }),
+    gulp.src("external/brotli/*.js", {
+      base: "brotli/",
+      encoding: false,
+      sourcemaps: enableSourceMaps,
+    }),
   ]);
 
   return buildLibHelper(bundleDefines, inputStream, dir);
@@ -1842,29 +1836,6 @@ gulp.task(
     await runTests("browser", { bot: true });
     await runTests("integration");
   })
-);
-
-gulp.task(
-  "xfatest",
-  gulp.series(setTestEnv, "generic", "components", async function runXfaTest() {
-    await runTests("unit");
-    await runTests("browser", { xfaOnly: true });
-    await runTests("integration");
-  })
-);
-
-gulp.task(
-  "botxfatest",
-  gulp.series(
-    setTestEnv,
-    "generic",
-    "components",
-    async function runBotXfaTest() {
-      await runTests("unit", { bot: true });
-      await runTests("browser", { bot: true, xfaOnly: true });
-      await runTests("integration");
-    }
-  )
 );
 
 gulp.task(
@@ -2092,6 +2063,87 @@ gulp.task(
   )
 );
 
+gulp.task("lint-licenses", function (done) {
+  console.log("\n### Checking license headers");
+
+  const jsRE =
+    /^(?:#[^\n]*\n)?\/\* Copyright \d{4} Mozilla Foundation\n \*\n \* Licensed under the Apache License, Version 2\.0 \(the "License"\);/;
+  const htmlRE = /^<!doctype html>\n<!--\nCopyright \d{4} Mozilla Foundation\n/;
+
+  // Files with non-standard license headers (different copyright holder,
+  // different license, or missing license).
+  const NON_STANDARD_HEADER_FILES = new Set([
+    "examples/learning/helloworld.html",
+    "examples/learning/helloworld64.html",
+    "examples/learning/prevnext.html",
+    "examples/node/getinfo.mjs",
+    "examples/text-only/index.html",
+    "examples/webpack/index.html",
+    "examples/webpack/main.mjs",
+    "examples/webpack/webpack.config.js",
+    "test/add_test.mjs",
+    "src/license_header_libre.js",
+    "src/shared/murmurhash3.js",
+    "test/font/font_core_spec.js",
+    "test/font/font_fpgm_spec.js",
+    "test/font/font_os2_spec.js",
+    "test/font/font_post_spec.js",
+    "test/reporter.js",
+    "test/resources/reftest-analyzer.css",
+    "test/resources/reftest-analyzer.js",
+    "test/stats/statcmp.js",
+    "web/grab_to_pan.js",
+    "web/toggle_button.css",
+  ]);
+
+  const errors = [];
+
+  gulp
+    .src(
+      [
+        "{src,web,test,examples}/**/*.{js,mjs,css}",
+        "examples/**/*.html",
+        "!web/wasm/**/*",
+      ],
+      { base: "." }
+    )
+    .on("data", function (file) {
+      if (!file.contents) {
+        console.warn(
+          `  ${file.relative} is a directory, skipping license header check.`
+        );
+        return;
+      }
+
+      const relativePath = file.relative.replaceAll("\\", "/");
+      const content = file.contents.toString();
+      const re = relativePath.endsWith(".html") ? htmlRE : jsRE;
+
+      if (NON_STANDARD_HEADER_FILES.has(relativePath)) {
+        if (re.test(content)) {
+          console.warn(
+            `  ${relativePath} has a standard license header, but is in the list of non-standard header files list.`
+          );
+        }
+        return;
+      }
+      if (!re.test(content)) {
+        errors.push(relativePath);
+      }
+    })
+    .on("end", function () {
+      if (errors.length > 0) {
+        for (const file of errors.sort()) {
+          console.log(`  Invalid license header: ${file}`);
+        }
+        done(new Error("License header check failed."));
+        return;
+      }
+      console.log("files checked, no errors found");
+      done();
+    });
+});
+
 gulp.task("lint", function (done) {
   console.log();
   console.log("### Linting disabled (commented out)");
@@ -2166,8 +2218,7 @@ gulp.task("lint", function (done) {
             return;
           }
 
-          console.log("files checked, no errors found");
-          done();
+          gulp.task("lint-licenses")(done);
         });
       });
     });
@@ -2278,6 +2329,15 @@ gulp.task(
         }
       }
 
+      let host;
+      const j = process.argv.indexOf("--host");
+      if (j >= 0 && j + 1 < process.argv.length) {
+        host = process.argv[j + 1];
+        if (host === "0") {
+          host = "0.0.0.0";
+        }
+      }
+
       const { WebServer } = await import("./test/webserver.mjs");
       // #3069 modified by ngx-extended-pdf-viewer
       // Listen on 0.0.0.0 so the server is reachable from other devices
@@ -2322,6 +2382,55 @@ gulp.task("check_l10n", function (done) {
   });
 });
 
+function createInternalViewerBundle(defines) {
+  const viewerFileConfig = createWebpackConfig(defines, {
+    filename: "debugger.mjs",
+    library: {
+      type: "module",
+    },
+  });
+  return gulp
+    .src("./web/internal/debugger.js", { encoding: false })
+    .pipe(webpack2Stream(viewerFileConfig));
+}
+
+function buildInternalViewer(defines, dir) {
+  fs.rmSync(dir, { recursive: true, force: true });
+
+  return ordered([
+    createMainBundle(defines).pipe(gulp.dest(dir + "build")),
+    createWorkerBundle(defines).pipe(gulp.dest(dir + "build")),
+    createInternalViewerBundle(defines).pipe(gulp.dest(dir + "web")),
+    preprocessHTML("web/internal/debugger.html", defines).pipe(
+      gulp.dest(dir + "web")
+    ),
+    preprocessCSS("web/internal/debugger.css", defines)
+      .pipe(
+        postcss([
+          postcssDirPseudoClass(),
+          discardCommentsCSS(),
+          postcssNesting(),
+          postcssLightDarkFunction({ preserve: true }),
+          autoprefixer(AUTOPREFIXER_CONFIG),
+        ])
+      )
+      .pipe(gulp.dest(dir + "web")),
+    createCMapBundle().pipe(gulp.dest(dir + "web/cmaps")),
+    createICCBundle().pipe(gulp.dest(dir + "web/iccs")),
+    createStandardFontBundle().pipe(gulp.dest(dir + "web/standard_fonts")),
+    createWasmBundle().pipe(gulp.dest(dir + "web/wasm")),
+  ]);
+}
+
+gulp.task(
+  "internal-viewer",
+  gulp.series(createBuildNumber, function createInternalViewer() {
+    console.log("\n### Creating internal viewer");
+    const defines = { ...DEFINES, GENERIC: true, INTERNAL_VIEWER: true };
+    return buildInternalViewer(defines, INTERNAL_VIEWER_DIR);
+  })
+);
+
 function ghPagesPrepare() {
   console.log("\n### Creating web site");
 
@@ -2345,6 +2454,13 @@ function ghPagesPrepare() {
     gulp
       .src(JSDOC_BUILD_DIR + "**/*", { base: JSDOC_BUILD_DIR, encoding: false })
       .pipe(gulp.dest(GH_PAGES_DIR + "api/draft/")),
+    gulp
+      .src(INTERNAL_VIEWER_DIR + "**/*", {
+        base: INTERNAL_VIEWER_DIR,
+        encoding: false,
+        removeBOM: false,
+      })
+      .pipe(gulp.dest(GH_PAGES_DIR + "internal-viewer/")),
   ]);
 }
 
@@ -2396,6 +2512,7 @@ gulp.task(
   gulp.series(
     "generic",
     "generic-legacy",
+    "internal-viewer",
     "jsdoc",
     ghPagesPrepare,
     "metalsmith"
@@ -2424,7 +2541,7 @@ function packageJson() {
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
     optionalDependencies: {
-      "@napi-rs/canvas": "^0.1.95",
+      "@napi-rs/canvas": "^0.1.96",
       "node-readable-to-web-readable-stream": "^0.4.2",
     },
     browser: {
@@ -2475,6 +2592,11 @@ gulp.task(
             removeBOM: false,
           })
           .pipe(gulp.dest(DIST_DIR)),
+        gulp
+          .src("external/dist/webpack.mjs", {
+            encoding: false,
+          })
+          .pipe(gulp.dest(DIST_DIR + "legacy/")),
         gulp
           .src(GENERIC_DIR + "LICENSE", { encoding: false })
           .pipe(gulp.dest(DIST_DIR)),

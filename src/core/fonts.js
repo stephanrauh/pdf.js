@@ -57,6 +57,7 @@ import {
 } from "./standard_fonts.js";
 import { IdentityToUnicodeMap, ToUnicodeMap } from "./to_unicode_map.js";
 import { CFFFont } from "./cff_font.js";
+import { compileFontInfo } from "./obj_bin_transform_core.js";
 import { FontRendererFactory } from "./font_renderer.js";
 import { getFontBasicMetrics } from "./metrics.js";
 import { GlyfTable } from "./glyf.js";
@@ -80,7 +81,7 @@ const EXPORT_DATA_PROPERTIES = [
   "bbox",
   "black",
   "bold",
-  "charProcOperatorList",
+  // "charProcOperatorList" is handled separately, since it's not compiled.
   "cssFontInfo",
   "data",
   "defaultVMetrics",
@@ -969,6 +970,12 @@ function createNameTable(name, proto) {
  * decoding logics whatever type it is (assuming the font type is supported).
  */
 class Font {
+  #charsCache = new Map();
+
+  #glyphCache = new Map();
+
+  charProcOperatorList;
+
   constructor(name, file, properties, evaluatorOptions) {
     this.name = name;
     this.psName = null;
@@ -980,9 +987,6 @@ class Font {
     this.isType3Font = properties.isType3Font;
     this.missingFile = false;
     this.cssFontInfo = properties.cssFontInfo;
-
-    this._charsCache = Object.create(null);
-    this._glyphCache = Object.create(null);
 
     let isSerifFont = !!(properties.flags & FontFlags.Serif);
     // Fallback to checking the font name, in order to improve text-selection,
@@ -1146,28 +1150,26 @@ class Font {
     return shadow(this, "renderer", renderer);
   }
 
-  exportData() {
+  #getExportData(props) {
     const data = Object.create(null);
-    for (const prop of EXPORT_DATA_PROPERTIES) {
+    for (const prop of props) {
       const value = this[prop];
       // Ignore properties that haven't been explicitly set.
       if (value !== undefined) {
         data[prop] = value;
       }
     }
+    return data;
+  }
 
-    if (!this.fontExtraProperties) {
-      return { data };
-    }
-
-    const extra = Object.create(null);
-    for (const prop of EXPORT_DATA_EXTRA_PROPERTIES) {
-      const value = this[prop];
-      if (value !== undefined) {
-        extra[prop] = value;
-      }
-    }
-    return { data, extra };
+  exportData() {
+    return {
+      buffer: compileFontInfo(this.#getExportData(EXPORT_DATA_PROPERTIES)),
+      charProcOperatorList: this.charProcOperatorList,
+      extra: this.fontExtraProperties
+        ? this.#getExportData(EXPORT_DATA_EXTRA_PROPERTIES)
+        : undefined,
+    };
   }
 
   fallbackToSystemFont(properties) {
@@ -2255,15 +2257,11 @@ class Font {
           if (!valid) {
             break;
           }
-          const customNames = [],
-            strBuf = [];
+          const customNames = [];
           while (font.pos < end) {
-            const stringLength = font.getByte();
-            strBuf.length = stringLength;
-            for (i = 0; i < stringLength; ++i) {
-              strBuf[i] = String.fromCharCode(font.getByte());
-            }
-            customNames.push(strBuf.join(""));
+            const strLen = font.getByte(),
+              str = font.getString(strLen);
+            customNames.push(str);
           }
           glyphNames = [];
           for (i = 0; i < numGlyphs; ++i) {
@@ -3389,7 +3387,7 @@ class Font {
    * @private
    */
   _charToGlyph(charcode, isSpace = false) {
-    let glyph = this._glyphCache[charcode];
+    let glyph = this.#glyphCache.get(charcode);
     // All `Glyph`-properties, except `isSpace` in multi-byte strings,
     // depend indirectly on the `charcode`.
     if (glyph?.isSpace === isSpace) {
@@ -3409,7 +3407,7 @@ class Font {
     if (typeof width !== "number") {
       width = this.defaultWidth;
     }
-    const vmetric = this.vmetrics?.[widthCode];
+    const vmetric = this.vmetrics?.[widthCode] || this.defaultVMetrics;
 
     let unicode = this.toUnicode.get(charcode) || charcode;
     if (typeof unicode === "number") {
@@ -3484,12 +3482,13 @@ class Font {
       isSpace,
       isInFont
     );
-    return (this._glyphCache[charcode] = glyph);
+    this.#glyphCache.set(charcode, glyph);
+    return glyph;
   }
 
   charsToGlyphs(chars) {
     // If we translated this string before, just grab it from the cache.
-    let glyphs = this._charsCache[chars];
+    let glyphs = this.#charsCache.get(chars);
     if (glyphs) {
       return glyphs;
     }
@@ -3521,7 +3520,8 @@ class Font {
     }
 
     // Enter the translated string into the cache.
-    return (this._charsCache[chars] = glyphs);
+    this.#charsCache.set(chars, glyphs);
+    return glyphs;
   }
 
   /**
@@ -3553,7 +3553,7 @@ class Font {
   }
 
   get glyphCacheValues() {
-    return Object.values(this._glyphCache);
+    return this.#glyphCache.values();
   }
 
   /**

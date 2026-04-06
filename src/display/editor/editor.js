@@ -240,7 +240,7 @@ class AnnotationEditor {
 
   static deleteAnnotationElement(editor) {
     const fakeEditor = new FakeEditor({
-      id: editor.parent.getNextId(),
+      id: editor._uiManager.getId(),
       parent: editor.parent,
       uiManager: editor._uiManager,
     });
@@ -502,6 +502,10 @@ class AnnotationEditor {
   }
 
   _moveAfterPaste(baseX, baseY) {
+    if (this.isClone) {
+      delete this.isClone;
+      return;
+    }
     const [parentWidth, parentHeight] = this.parentDimensions;
     this.setAt(
       baseX * parentWidth,
@@ -1937,7 +1941,7 @@ class AnnotationEditor {
   static async deserialize(data, parent, uiManager) {
     const editor = new this.prototype.constructor({
       parent,
-      id: parent.getNextId(),
+      id: uiManager.getId(),
       uiManager,
       annotationElementId: data.annotationElementId,
       eventBus: parent.eventBus, // #2256 modified by ngx-extended-pdf-viewer

@@ -133,20 +133,30 @@ class PDFThumbnailView extends RenderableView {
       thumbPageTitlePromiseOrPageL10nArgs: this.#getPageL10nArgs(), // upstream renamed #pageL10nArgs to #getPageL10nArgs()
     });
 
-    // Check if custom thumbnail was already created by ngx-extended-pdf-viewer
+    // #1696 modified by ngx-extended-pdf-viewer
+    // Angular's sidebar content component pre-creates thumbnail elements from an
+    // ng-template (rendercustomthumbnail event). If found, reuse the existing DOM
+    // and wire up div/imageContainer/image/checkbox references so pdf.js can operate
+    // on them. If enableSplitMerge is active but the template didn't include a
+    // checkbox, create one dynamically so page selection works.
     const existingThumbnail = container.querySelector(`.${this.renderingId}`);
     if (existingThumbnail) {
-      // Use the existing custom thumbnail
       this.div = existingThumbnail;
       this.imageContainer = this.div.querySelector(".thumbnailImageContainer") || this.div;
-      this.image = this.div.querySelector(".thumbnailImage");
+      this.image = this.div.querySelector(".thumbnailImage") || this.imageContainer.querySelector("img");
       this.checkbox = this.div.querySelector("input[type='checkbox']");
       if (!this.image) {
-        // Fallback: create standard thumbnail if custom one is malformed
         this.#createStandardThumbnail(container, id, enableSplitMerge);
+      } else if (enableSplitMerge && !this.checkbox) {
+        const checkbox = (this.checkbox = document.createElement("input"));
+        checkbox.type = "checkbox";
+        checkbox.tabIndex = -1;
+        checkbox.setAttribute("data-l10n-id", "pdfjs-thumb-page-checkbox1");
+        checkbox.setAttribute("data-l10n-args", this.#getPageL10nArgs());
+        this.div.append(checkbox);
+        this.pasteButton = null;
       }
     } else {
-      // Create standard thumbnail using upstream structure
       this.#createStandardThumbnail(container, id, enableSplitMerge);
     }
     // #1696 end of modification by ngx-extended-pdf-viewer
@@ -223,7 +233,6 @@ class PDFThumbnailView extends RenderableView {
       pageColors: this.pageColors,
       enableSplitMerge: !!this.checkbox,
     });
-    thumbnailView.setPdfPage(this.pdfPage);
     const { imageContainer } = this;
     if (!imageContainer.classList.contains("missingThumbnailImage")) {
       thumbnailView.image.replaceWith(this.image.cloneNode(true));
@@ -239,14 +248,43 @@ class PDFThumbnailView extends RenderableView {
     const pasteButton = (this.pasteButton = document.createElement("button"));
     pasteButton.classList.add("thumbnailPasteButton", "viewsManagerButton");
     pasteButton.tabIndex = 0;
+    pasteButton.setAttribute(
+      "data-l10n-id",
+      "pdfjs-views-manager-paste-button-after"
+    );
+    pasteButton.setAttribute(
+      "data-l10n-args",
+      JSON.stringify({
+        page: this.pageLabel ?? this.id,
+      })
+    );
     const span = document.createElement("span");
     span.setAttribute("data-l10n-id", "pdfjs-views-manager-paste-button-label");
     pasteButton.append(span);
     pasteButton.addEventListener("click", () => {
       pasteCallback(this.id);
     });
+    if (this.id === 1) {
+      const prevPasteButton = (this.prevPasteButton =
+        pasteButton.cloneNode(true));
+      prevPasteButton.setAttribute(
+        "data-l10n-id",
+        "pdfjs-views-manager-paste-button-before"
+      );
+      prevPasteButton.addEventListener("click", () => {
+        pasteCallback(0);
+      });
+      this.imageContainer.before(prevPasteButton);
+    }
 
     this.imageContainer.after(pasteButton);
+  }
+
+  removePasteButton() {
+    this.pasteButton?.remove();
+    this.pasteButton = null;
+    this.prevPasteButton?.remove();
+    this.prevPasteButton = null;
   }
 
   toggleSelected(isSelected) {

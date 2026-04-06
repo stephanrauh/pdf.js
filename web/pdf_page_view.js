@@ -30,6 +30,7 @@ import {
   PixelsPerInch,
   setLayerDimensions,
   shadow,
+  TextLayerImages,
 } from "pdfjs-lib";
 import {
   approximateFraction,
@@ -93,6 +94,9 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  *   `maxCanvasDim`, it will draw a second canvas on top of the CSS-zoomed one,
  *   that only renders the part of the page that is close to the viewport.
  *   The default value is `true`.
+ * @property {number} [imagesRightClickMinSize] - All images whose width and
+ *  height are at least this value (in pixels) will be lazily inserted in the
+ *  dom to allow right-clicking and saving them. Use `-1` to disable this.
  * @property {boolean} [enableOptimizedPartialRendering] - When enabled, PDF
  *   rendering will keep track of which areas of the page each PDF operation
  *   affects. Then, when rendering a partial page (if `enableDetailCanvas` is
@@ -107,8 +111,8 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  * @property {boolean} [enableAutoLinking] - Enable creation of hyperlinks from
  *   text that look like URLs. The default value is `true`.
  * @property {CommentManager} [commentManager] - The comment manager instance.
- * @property {PDFPageView} [clonedFrom] - The page view that is cloned
  *   to.
+ * @property {AbortSignal} [abortSignal]
  */
 
 const DEFAULT_LAYER_PROPERTIES =
@@ -136,6 +140,8 @@ const LAYERS_ORDER = new Map([
 ]);
 
 class PDFPageView extends BasePDFPageView {
+  #abortSignal = null;
+
   #annotationMode = AnnotationMode.ENABLE_FORMS;
 
   #canvasWrapper = null;
@@ -172,8 +178,6 @@ class PDFPageView extends BasePDFPageView {
 
   #layers = [null, null, null, null];
 
-  #clonedFrom = null;
-
   /**
    * @param {PDFPageViewOptions} options
    */
@@ -184,6 +188,7 @@ class PDFPageView extends BasePDFPageView {
 
     this.renderingId = "page" + this.id;
     this.#layerProperties = options.layerProperties || DEFAULT_LAYER_PROPERTIES;
+    this.#abortSignal = options.abortSignal || null;
 
     this.pdfPage = null;
     this.pageLabel = null;
@@ -205,7 +210,6 @@ class PDFPageView extends BasePDFPageView {
       options.capCanvasAreaFactor ?? AppOptions.get("capCanvasAreaFactor");
     this.#enableAutoLinking = options.enableAutoLinking !== false;
     this.#commentManager = options.commentManager || null;
-    this.#clonedFrom = options.clonedFrom || null;
 
     this.l10n = options.l10n;
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
@@ -289,6 +293,7 @@ class PDFPageView extends BasePDFPageView {
       defaultViewport: this.viewport,
       id,
       layerProperties: this.#layerProperties,
+      abortSignal: this.#abortSignal,
       scale: this.scale,
       optionalContentConfigPromise: this._optionalContentConfigPromise,
       textLayerMode: this.#textLayerMode,
@@ -301,9 +306,8 @@ class PDFPageView extends BasePDFPageView {
       enableAutoLinking: this.#enableAutoLinking,
       commentManager: this.#commentManager,
       l10n: this.l10n,
-      clonedFrom: this,
     });
-    clone.setPdfPage(this.pdfPage);
+    clone.setPdfPage(this.pdfPage.clone(id - 1));
     return clone;
   }
 
@@ -355,6 +359,7 @@ class PDFPageView extends BasePDFPageView {
     if (this.id === newPageNumber) {
       return;
     }
+    const oldPageNumber = this.id;
     this.id = newPageNumber;
     this.renderingId = `page${newPageNumber}`;
     if (this.pdfPage) {
@@ -368,7 +373,11 @@ class PDFPageView extends BasePDFPageView {
     this._textHighlighter.pageIdx = newPageNumber - 1;
     // Don't update the page index for the draw layer, since it's just used as
     // an identifier.
-    this.annotationEditorLayer?.updatePageIndex(newPageNumber - 1);
+
+    this.#layerProperties.annotationEditorUIManager?.updatePageIndex(
+      oldPageNumber - 1,
+      newPageNumber - 1
+    );
   }
 
   setPdfPage(pdfPage) {
@@ -528,6 +537,14 @@ class PDFPageView extends BasePDFPageView {
     try {
       await this.textLayer.render({
         viewport: this.viewport,
+        images: this.imageCoordinates
+          ? new TextLayerImages(
+              this.imagesRightClickMinSize,
+              this.imageCoordinates,
+              this.viewport,
+              () => this.canvas
+            )
+          : null,
       });
     } catch (ex) {
       if (ex instanceof AbortException) {
@@ -715,6 +732,7 @@ class PDFPageView extends BasePDFPageView {
         this.detailView ??= new PDFPageDetailView({
           pageView: this,
           enableOptimizedPartialRendering: this.enableOptimizedPartialRendering,
+          imagesRightClickMinSize: -1,
         });
         this.detailView.update({ visibleArea });
       } else if (this.detailView) {
@@ -1015,7 +1033,7 @@ class PDFPageView extends BasePDFPageView {
     return canvasWrapper;
   }
 
-  _getRenderingContext(canvas, transform, recordOperations) {
+  _getRenderingContext(canvas, transform, recordOperations, recordImages) {
     const backgroundColor = AppOptions.get("pdfBackgroundColor"); // #2997 modified by ngx-extended-pdf-viewer
     return {
       canvas,
@@ -1028,6 +1046,7 @@ class PDFPageView extends BasePDFPageView {
       isEditing: this.#isEditing,
       background: backgroundColor || null,
       recordOperations,
+      recordImages,
     };
   }
 
@@ -1066,6 +1085,7 @@ class PDFPageView extends BasePDFPageView {
           this.#addLayer(textLayerDiv, "textLayer");
           this.l10n.resume();
         },
+        abortSignal: this.#abortSignal,
       });
     }
 
@@ -1159,6 +1179,9 @@ class PDFPageView extends BasePDFPageView {
       this.#hasRestrictedScaling &&
       !this.recordedBBoxes;
 
+    const recordImages =
+      this.imagesRightClickMinSize !== -1 && !this.imageCoordinates;
+
     // Rendering area
     const transform = outputScale.scaled
       ? [outputScale.sx, 0, 0, outputScale.sy, 0, 0]
@@ -1172,7 +1195,7 @@ class PDFPageView extends BasePDFPageView {
     const canvasForThisDraw = canvas;
     // #3131 end of modification by ngx-extended-pdf-viewer
     const resultPromise = this._drawCanvas(
-      this._getRenderingContext(canvas, transform, recordBBoxes),
+      this._getRenderingContext(canvas, transform, recordBBoxes, recordImages),
       () => {
         prevCanvas?.remove();
         // #3131 modified by ngx-extended-pdf-viewer
@@ -1234,13 +1257,11 @@ class PDFPageView extends BasePDFPageView {
           annotationLayer: this.annotationLayer?.annotationLayer,
           textLayer: this.textLayer,
           drawLayer: this.drawLayer.getDrawLayer(),
-          clonedFrom: this.#clonedFrom?.annotationEditorLayer,
           onAppend: annotationEditorLayerDiv => {
             this.#addLayer(annotationEditorLayerDiv, "annotationEditorLayer");
           },
           eventBus: this.eventBus // #2256 modified by ngx-extended-pdf-viewer
         });
-        this.#clonedFrom = null;
         this.#renderAnnotationEditorLayer();
       }
     });

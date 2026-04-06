@@ -100,6 +100,8 @@ class ViewsManager extends Sidebar {
     },
     eventBus,
     l10n,
+    enableSplitMerge = false,
+    globalAbortSignal,
   }) {
     super(
       {
@@ -108,7 +110,8 @@ class ViewsManager extends Sidebar {
         toggleButton,
       },
       l10n.getDirection() === "ltr",
-      /* isResizerOnTheLeft = */ false
+      /* isResizerOnTheLeft = */ false,
+      globalAbortSignal
     );
     this.isOpen = false;
     this.active = SidebarView.THUMBS;
@@ -145,6 +148,11 @@ class ViewsManager extends Sidebar {
     this.eventBus = eventBus;
 
     // #modified by ngx-extended-pdf-viewer
+    if (!enableSplitMerge && viewsManagerStatus) {
+      viewsManagerStatus.hidden = true;
+    }
+    this._enableSplitMerge = enableSplitMerge;
+
     // PDF.js v5.4.530 introduced a new Menu component for view selector
     // ngx-extended-pdf-viewer's HTML doesn't include these elements yet, so we conditionally create the menu
     if (viewsManagerSelectorOptions && viewsManagerSelectorButton) {
@@ -160,9 +168,9 @@ class ViewsManager extends Sidebar {
 
     ViewsManager.#l10nDescription ||= Object.freeze({
       pagesTitle: "pdfjs-views-manager-pages-title",
-      outlinesTitle: "pdfjs-views-manager-outlines-title",
+      outlinesTitle: "pdfjs-views-manager-outlines-title1",
       attachmentsTitle: "pdfjs-views-manager-attachments-title",
-      layersTitle: "pdfjs-views-manager-layers-title",
+      layersTitle: "pdfjs-views-manager-layers-title1",
       notificationButton: "pdfjs-toggle-views-manager-notification-button",
       toggleButton: "pdfjs-toggle-views-manager-button",
     });
@@ -274,7 +282,7 @@ class ViewsManager extends Sidebar {
 
     // #3170 modified by ngx-extended-pdf-viewer
     // These elements may not exist in ngx-extended-pdf-viewer's HTML, add null checks
-    if (this.viewsManagerStatus) {
+    if (this._enableSplitMerge && this.viewsManagerStatus) {
       this.viewsManagerStatus.hidden = view !== SidebarView.THUMBS;
     }
     if (this.viewsManagerAddFileButton) {
@@ -448,6 +456,19 @@ class ViewsManager extends Sidebar {
     }
     // #3170 end of modification by ngx-extended-pdf-viewer
 
+    // #3170 modified by ngx-extended-pdf-viewer
+    // viewsManagerHeaderLabel may not exist when using Angular's sidebar toolbar
+    this.viewsManagerHeaderLabel?.addEventListener("dblclick", e => {
+    // #3170 end of modification by ngx-extended-pdf-viewer
+      if (this.active === SidebarView.OUTLINE) {
+        eventBus.dispatch("toggleoutlinetree", { source: this });
+        return;
+      }
+      if (this.active === SidebarView.LAYERS) {
+        eventBus.dispatch("resetlayers", { source: this });
+      }
+    });
+
     // Buttons for switching views.
     this.thumbnailButton?.addEventListener("click", () => {
       this.switchView(SidebarView.THUMBS);
@@ -456,9 +477,6 @@ class ViewsManager extends Sidebar {
     this.outlineButton?.addEventListener("click", () => {
       this.switchView(SidebarView.OUTLINE);
     });
-    this.outlineButton?.addEventListener("dblclick", () => {
-      eventBus.dispatch("toggleoutlinetree", { source: this });
-    });
 
     this.attachmentsButton?.addEventListener("click", () => {
       this.switchView(SidebarView.ATTACHMENTS);
@@ -466,9 +484,6 @@ class ViewsManager extends Sidebar {
 
     this.layersButton?.addEventListener("click", () => {
       this.switchView(SidebarView.LAYERS);
-    });
-    this.layersButton?.addEventListener("dblclick", () => {
-      eventBus.dispatch("resetlayers", { source: this });
     });
 
     // Buttons for view-specific options.

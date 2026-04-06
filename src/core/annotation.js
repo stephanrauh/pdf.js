@@ -362,12 +362,12 @@ class AnnotationFactory {
 
   static async saveNewAnnotations(
     evaluator,
+    xref,
     task,
     annotations,
     imagePromises,
     changes
   ) {
-    const xref = evaluator.xref;
     let baseFontRef;
     const promises = [];
     const { isOffscreenCanvasSupported } = evaluator.options;
@@ -1112,14 +1112,18 @@ class Annotation {
       }
     } else if (borderStyle.has("Border")) {
       const array = borderStyle.getArray("Border");
-      if (Array.isArray(array) && array.length >= 3) {
-        this.borderStyle.setHorizontalCornerRadius(array[0]);
-        this.borderStyle.setVerticalCornerRadius(array[1]);
-        this.borderStyle.setWidth(array[2], this.rectangle);
+      if (Array.isArray(array)) {
+        if (array.length >= 3) {
+          this.borderStyle.setHorizontalCornerRadius(array[0]);
+          this.borderStyle.setVerticalCornerRadius(array[1]);
+          this.borderStyle.setWidth(array[2], this.rectangle);
 
-        if (array.length === 4) {
-          // Dash array available
-          this.borderStyle.setDashArray(array[3], /* forceStyle = */ true);
+          if (array.length === 4) {
+            // Dash array available
+            this.borderStyle.setDashArray(array[3], /* forceStyle = */ true);
+          }
+        } else if (array.length === 0) {
+          this.borderStyle.setWidth(0);
         }
       }
     } else {
@@ -2255,9 +2259,9 @@ class WidgetAnnotation extends Annotation {
     }
 
     const dict = new Dict(xref);
-    for (const key of originalDict.getKeys()) {
+    for (const [key, rawVal] of originalDict.getRawEntries()) {
       if (key !== "AP") {
-        dict.set(key, originalDict.getRaw(key));
+        dict.set(key, rawVal);
       }
     }
     if (flags !== undefined) {
@@ -2469,8 +2473,8 @@ class WidgetAnnotation extends Annotation {
 
       if (this._fieldResources.mergedResources.has("Font")) {
         const oldFont = this._fieldResources.mergedResources.get("Font");
-        for (const key of newFont.getKeys()) {
-          oldFont.set(key, newFont.getRaw(key));
+        for (const [key, rawVal] of newFont.getRawEntries()) {
+          oldFont.set(key, rawVal);
         }
       } else {
         this._fieldResources.mergedResources.set("Font", newFont);
@@ -3425,7 +3429,7 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
         ? this.data.fieldValue
         : "Yes";
 
-    const exportValues = this._decodeFormValue(normalAppearance.getKeys());
+    const exportValues = this._decodeFormValue([...normalAppearance.getKeys()]);
     if (exportValues.length === 0) {
       exportValues.push("Off", yes);
     } else if (exportValues.length === 1) {
@@ -5132,9 +5136,9 @@ class StampAnnotation extends MarkupAnnotation {
       ctx.drawImage(bitmap, 0, 0);
     }
 
-    const jpegBufferPromise = canvas
+    const jpegBytesPromise = canvas
       .convertToBlob({ type: "image/jpeg", quality: 1 })
-      .then(blob => blob.arrayBuffer());
+      .then(blob => blob.bytes());
 
     const xobjectName = Name.get("XObject");
     const imageName = Name.get("Image");
@@ -5171,7 +5175,7 @@ class StampAnnotation extends MarkupAnnotation {
 
       smaskStream = new Stream(alphaBuffer, 0, 0, smask);
     }
-    const imageStream = new Stream(await jpegBufferPromise, 0, 0, image);
+    const imageStream = new Stream(await jpegBytesPromise, 0, 0, image);
 
     return {
       imageStream,

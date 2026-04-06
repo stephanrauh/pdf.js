@@ -216,11 +216,9 @@ class TextHighlighter {
         div.append(span);
 
         if (className.includes("selected")) {
-          const { left } = span.getClientRects()[0];
-          const parentLeft = div.getBoundingClientRect().left;
-          return left - parentLeft;
+          return span;
         }
-        return 0;
+        return null;
       }
 
       div.append(node);
@@ -247,8 +245,10 @@ class TextHighlighter {
       lastOffset = begin.offset;
 
       const end = match.end;
+      // #2488 modified by ngx-extended-pdf-viewer
       const highlightSuffix = match.selected ? " selected" : "";
-      let selectedLeft = 0;
+      let selectedSpan = null;
+      // #2488 end of modification by ngx-extended-pdf-viewer
 
       // Match inside new div.
       if (!prevEnd || begin.divIdx !== prevEnd.divIdx) {
@@ -263,14 +263,14 @@ class TextHighlighter {
       }
 
       if (begin.divIdx === end.divIdx) {
-        selectedLeft = appendTextToDiv(
+        selectedSpan = appendTextToDiv(
           begin.divIdx,
           begin.offset,
           end.offset,
           match.cssClass + highlightSuffix // #2482 modified by ngx-extended-pdf-viewer
         );
       } else {
-        selectedLeft = appendTextToDiv(
+        selectedSpan = appendTextToDiv(
           begin.divIdx,
           begin.offset,
           infinity.offset,
@@ -286,8 +286,7 @@ class TextHighlighter {
       if (match.selected) { // #2488 modified by ngx-extended-pdf-viewer
         // Attempt to scroll the selected match into view.
         findController.scrollMatchIntoView({
-          element: textDivs[begin.divIdx],
-          selectedLeft,
+          element: selectedSpan,
           pageIndex: pageIdx,
           matchIndex: i, // #2488 modified by ngx-extended-pdf-viewer
         });

@@ -13,15 +13,10 @@
  * limitations under the License.
  */
 
-import { BaseException, warn } from "../shared/util.js";
 import { fetchBinaryData } from "./core_utils.js";
 import JBig2 from "../../external/jbig2/jbig2.js";
-
-class JBig2Error extends BaseException {
-  constructor(msg) {
-    super(msg, "Jbig2Error");
-  }
-}
+import { Jbig2Error } from "./jbig2.js";
+import { warn } from "../shared/util.js";
 
 class JBig2CCITTFaxWasmImage {
   static #buffer = null;
@@ -53,9 +48,12 @@ class JBig2CCITTFaxWasmImage {
         if (this.#useWorkerFetch) {
           this.#buffer = await fetchBinaryData(`${this.#wasmUrl}${filename}`);
         } else {
+          if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+            throw new Error("Only worker-thread fetching supported.");
+          }
           this.#buffer = await this.#handler.sendWithPromise(
             "FetchBinaryData",
-            { type: "wasmFactory", filename }
+            { kind: "wasmUrl", filename }
           );
         }
       }
@@ -87,7 +85,7 @@ class JBig2CCITTFaxWasmImage {
     }
     const module = await this.#modulePromise;
     if (!module) {
-      throw new JBig2Error("JBig2 failed to initialize");
+      throw new Jbig2Error("JBig2 failed to initialize");
     }
     let ptr, globalsPtr;
 
@@ -118,7 +116,7 @@ class JBig2CCITTFaxWasmImage {
         module._jbig2_decode(ptr, size, width, height, globalsPtr, globalsSize);
       }
       if (!module.imageData) {
-        throw new JBig2Error("Unknown error");
+        throw new Jbig2Error("Unknown error");
       }
       const { imageData } = module;
       module.imageData = null;
@@ -139,4 +137,4 @@ class JBig2CCITTFaxWasmImage {
   }
 }
 
-export { JBig2CCITTFaxWasmImage, JBig2Error };
+export { JBig2CCITTFaxWasmImage };

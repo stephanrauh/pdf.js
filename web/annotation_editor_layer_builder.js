@@ -39,7 +39,6 @@ import { GenericL10n } from "web-null_l10n";
  * @property {TextLayer} [textLayer]
  * @property {DrawLayer} [drawLayer]
  * @property {function} [onAppend]
- * @property {AnnotationEditorLayer} [clonedFrom]
  */
 
 /**
@@ -61,8 +60,6 @@ class AnnotationEditorLayerBuilder {
 
   #uiManager;
 
-  #clonedFrom = null;
-
   /**
    * @param {AnnotationEditorLayerBuilderOptions} options
    */
@@ -83,7 +80,6 @@ class AnnotationEditorLayerBuilder {
     this.#onAppend = options.onAppend || null;
     this.eventBus = options.eventBus; // #2256 modified by ngx-extended-pdf-viewer
     this.#structTreeLayer = options.structTreeLayer || null;
-    this.#clonedFrom = options.clonedFrom || null;
   }
 
   updatePageIndex(newPageIndex) {
@@ -132,11 +128,6 @@ class AnnotationEditorLayerBuilder {
       eventBus: this.eventBus, // modified by ngx-extended-pdf-viewer #2256
     });
 
-    this.annotationEditorLayer.setClonedFrom(
-      this.#clonedFrom?.annotationEditorLayer
-    );
-    this.#clonedFrom = null;
-
     const parameters = {
       viewport: clonedViewport,
       div,
@@ -144,7 +135,7 @@ class AnnotationEditorLayerBuilder {
       intent,
     };
 
-    this.annotationEditorLayer.render(parameters);
+    await this.annotationEditorLayer.render(parameters);
     this.show();
   }
 

@@ -110,6 +110,7 @@
     &.selected {
       background-color: var(--highlight-selected-bg-color);
       backdrop-filter: var(--highlight-selected-backdrop-filter);
+      scroll-margin-top: 50px;
     }
   }
 
@@ -140,5 +141,16 @@
 
   &.selecting .endOfContent {
     top: 0;
+  }
+}
+
+.textLayerImages {
+  position: absolute;
+  inset: 0;
+  user-select: none;
+
+  canvas {
+    position: absolute;
+    transform-origin: 0% 0%;
   }
 }

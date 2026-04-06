@@ -180,13 +180,40 @@ function getViewerConfiguration() {
         "viewsManagerHeaderLabel"
       ),
       viewsManagerStatus: document.getElementById("viewsManagerStatus"),
+      viewsManagerStatusBar: {
+        viewsManagerStatusAction: document.getElementById(
+          "viewsManagerStatusAction"
+        ),
+        viewsManagerStatusActionDeselectButton: document.getElementById(
+          "viewsManagerStatusActionDeselectButton"
+        ),
+        viewsManagerStatusActionLabel: document.getElementById(
+          "viewsManagerStatusActionLabel"
+        ),
+      },
+      viewsManagerUndoBar: {
+        viewsManagerStatusUndo: document.getElementById(
+          "viewsManagerStatusUndo"
+        ),
+        viewsManagerStatusUndoLabel: document.getElementById(
+          "viewsManagerStatusUndoLabel"
+        ),
+        viewsManagerStatusUndoButton: document.getElementById(
+          "viewsManagerStatusUndoButton"
+        ),
+        viewsManagerStatusUndoCloseButton: document.getElementById(
+          "viewsManagerStatusUndoCloseButton"
+        ),
+      },
       manageMenu: {
         button: document.getElementById("viewsManagerStatusActionButton"),
         menu: document.getElementById("viewsManagerStatusActionOptions"),
         copy: document.getElementById("viewsManagerStatusActionCopy"),
         cut: document.getElementById("viewsManagerStatusActionCut"),
         delete: document.getElementById("viewsManagerStatusActionDelete"),
-        saveAs: document.getElementById("viewsManagerStatusActionSaveAs"),
+        exportSelected: document.getElementById(
+          "viewsManagerStatusActionExport"
+        ),
       },
     },
     findBar: {

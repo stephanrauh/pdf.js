@@ -274,8 +274,6 @@ appConfig: null,
     }
     await this._initializeViewerComponents();
 
-    this.pdfTextExtractor = new PdfTextExtractor(this.externalServices);
-
     // Bind the various event handlers *after* the viewer has been
     // initialized, to prevent errors if an event arrives too soon.
     this.bindEvents();
@@ -393,10 +391,12 @@ appConfig: null,
         enableComment: x => x === "true",
         enableFakeMLManager: x => x === "true",
         enableGuessAltText: x => x === "true",
+        enableNewBadge: x => x === "true",
         enablePermissions: x => x === "true",
         enableSplitMerge: x => x === "true",
         enableUpdatedAddImage: x => x === "true",
         highlightEditorColors: x => x,
+        imagesRightClickMinSize: x => parseInt(x),
         maxCanvasPixels: x => parseInt(x),
         spreadModeOnLoad: x => parseInt(x),
         supportsCaretBrowsingMode: x => x === "true",
@@ -507,6 +507,7 @@ appConfig: null,
           foreground: AppOptions.get("pageColorsForeground"),
         }
       : null;
+    const enableSplitMerge = AppOptions.get("enableSplitMerge");
 
     let altTextManager;
     if (AppOptions.get("enableUpdatedAddImage")) {
@@ -546,9 +547,6 @@ appConfig: null,
           )
         : null;
 
-    const ltr = appConfig.viewerContainer
-      ? getComputedStyle(appConfig.viewerContainer).direction === "ltr"
-      : true;
     const commentManager =
       AppOptions.get("enableComment") && appConfig.editCommentDialog
         ? new CommentManager(
@@ -578,13 +576,13 @@ appConfig: null,
             eventBus,
             linkService,
             overlayManager,
-            ltr,
-            hasForcedColors
+            /* ltr = */ l10n.getDirection() === "ltr",
+            hasForcedColors,
+            abortSignal
           )
         : null;
 
-    const enableHWA = AppOptions.get("enableHWA"),
-      maxCanvasPixels = AppOptions.get("maxCanvasPixels"),
+    const maxCanvasPixels = AppOptions.get("maxCanvasPixels"),
       maxCanvasDim = AppOptions.get("maxCanvasDim"),
       capCanvasAreaFactor = AppOptions.get("capCanvasAreaFactor");
     const pdfViewer = (this.pdfViewer = new PDFViewer({
@@ -629,14 +627,16 @@ appConfig: null,
       enableOptimizedPartialRendering: AppOptions.get(
         "enableOptimizedPartialRendering"
       ),
+      imagesRightClickMinSize: AppOptions.get("imagesRightClickMinSize"),
       pageColors,
       mlManager,
       abortSignal,
-      enableHWA,
+      // #modified by ngx-extended-pdf-viewer
       defaultCacheSize: AppOptions.get("defaultCacheSize"),
-      minZoom: AppOptions.get("minZoom"), // modified by ngx-extended-pdf-viewer
-      maxZoom: AppOptions.get("maxZoom"), // modified by ngx-extended-pdf-viewer
-      cspPolicyService: this.cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
+      minZoom: AppOptions.get("minZoom"),
+      maxZoom: AppOptions.get("maxZoom"),
+      cspPolicyService: this.cspPolicyService, // #2362
+      // #end of modification by ngx-extended-pdf-viewer
       supportsPinchToZoom: this.supportsPinchToZoom,
       enableAutoLinking: AppOptions.get("enableAutoLinking"),
       minDurationToUpdateCanvas: AppOptions.get("minDurationToUpdateCanvas"),
@@ -647,8 +647,9 @@ appConfig: null,
     pdfScriptingManager.setViewer(pdfViewer);
 
     if (appConfig.viewsManager?.thumbnailsView) {
+      const { viewsManager } = appConfig;
       this.pdfThumbnailViewer = new PDFThumbnailViewer({
-        container: appConfig.viewsManager.thumbnailsView,
+        container: viewsManager.thumbnailsView,
         eventBus,
         renderingQueue,
         linkService,
@@ -656,10 +657,12 @@ appConfig: null,
         maxCanvasDim,
         pageColors,
         abortSignal,
-        enableHWA,
-        enableSplitMerge: AppOptions.get("enableSplitMerge"),
-        manageMenu: appConfig.viewsManager.manageMenu,
-        addFileButton: appConfig.viewsManager.viewsManagerAddFileButton,
+        enableSplitMerge,
+        enableNewBadge: AppOptions.get("enableNewBadge"),
+        statusBar: viewsManager.viewsManagerStatusBar,
+        undoBar: viewsManager.viewsManagerUndoBar,
+        manageMenu: viewsManager.manageMenu,
+        addFileButton: viewsManager.viewsManagerAddFileButton,
       });
       renderingQueue.setThumbnailViewer(this.pdfThumbnailViewer);
     }
@@ -844,6 +847,8 @@ appConfig: null,
         elements: appConfig.viewsManager,
         eventBus,
         l10n,
+        enableSplitMerge,
+        globalAbortSignal: abortSignal,
       });
       this.viewsManager.onToggled = this.forceRendering.bind(this);
       this.viewsManager.onUpdateThumbnails = () => {
@@ -859,6 +864,17 @@ appConfig: null,
           pdfViewer.currentPageNumber
         );
       };
+    }
+
+    if (
+      typeof PDFJSDev === "undefined" ||
+      PDFJSDev.test("TESTING || MOZCENTRAL")
+    ) {
+      this.pdfTextExtractor = new PdfTextExtractor(
+        externalServices,
+        pdfViewer,
+        eventBus
+      );
     }
   },
 
@@ -1204,9 +1220,9 @@ appConfig: null,
       // Embedded PDF viewers should not be changing their parent page's title.
       return;
     }
-    const editorIndicator =
-      this._hasAnnotationEditors && !this.pdfRenderingQueue.printing;
-    document.title = `${editorIndicator ? "* " : ""}${title}`;
+    const hasChangesIndicator =
+      this._hasChanges() && !this.pdfRenderingQueue.printing;
+    document.title = `${hasChangesIndicator ? "* " : ""}${title}`;
   },
 
   get _docFilename() {
@@ -1267,13 +1283,13 @@ appConfig: null,
     if (
       (typeof PDFJSDev === "undefined" ||
         PDFJSDev.test("GENERIC && !TESTING")) &&
-      this.pdfDocument?.annotationStorage.size > 0 &&
+      this._hasChanges() &&
       this._hasRealAnnotationChanges()
     ) {
     // #2691 end of modification by ngx-extended-pdf-viewer
       try {
         // Trigger saving, to prevent data loss in forms; see issue 12257.
-        await this.save();
+        await this.downloadOrSave();
       } catch {
         // Ignoring errors, to ensure that document closing won't break.
       }
@@ -1290,7 +1306,6 @@ appConfig: null,
       this.pdfViewer.setDocument(null);
       this.pdfLinkService.setDocument(null);
       this.pdfDocumentProperties?.setDocument(null);
-      this.pdfTextExtractor?.setViewer(null);
     }
     this.pdfLinkService.externalLinkEnabled = true;
     this.store = null;
@@ -1420,6 +1435,10 @@ appConfig: null,
         if (loadingTask !== this.pdfLoadingTask) {
           return undefined; // Ignore errors for previously opened PDF files.
         }
+        if (this.loadingBar) {
+          // Avoid the "indeterminate" loadingBar being displayed on error.
+          this.loadingBar.percent ||= 0;
+        }
 
         let key = "pdfjs-loading-error";
         if (reason instanceof InvalidPDFException) {
@@ -1496,10 +1515,21 @@ appConfig: null,
     // a message and change PdfjsChild.sys.mjs to take it into account.
     const { classList } = this.appConfig.appContainer;
     classList.add("wait");
+
     // #2943 modified by ngx-extended-pdf-viewer
-    const hasChanges = this.pdfDocument?.annotationStorage.size > 0 || !this.pageOrder.every((value, index, array) =>
-      index === 0 || value >= array[index - 1]);
-    await (hasChanges ? this.save(this.pageOrder) : this.download());
+    if (this.pdfThumbnailViewer?.hasStructuralChanges()) {
+      this.externalServices.reportTelemetry({
+        type: "pageOrganization",
+        data: { action: "save" },
+      });
+      await this.onSavePages({
+        data: this.pdfThumbnailViewer.getStructuralChanges(),
+      });
+    } else {
+      const hasChanges = this.pdfDocument?.annotationStorage.size > 0 || !this.pageOrder.every((value, index, array) =>
+        index === 0 || value >= array[index - 1]);
+      await (hasChanges ? this.save(this.pageOrder) : this.download());
+    }
     // #2943 end of modification by ngx-extended-pdf-viewer
     classList.remove("wait");
   },
@@ -1737,7 +1767,6 @@ appConfig: null,
 
     const pdfViewer = this.pdfViewer;
     pdfViewer.setDocument(pdfDocument);
-    this.pdfTextExtractor.setViewer(pdfViewer);
     const { firstPagePromise, onePageRendered, pagesPromise } = pdfViewer;
 
     this.pdfThumbnailViewer?.setDocument(pdfDocument);
@@ -2202,6 +2231,13 @@ appConfig: null,
     }
   },
 
+  _hasChanges() {
+    return (
+      this.pdfDocument?.annotationStorage.size > 0 ||
+      this.pdfThumbnailViewer?.hasStructuralChanges()
+    );
+  },
+
   /**
    * @private
    */
@@ -2217,15 +2253,11 @@ appConfig: null,
     const { annotationStorage } = pdfDocument;
 
     annotationStorage.onSetModified = () => {
-      window.addEventListener("beforeunload", beforeUnload);
-
       if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
         this._annotationStorageModified = true;
       }
     };
     annotationStorage.onResetModified = () => {
-      window.removeEventListener("beforeunload", beforeUnload);
-
       if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
         delete this._annotationStorageModified;
       }
@@ -2653,7 +2685,7 @@ appConfig: null,
     }
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
       eventBus._on(
-        "annotationeditorstateschanged",
+        "editingstateschanged",
         evt => externalServices.updateEditorStates(evt),
         opts
       );
@@ -2674,11 +2706,7 @@ appConfig: null,
       );
     }
     eventBus._on("pagesedited", this.onPagesEdited.bind(this), opts);
-    eventBus._on(
-      "savepageseditedpdf",
-      this.onSavePagesEditedPDF.bind(this),
-      opts
-    );
+    eventBus._on("saveextractedpages", this.onSavePages.bind(this), opts);
   },
 
   bindWindowEvents() {
@@ -2792,6 +2820,9 @@ appConfig: null,
       },
       { signal }
     );
+    window.addEventListener("beforeunload", onBeforeUnload.bind(this), {
+      signal,
+    });
 
     if (
       (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
@@ -2890,7 +2921,7 @@ appConfig: null,
     this.pdfViewer.onPagesEdited(data);
   },
 
-  async onSavePagesEditedPDF({ data: extractParams }) {
+  async onSavePages({ data: extractParams }) {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
       return;
     }
@@ -3467,6 +3498,15 @@ function closeEditorUndoBar(evt) {
   }
 }
 
+function onBeforeUnload(evt) {
+  if (this._hasChanges()) {
+    evt.preventDefault();
+    evt.returnValue = "";
+    return false;
+  }
+  return true;
+}
+
 function onClick(evt) {
   closeSecondaryToolbar.call(this, evt);
   closeEditorUndoBar.call(this, evt);
@@ -3874,6 +3914,7 @@ function onKeyDown(evt) {
   }
 }
 
+// #modified by ngx-extended-pdf-viewer
 /**
  * Checks if the viewer can capture the keyboard event without
  * ruining the user experience of the browser. In particular,
@@ -3897,6 +3938,7 @@ function viewerIsAllowedToCaptureKeyEvent(mainContainer) {
   }
   return true;
 }
+// #end of modification by ngx-extended-pdf-viewer
 
 // #2691 modified by ngx-extended-pdf-viewer
 function beforeUnload(evt) {
@@ -3914,7 +3956,6 @@ function beforeUnload(evt) {
 }
 // #2691 end of modification by ngx-extended-pdf-viewer
 
-
 // #2337 modified by ngx-extended-pdf-viewer
 PDFViewerApplication.printPdf = printPdf;
 PDFViewerApplication.PDFPrintServiceFactory = PDFPrintServiceFactory;
@@ -3927,5 +3968,6 @@ const ServiceWorkerOptions = {
 // #171 end
 PDFViewerApplication.serviceWorkerOptions = ServiceWorkerOptions;
 // #2337 end of modification by ngx-extended-pdf-viewer
+
 
 export { PDFViewerApplication };

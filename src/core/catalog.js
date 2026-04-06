@@ -29,6 +29,7 @@ import {
 import {
   collectActions,
   isNumberArray,
+  lookupRect,
   MissingDataException,
   PDF_VERSION_REGEXP,
   recoverJsURL,
@@ -325,7 +326,7 @@ class Catalog {
     return shadow(this, "documentOutline", obj);
   }
 
-  #readDocumentOutline() {
+  #readDocumentOutline(options = {}) {
     let obj = this.#catDict.get("Outlines");
     if (!(obj instanceof Dict)) {
       return null;
@@ -390,6 +391,10 @@ class Catalog {
         items: [],
       };
 
+      if (options.keepRawDict) {
+        outlineItem.rawDict = outlineDict;
+      }
+
       i.parent.items.push(outlineItem);
       obj = outlineDict.getRaw("First");
       if (obj instanceof Ref && !processed.has(obj)) {
@@ -403,6 +408,19 @@ class Catalog {
       }
     }
     return root.items.length > 0 ? root.items : null;
+  }
+
+  get documentOutlineForEditor() {
+    let obj = null;
+    try {
+      obj = this.#readDocumentOutline({ keepRawDict: true });
+    } catch (ex) {
+      if (ex instanceof MissingDataException) {
+        throw ex;
+      }
+      warn("Unable to read document outline.");
+    }
+    return shadow(this, "documentOutlineForEditor", obj);
   }
 
   get permissions() {
@@ -1551,6 +1569,105 @@ class Catalog {
    */
 
   /**
+   * Derive a destination array from a Structure Element reference.
+   * Walks the SE dict to find its page (Pg) and optional bounding box (A.BBox),
+   * then returns an XYZ destination array that can be used for navigation.
+   * @param {XRef} xref
+   * @param {Ref} seRef
+   * @returns {Array|null}
+   */
+  static #getDestFromStructElement(xref, seRef) {
+    const seDict = xref.fetchIfRef(seRef);
+    if (!(seDict instanceof Dict)) {
+      return null;
+    }
+
+    // Try to find the page reference for this structure element.
+    // Search order: the element itself, its descendants down to leaf nodes,
+    // then ancestor elements via the P entry (up).
+    let pageRef = null;
+
+    // Check the element directly.
+    const directPg = seDict.getRaw("Pg");
+    if (directPg instanceof Ref) {
+      pageRef = directPg;
+    }
+
+    // Walk down into descendants (BFS) until a Pg is found or leaves are
+    // reached (e.g. integer MCIDs or MCR/OBJR dicts without further K).
+    if (!pageRef) {
+      const queue = [seDict];
+      while (queue.length > 0 && !pageRef) {
+        const node = queue.shift();
+        const kids = node.get("K");
+        let kidsArr;
+        if (Array.isArray(kids)) {
+          kidsArr = kids;
+        } else if (kids) {
+          kidsArr = [kids];
+        } else {
+          continue;
+        }
+        for (const kid of kidsArr) {
+          const kidObj = xref.fetchIfRef(kid);
+          if (!(kidObj instanceof Dict)) {
+            continue; // integer MCID – leaf node, no Pg here
+          }
+          const pg = kidObj.getRaw("Pg");
+          if (pg instanceof Ref) {
+            pageRef = pg;
+            break;
+          }
+          queue.push(kidObj);
+        }
+      }
+    }
+
+    // Walk up the parent chain if still not found.
+    if (!pageRef) {
+      const MAX_DEPTH = 40;
+      let current = seDict;
+      for (let depth = 0; depth < MAX_DEPTH; depth++) {
+        const parentRaw = current.getRaw("P");
+        if (!(parentRaw instanceof Ref)) {
+          break;
+        }
+        const parentDict = xref.fetch(parentRaw);
+        if (!(parentDict instanceof Dict)) {
+          break;
+        }
+        if (isName(parentDict.get("Type"), "StructTreeRoot")) {
+          break;
+        }
+        const pg = parentDict.getRaw("Pg");
+        if (pg instanceof Ref) {
+          pageRef = pg;
+          break;
+        }
+        current = parentDict;
+      }
+    }
+
+    if (!pageRef) {
+      return null;
+    }
+
+    // Try to obtain precise coordinates from the element's attribute BBox.
+    let x = null,
+      y = null;
+    const attrs = seDict.get("A");
+    if (attrs instanceof Dict) {
+      const bbox = lookupRect(attrs.getArray("BBox"), null);
+      if (bbox) {
+        x = bbox[0];
+        y = bbox[3]; // top of the bbox in PDF page coordinates
+      }
+    }
+
+    return [pageRef, { name: "XYZ" }, x, y, null];
+  }
+
+  /**
    * Helper function used to parse the contents of destination dictionaries.
    * @param {ParseDestDictionaryParameters} params
    */
@@ -1779,6 +1896,35 @@ class Catalog {
         );
       } else if (isValidExplicitDest(dest)) {
         resultObj.dest = dest;
+      }
+    }
+
+    // Handle SE (Structure Element) entry: when no other destination has been
+    // found, derive one from the structure element's page and optional bbox.
+    if (
+      !resultObj.dest &&
+      !resultObj.url &&
+      !resultObj.action &&
+      !resultObj.attachment &&
+      !resultObj.setOCGState &&
+      !resultObj.resetForm
+    ) {
+      const seRef = destDict.getRaw("SE");
+      if (seRef instanceof Ref) {
+        try {
+          const seDest = Catalog.#getDestFromStructElement(
+            destDict.xref,
+            seRef
+          );
+          if (seDest) {
+            resultObj.dest = seDest;
+          }
+        } catch (ex) {
+          if (ex instanceof MissingDataException) {
+            throw ex;
+          }
+          info("SE parsing failed.");
+        }
       }
     }
   }

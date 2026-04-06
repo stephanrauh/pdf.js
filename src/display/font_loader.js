@@ -355,25 +355,29 @@ class FontLoader {
 }
 
 class FontFaceObject {
+  compiledGlyphs = Object.create(null);
+
   #fontData;
 
-  constructor(translatedData, inspectFont = null, extra, charProcOperatorList) {
-    this.compiledGlyphs = Object.create(null);
-    this.#fontData = translatedData;
+  constructor(translatedData, inspectFont = null, charProcOperatorList, extra) {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-      if (typeof this.disableFontFace !== "boolean") {
-        unreachable("disableFontFace must be available.");
-      }
-      if (typeof this.fontExtraProperties !== "boolean") {
-        unreachable("fontExtraProperties must be available.");
-      }
+      assert(
+        typeof translatedData.disableFontFace === "boolean",
+        "disableFontFace must be available."
+      );
+      assert(
+        typeof translatedData.fontExtraProperties === "boolean",
+        "fontExtraProperties must be available."
+      );
     }
+    this.#fontData = translatedData;
     this._inspectFont = inspectFont;
-    if (extra) {
-      Object.assign(this, extra);
-    }
+
     if (charProcOperatorList) {
       this.charProcOperatorList = charProcOperatorList;
+    }
+    if (extra) {
+      Object.assign(this, extra);
     }
   }
 
@@ -453,7 +457,7 @@ class FontFaceObject {
   }
 
   get disableFontFace() {
-    return this.#fontData.disableFontFace ?? false;
+    return this.#fontData.disableFontFace;
   }
 
   set disableFontFace(value) {
@@ -461,7 +465,7 @@ class FontFaceObject {
   }
 
   get fontExtraProperties() {
-    return this.#fontData.fontExtraProperties ?? false;
+    return this.#fontData.fontExtraProperties;
   }
 
   get isInvalidPDFjsFont() {
@@ -502,10 +506,6 @@ class FontFaceObject {
 
   get bbox() {
     return this.#fontData.bbox;
-  }
-
-  set bbox(bbox) {
-    shadow(this, "bbox", bbox);
   }
 
   get fontMatrix() {

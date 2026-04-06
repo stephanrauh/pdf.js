@@ -17,10 +17,15 @@
 /** @typedef {import("./event_utils").EventBus} EventBus */
 /** @typedef {import("./pdf_link_service.js").PDFLinkService} PDFLinkService */
 
-import { binarySearchFirstItem, scrollIntoView } from "./ui_utils.js";
 import { getCharacterType, getNormalizeWithNFKC } from "./pdf_find_utils.js";
+// #modified by ngx-extended-pdf-viewer
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
+// #end of modification by ngx-extended-pdf-viewer
+// #492 modified by ngx-extended-pdf-viewer
+import { binarySearchFirstItem, scrollIntoView } from "./ui_utils.js";
+// #492 end of modification by ngx-extended-pdf-viewer
 
+// #modified by ngx-extended-pdf-viewer
 /**
  * Search and replacements for ngx-extended-pdf-viewer
  *
@@ -28,6 +33,7 @@ import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
  * `#calculateMatch` -> `_calculateMatch`
  *
  */
+// #end of modification by ngx-extended-pdf-viewer
 
 const FindState = {
   FOUND: 0,
@@ -37,7 +43,9 @@ const FindState = {
 };
 
 const FIND_TIMEOUT = 250; // ms
+// #492 modified by ngx-extended-pdf-viewer
 const MATCH_SCROLL_OFFSET_TOP = -50; // px
+// #492 end of modification by ngx-extended-pdf-viewer
 
 const CHARACTERS_TO_NORMALIZE = {
   "\u2010": "-", // Hyphen
@@ -431,7 +439,9 @@ class PDFFindController {
 
   #visitedPagesCount = 0;
 
-  #copiedExtractTextPromises = null;
+  #copiedPageData = null;
+
+  #savedPageData = null;
 
   /**
    * @param {PDFFindControllerOptions} options
@@ -611,7 +621,6 @@ class PDFFindController {
   /**
    * @typedef {Object} PDFFindControllerScrollMatchIntoViewParams
    * @property {HTMLElement} element
-   * @property {number} selectedLeft
    * @property {number} pageIndex
    * @property {number} matchIndex
    */
@@ -620,12 +629,7 @@ class PDFFindController {
    * Scroll the current match into view.
    * @param {PDFFindControllerScrollMatchIntoViewParams}
    */
-  scrollMatchIntoView({
-    element = null,
-    selectedLeft = 0,
-    pageIndex = -1,
-    matchIndex = -1,
-  }) {
+  scrollMatchIntoView({ element = null, pageIndex = -1, matchIndex = -1 }) {
     // #2482 modified by ngx-extended-pdf-viewer
     if (this.#state?.dontScrollIntoView) {
       return;
@@ -642,13 +646,13 @@ class PDFFindController {
       //  return;
     }
     this._scrollMatches = false; // Ensure that scrolling only happens once.
-    const spot = {
-      top: MATCH_SCROLL_OFFSET_TOP,
-      left: selectedLeft,
-    };
-    /** #492 modified by ngx-extended-pdf-viewer */
-    scrollIntoView(element, spot, /* scrollMatches = */ true, this._pageViewMode === "infinite-scroll");
-    /** #492 end of modification */
+    // #492 modified by ngx-extended-pdf-viewer
+    if (this._pageViewMode === "infinite-scroll") {
+      scrollIntoView(element, { top: MATCH_SCROLL_OFFSET_TOP, left: 0 }, /* scrollMatches = */ true, /* infiniteScroll = */ true);
+    } else {
+      element.scrollIntoView({ block: "start", inline: "center" });
+    }
+    // #492 end of modification by ngx-extended-pdf-viewer
   }
 
   #reset() {
@@ -685,7 +689,7 @@ class PDFFindController {
     this._dirtyMatch = false;
     clearTimeout(this._findTimeout);
     this._findTimeout = null;
-    this.#copiedExtractTextPromises = null;
+    this.#copiedPageData = null;
 
     this._firstPageCapability = Promise.withResolvers();
   }
@@ -1255,32 +1259,85 @@ class PDFFindController {
     }
 
     if (type === "copy") {
-      this.#copiedExtractTextPromises = new Map();
+      const promises = new Map();
+      const contents = new Map();
+      const diffs = new Map();
+      const diacritics = new Map();
       for (const pageNum of pageNumbers) {
-        this.#copiedExtractTextPromises.set(
-          pageNum,
-          this._extractTextPromises[pageNum - 1]
-        );
+        promises.set(pageNum, this._extractTextPromises[pageNum - 1]);
+        contents.set(pageNum, this._pageContents[pageNum - 1]);
+        diffs.set(pageNum, this._pageDiffs[pageNum - 1]);
+        diacritics.set(pageNum, this._hasDiacritics[pageNum - 1]);
       }
+      this.#copiedPageData = { promises, contents, diffs, diacritics };
       return;
     }
 
-    this.#onFindBarClose();
+    if (type === "cancelCopy") {
+      this.#copiedPageData = null;
+      return;
+    }
+
+    if (type === "delete") {
+      this.#savedPageData = {
+        promises: this._extractTextPromises,
+        contents: this._pageContents,
+        diffs: this._pageDiffs,
+        diacritics: this._hasDiacritics,
+      };
+    }
+
+    if (type === "cancelDelete") {
+      this._extractTextPromises = this.#savedPageData.promises;
+      this._pageContents = this.#savedPageData.contents;
+      this._pageDiffs = this.#savedPageData.diffs;
+      this._hasDiacritics = this.#savedPageData.diacritics;
+      return;
+    }
+
+    if (type === "cleanSavedData") {
+      this.#savedPageData = null;
+      return;
+    }
+
+    // Cancel any pending find timeout and clear a pending resume page index
+    // synchronously. Calling #onFindBarClose() here would schedule its cleanup
+    // asynchronously.
+    if (this._findTimeout) {
+      clearTimeout(this._findTimeout);
+      this._findTimeout = null;
+    }
+    this._resumePageIdx = null;
     this._dirtyMatch = true;
-    const prevTextPromises = this._extractTextPromises;
-    const extractTextPromises = (this._extractTextPromises.length = []);
-    for (let i = 1, ii = pagesMapper.length; i <= ii; i++) {
+    const prevPromises = this._extractTextPromises;
+    const prevContents = this._pageContents;
+    const prevDiffs = this._pageDiffs;
+    const prevDiacritics = this._hasDiacritics;
+    const extractTextPromises = (this._extractTextPromises = []);
+    const pageContents = (this._pageContents = []);
+    const pageDiffs = (this._pageDiffs = []);
+    const hasDiacritics = (this._hasDiacritics = []);
+    for (let i = 1, ii = pagesMapper.pagesNumber; i <= ii; i++) {
       const prevPageNumber = pagesMapper.getPrevPageNumber(i);
       if (prevPageNumber < 0) {
+        const src = -prevPageNumber;
         extractTextPromises.push(
-          this.#copiedExtractTextPromises?.get(-prevPageNumber) ||
-            Promise.resolve()
+          this.#copiedPageData?.promises.get(src) || Promise.resolve()
         );
+        pageContents.push(this.#copiedPageData?.contents.get(src) ?? "");
+        pageDiffs.push(this.#copiedPageData?.diffs.get(src) ?? null);
+        hasDiacritics.push(this.#copiedPageData?.diacritics.get(src) ?? false);
         continue;
       }
       extractTextPromises.push(
-        prevTextPromises[prevPageNumber - 1] || Promise.resolve()
+        prevPromises[prevPageNumber - 1] || Promise.resolve()
       );
+      pageContents.push(prevContents[prevPageNumber - 1] ?? "");
+      pageDiffs.push(prevDiffs[prevPageNumber - 1] ?? null);
+      hasDiacritics.push(prevDiacritics[prevPageNumber - 1] ?? false);
+    }
+    if (this.#state) {
+      this.#nextMatch();
     }
   }
 

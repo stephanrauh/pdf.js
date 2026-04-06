@@ -54,7 +54,12 @@ class Sidebar {
    * @param {boolean} ltr
    * @param {boolean} isResizerOnTheLeft
    */
-  constructor({ sidebar, resizer, toggleButton }, ltr, isResizerOnTheLeft) {
+  constructor(
+    { sidebar, resizer, toggleButton },
+    ltr,
+    isResizerOnTheLeft,
+    globalAbortSignal
+  ) {
     // #modified by ngx-extended-pdf-viewer
     // Add null check for sidebar to support ngx-extended-pdf-viewer's custom HTML
     // where sidebar elements may not be present during initial render in some browsers (Firefox)
@@ -88,6 +93,9 @@ class Sidebar {
     // #end of modification by ngx-extended-pdf-viewer
     this._isOpen = false;
     sidebar.hidden = true;
+    globalAbortSignal?.addEventListener("abort", this.destroy.bind(this), {
+      once: true,
+    });
 
     this.#resizeObserver = new ResizeObserver(
       ([

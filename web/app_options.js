@@ -296,6 +296,11 @@ const defaultOptions = {
     value: true,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  enableNewBadge: {
+    /** @type {boolean} */
+    value: typeof PDFJSDev === "undefined" || PDFJSDev.test("MOZCENTRAL"),
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
   enableOptimizedPartialRendering: {
     /** @type {boolean} */
     value: false,
@@ -326,11 +331,14 @@ const defaultOptions = {
     value: true,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  // #2943 modified by ngx-extended-pdf-viewer
+  // Default to false (upstream gates this on TESTING which strips the option in GENERIC builds)
   enableSplitMerge: {
     /** @type {boolean} */
-    value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
+    value: false,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  // #2943 end of modification by ngx-extended-pdf-viewer
   pdfBackgroundColor: { // #2997 modified by ngx-extended-pdf-viewer
     /** @type {string} */
     value: "",
@@ -378,6 +386,20 @@ const defaultOptions = {
         ? "resource://pdf.js/web/images/"
         : "./images/",
     kind: OptionKind.VIEWER,
+  },
+  imagesRightClickMinSize: {
+    /** @type {number} */
+    value:
+      typeof PDFJSDev !== "undefined" &&
+      // Firefox mobile does not support right-clicking on images,
+      // see https://bugzilla.mozilla.org/show_bug.cgi?id=2014081.
+      // This option is disabled by default outside of MOZCENTRAL
+      // because it degrades the text selection experience in Chrome
+      // and Safari.
+      PDFJSDev.test("MOZCENTRAL && !GECKOVIEW")
+        ? 16
+        : -1,
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   maxCanvasPixels: {
     /** @type {number} */
@@ -506,8 +528,13 @@ const defaultOptions = {
   },
   enableHWA: {
     /** @type {boolean} */
-    value: typeof PDFJSDev !== "undefined" && !PDFJSDev.test("MOZCENTRAL"),
-    kind: OptionKind.API + OptionKind.VIEWER + OptionKind.PREFERENCE,
+    value: true,
+    kind: OptionKind.API + OptionKind.PREFERENCE,
+  },
+  enableWebGPU: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.API + OptionKind.PREFERENCE,
   },
   enableXfa: {
     /** @type {boolean} */

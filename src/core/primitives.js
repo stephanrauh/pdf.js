@@ -67,13 +67,18 @@ const nonSerializable = function nonSerializableClosure() {
 };
 
 class Dict {
+  __nonSerializable__ = nonSerializable; // Disable cloning of the Dict.
+
+  #map = new Map();
+
+  objId = null;
+
+  suppressEncryption = false;
+
+  xref;
+
   constructor(xref = null) {
-    // Map should only be used internally, use functions below to access.
-    this._map = new Map();
     this.xref = xref;
-    this.objId = null;
-    this.suppressEncryption = false;
-    this.__nonSerializable__ = nonSerializable; // Disable cloning of the Dict.
   }
 
   assignXref(newXref) {
@@ -81,87 +86,50 @@ class Dict {
   }
 
   get size() {
-    return this._map.size;
+    return this.#map.size;
+  }
+
+  #getValue(isAsync, key1, key2, key3) {
+    let value = this.#map.get(key1);
+    if (value === undefined && key2 !== undefined) {
+      if (
+        (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
+        key2.length < key1.length
+      ) {
+        unreachable("Dict.#getValue: Expected keys to be ordered by length.");
+      }
+      value = this.#map.get(key2);
+      if (value === undefined && key3 !== undefined) {
+        if (
+          (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
+          key3.length < key2.length
+        ) {
+          unreachable("Dict.#getValue: Expected keys to be ordered by length.");
+        }
+        value = this.#map.get(key3);
+      }
+    }
+    if (value instanceof Ref && this.xref) {
+      return isAsync
+        ? this.xref.fetchAsync(value, this.suppressEncryption)
+        : this.xref.fetch(value, this.suppressEncryption);
+    }
+    return value;
   }
 
   // Automatically dereferences Ref objects.
   get(key1, key2, key3) {
-    let value = this._map.get(key1);
-    if (value === undefined && key2 !== undefined) {
-      if (
-        (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
-        key2.length < key1.length
-      ) {
-        unreachable("Dict.get: Expected keys to be ordered by length.");
-      }
-      value = this._map.get(key2);
-      if (value === undefined && key3 !== undefined) {
-        if (
-          (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
-          key3.length < key2.length
-        ) {
-          unreachable("Dict.get: Expected keys to be ordered by length.");
-        }
-        value = this._map.get(key3);
-      }
-    }
-    if (value instanceof Ref && this.xref) {
-      return this.xref.fetch(value, this.suppressEncryption);
-    }
-    return value;
+    return this.#getValue(/* isAsync = */ false, key1, key2, key3);
   }
 
   // Same as get(), but returns a promise and uses fetchIfRefAsync().
   async getAsync(key1, key2, key3) {
-    let value = this._map.get(key1);
-    if (value === undefined && key2 !== undefined) {
-      if (
-        (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
-        key2.length < key1.length
-      ) {
-        unreachable("Dict.getAsync: Expected keys to be ordered by length.");
-      }
-      value = this._map.get(key2);
-      if (value === undefined && key3 !== undefined) {
-        if (
-          (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
-          key3.length < key2.length
-        ) {
-          unreachable("Dict.getAsync: Expected keys to be ordered by length.");
-        }
-        value = this._map.get(key3);
-      }
-    }
-    if (value instanceof Ref && this.xref) {
-      return this.xref.fetchAsync(value, this.suppressEncryption);
-    }
-    return value;
+    return this.#getValue(/* isAsync = */ true, key1, key2, key3);
   }
 
   // Same as get(), but dereferences all elements if the result is an Array.
   getArray(key1, key2, key3) {
-    let value = this._map.get(key1);
-    if (value === undefined && key2 !== undefined) {
-      if (
-        (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
-        key2.length < key1.length
-      ) {
-        unreachable("Dict.getArray: Expected keys to be ordered by length.");
-      }
-      value = this._map.get(key2);
-      if (value === undefined && key3 !== undefined) {
-        if (
-          (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
-          key3.length < key2.length
-        ) {
-          unreachable("Dict.getArray: Expected keys to be ordered by length.");
-        }
-        value = this._map.get(key3);
-      }
-    }
-    if (value instanceof Ref && this.xref) {
-      value = this.xref.fetch(value, this.suppressEncryption);
-    }
+    let value = this.#getValue(/* isAsync = */ false, key1, key2, key3);
 
     if (Array.isArray(value)) {
       value = value.slice(); // Ensure that we don't modify the Dict data.
@@ -176,20 +144,20 @@ class Dict {
 
   // No dereferencing.
   getRaw(key) {
-    return this._map.get(key);
+    return this.#map.get(key);
   }
 
   getKeys() {
-    return [...this._map.keys()];
+    return this.#map.keys();
   }
 
   // No dereferencing.
   getRawValues() {
-    return [...this._map.values()];
+    return this.#map.values();
   }
 
   getRawEntries() {
-    return this._map.entries();
+    return this.#map.entries();
   }
 
   set(key, value) {
@@ -200,7 +168,7 @@ class Dict {
         unreachable('Dict.set: The "value" cannot be undefined.');
       }
     }
-    this._map.set(key, value);
+    this.#map.set(key, value);
   }
 
   setIfNotExists(key, value) {
@@ -242,11 +210,11 @@ class Dict {
   }
 
   has(key) {
-    return this._map.has(key);
+    return this.#map.has(key);
   }
 
   *[Symbol.iterator]() {
-    for (const [key, value] of this._map) {
+    for (const [key, value] of this.#map) {
       yield [
         key,
         value instanceof Ref && this.xref
@@ -273,7 +241,7 @@ class Dict {
       if (!(dict instanceof Dict)) {
         continue;
       }
-      for (const [key, value] of dict._map) {
+      for (const [key, value] of dict.getRawEntries()) {
         let property = properties.get(key);
         if (property === undefined) {
           property = [];
@@ -289,20 +257,18 @@ class Dict {
     }
     for (const [name, values] of properties) {
       if (values.length === 1 || !(values[0] instanceof Dict)) {
-        mergedDict._map.set(name, values[0]);
+        mergedDict.set(name, values[0]);
         continue;
       }
       const subDict = new Dict(xref);
 
       for (const dict of values) {
-        for (const [key, value] of dict._map) {
-          if (!subDict._map.has(key)) {
-            subDict._map.set(key, value);
-          }
+        for (const [key, value] of dict.getRawEntries()) {
+          subDict.setIfNotExists(key, value);
         }
       }
       if (subDict.size > 0) {
-        mergedDict._map.set(name, subDict);
+        mergedDict.set(name, subDict);
       }
     }
     properties.clear();
@@ -312,17 +278,14 @@ class Dict {
 
   clone() {
     const dict = new Dict(this.xref);
-    for (const key of this.getKeys()) {
-      dict.set(key, this.getRaw(key));
+    for (const [key, value] of this.#map) {
+      dict.set(key, value);
     }
     return dict;
   }
 
   delete(key) {
-    // #2995 modified by ngx-extended-pdf-viewer
-    this._map.delete(key);
-    // #2995 end of modification by ngx-extended-pdf-viewer
-    delete this._map[key];
+    this.#map.delete(key);
   }
 }
 
@@ -380,10 +343,24 @@ class RefSet {
   }
 
   has(ref) {
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
+      !(ref instanceof Ref) &&
+      typeof ref !== "string"
+    ) {
+      unreachable('RefSet: Invalid "ref" value in has.');
+    }
     return this._set.has(ref.toString());
   }
 
   put(ref) {
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
+      !(ref instanceof Ref) &&
+      typeof ref !== "string"
+    ) {
+      unreachable('RefSet: Invalid "ref" value in put.');
+    }
     this._set.add(ref.toString());
   }
 
