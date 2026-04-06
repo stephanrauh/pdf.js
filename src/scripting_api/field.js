@@ -453,11 +453,9 @@ class Field extends PDFObject {
       return array;
     }
 
-    if (this._children === null) {
-      this._children = this._document.obj._getTerminalChildren(this._fieldPath);
-    }
-
-    return this._children;
+    return (this._children ??= this._document.obj._getTerminalChildren(
+      this._fieldPath
+    ));
   }
 
   getLock() {

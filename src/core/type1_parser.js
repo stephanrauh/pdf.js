@@ -79,13 +79,15 @@ const COMMAND_MAP = {
  *  the charStrings.
  */
 class Type1CharString {
-  constructor() {
-    this.width = 0;
-    this.lsb = 0;
-    this.flexing = false;
-    this.output = [];
-    this.stack = [];
-  }
+  width = 0;
+
+  lsb = 0;
+
+  flexing = false;
+
+  output = [];
+
+  stack = [];
 
   convert(encoded, subrs, seacAnalysisEnabled) {
     const count = encoded.length;

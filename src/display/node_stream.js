@@ -14,28 +14,19 @@
  */
 /* globals process */
 
-import { AbortException, assert, warn } from "../shared/util.js";
+import { AbortException, assert } from "../shared/util.js";
 import {
   BasePDFStream,
   BasePDFStreamRangeReader,
   BasePDFStreamReader,
 } from "../shared/base_pdf_stream.js";
 import { createResponseError } from "./network_utils.js";
+import { getArrayBuffer } from "./fetch_stream.js";
 
 if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
   throw new Error(
     'Module "./node_stream.js" shall not be used with MOZCENTRAL builds.'
   );
-}
-
-const urlRegex = /^[a-z][a-z0-9\-+.]+:/i;
-
-function parseUrlOrPath(sourceUrl) {
-  if (urlRegex.test(sourceUrl)) {
-    return new URL(sourceUrl);
-  }
-  const url = process.getBuiltinModule("url");
-  return new URL(url.pathToFileURL(sourceUrl));
 }
 
 function getReadableStream(readStream) {
@@ -54,23 +45,13 @@ function getReadableStream(readStream) {
   return polyfill.makeDefaultReadableStreamFromNodeReadable(readStream);
 }
 
-function getArrayBuffer(val) {
-  if (val instanceof Uint8Array) {
-    return val.buffer;
-  }
-  if (val instanceof ArrayBuffer) {
-    return val;
-  }
-  warn(`getArrayBuffer - unexpected data format: ${val}`);
-  return new Uint8Array(val).buffer;
-}
-
 class PDFNodeStream extends BasePDFStream {
   constructor(source) {
     super(source, PDFNodeStreamReader, PDFNodeStreamRangeReader);
-    this.url = parseUrlOrPath(source.url);
+    const { url } = source;
+
     assert(
-      this.url.protocol === "file:",
+      url.protocol === "file:",
       "PDFNodeStream only supports file:// URLs."
     );
   }
@@ -81,14 +62,13 @@ class PDFNodeStreamReader extends BasePDFStreamReader {
 
   constructor(stream) {
     super(stream);
-    const { disableRange, disableStream, length, rangeChunkSize } =
+    const { disableRange, disableStream, length, rangeChunkSize, url } =
       stream._source;
 
     this._contentLength = length;
     this._isStreamingSupported = !disableStream;
     this._isRangeSupported = !disableRange;
 
-    const url = stream.url;
     const fs = process.getBuiltinModule("fs");
     fs.promises
       .lstat(url)
@@ -117,7 +97,7 @@ class PDFNodeStreamReader extends BasePDFStreamReader {
       })
       .catch(error => {
         if (error.code === "ENOENT") {
-          error = createResponseError(/* status = */ 0, url.href);
+          error = createResponseError(/* status = */ 0, url);
         }
         this._headersCapability.reject(error);
       });
@@ -129,11 +109,8 @@ class PDFNodeStreamReader extends BasePDFStreamReader {
     if (done) {
       return { value, done };
     }
-    this._loaded += value.length;
-    this.onProgress?.({
-      loaded: this._loaded,
-      total: this._contentLength,
-    });
+    this._loaded += value.byteLength;
+    this._callOnProgress();
 
     return { value: getArrayBuffer(value), done: false };
   }
@@ -150,8 +127,8 @@ class PDFNodeStreamRangeReader extends BasePDFStreamRangeReader {
 
   constructor(stream, begin, end) {
     super(stream, begin, end);
+    const { url } = stream._source;
 
-    const url = stream.url;
     const fs = process.getBuiltinModule("fs");
     try {
       const readStream = fs.createReadStream(url, {

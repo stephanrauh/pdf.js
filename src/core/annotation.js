@@ -179,7 +179,7 @@ class AnnotationFactory {
 
     if (
       collectByType &&
-      !collectByType.has(AnnotationType[subtype.toUpperCase()])
+      !collectByType.has(AnnotationType[subtype?.toUpperCase()])
     ) {
       return null;
     }
@@ -668,7 +668,8 @@ function getTransformMatrix(rect, bbox, matrix) {
 
 class Annotation {
   constructor(params) {
-    const { dict, xref, annotationGlobals, ref, orphanFields } = params;
+    const { annotationGlobals, dict, orphanFields, ref, subtype, xref } =
+      params;
     const parentRef = orphanFields?.get(ref);
     if (parentRef) {
       dict.set("Parent", parentRef);
@@ -702,6 +703,7 @@ class Annotation {
 
     // Expose public properties using a data object.
     this.data = {
+      annotationType: AnnotationType[subtype?.toUpperCase()],
       annotationFlags: this.flags,
       borderStyle: this.borderStyle,
       color: this.color,
@@ -713,7 +715,7 @@ class Annotation {
       id: params.id,
       modificationDate: this.modificationDate,
       rect: this.rectangle,
-      subtype: params.subtype,
+      subtype,
       hasOwnCanvas: false,
       noRotate: !!(this.flags & AnnotationFlag.NOROTATE),
       noHTML: isLocked && isContentLocked,
@@ -1470,14 +1472,17 @@ class Annotation {
  * Contains all data regarding an annotation's border style.
  */
 class AnnotationBorderStyle {
-  constructor() {
-    this.width = 1;
-    this.rawWidth = 1;
-    this.style = AnnotationBorderStyleType.SOLID;
-    this.dashArray = [3];
-    this.horizontalCornerRadius = 0;
-    this.verticalCornerRadius = 0;
-  }
+  width = 1;
+
+  rawWidth = 1;
+
+  style = AnnotationBorderStyleType.SOLID;
+
+  dashArray = [3];
+
+  horizontalCornerRadius = 0;
+
+  verticalCornerRadius = 0;
 
   /**
    * Set the width.
@@ -1878,7 +1883,6 @@ class WidgetAnnotation extends Annotation {
     const data = this.data;
     this._needAppearances = params.needAppearances;
 
-    data.annotationType = AnnotationType.WIDGET;
     if (data.fieldName === undefined) {
       data.fieldName = this._constructFieldName(dict);
     }
@@ -3880,7 +3884,6 @@ class TextAnnotation extends MarkupAnnotation {
     this.data.noHTML = false;
 
     const { dict } = params;
-    this.data.annotationType = AnnotationType.TEXT;
 
     if (this.data.hasAppearance) {
       this.data.name = "NoIcon";
@@ -3905,7 +3908,6 @@ class LinkAnnotation extends Annotation {
     super(params);
 
     const { dict, annotationGlobals } = params;
-    this.data.annotationType = AnnotationType.LINK;
 
     // A link is never rendered on the main canvas so we must render its HTML
     // version.
@@ -3937,7 +3939,6 @@ class PopupAnnotation extends Annotation {
     super(params);
 
     const { dict } = params;
-    this.data.annotationType = AnnotationType.POPUP;
 
     // A pop-up is never rendered on the main canvas so we must render its HTML
     // version.
@@ -4030,7 +4031,6 @@ class FreeTextAnnotation extends MarkupAnnotation {
     this.data.noHTML = false;
 
     const { annotationGlobals, evaluatorOptions, xref } = params;
-    this.data.annotationType = AnnotationType.FREETEXT;
     this.setDefaultAppearance(params);
     this._hasAppearance = !!this.appearance;
 
@@ -4259,7 +4259,6 @@ class LineAnnotation extends MarkupAnnotation {
     super(params);
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.LINE;
     this.data.hasOwnCanvas = this.data.noRotate;
     this.data.noHTML = false;
 
@@ -4327,7 +4326,6 @@ class SquareAnnotation extends MarkupAnnotation {
     super(params);
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.SQUARE;
     this.data.hasOwnCanvas = this.data.noRotate;
     this.data.noHTML = false;
 
@@ -4376,7 +4374,6 @@ class CircleAnnotation extends MarkupAnnotation {
     super(params);
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.CIRCLE;
 
     if (!this.appearance) {
       // The default stroke color is black.
@@ -4440,7 +4437,6 @@ class PolylineAnnotation extends MarkupAnnotation {
     super(params);
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.POLYLINE;
     this.data.hasOwnCanvas = this.data.noRotate;
     this.data.noHTML = false;
     this.data.vertices = null;
@@ -4526,22 +4522,10 @@ class PolylineAnnotation extends MarkupAnnotation {
   }
 }
 
-class PolygonAnnotation extends PolylineAnnotation {
-  constructor(params) {
-    // Polygons are specific forms of polylines, so reuse their logic.
-    super(params);
+// Polygons are specific forms of polylines, so reuse their logic.
+class PolygonAnnotation extends PolylineAnnotation {}
 
-    this.data.annotationType = AnnotationType.POLYGON;
-  }
-}
-
-class CaretAnnotation extends MarkupAnnotation {
-  constructor(params) {
-    super(params);
-
-    this.data.annotationType = AnnotationType.CARET;
-  }
-}
+class CaretAnnotation extends MarkupAnnotation {}
 
 class InkAnnotation extends MarkupAnnotation {
   constructor(params) {
@@ -4551,7 +4535,6 @@ class InkAnnotation extends MarkupAnnotation {
     this.data.noHTML = false;
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.INK;
     this.data.inkLists = [];
     this.data.isEditable = !this.data.noHTML;
     // We want to be able to add mouse listeners to the annotation.
@@ -4829,7 +4812,6 @@ class HighlightAnnotation extends MarkupAnnotation {
     super(params);
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.HIGHLIGHT;
     this.data.isEditable = !this.data.noHTML;
     // We want to be able to add mouse listeners to the annotation.
     this.data.noHTML = false;
@@ -4973,7 +4955,6 @@ class UnderlineAnnotation extends MarkupAnnotation {
     super(params);
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.UNDERLINE;
 
     const quadPoints = (this.data.quadPoints = getQuadPoints(dict, null));
     if (quadPoints) {
@@ -5013,7 +4994,6 @@ class SquigglyAnnotation extends MarkupAnnotation {
     super(params);
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.SQUIGGLY;
 
     const quadPoints = (this.data.quadPoints = getQuadPoints(dict, null));
     if (quadPoints) {
@@ -5059,7 +5039,6 @@ class StrikeOutAnnotation extends MarkupAnnotation {
     super(params);
 
     const { dict, xref } = params;
-    this.data.annotationType = AnnotationType.STRIKEOUT;
 
     const quadPoints = (this.data.quadPoints = getQuadPoints(dict, null));
     if (quadPoints) {
@@ -5101,7 +5080,6 @@ class StampAnnotation extends MarkupAnnotation {
   constructor(params) {
     super(params);
 
-    this.data.annotationType = AnnotationType.STAMP;
     this.data.hasOwnCanvas = this.data.noRotate;
     this.data.isEditable = !this.data.noHTML;
     // We want to be able to add mouse listeners to the annotation.
@@ -5320,7 +5298,6 @@ class FileAttachmentAnnotation extends MarkupAnnotation {
     const { dict } = params;
     const file = new FileSpec(dict.get("FS"));
 
-    this.data.annotationType = AnnotationType.FILEATTACHMENT;
     this.data.hasOwnCanvas = this.data.noRotate;
     this.data.noHTML = false;
     this.data.file = file.serializable;

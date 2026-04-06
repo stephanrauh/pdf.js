@@ -2,7 +2,7 @@ import globals from "globals";
 
 import import_ from "eslint-plugin-import";
 import jasmine from "eslint-plugin-jasmine";
-import json from "eslint-plugin-json";
+import json from "@eslint/json";
 import noUnsanitized from "eslint-plugin-no-unsanitized";
 import perfectionist from "eslint-plugin-perfectionist";
 import prettierRecommended from "eslint-plugin-prettier/recommended";
@@ -26,11 +26,13 @@ const chromiumExtensionServiceWorkerFiles = [
 export default [
   {
     ignores: [
+      "package-lock.json",
       "**/build/",
       "**/l10n/",
       "**/docs/",
       "**/node_modules/",
       "external/bcmaps/",
+      "external/brotli/",
       "external/builder/fixtures/",
       "external/builder/fixtures_babel/",
       "external/openjpeg/",
@@ -52,7 +54,8 @@ export default [
 
   prettierRecommended,
   {
-    files: ["**/*.json"],
+    files: ["**/*.json", "**/.*.json"],
+    language: "json/json",
     ...json.configs.recommended,
   },
   {
@@ -115,9 +118,13 @@ export default [
             "pdfjs-lib",
             "pdfjs-web",
             "web",
+            "@csstools/postcss-light-dark-function",
             "fluent-bundle",
             "fluent-dom",
+            "postcss-dir-pseudo-class",
+            "postcss-nesting",
             "postcss-values-parser",
+            "stylelint",
             // See https://github.com/firebase/firebase-admin-node/discussions/1359.
             "eslint-plugin-perfectionist",
           ],
@@ -138,6 +145,7 @@ export default [
       "unicorn/no-unnecessary-array-flat-depth": "error",
       "unicorn/no-unnecessary-array-splice-count": "error",
       "unicorn/no-unnecessary-slice-end": "error",
+      "unicorn/no-useless-collection-argument": "error",
       "unicorn/no-useless-promise-resolve-reject": "error",
       "unicorn/no-useless-spread": "error",
       "unicorn/prefer-array-find": "error",
@@ -146,6 +154,8 @@ export default [
       "unicorn/prefer-array-index-of": "error",
       "unicorn/prefer-array-some": "error",
       "unicorn/prefer-at": "error",
+      "unicorn/prefer-class-fields": "error",
+      "unicorn/prefer-classlist-toggle": "error",
       "unicorn/prefer-date-now": "error",
       "unicorn/prefer-dom-node-append": "error",
       "unicorn/prefer-dom-node-remove": "error",
@@ -469,7 +479,7 @@ export default [
                                 Other
   \* ======================================================================== */
   {
-    files: ["gulpfile.mjs"],
+    files: ["gulpfile.mjs", "check_l10n.mjs"],
     languageOptions: { globals: globals.node },
   },
 ];

@@ -46,7 +46,7 @@
       }
 
       position: relative;
-      float: var(--inline-start);
+      float: inline-start;
       height: 0;
       width: 0;
       color: rgb(255 255 255 / 0.5);

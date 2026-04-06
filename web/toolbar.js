@@ -309,6 +309,12 @@ class Toolbar {
         value: this.value,
       });
     });
+    eventBus._on("pagesedited", ({ pagesMapper }) => {
+      const pagesCount = pagesMapper.pagesNumber;
+      if (pagesCount !== this.pagesCount) {
+        this.setPagesCount(pagesCount, this.hasPageLabels);
+      }
+    });
 
     scaleSelect.addEventListener("change", function () {
       if (this.value === "custom") {

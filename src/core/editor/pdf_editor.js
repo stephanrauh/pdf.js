@@ -74,33 +74,52 @@ class XRefWrapper {
 }
 
 class PDFEditor {
+  hasSingleFile = false;
+
+  currentDocument = null;
+
+  oldPages = [];
+
+  newPages = [];
+
+  xref = [null];
+
+  xrefWrapper = new XRefWrapper(this.xref);
+
+  newRefCount = 1;
+
+  namesDict = null;
+
+  version = "1.7";
+
+  pageLabels = null;
+
+  namedDestinations = new Map();
+
+  parentTree = new Map();
+
+  structTreeKids = [];
+
+  idTree = new Map();
+
+  classMap = new Dict();
+
+  roleMap = new Dict();
+
+  namespaces = new Map();
+
+  structTreeAF = [];
+
+  structTreePronunciationLexicon = [];
+
   constructor({ useObjectStreams = true, title = "", author = "" } = {}) {
-    this.hasSingleFile = false;
-    this.currentDocument = null;
-    this.oldPages = [];
-    this.newPages = [];
-    this.xref = [null];
-    this.xrefWrapper = new XRefWrapper(this.xref);
-    this.newRefCount = 1;
     [this.rootRef, this.rootDict] = this.newDict;
     [this.infoRef, this.infoDict] = this.newDict;
     [this.pagesRef, this.pagesDict] = this.newDict;
-    this.namesDict = null;
     this.useObjectStreams = useObjectStreams;
     this.objStreamRefs = useObjectStreams ? new Set() : null;
-    this.version = "1.7";
     this.title = title;
     this.author = author;
-    this.pageLabels = null;
-    this.namedDestinations = new Map();
-    this.parentTree = new Map();
-    this.structTreeKids = [];
-    this.idTree = new Map();
-    this.classMap = new Dict();
-    this.roleMap = new Dict();
-    this.namespaces = new Map();
-    this.structTreeAF = [];
-    this.structTreePronunciationLexicon = [];
   }
 
   /**

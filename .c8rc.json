@@ -1,0 +1,13 @@
+{
+  "reporter": ["text", "html", "lcov"],
+  "include": [
+    "build/lib-legacy/core/**/*.js",
+    "build/lib-legacy/display/**/*.js",
+    "build/lib-legacy/shared/**/*.js"
+  ],
+  "exclude": ["build/lib-legacy/test/**"],
+  "all": false,
+  "check-coverage": false,
+  "report-dir": "./build/coverage",
+  "temp-directory": "./build/.c8_output"
+}

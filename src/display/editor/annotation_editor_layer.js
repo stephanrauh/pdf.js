@@ -18,12 +18,12 @@
 /** @typedef {import("../display_utils.js").PageViewport} PageViewport */
 // eslint-disable-next-line max-len
 /** @typedef {import("../../../web/text_accessibility.js").TextAccessibilityManager} TextAccessibilityManager */
-/** @typedef {import("../../../web/interfaces").IL10n} IL10n */
 // eslint-disable-next-line max-len
 /** @typedef {import("../annotation_layer.js").AnnotationLayer} AnnotationLayer */
 /** @typedef {import("../draw_layer.js").DrawLayer} DrawLayer */
 // eslint-disable-next-line max-len
-/** @typedef {import("../src/display/struct_tree_layer_builder.js").StructTreeLayerBuilder} StructTreeLayerBuilder */
+/** @typedef {import("../../../web/struct_tree_layer_builder.js").StructTreeLayerBuilder} StructTreeLayerBuilder */
+/** @typedef {import("../../../web/l10n.js").L10n} L10n */
 
 import {
   AnnotationEditorPrefix,
@@ -47,7 +47,7 @@ import { StampEditor } from "./stamp.js";
  * @property {boolean} enabled
  * @property {TextAccessibilityManager} [accessibilityManager]
  * @property {number} pageIndex
- * @property {IL10n} l10n
+ * @property {L10n} l10n
  * @property {AnnotationLayer} [annotationLayer]
  * @property {HTMLDivElement} [textLayer]
  * @property {DrawLayer} drawLayer
@@ -180,7 +180,44 @@ class AnnotationEditorLayer {
   }
 
   updatePageIndex(newPageIndex) {
+    for (const editor of this.#allEditorsIterator) {
+      editor.updatePageIndex(newPageIndex);
+    }
+
     this.pageIndex = newPageIndex;
+    this.#uiManager.addLayer(this);
+  }
+
+  /**
+   * Clones all annotation editors from another layer into this layer.
+   * This is typically used when duplicating a page - the editors from the
+   * source page are serialized and then deserialized into the new page's layer.
+   *
+   * @param {AnnotationEditorLayer} clonedFrom - The source annotation editor
+   *   layer to clone editors from. If null or undefined, no action is taken.
+   * @returns {Promise<void>} A promise that resolves when all editors have been
+   *   cloned and added to this layer.
+   */
+  async setClonedFrom(clonedFrom) {
+    if (!clonedFrom) {
+      return;
+    }
+    const promises = [];
+    for (const editor of clonedFrom.#allEditorsIterator) {
+      const serialized = editor.serialize(/* isForCopying = */ true);
+      if (!serialized) {
+        continue;
+      }
+      serialized.isCopy = false;
+      promises.push(
+        this.deserialize(serialized).then(deserialized => {
+          if (deserialized) {
+            this.addOrRebuild(deserialized);
+          }
+        })
+      );
+    }
+    await Promise.all(promises);
   }
 
   get isEmpty() {

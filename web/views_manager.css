@@ -23,7 +23,7 @@
   &.viewsManagerOpen {
     #viewsManager {
       visibility: visible;
-      inset-inline-start: 1px;
+      inset-inline-start: 8px;
     }
 
     #viewerContainer:not(.pdfPresentationMode) {
@@ -53,11 +53,12 @@
   --pages-selected-icon: url(images/pages_selected.svg);
   --spinner-icon: url(images/altText_spinner.svg);
 
-  --sidebar-bg-color: light-dark(rgb(255 255 255 / 0.92), rgb(35 34 43 / 0.92));
+  --sidebar-bg-color: light-dark(rgb(255 255 255 / 0.92), rgb(66 65 77 / 0.92));
   --sidebar-backdrop-filter: blur(7px);
   --sidebar-width: 230px;
   --sidebar-min-width: min-content;
   --sidebar-max-width: 50vw;
+  --sidebar-block-padding: 8px;
 
   --text-color: light-dark(#15141a, #fbfbfe);
   --button-fg: var(--text-color);
@@ -86,16 +87,22 @@
   --header-shadow:
     0 0.25px 0.75px -0.75px light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.2)),
     0 2px 6px -6px light-dark(rgb(0 0 0 / 0.1), rgb(0 0 0 / 0.4));
+  --header-bg: light-dark(rgb(255 255 255 / 0.92), #42414e);
   --image-outline: none;
   --image-border-width: 6px;
   --image-border-color: light-dark(#cfcfd8, #3a3944);
   --image-hover-border-color: #bfbfc9;
   --image-current-border-color: var(--button-focus-outline-color);
   --image-current-focused-outline-color: var(--image-hover-border-color);
-  --image-page-number-bg: light-dark(#f0f0f4, #23222b);
+  --image-page-number-bg: light-dark(#f0f0f4, #42414d);
   --image-page-number-fg: var(--text-color);
+  --image-page-number-border-color: transparent;
+  --image-hover-page-number-bg: var(--image-page-number-bg);
+  --image-hover-page-number-fg: var(--image-page-number-fg);
   --image-current-page-number-bg: var(--image-current-border-color);
   --image-current-page-number-fg: light-dark(#fff, #15141a);
+  --image-current-hover-page-number-bg: var(--image-current-page-number-bg);
+  --image-current-hover-page-number-fg: var(--image-current-page-number-fg);
   --image-shadow:
     0 0.375px 1.5px 0 light-dark(rgb(0 0 0 / 0.05), rgb(0 0 0 / 0.2)),
     0 0 0 1px var(--image-border-color),
@@ -122,6 +129,7 @@
       calc(3 * var(--image-border-width) / 2) var(--image-current-border-color);
   --image-dragging-shadow: 0 0 0 var(--image-border-width)
     var(--image-current-border-color);
+  --multiple-dragging-indicator-bg: var(--indicator-color);
   --multiple-dragging-text-color: light-dark(#fbfbfe, #15141a);
 
   @media screen and (forced-colors: active) {
@@ -145,24 +153,33 @@
     --status-warning-bg: none;
     --indicator-warning-color: CanvasText;
     --header-shadow: none;
-    --image-shadow: 0 0 0 1px CanvasText;
-    --image-outline: 1px solid CanvasText;
-    --image-border-color: CanvasText;
+    --image-shadow: none;
+    --image-outline: 1px solid ButtonText;
+    --image-focus-outline-color: CanvasText;
     --image-hover-border-color: SelectedItem;
-    --image-current-border-color: ButtonBorder;
+    --image-hover-page-number-bg: SelectedItemText;
+    --image-hover-page-number-fg: SelectedItem;
+    --image-current-page-number-bg: ButtonText;
+    --image-current-page-number-fg: ButtonFace;
+    --image-current-border-color: ButtonText;
     --image-current-focused-outline-color: var(--image-hover-border-color);
+    --image-current-hover-page-number-bg: SelectedItem;
+    --image-current-hover-page-number-fg: SelectedItemText;
     --image-page-number-bg: ButtonFace;
-    --image-page-number-fg: CanvasText;
+    --image-page-number-fg: ButtonText;
+    --image-page-number-border-color: var(--image-page-number-fg);
     --multiple-dragging-bg: Canvas;
+    --multiple-dragging-indicator-bg: ButtonBorder;
+    --multiple-dragging-text-color: Canvas;
   }
 
   display: flex;
   padding-bottom: 16px;
   flex-direction: column;
   align-items: flex-start;
+  inset-block-start: calc(100% + var(--sidebar-block-padding));
   height: calc(
-    var(--viewer-container-height) - var(--toolbar-height) -
-      var(--doorhanger-height)
+    var(--viewer-container-height) - 2 * var(--sidebar-block-padding)
   );
   position: absolute;
 
@@ -174,7 +191,7 @@
   transition-timing-function: var(--sidebar-transition-timing-function);
 
   .sidebarResizer {
-    inset-inline-start: 100%;
+    inset-inline-start: calc(100% + 4px);
   }
 
   .viewsManagerButton {
@@ -228,12 +245,14 @@
     width: 100%;
     box-shadow: var(--header-shadow);
     flex: 0 0 auto;
+    background-color: var(--header-bg);
 
     .viewsManagerLabel {
-      flex: 1 0 0;
+      flex: 0;
       color: var(--text-color);
       text-align: center;
       height: fit-content;
+      width: fit-content;
       user-select: none;
 
       font: menu;
@@ -270,13 +289,6 @@
             mask-repeat: no-repeat;
             mask-image: var(--views-manager-button-icon);
             background-color: var(--button-fg);
-
-            &:hover {
-              background-color: var(--button-hover-fg) !important;
-            }
-            &:active {
-              background-color: var(--button-active-fg) !important;
-            }
           }
 
           &::after {
@@ -289,11 +301,18 @@
             mask-position: center;
             mask-image: var(--views-manager-button-arrow-icon);
             background-color: var(--button-fg);
+          }
 
-            &:hover {
+          &:hover {
+            &::before,
+            &::after {
               background-color: var(--button-hover-fg) !important;
             }
-            &:active {
+          }
+
+          &:active {
+            &::before,
+            &::after {
               background-color: var(--button-active-fg) !important;
             }
           }
@@ -321,6 +340,8 @@
       }
 
       #viewsManagerAddFileButton {
+        visibility: hidden;
+
         background: var(--button-no-bg);
         width: 32px;
         height: 32px;
@@ -416,18 +437,20 @@
               mask-position: center;
               mask-image: var(--manage-button-icon);
               background-color: var(--button-fg);
+            }
 
-              &:hover {
-                background-color: var(--button-hover-fg) !important;
-              }
-              &:active {
-                background-color: var(--button-active-fg) !important;
-              }
+            &:hover::after {
+              background-color: var(--button-hover-fg) !important;
+            }
+
+            &:active::after {
+              background-color: var(--button-active-fg) !important;
             }
           }
 
           > .popupMenu {
-            width: auto;
+            width: 100%;
+            min-width: fit-content;
             z-index: 1;
           }
         }
@@ -526,7 +549,7 @@
       align-items: center;
       justify-content: space-evenly;
       padding: 20px 32px;
-      gap: 20px;
+      gap: 44px;
       width: 100%;
       box-sizing: border-box;
       position: relative;
@@ -535,7 +558,7 @@
         cursor: grabbing;
 
         > .thumbnail {
-          > .thumbnailImage:hover {
+          > .thumbnailImageContainer:hover {
             cursor: grabbing;
 
             &:not([aria-current="page"]) {
@@ -557,31 +580,71 @@
         }
       }
 
+      &.pasteMode {
+        > .thumbnail {
+          flex-direction: column;
+
+          > input {
+            display: none;
+          }
+
+          > .thumbnailPasteButton {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            border-radius: 16px;
+            min-height: 24px;
+            padding: 4px 16px;
+
+            font: menu;
+            font-size: 13px;
+            font-style: normal;
+            font-weight: 400;
+            line-height: normal;
+          }
+        }
+      }
+
+      &:not(.pasteMode) > .thumbnail > .thumbnailPasteButton {
+        display: none;
+      }
+
       > .thumbnail {
+        --input-dim: 16px;
+        --gap-between-input-and-thumbnail: 16px;
+
         display: inline-flex;
-        justify-content: center;
+        justify-content: flex-end;
         align-items: center;
-        gap: 16px;
-        width: auto;
+        flex-direction: row-reverse;
+        gap: var(--gap-between-input-and-thumbnail);
+        width: 190px;
         height: auto;
         position: relative;
         scroll-margin-top: 20px;
 
-        &:not(.isDragging)::after {
+        .thumbnailPasteButton {
+          padding: 8px 0;
+          text-align: center;
+        }
+
+        &:not(.isDragging) > .thumbnailImageContainer::after {
           content: attr(page-number);
           border-radius: 8px;
+          border: 1px solid var(--image-page-number-border-color);
           background-color: var(--image-page-number-bg);
           color: var(--image-page-number-fg);
           position: absolute;
           bottom: 5px;
-          inset-inline-end: calc(var(--thumbnail-width) / 2);
+          inset-inline-end: 50%;
           min-width: 32px;
           height: 16px;
           text-align: center;
+          box-sizing: content-box;
           translate: calc(var(--dir-factor) * 50%);
 
           font: menu;
-          font-size: 13px;
+          font-size: 12px;
           font-style: normal;
           font-weight: 400;
           line-height: normal;
@@ -590,9 +653,11 @@
           user-select: none;
         }
 
-        &:has([aria-current="page"]):not(.isDragging)::after {
+        &:has([aria-current="page"]):not(.isDragging)
+          > .thumbnailImageContainer::after {
           background-color: var(--image-current-page-number-bg);
           color: var(--image-current-page-number-fg);
+          outline: 1px solid var(--image-current-border-color);
         }
 
         &.isDragging > input {
@@ -601,9 +666,12 @@
 
         > input {
           margin: 0;
+          width: var(--input-dim);
+          height: var(--input-dim);
+          accent-color: var(--indicator-color);
         }
 
-        > .thumbnailImage {
+        > .thumbnailImageContainer {
           --thumbnail-dragging-scale: 1.4;
 
           width: var(--thumbnail-width);
@@ -613,6 +681,17 @@
           box-sizing: content-box;
           outline: var(--image-outline);
           user-select: none;
+          position: relative;
+
+          img {
+            width: 100%;
+            height: 100%;
+            border: none;
+            border-radius: 8px;
+            outline: none;
+            user-select: none;
+            pointer-events: none;
+          }
 
           &.missingThumbnailImage {
             content-visibility: hidden;
@@ -621,23 +700,87 @@
           &:hover {
             cursor: pointer;
             box-shadow: var(--image-hover-shadow);
+
+            &::after {
+              background-color: var(--image-hover-page-number-bg);
+              color: var(--image-hover-page-number-fg);
+            }
+
+            @media screen and (forced-colors: active) {
+              /* box-shadow isn't rendered in HCM */
+              box-shadow: none;
+              outline: var(--image-border-width) var(--image-hover-border-color)
+                solid;
+            }
           }
 
           &:focus-visible {
             &:not([aria-current="page"]) {
               box-shadow: var(--image-hover-shadow);
               outline: none;
+
+              @media screen and (forced-colors: active) {
+                /* box-shadow isn't rendered in HCM */
+                box-shadow: none;
+                outline: var(--image-border-width)
+                  var(--image-focus-outline-color) solid;
+              }
             }
 
             &[aria-current="page"] {
               outline: var(--image-border-width) solid
                 var(--image-current-focused-outline-color);
               outline-offset: var(--image-border-width);
+
+              @media screen and (forced-colors: active) {
+                /* box-shadow isn't rendered in HCM */
+                box-shadow: none;
+                outline: var(--image-border-width)
+                  var(--image-current-border-color) solid;
+                outline-offset: 0;
+
+                > img {
+                  outline: var(--image-border-width)
+                    var(--image-focus-outline-color) solid;
+                  outline-offset: var(--image-border-width);
+                }
+              }
+            }
+
+            @media screen and (forced-colors: active) {
+              /* box-shadow isn't rendered in HCM */
+              box-shadow: none;
+              outline: var(--image-border-width)
+                var(--image-current-border-color) solid;
+
+              &:hover > img {
+                outline: var(--image-border-width)
+                  var(--image-hover-border-color) solid;
+                outline-offset: var(--image-border-width);
+              }
             }
           }
 
           &[aria-current="page"] {
             box-shadow: var(--image-current-shadow);
+
+            &:hover::after {
+              background-color: var(--image-current-hover-page-number-bg);
+              color: var(--image-current-hover-page-number-fg);
+            }
+
+            @media screen and (forced-colors: active) {
+              /* box-shadow isn't rendered in HCM */
+              box-shadow: none;
+              outline: var(--image-border-width)
+                var(--image-current-border-color) solid;
+
+              &:hover > img {
+                outline: var(--image-border-width)
+                  var(--image-hover-border-color) solid;
+                outline-offset: var(--image-border-width);
+              }
+            }
           }
 
           &.placeholder {
@@ -658,7 +801,12 @@
             &.multiple {
               box-shadow: var(--image-multiple-dragging-shadow);
 
-              > img {
+              @media screen and (forced-colors: active) {
+                forced-color-adjust: none;
+                box-shadow: var(--image-multiple-dragging-shadow);
+              }
+
+              > .thumbnailImageContainer {
                 position: absolute;
                 top: 0;
                 left: 0;
@@ -674,7 +822,7 @@
               &::after {
                 content: attr(data-multiple-count);
                 border-radius: calc(8px * var(--thumbnail-dragging-scale));
-                background-color: var(--indicator-color);
+                background-color: var(--multiple-dragging-indicator-bg);
                 color: var(--multiple-dragging-text-color);
                 position: absolute;
                 inset-block-end: calc(4px * var(--thumbnail-dragging-scale));

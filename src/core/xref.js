@@ -683,10 +683,10 @@ class XRef {
       // iterate over empty entries so we use the `in` operator instead of
       // using for..of on entries() or a for with the array length.
       for (const num in this.entries) {
-        if (!Object.hasOwn(this.entries, num)) {
+        const entry = this.entries[num];
+        if (!entry) {
           continue;
         }
-        const entry = this.entries[num];
         const ref = Ref.get(parseInt(num), entry.gen);
         let obj;
 
@@ -695,7 +695,6 @@ class XRef {
         } catch {
           continue;
         }
-
         if (obj instanceof BaseStream) {
           obj = obj.dict;
         }

@@ -22,6 +22,7 @@ import autoprefixer from "autoprefixer";
 import babel from "@babel/core";
 import { buildPrefsSchema } from "./external/chromium/prefs.mjs";
 import crypto from "crypto";
+import { finished } from "stream/promises";
 import fs from "fs";
 import gulp from "gulp";
 import hljs from "highlight.js";
@@ -39,6 +40,7 @@ import { preprocess } from "./external/builder/builder.mjs";
 import relative from "metalsmith-html-relative";
 import rename from "gulp-rename";
 import replace from "gulp-replace";
+import sourcemaps from "gulp-sourcemaps";
 import stream from "stream";
 import TerserPlugin from "terser-webpack-plugin";
 import Vinyl from "vinyl";
@@ -81,7 +83,7 @@ const config = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
 
 const ENV_TARGETS = [
   "last 2 versions",
-  "Chrome >= 110",
+  "Chrome >= 118",
   "Firefox ESR",
   "Safari >= 15.0",
   "Node >= 20",
@@ -99,7 +101,7 @@ const AUTOPREFIXER_CONFIG = {
 const BABEL_TARGETS = ENV_TARGETS.join(", ");
 
 const BABEL_PRESET_ENV_OPTS = Object.freeze({
-  corejs: "3.47.0",
+  corejs: "3.48.0",
   exclude: ["web.structured-clone"],
   shippedProposals: true,
   useBuiltIns: "usage",
@@ -235,7 +237,7 @@ function createWebpackAlias(defines) {
     libraryAlias["display-fetch_stream"] = "src/display/fetch_stream.js";
     libraryAlias["display-network"] = "src/display/network.js";
 
-    viewerAlias["web-download_manager"] = "web/download_manager.js";
+    viewerAlias["web-download_manager"] = "web/chromecom.js";
     viewerAlias["web-external_services"] = "web/chromecom.js";
     viewerAlias["web-null_l10n"] = "web/l10n.js";
     viewerAlias["web-preferences"] = "web/chromecom.js";
@@ -750,6 +752,15 @@ function runTests(testsName, { bot = false, xfaOnly = false } = {}) {
     if (process.argv.includes("--headless")) {
       args.push("--headless");
     }
+    if (process.argv.includes("--coverage")) {
+      args.push("--coverage");
+    }
+    if (process.argv.includes("--coverage-output")) {
+      args.push(
+        "--coverageOutput",
+        process.argv[process.argv.indexOf("--coverage-output") + 1]
+      );
+    }
 
     const testProcess = startNode(args, { cwd: TEST_DIR, stdio: "inherit" });
     testProcess.on("close", function (code) {
@@ -831,6 +842,28 @@ gulp.task("default", function (done) {
     }
     console.log("  " + taskName);
   }
+  done();
+});
+
+gulp.task("release-brotli", async function (done) {
+  const hashIndex = process.argv.indexOf("--hash");
+  if (hashIndex === -1 || hashIndex + 1 >= process.argv.length) {
+    throw new Error('Missing "--hash <commit-hash>" argument.');
+  }
+  console.log();
+  console.log("### Getting Brotli js file for release");
+
+  const OUTPUT_DIR = "./external/brotli/";
+  const hash = process.argv[hashIndex + 1];
+  const url = `https://raw.githubusercontent.com/google/brotli/${hash}/js/decode.js`;
+  const outputPath = OUTPUT_DIR + "decode.js";
+  const res = await fetch(url);
+  const fileStream = fs.createWriteStream(outputPath, { flags: "w" });
+  await finished(stream.Readable.fromWeb(res.body).pipe(fileStream));
+  fileStream.end();
+
+  console.log(`Brotli js file saved to: ${outputPath}`);
+
   done();
 });
 
@@ -1316,10 +1349,6 @@ function createDefaultPrefsFile() {
   return createStringSource(defaultFileName, buf.join("\n"));
 }
 
-function replaceMozcentralCSS() {
-  return replace(/var\(--(inline-(?:start|end))\)/g, "$1");
-}
-
 gulp.task(
   "mozcentral",
   gulp.series(
@@ -1397,7 +1426,6 @@ gulp.task(
               autoprefixer(MOZCENTRAL_AUTOPREFIXER_CONFIG),
             ])
           )
-          .pipe(replaceMozcentralCSS())
           .pipe(gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")),
 
         preprocessCSS("web/viewer-geckoview.css", gvDefines)
@@ -1407,7 +1435,6 @@ gulp.task(
               autoprefixer(MOZCENTRAL_AUTOPREFIXER_CONFIG),
             ])
           )
-          .pipe(replaceMozcentralCSS())
           .pipe(gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")),
 
         gulp
@@ -1553,27 +1580,13 @@ gulp.task("types", function (done) {
 });
 
 function buildLibHelper(bundleDefines, inputStream, outputDir) {
-  function preprocessLib(content) {
-    const skipBabel = bundleDefines.SKIP_BABEL;
-    content = babel.transform(content, {
-      sourceType: "module",
-      presets: skipBabel
-        ? undefined
-        : [
-            [
-              "@babel/preset-env",
-              { ...BABEL_PRESET_ENV_OPTS, loose: false, modules: false },
-            ],
-          ],
-      plugins: [[babelPluginPDFJSPreprocessor, ctx]],
-      targets: BABEL_TARGETS,
-    }).code;
-    content = content.replaceAll(
-      /(\sfrom\s".*?)(?:\/src)(\/[^"]*"?;)$/gm,
-      (all, prefix, suffix) => prefix + suffix
-    );
-    return licenseHeaderLibre + content;
-  }
+  const licenseHeader = fs
+    .readFileSync("./src/license_header.js")
+    .toString()
+    .split("\n")
+    .slice(1, -2)
+    .map(line => line.replace(/^\s*\*\s?/, ""));
+
   const ctx = {
     rootPath: __dirname,
     defines: bundleDefines,
@@ -1594,12 +1607,82 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       "web-null_l10n": "../web/genericl10n.js",
     },
   };
-  const licenseHeaderLibre = fs
-    .readFileSync("./src/license_header_libre.js")
-    .toString();
-  return inputStream
-    .pipe(transform("utf8", preprocessLib))
-    .pipe(gulp.dest(outputDir));
+  const enableSourceMaps = bundleDefines.TESTING;
+
+  function preprocessLib(file, _enc, callback) {
+    const skipBabel = bundleDefines.SKIP_BABEL;
+
+    if (file.isNull()) {
+      return callback(null, file);
+    }
+
+    if (file.isStream()) {
+      return callback(new Error("Streaming not supported"));
+    }
+
+    try {
+      // Calculate where the output file will be
+      const outputFilePath = path.join(__dirname, outputDir, file.relative);
+      const outputFileDir = path.dirname(outputFilePath);
+      // Calculate relative path from output directory to source file
+      const relativeSourcePath = path.relative(outputFileDir, file.path);
+
+      const result = babel.transform(file.contents.toString(), {
+        sourceType: "module",
+        presets: skipBabel
+          ? undefined
+          : [
+              [
+                "@babel/preset-env",
+                { ...BABEL_PRESET_ENV_OPTS, loose: false, modules: false },
+              ],
+            ],
+        plugins: [
+          [babelPluginPDFJSPreprocessor, ctx],
+          [
+            "add-header-comment",
+            {
+              header: licenseHeader,
+            },
+          ],
+        ],
+        targets: BABEL_TARGETS,
+        sourceMaps: enableSourceMaps,
+        sourceFileName: relativeSourcePath,
+      });
+
+      let code = result.code;
+      code = code.replaceAll(
+        /(\sfrom\s".*?)(?:\/src)(\/[^"]*"?;)$/gm,
+        (all, prefix, suffix) => prefix + suffix
+      );
+
+      file.contents = Buffer.from(code);
+      // Attach the source map to the file for gulp-sourcemaps
+      if (result.map) {
+        file.sourceMap = result.map;
+      }
+
+      return callback(null, file);
+    } catch (err) {
+      return callback(err);
+    }
+  }
+
+  let pipeline = inputStream;
+  if (enableSourceMaps) {
+    pipeline = pipeline.pipe(sourcemaps.init({ loadMaps: true }));
+  }
+  pipeline = pipeline.pipe(
+    new stream.Transform({
+      objectMode: true,
+      transform: preprocessLib,
+    })
+  );
+  if (enableSourceMaps) {
+    pipeline = pipeline.pipe(sourcemaps.write("."));
+  }
+  return pipeline.pipe(gulp.dest(outputDir));
 }
 
 function buildLib(defines, dir) {
@@ -1629,6 +1712,7 @@ function buildLib(defines, dir) {
     gulp.src("external/openjpeg/*.js", { base: "openjpeg/", encoding: false }),
     gulp.src("external/qcms/*.js", { base: "qcms/", encoding: false }),
     gulp.src("external/jbig2/*.js", { base: "jbig2/", encoding: false }),
+    gulp.src("external/brotli/*.js", { base: "brotli/", encoding: false }),
   ]);
 
   return buildLibHelper(bundleDefines, inputStream, dir);
@@ -1967,15 +2051,40 @@ gulp.task(
     "generic-legacy",
     "lib-legacy",
     function runUnitTestCli(done) {
-      const options = [
-        "node_modules/jasmine/bin/jasmine",
-        "JASMINE_CONFIG_PATH=test/unit/clitests.json",
-      ];
-      const jasmineProcess = startNode(options, { stdio: "inherit" });
+      const useCoverage = process.argv.includes("--coverage");
+
+      if (useCoverage) {
+        console.log("\n### Running unit tests with code coverage");
+      }
+
+      let jasmineProcess;
+      if (useCoverage) {
+        const options = [
+          "node_modules/c8/bin/c8.js",
+          "node",
+          "--max-http-header-size=80000",
+          "node_modules/jasmine/bin/jasmine",
+          "JASMINE_CONFIG_PATH=test/unit/clitests.json",
+        ];
+        jasmineProcess = spawn("node", options, { stdio: "inherit" });
+      } else {
+        const options = [
+          "--enable-source-maps",
+          "node_modules/jasmine/bin/jasmine",
+          "JASMINE_CONFIG_PATH=test/unit/clitests.json",
+        ];
+        jasmineProcess = startNode(options, { stdio: "inherit" });
+      }
+
       jasmineProcess.on("close", function (code) {
         if (code !== 0) {
           done(new Error("Unit tests failed."));
           return;
+        }
+        if (useCoverage) {
+          console.log(
+            "\n### Code coverage report generated in ./build/coverage directory"
+          );
         }
         done();
       });
@@ -2198,6 +2307,21 @@ gulp.task("importl10n", async function () {
   await downloadL10n(L10N_DIR);
 });
 
+gulp.task("check_l10n", function (done) {
+  console.log("\n### Checking for unused l10n IDs");
+
+  const checkProcess = startNode(["external/check_l10n/check_l10n.mjs"], {
+    stdio: "inherit",
+  });
+  checkProcess.on("close", function (code) {
+    if (code !== 0) {
+      done(new Error("check_l10n failed."));
+      return;
+    }
+    done();
+  });
+});
+
 function ghPagesPrepare() {
   console.log("\n### Creating web site");
 
@@ -2300,7 +2424,7 @@ function packageJson() {
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
     optionalDependencies: {
-      "@napi-rs/canvas": "^0.1.88",
+      "@napi-rs/canvas": "^0.1.95",
       "node-readable-to-web-readable-stream": "^0.4.2",
     },
     browser: {
@@ -2315,7 +2439,7 @@ function packageJson() {
       url: `git+${DIST_GIT_URL}`,
     },
     engines: {
-      node: ">=20.16.0 || >=22.3.0",
+      node: ">=20.19.0 || >=22.13.0 || >=24",
     },
     scripts: {},
   };

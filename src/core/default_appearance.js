@@ -294,7 +294,7 @@ class FakeUnicodeFont {
     descendantFont.set("DW", 1000);
 
     const widths = [];
-    const chars = [...this.widths.entries()].sort();
+    const chars = [...this.widths].sort();
     let currentChar = null;
     let currentWidths = null;
     for (const [char, width] of chars) {

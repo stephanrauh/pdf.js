@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { shadow, unreachable } from "../shared/util.js";
+import { makeMap, shadow, unreachable } from "../shared/util.js";
 import { AnnotationEditor } from "./editor/editor.js";
 import { MurmurHash3_64 } from "../shared/murmurhash3.js";
 
@@ -35,15 +35,17 @@ class AnnotationStorage {
 
   #storage = new Map();
 
-  constructor() {
-    // Callbacks to signal when the modification state is set or reset.
-    // This is used by the viewer to only bind on `beforeunload` if forms
-    // are actually edited to prevent doing so unconditionally since that
-    // can have undesirable effects.
-    this.onSetModified = null;
-    this.onResetModified = null;
-    this.onAnnotationEditor = null;
+  // Callbacks to signal when the modification state is set or reset.
+  // This is used by the viewer to only bind on `beforeunload` if forms
+  // are actually edited to prevent doing so unconditionally since that
+  // can have undesirable effects.
+  onSetModified = null;
 
+  onResetModified = null;
+
+  onAnnotationEditor = null;
+
+  constructor() {
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       // For testing purposes.
       Object.defineProperty(this, "_setValues", {
@@ -258,13 +260,8 @@ class AnnotationStorage {
         if (key === "type") {
           continue;
         }
-        let counters = map.get(key);
-        if (!counters) {
-          counters = new Map();
-          map.set(key, counters);
-        }
-        const count = counters.get(val) ?? 0;
-        counters.set(val, count + 1);
+        const counters = map.getOrInsertComputed(key, makeMap);
+        counters.set(val, (counters.get(val) ?? 0) + 1);
       }
     }
     if (numberOfDeletedComments > 0 || numberOfEditedComments > 0) {
@@ -333,15 +330,21 @@ class AnnotationStorage {
  * contents. (Necessary since printing is triggered synchronously in browsers.)
  */
 class PrintAnnotationStorage extends AnnotationStorage {
-  #serializable;
+  #serializable = SerializableEmpty;
 
   constructor(parent) {
     super();
-    const { map, hash, transfer } = parent.serializable;
+
+    const { serializable } = parent;
+    if (serializable === SerializableEmpty) {
+      return;
+    }
+    const { map, hash, transfer } = serializable;
     // Create a *copy* of the data, since Objects are passed by reference in JS.
     const clone = structuredClone(map, transfer ? { transfer } : null);
-
-    this.#serializable = { map: clone, hash, transfer };
+    // The `PrintAnnotationStorage` instance is re-used for all pages,
+    // hence we cannot transfer the data since that breaks printing.
+    this.#serializable = { map: clone, hash, transfer: [] };
   }
 
   /**

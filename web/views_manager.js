@@ -14,7 +14,6 @@
  */
 
 /** @typedef {import("./event_utils.js").EventBus} EventBus */
-/** @typedef {import("./interfaces.js").IL10n} IL10n */
 
 import {
   docStyle,
@@ -36,7 +35,7 @@ const UI_NOTIFICATION_CLASS = "pdfSidebarNotification";
  * @typedef {Object} PDFSidebarOptions
  * @property {PDFSidebarElements} elements - The DOM elements.
  * @property {EventBus} eventBus - The application event bus.
- * @property {IL10n} l10n - The localization service.
+ * @property {L10n} l10n - The localization service.
  */
 
 /**
@@ -72,6 +71,9 @@ const UI_NOTIFICATION_CLASS = "pdfSidebarNotification";
 class ViewsManager extends Sidebar {
   static #l10nDescription = null;
 
+  #hasAnimations = !window.matchMedia("(prefers-reduced-motion: reduce)")
+    .matches;
+
   /**
    * @param {PDFSidebarOptions} options
    */
@@ -89,10 +91,12 @@ class ViewsManager extends Sidebar {
       outlinesView,
       attachmentsView,
       layersView,
+      viewsManagerAddFileButton,
       viewsManagerCurrentOutlineButton,
       viewsManagerSelectorButton,
       viewsManagerSelectorOptions,
       viewsManagerHeaderLabel,
+      viewsManagerStatus,
     },
     eventBus,
     l10n,
@@ -133,8 +137,10 @@ class ViewsManager extends Sidebar {
     this.attachmentsView = attachmentsView;
     this.layersView = layersView;
 
+    this.viewsManagerAddFileButton = viewsManagerAddFileButton;
     this.viewsManagerCurrentOutlineButton = viewsManagerCurrentOutlineButton;
     this.viewsManagerHeaderLabel = viewsManagerHeaderLabel;
+    this.viewsManagerStatus = viewsManagerStatus;
 
     this.eventBus = eventBus;
 
@@ -266,8 +272,14 @@ class ViewsManager extends Sidebar {
         return;
     }
 
-    // #modified by ngx-extended-pdf-viewer
-    // These elements may not exist in ngx-extended-pdf-viewer's HTML, add null checks for backward compatibility
+    // #3170 modified by ngx-extended-pdf-viewer
+    // These elements may not exist in ngx-extended-pdf-viewer's HTML, add null checks
+    if (this.viewsManagerStatus) {
+      this.viewsManagerStatus.hidden = view !== SidebarView.THUMBS;
+    }
+    if (this.viewsManagerAddFileButton) {
+      this.viewsManagerAddFileButton.hidden = view !== SidebarView.THUMBS;
+    }
     if (this.viewsManagerCurrentOutlineButton) {
       this.viewsManagerCurrentOutlineButton.hidden = view !== SidebarView.OUTLINE;
     }
@@ -277,7 +289,7 @@ class ViewsManager extends Sidebar {
         ViewsManager.#l10nDescription[titleL10nId] || ""
       );
     }
-    // #end of modification by ngx-extended-pdf-viewer
+    // #3170 end of modification by ngx-extended-pdf-viewer
 
     // Update the active view *after* it has been validated above,
     // in order to prevent setting it to an invalid state.
@@ -328,15 +340,20 @@ class ViewsManager extends Sidebar {
     toggleExpandedBtn(this.toggleButton, true);
     this.switchView(this.active);
 
-    // Changing `hidden` above may cause a reflow which would prevent the
-    // CSS transition from being applied correctly, so we need to delay
-    // adding the relevant CSS classes.
-    queueMicrotask(() => {
-      this.outerContainer.classList.add(
-        "viewsManagerMoving",
-        "viewsManagerOpen"
-      );
-    });
+    if (this.#hasAnimations) {
+      // Changing `hidden` above may cause a reflow which would prevent the
+      // CSS transition from being applied correctly, so we need to delay
+      // adding the relevant CSS classes.
+      queueMicrotask(() => {
+        this.outerContainer.classList.add(
+          "viewsManagerMoving",
+          "viewsManagerOpen"
+        );
+      });
+    } else {
+      this.outerContainer.classList.add("viewsManagerOpen");
+      this.eventBus.dispatch("resize", { source: this });
+    }
     if (this.active === SidebarView.THUMBS) {
       this.onUpdateThumbnails();
     }
@@ -417,16 +434,19 @@ class ViewsManager extends Sidebar {
   #addEventListeners() {
     const { eventBus, outerContainer } = this;
 
-    // #modified by ngx-extended-pdf-viewer
-    // Add null checks for all elements to support ngx-extended-pdf-viewer's custom HTML
-    // which may not have all the new viewsManager elements
-    this.sidebarContainer?.addEventListener("transitionend", evt => {
-      if (evt.target === this.sidebarContainer) {
-        outerContainer.classList.remove("viewsManagerMoving");
-        // Ensure that rendering is triggered after opening/closing the sidebar.
-        eventBus.dispatch("resize", { source: this });
-      }
-    });
+    // #3170 modified by ngx-extended-pdf-viewer
+    // Add null check for sidebarContainer to support ngx-extended-pdf-viewer's custom HTML
+    if (this.#hasAnimations && this.sidebarContainer) {
+      this.sidebarContainer.addEventListener("transitionend", evt => {
+        if (evt.target === this.sidebarContainer) {
+          outerContainer.classList.remove("viewsManagerMoving");
+          // Ensure that rendering is triggered after opening/closing the
+          // sidebar.
+          eventBus.dispatch("resize", { source: this });
+        }
+      });
+    }
+    // #3170 end of modification by ngx-extended-pdf-viewer
 
     // Buttons for switching views.
     this.thumbnailButton?.addEventListener("click", () => {

@@ -55,8 +55,7 @@ class DOMWasmFactory extends BaseWasmFactory {
    * @ignore
    */
   async _fetch(url) {
-    const data = await fetchData(url, /* type = */ "arraybuffer");
-    return new Uint8Array(data);
+    return fetchData(url, /* type = */ "bytes");
   }
 }
 

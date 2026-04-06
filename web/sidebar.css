@@ -29,6 +29,7 @@
   --sidebar-max-width: 632px;
   --sidebar-width: 239px;
   --resizer-width: 4px;
+  --resizer-shift: calc(0px - var(--resizer-width) - 2px);
   --resizer-hover-bg-color: light-dark(#0062fa, #00cadb);
 
   @media screen and (forced-colors: active) {
@@ -49,6 +50,7 @@
   max-width: var(--sidebar-max-width);
   backdrop-filter: var(--sidebar-backdrop-filter);
   box-sizing: border-box;
+  position: relative;
 
   .sidebarResizer {
     width: var(--resizer-width);
@@ -56,9 +58,11 @@
     forced-color-adjust: none;
     cursor: ew-resize;
     position: absolute;
-    inset-block: calc(var(--sidebar-padding) + var(--sidebar-border-radius));
-    inset-inline-start: calc(0px - var(--resizer-width) / 2);
-    transition: background-color 0.5s ease-in-out;
+    inset-block: 0;
+    inset-inline-start: var(--resizer-shift);
+    transition:
+      background-color 0.5s ease-in-out,
+      border-color 0.5s ease-in-out;
     box-sizing: border-box;
     border: 1px solid transparent;
     border-block-width: 0;
@@ -66,6 +70,7 @@
 
     &:hover {
       background-color: var(--resizer-hover-bg-color);
+      border-color: white;
     }
     &:focus-visible {
       background-color: var(--resizer-hover-bg-color);

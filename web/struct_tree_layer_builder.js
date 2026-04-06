@@ -15,7 +15,7 @@
 
 /** @typedef {import("../src/display/api").PDFPageProxy} PDFPageProxy */
 
-import { FeatureTest, shadow } from "pdfjs-lib";
+import { FeatureTest, makeMap, shadow } from "pdfjs-lib";
 import { removeNullCharacters } from "./ui_utils.js";
 
 const PDF_ROLE_TO_HTML_ROLE = {
@@ -61,8 +61,8 @@ const PDF_ROLE_TO_HTML_ROLE = {
   TR: "row",
   TH: "columnheader",
   TD: "cell",
-  THead: "columnheader",
-  TBody: null,
+  THead: "rowgroup",
+  TBody: "rowgroup",
   TFoot: null,
   // Standard structure type Caption
   Caption: null,
@@ -251,12 +251,9 @@ class StructTreeLayerBuilder {
       const label = removeNullCharacters(alt);
       for (const child of structElement.children) {
         if (child.type === "annotation") {
-          let attrs = this.#elementAttributes.get(child.id);
-          if (!attrs) {
-            attrs = new Map();
-            this.#elementAttributes.set(child.id, attrs);
-          }
-          attrs.set("aria-label", label);
+          this.#elementAttributes
+            .getOrInsertComputed(child.id, makeMap)
+            .set("aria-label", label);
           added = true;
         }
       }
@@ -353,7 +350,7 @@ class StructTreeLayerBuilder {
     }
   }
 
-  #walk(node) {
+  #walk(node, parentNodes = []) {
     if (!node) {
       return null;
     }
@@ -378,7 +375,14 @@ class StructTreeLayerBuilder {
         element.setAttribute("role", "heading");
         element.setAttribute("aria-level", match[1]);
       } else if (PDF_ROLE_TO_HTML_ROLE[role]) {
-        element.setAttribute("role", PDF_ROLE_TO_HTML_ROLE[role]);
+        element.setAttribute(
+          "role",
+          role === "TH" &&
+            parentNodes.at(-1)?.role === "TR" &&
+            parentNodes.at(-2)?.role === "TBody"
+            ? "rowheader" // TH inside TR itself in TBody is a rowheader.
+            : PDF_ROLE_TO_HTML_ROLE[role]
+        );
       }
       if (role === "Figure" && this.#addImageInTextLayer(node, element)) {
         return element;
@@ -423,9 +427,11 @@ class StructTreeLayerBuilder {
         // parent node to avoid creating an extra span.
         this.#setAttributes(node.children[0], element);
       } else {
+        parentNodes.push(node);
         for (const kid of node.children) {
-          element.append(this.#walk(kid));
+          element.append(this.#walk(kid, parentNodes));
         }
+        parentNodes.pop();
       }
     }
     return element;

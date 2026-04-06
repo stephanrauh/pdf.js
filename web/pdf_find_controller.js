@@ -15,7 +15,7 @@
 
 /** @typedef {import("../src/display/api").PDFDocumentProxy} PDFDocumentProxy */
 /** @typedef {import("./event_utils").EventBus} EventBus */
-/** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
+/** @typedef {import("./pdf_link_service.js").PDFLinkService} PDFLinkService */
 
 import { binarySearchFirstItem, scrollIntoView } from "./ui_utils.js";
 import { getCharacterType, getNormalizeWithNFKC } from "./pdf_find_utils.js";
@@ -414,7 +414,7 @@ function getOriginalIndex(diffs, pos, len) {
 
 /**
  * @typedef {Object} PDFFindControllerOptions
- * @property {IPDFLinkService} linkService - The navigation/linking service.
+ * @property {PDFLinkService} linkService - The navigation/linking service.
  * @property {EventBus} eventBus - The application event bus.
  * @property {boolean} [updateMatchesCountOnProgress] - True if the matches
  *   count must be updated on progress or only when the last page is reached.
@@ -430,6 +430,8 @@ class PDFFindController {
   #updateMatchesCountOnProgress = true;
 
   #visitedPagesCount = 0;
+
+  #copiedExtractTextPromises = null;
 
   /**
    * @param {PDFFindControllerOptions} options
@@ -683,6 +685,7 @@ class PDFFindController {
     this._dirtyMatch = false;
     clearTimeout(this._findTimeout);
     this._findTimeout = null;
+    this.#copiedExtractTextPromises = null;
 
     this._firstPageCapability = Promise.withResolvers();
   }
@@ -1246,21 +1249,37 @@ class PDFFindController {
     }
   }
 
-  #onPagesEdited({ pagesMapper }) {
+  #onPagesEdited({ pagesMapper, type, pageNumbers }) {
     if (this._extractTextPromises.length === 0) {
       return;
     }
+
+    if (type === "copy") {
+      this.#copiedExtractTextPromises = new Map();
+      for (const pageNum of pageNumbers) {
+        this.#copiedExtractTextPromises.set(
+          pageNum,
+          this._extractTextPromises[pageNum - 1]
+        );
+      }
+      return;
+    }
+
     this.#onFindBarClose();
     this._dirtyMatch = true;
     const prevTextPromises = this._extractTextPromises;
     const extractTextPromises = (this._extractTextPromises.length = []);
-    for (let i = 0, ii = pagesMapper.length; i < ii; i++) {
-      const prevPageIndex = pagesMapper.getPrevPageNumber(i + 1) - 1;
-      if (prevPageIndex === -1) {
+    for (let i = 1, ii = pagesMapper.length; i <= ii; i++) {
+      const prevPageNumber = pagesMapper.getPrevPageNumber(i);
+      if (prevPageNumber < 0) {
+        extractTextPromises.push(
+          this.#copiedExtractTextPromises?.get(-prevPageNumber) ||
+            Promise.resolve()
+        );
         continue;
       }
       extractTextPromises.push(
-        prevTextPromises[prevPageIndex] || Promise.resolve()
+        prevTextPromises[prevPageNumber - 1] || Promise.resolve()
       );
     }
   }

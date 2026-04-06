@@ -14,7 +14,7 @@
  */
 
 /** @typedef {import("./event_utils").EventBus} EventBus */
-/** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
+/** @typedef {import("./pdf_link_service.js").PDFLinkService} PDFLinkService */
 
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { isValidRotation, parseQueryString } from "./ui_utils.js";
@@ -30,7 +30,7 @@ const UPDATE_VIEWAREA_TIMEOUT = 1000; // milliseconds
 
 /**
  * @typedef {Object} PDFHistoryOptions
- * @property {IPDFLinkService} linkService - The navigation/linking service.
+ * @property {PDFLinkService} linkService - The navigation/linking service.
  * @property {EventBus} eventBus - The application event bus.
  */
 

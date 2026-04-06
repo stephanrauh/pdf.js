@@ -14,7 +14,6 @@
  * limitations under the License.
  */
 
-/** @typedef {import("./interfaces.js").IL10n} IL10n */
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/api.js").PDFDocumentProxy} PDFDocumentProxy */
 // eslint-disable-next-line max-len
@@ -36,7 +35,6 @@ import {
   normalizeWheelEventDirection,
   parseQueryString,
   ProgressBar,
-  RenderingStates,
   ScrollMode,
   SidebarView,
   SpreadMode,
@@ -94,6 +92,7 @@ import { PdfTextExtractor } from "./pdf_text_extractor.js";
 import { PDFThumbnailViewer } from "web-pdf_thumbnail_viewer";
 import { PDFViewer } from "./pdf_viewer.js";
 import { Preferences } from "web-preferences";
+import { RenderingStates } from "./renderable_view.js";
 import { SecondaryToolbar } from "web-secondary_toolbar";
 import { SignatureManager } from "web-signature_manager";
 import { Toolbar } from "web-toolbar";
@@ -166,7 +165,7 @@ appConfig: null,
   secondaryToolbar: null,
   /** @type {EventBus} */
   eventBus: null,
-  /** @type {IL10n} */
+  /** @type {L10n} */
   l10n: null,
   /** @type {AnnotationEditorParams} */
   annotationEditorParams: null,
@@ -660,6 +659,7 @@ appConfig: null,
         enableHWA,
         enableSplitMerge: AppOptions.get("enableSplitMerge"),
         manageMenu: appConfig.viewsManager.manageMenu,
+        addFileButton: appConfig.viewsManager.viewsManagerAddFileButton,
       });
       renderingQueue.setThumbnailViewer(this.pdfThumbnailViewer);
     }
@@ -2675,11 +2675,6 @@ appConfig: null,
     }
     eventBus._on("pagesedited", this.onPagesEdited.bind(this), opts);
     eventBus._on(
-      "beforepagesedited",
-      this.onBeforePagesEdited.bind(this),
-      opts
-    );
-    eventBus._on(
       "savepageseditedpdf",
       this.onSavePagesEditedPDF.bind(this),
       opts
@@ -2891,30 +2886,18 @@ appConfig: null,
     await Promise.all([this.l10n?.destroy(), this.close()]);
   },
 
-  onBeforePagesEdited(data) {
-    this.pdfViewer.onBeforePagesEdited(data);
-  },
-
   onPagesEdited(data) {
     this.pdfViewer.onPagesEdited(data);
   },
 
-  async onSavePagesEditedPDF({
-    data: { includePages, excludePages, pageIndices },
-  }) {
+  async onSavePagesEditedPDF({ data: extractParams }) {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
       return;
     }
     if (!this.pdfDocument) {
       return;
     }
-    const pageInfo = {
-      document: null, // For now, no merge.
-      includePages,
-      excludePages,
-      pageIndices,
-    };
-    const modifiedPdfBytes = await this.pdfDocument.extractPages([pageInfo]);
+    const modifiedPdfBytes = await this.pdfDocument.extractPages(extractParams);
     if (!modifiedPdfBytes) {
       console.error(
         "Something wrong happened when saving the edited PDF.\nPlease file a bug."
@@ -2982,10 +2965,7 @@ appConfig: null,
 };
 
 initCom(PDFViewerApplication);
-
-if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
-  PDFPrintServiceFactory.initGlobals(PDFViewerApplication);
-}
+PDFPrintServiceFactory.initGlobals(PDFViewerApplication);
 
 if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
   const HOSTED_VIEWER_ORIGINS = new Set([

@@ -91,12 +91,10 @@ function toNumberArray(arr) {
 
 class PDFFunction {
   static getSampleArray(size, outputSize, bps, stream) {
-    let i, ii;
-    let length = 1;
-    for (i = 0, ii = size.length; i < ii; i++) {
-      length *= size[i];
+    let length = outputSize;
+    for (const s of size) {
+      length *= s;
     }
-    length *= outputSize;
 
     const array = new Array(length);
     let codeSize = 0;
@@ -106,7 +104,7 @@ class PDFFunction {
 
     const strBytes = stream.getBytes((length * bps + 7) / 8);
     let strIdx = 0;
-    for (i = 0; i < length; i++) {
+    for (let i = 0; i < length; i++) {
       while (codeSize < bps) {
         codeBuf <<= 8;
         codeBuf |= strBytes[strIdx++];
@@ -330,14 +328,8 @@ class PDFFunction {
       }
 
       // encode value into domain of function
-      let dmin = domain[0];
-      if (i > 0) {
-        dmin = bounds[i - 1];
-      }
-      let dmax = domain[1];
-      if (i < bounds.length) {
-        dmax = bounds[i];
-      }
+      const dmin = i > 0 ? bounds[i - 1] : domain[0];
+      const dmax = i < length ? bounds[i] : domain[1];
 
       const rmin = encode[2 * i];
       const rmax = encode[2 * i + 1];
@@ -414,17 +406,11 @@ class PDFFunction {
       const stack = evaluator.execute(input);
       const stackIndex = stack.length - numOutputs;
       for (i = 0; i < numOutputs; i++) {
-        value = stack[stackIndex + i];
-        let bound = range[i * 2];
-        if (value < bound) {
-          value = bound;
-        } else {
-          bound = range[i * 2 + 1];
-          if (value > bound) {
-            value = bound;
-          }
-        }
-        output[i] = value;
+        output[i] = MathClamp(
+          stack[stackIndex + i],
+          range[i * 2],
+          range[i * 2 + 1]
+        );
       }
       if (cache_available > 0) {
         cache_available--;
@@ -836,9 +822,7 @@ class AstVariableDefinition extends AstNode {
 }
 
 class ExpressionBuilderVisitor {
-  constructor() {
-    this.parts = [];
-  }
+  parts = [];
 
   visitArgument(arg) {
     this.parts.push(

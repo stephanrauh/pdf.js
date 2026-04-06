@@ -956,7 +956,6 @@ class AnnotationEditorUIManager {
       evt => this.updateParams(evt.type, evt.value),
       { signal }
     );
-    eventBus._on("pagesedited", this.onPagesEdited.bind(this), { signal });
     window.addEventListener(
       "pointerdown",
       () => {
@@ -971,6 +970,10 @@ class AnnotationEditorUIManager {
       },
       { capture: true, signal }
     );
+    window.addEventListener("beforeunload", this.#beforeUnload.bind(this), {
+      capture: true,
+      signal,
+    });
     this.#addSelectionListener();
     this.#addDragAndDropListeners();
     this.#addKeyboardManager();
@@ -1268,28 +1271,18 @@ class AnnotationEditorUIManager {
     }
   }
 
-  onPagesEdited({ pagesMapper }) {
-    for (const editor of this.#allEditors.values()) {
-      editor.updatePageIndex(
-        pagesMapper.getPrevPageNumber(editor.pageIndex + 1) - 1
-      );
-    }
-    const allLayers = this.#allLayers;
-    const newAllLayers = (this.#allLayers = new Map());
-    for (const [pageIndex, layer] of allLayers) {
-      const prevPageIndex = pagesMapper.getPrevPageNumber(pageIndex + 1) - 1;
-      if (prevPageIndex === -1) {
-        // TODO: handle the case where the deletion of the page has been undone.
-        layer.destroy();
-        continue;
-      }
-      newAllLayers.set(prevPageIndex, layer);
-      layer.updatePageIndex(prevPageIndex);
-    }
-  }
-
   onPageChanging({ pageNumber }) {
     this.#currentPageIndex = pageNumber - 1;
+  }
+
+  deletePage(id) {
+    for (const editor of this.getEditors(id)) {
+      editor.remove();
+    }
+    this.#allLayers.delete(id);
+    if (this.#currentPageIndex === id) {
+      this.#currentPageIndex = 0;
+    }
   }
 
   focusMainContainer() {
@@ -1404,6 +1397,11 @@ class AnnotationEditorUIManager {
 
   commentSelection(methodOfCreation = "") {
     this.highlightSelection(methodOfCreation, /* comment */ true);
+  }
+
+  #beforeUnload(e) {
+    this.commitOrRemove();
+    this.currentLayer?.endDrawingSession(/* isAborted = */ false);
   }
 
   #displayFloatingToolbar() {

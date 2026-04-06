@@ -25,6 +25,7 @@ import {
   getVerbosityLevel,
   info,
   isNodeJS,
+  makeObj,
   MathClamp,
   RenderingIntentFlag,
   setVerbosityLevel,
@@ -236,6 +237,9 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  *    The default value is {DOMFilterFactory}.
  * @property {boolean} [enableHWA] - Enables hardware acceleration for
  *   rendering. The default value is `false`.
+ * @property {Object} [pagesMapper] - The pages mapper that will be used to map
+ *   page ids and page numbers. It's used when the page order is changed or some
+ *   pages are removed, cloned, etc.
  */
 
 /**
@@ -359,6 +363,7 @@ function getDocument(src = {}) {
       : DOMFilterFactory);
   const enableHWA = src.enableHWA === true;
   const useWasm = src.useWasm !== false;
+  const pagesMapper = src.pagesMapper || new PagesMapper();
 
   // Parameters whose default values depend on other parameters.
   const length = rangeTransport ? rangeTransport.length : (src.length ?? NaN);
@@ -534,7 +539,8 @@ function getDocument(src = {}) {
           task,
           networkStream,
           transportParams,
-          transportFactory
+          transportFactory,
+          pagesMapper
         );
         task._transport = transport;
         messageHandler.send("Ready", null);
@@ -662,8 +668,6 @@ class PDFDataRangeTransport {
 
   #progressiveReadListeners = [];
 
-  #progressListeners = [];
-
   #rangeListeners = [];
 
   /**
@@ -682,6 +686,18 @@ class PDFDataRangeTransport {
     this.initialData = initialData;
     this.progressiveDone = progressiveDone;
     this.contentDispositionFilename = contentDispositionFilename;
+
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      Object.defineProperty(this, "onDataProgress", {
+        value: () => {
+          deprecated(
+            "`PDFDataRangeTransport.prototype.onDataProgress` - method was " +
+              "removed, since loading progress is now reported automatically " +
+              "through the `PDFDataTransportStream` class (and related code)."
+          );
+        },
+      });
+    }
   }
 
   /**
@@ -689,13 +705,6 @@ class PDFDataRangeTransport {
    */
   addRangeListener(listener) {
     this.#rangeListeners.push(listener);
-  }
-
-  /**
-   * @param {function} listener
-   */
-  addProgressListener(listener) {
-    this.#progressListeners.push(listener);
   }
 
   /**
@@ -720,18 +729,6 @@ class PDFDataRangeTransport {
     for (const listener of this.#rangeListeners) {
       listener(begin, chunk);
     }
-  }
-
-  /**
-   * @param {number} loaded
-   * @param {number|undefined} total
-   */
-  onDataProgress(loaded, total) {
-    this.#capability.promise.then(() => {
-      for (const listener of this.#progressListeners) {
-        listener(loaded, total);
-      }
-    });
   }
 
   /**
@@ -791,6 +788,13 @@ class PDFDocumentProxy {
         value: pageIndex => this._transport.getAnnotArray(pageIndex),
       });
     }
+  }
+
+  /**
+   * @type {PagesMapper} The pages mapper instance.
+   */
+  get pagesMapper() {
+    return this._transport.pagesMapper;
   }
 
   /**
@@ -1358,9 +1362,9 @@ class PDFDocumentProxy {
 class PDFPageProxy {
   #pendingCleanup = false;
 
-  #pagesMapper = PagesMapper.instance;
+  #pagesMapper = null;
 
-  constructor(pageIndex, pageInfo, transport, pdfBug = false) {
+  constructor(pageIndex, pageInfo, transport, pagesMapper, pdfBug = false) {
     this._pageIndex = pageIndex;
     this._pageInfo = pageInfo;
     this._transport = transport;
@@ -1373,6 +1377,7 @@ class PDFPageProxy {
     this._intentStates = new Map();
     this.destroyed = false;
     this.recordedBBoxes = null;
+    this.#pagesMapper = pagesMapper;
   }
 
   /**
@@ -1523,12 +1528,10 @@ class PDFPageProxy {
     optionalContentConfigPromise ||=
       this._transport.getOptionalContentConfig(renderingIntent);
 
-    let intentState = this._intentStates.get(cacheKey);
-    if (!intentState) {
-      intentState = Object.create(null);
-      this._intentStates.set(cacheKey, intentState);
-    }
-
+    const intentState = this._intentStates.getOrInsertComputed(
+      cacheKey,
+      makeObj
+    );
     // Ensure that a pending `streamReader` cancel timeout is always aborted.
     if (intentState.streamReaderCancelTimeout) {
       clearTimeout(intentState.streamReaderCancelTimeout);
@@ -1697,11 +1700,10 @@ class PDFPageProxy {
       isEditing,
       /* isOpList = */ true
     );
-    let intentState = this._intentStates.get(intentArgs.cacheKey);
-    if (!intentState) {
-      intentState = Object.create(null);
-      this._intentStates.set(intentArgs.cacheKey, intentState);
-    }
+    const intentState = this._intentStates.getOrInsertComputed(
+      intentArgs.cacheKey,
+      makeObj
+    );
     let opListTask;
 
     if (!intentState.opListReadCapability) {
@@ -1760,7 +1762,7 @@ class PDFPageProxy {
    * @returns {Promise<TextContent>} A promise that is resolved with a
    *   {@link TextContent} object that represents the page's text content.
    */
-  getTextContent(params = {}) {
+  async getTextContent(params = {}) {
     if (this._transport._htmlForXfa) {
       // TODO: We need to revisit this once the XFA foreground patch lands and
       // only do this for non-foreground XFA.
@@ -1768,28 +1770,18 @@ class PDFPageProxy {
     }
     const readableStream = this.streamTextContent(params);
 
-    return new Promise(function (resolve, reject) {
-      function pump() {
-        reader.read().then(function ({ value, done }) {
-          if (done) {
-            resolve(textContent);
-            return;
-          }
-          textContent.lang ??= value.lang;
-          Object.assign(textContent.styles, value.styles);
-          textContent.items.push(...value.items);
-          pump();
-        }, reject);
-      }
+    const textContent = {
+      items: [],
+      styles: Object.create(null),
+      lang: null,
+    };
 
-      const reader = readableStream.getReader();
-      const textContent = {
-        items: [],
-        styles: Object.create(null),
-        lang: null,
-      };
-      pump();
-    });
+    for await (const value of readableStream) {
+      textContent.lang ??= value.lang;
+      Object.assign(textContent.styles, value.styles);
+      textContent.items.push(...value.items);
+    }
+    return textContent;
   }
 
   /**
@@ -1931,6 +1923,7 @@ class PDFPageProxy {
         annotationStorage: map,
         modifiedIds,
       },
+      /* queueingStrategy = */ undefined,
       transfer
     );
     const reader = readableStream.getReader();
@@ -2439,9 +2432,16 @@ class WorkerTransport {
 
   #passwordCapability = null;
 
-  #pagesMapper = PagesMapper.instance;
+  #copiedPageInfo = null;
 
-  constructor(messageHandler, loadingTask, networkStream, params, factory) {
+  constructor(
+    messageHandler,
+    loadingTask,
+    networkStream,
+    params,
+    factory,
+    pagesMapper
+  ) {
     this.messageHandler = messageHandler;
     this.loadingTask = loadingTask;
     this.#networkStream = networkStream;
@@ -2466,7 +2466,8 @@ class WorkerTransport {
 
     this.setupMessageHandler();
 
-    this.#pagesMapper.addListener(this.#updateCaches.bind(this));
+    this.pagesMapper = pagesMapper;
+    this.pagesMapper.addListener(this.#updateCaches.bind(this));
 
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       // For testing purposes.
@@ -2492,11 +2493,42 @@ class WorkerTransport {
     }
   }
 
-  #updateCaches() {
+  #updateCaches({ type, pageNumbers }) {
+    if (type === "copy") {
+      this.#copiedPageInfo = new Map();
+      for (const pageNum of pageNumbers) {
+        this.#copiedPageInfo.set(pageNum, {
+          proxy: this.#pageCache.get(pageNum - 1) || null,
+          promise: this.#pagePromises.get(pageNum - 1) || null,
+        });
+      }
+      return;
+    }
+
+    if (type === "delete") {
+      for (const pageNum of pageNumbers) {
+        this.#pageCache.delete(pageNum - 1);
+        this.#pagePromises.delete(pageNum - 1);
+      }
+    }
+
     const newPageCache = new Map();
     const newPromiseCache = new Map();
-    for (let i = 0, ii = this.#pagesMapper.pagesNumber; i < ii; i++) {
-      const prevPageIndex = this.#pagesMapper.getPrevPageNumber(i + 1) - 1;
+    const { pagesMapper } = this;
+    for (let i = 0, ii = pagesMapper.pagesNumber; i < ii; i++) {
+      const prevPageNumber = pagesMapper.getPrevPageNumber(i + 1);
+      if (prevPageNumber < 0) {
+        const { proxy, promise } =
+          this.#copiedPageInfo?.get(-prevPageNumber) || {};
+        if (proxy) {
+          newPageCache.set(i, proxy);
+        }
+        if (promise) {
+          newPromiseCache.set(i, promise);
+        }
+        continue;
+      }
+      const prevPageIndex = prevPageNumber - 1;
       const page = this.#pageCache.get(prevPageIndex);
       if (page) {
         newPageCache.set(i, page);
@@ -2511,14 +2543,9 @@ class WorkerTransport {
   }
 
   #cacheSimpleMethod(name, data = null) {
-    const cachedPromise = this.#methodPromises.get(name);
-    if (cachedPromise) {
-      return cachedPromise;
-    }
-    const promise = this.messageHandler.sendWithPromise(name, data);
-
-    this.#methodPromises.set(name, promise);
-    return promise;
+    return this.#methodPromises.getOrInsertComputed(name, () =>
+      this.messageHandler.sendWithPromise(name, data)
+    );
   }
 
   #onProgress({ loaded, total }) {
@@ -2767,7 +2794,7 @@ class WorkerTransport {
     });
 
     messageHandler.on("GetDoc", ({ pdfInfo }) => {
-      this.#pagesMapper.pagesNumber = pdfInfo.numPages;
+      this.pagesMapper.pagesNumber = pdfInfo.numPages;
       this._numPages = pdfInfo.numPages;
       this._htmlForXfa = pdfInfo.htmlForXfa;
       delete pdfInfo.htmlForXfa;
@@ -2987,12 +3014,12 @@ class WorkerTransport {
     if (
       !Number.isInteger(pageNumber) ||
       pageNumber <= 0 ||
-      pageNumber > this.#pagesMapper.pagesNumber
+      pageNumber > this.pagesMapper.pagesNumber
     ) {
       return Promise.reject(new Error("Invalid page request."));
     }
     const pageIndex = pageNumber - 1;
-    const newPageIndex = this.#pagesMapper.getPageId(pageNumber) - 1;
+    const newPageIndex = this.pagesMapper.getPageId(pageNumber) - 1;
 
     const cachedPromise = this.#pagePromises.get(pageIndex);
     if (cachedPromise) {
@@ -3014,6 +3041,7 @@ class WorkerTransport {
           pageIndex,
           pageInfo,
           this,
+          this.pagesMapper,
           this._params.pdfBug
         );
         this.#pageCache.set(pageIndex, page);
@@ -3031,12 +3059,16 @@ class WorkerTransport {
       num: ref.num,
       gen: ref.gen,
     });
-    return this.#pagesMapper.getPageNumber(index + 1) - 1;
+    const pageNumber = this.pagesMapper.getPageNumber(index + 1);
+    if (pageNumber === 0) {
+      throw new Error("GetPageIndex: page has been removed.");
+    }
+    return pageNumber - 1;
   }
 
   getAnnotations(pageIndex, intent) {
     return this.messageHandler.sendWithPromise("GetAnnotations", {
-      pageIndex: this.#pagesMapper.getPageId(pageIndex + 1) - 1,
+      pageIndex: this.pagesMapper.getPageId(pageIndex + 1) - 1,
       intent,
     });
   }
@@ -3103,13 +3135,13 @@ class WorkerTransport {
 
   getPageJSActions(pageIndex) {
     return this.messageHandler.sendWithPromise("GetPageJSActions", {
-      pageIndex: this.#pagesMapper.getPageId(pageIndex + 1) - 1,
+      pageIndex: this.pagesMapper.getPageId(pageIndex + 1) - 1,
     });
   }
 
   getStructTree(pageIndex) {
     return this.messageHandler.sendWithPromise("GetStructTree", {
-      pageIndex: this.#pagesMapper.getPageId(pageIndex + 1) - 1,
+      pageIndex: this.pagesMapper.getPageId(pageIndex + 1) - 1,
     });
   }
 
@@ -3128,22 +3160,17 @@ class WorkerTransport {
   }
 
   getMetadata() {
-    const name = "GetMetadata",
-      cachedPromise = this.#methodPromises.get(name);
-    if (cachedPromise) {
-      return cachedPromise;
-    }
-    const promise = this.messageHandler
-      .sendWithPromise(name, null)
-      .then(results => ({
+    const name = "GetMetadata";
+
+    return this.#methodPromises.getOrInsertComputed(name, () =>
+      this.messageHandler.sendWithPromise(name, null).then(results => ({
         info: results[0],
         metadata: results[1] ? new Metadata(results[1]) : null,
         contentDispositionFilename: this.#fullReader?.filename ?? null,
         contentLength: this.#fullReader?.contentLength ?? null,
         hasStructTree: results[2],
-      }));
-    this.#methodPromises.set(name, promise);
-    return promise;
+      }))
+    );
   }
 
   getMarkInfo() {
@@ -3180,9 +3207,13 @@ class WorkerTransport {
     }
     const refStr = ref.gen === 0 ? `${ref.num}R` : `${ref.num}R${ref.gen}`;
     const pageIndex = this.#pageRefCache.get(refStr);
-    return pageIndex >= 0
-      ? this.#pagesMapper.getPageNumber(pageIndex + 1)
-      : null;
+    if (pageIndex >= 0) {
+      const pageNumber = this.pagesMapper.getPageNumber(pageIndex + 1);
+      if (pageNumber !== 0) {
+        return pageNumber;
+      }
+    }
+    return null;
   }
 }
 

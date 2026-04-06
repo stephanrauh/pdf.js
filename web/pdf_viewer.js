@@ -20,21 +20,22 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/optional_content_config").OptionalContentConfig} OptionalContentConfig */
 /** @typedef {import("./event_utils").EventBus} EventBus */
-/** @typedef {import("./interfaces").IDownloadManager} IDownloadManager */
-/** @typedef {import("./interfaces").IL10n} IL10n */
-/** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
 // eslint-disable-next-line max-len
 /** @typedef {import("./pdf_find_controller").PDFFindController} PDFFindController */
 // eslint-disable-next-line max-len
 /** @typedef {import("./pdf_scripting_manager").PDFScriptingManager} PDFScriptingManager */
+/** @typedef {import("./pdf_link_service.js").PDFLinkService} PDFLinkService */
+// eslint-disable-next-line max-len
+/** @typedef {import("./base_download_manager.js").BaseDownloadManager} BaseDownloadManager */
+/** @typedef {import("./l10n.js").L10n} L10n */
 
 
 import {
   AnnotationEditorType,
   AnnotationEditorUIManager,
   AnnotationMode,
+  makeArr,
   MathClamp,
-  PagesMapper,
   PermissionFlag,
   PixelsPerInch,
   shadow,
@@ -56,7 +57,6 @@ import {
   MIN_SCALE,
   PresentationModeState,
   removeNullCharacters,
-  RenderingStates,
   SCROLLBAR_PADDING,
   scrollIntoView,
   ScrollMode,
@@ -71,6 +71,7 @@ import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { PageFlip } from "./page-flip.module.js"; // #716 modified by ngx-extended-pdf-viewer
 import { PDFPageView } from "./pdf_page_view.js";
 import { PDFRenderingQueue } from "./pdf_rendering_queue.js";
+import { RenderingStates } from "./renderable_view.js";
 import { SimpleLinkService } from "./pdf_link_service.js";
 
 const DEFAULT_CACHE_SIZE = 10;
@@ -93,8 +94,8 @@ function isValidAnnotationEditorMode(mode) {
  * @property {HTMLDivElement} container - The container for the viewer element.
  * @property {HTMLDivElement} [viewer] - The viewer element.
  * @property {EventBus} eventBus - The application event bus.
- * @property {IPDFLinkService} [linkService] - The navigation/linking service.
- * @property {IDownloadManager} [downloadManager] - The download manager
+ * @property {PDFLinkService} [linkService] - The navigation/linking service.
+ * @property {BaseDownloadManager} [downloadManager] - The download manager
  *   component.
  * @property {PDFFindController} [findController] - The find controller
  *   component.
@@ -138,7 +139,7 @@ function isValidAnnotationEditorMode(mode) {
  *   rendering will keep track of which areas of the page each PDF operation
  *   affects. Then, when rendering a partial page (if `enableDetailCanvas` is
  *   enabled), it will only run through the operations that affect that portion.
- * @property {IL10n} [l10n] - Localization service.
+ * @property {L10n} [l10n] - Localization service.
  * @property {boolean} [enablePermissions] - Enables PDF document permissions,
  *   when they exist. The default value is `false`.
  * @property {Object} [pageColors] - Overwrites background and foreground colors
@@ -321,7 +322,7 @@ class PDFViewer {
 
   #viewerAlert = null;
 
-  #pagesMapper = PagesMapper.instance;
+  #copiedPageViews = null;
 
   /**
    * @param {PDFViewerOptions} options
@@ -333,9 +334,6 @@ class PDFViewer {
       throw new Error(
         `The API version "${version}" does not match the Viewer version "${viewerVersion}".`
       );
-    }
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-      this.pagesMapper = PagesMapper.instance;
     }
 
     this.container = options.container;
@@ -1238,7 +1236,6 @@ class PDFViewer {
       this.#annotationEditorMode = AnnotationEditorType.NONE;
 
       this.#printingAllowed = true;
-      this.#pagesMapper.pagesNumber = 0;
     }
 
     this.pdfDocument = pdfDocument;
@@ -1548,23 +1545,44 @@ class PDFViewer {
       });
   }
 
-  async onBeforePagesEdited({ pagesMapper }) {
-    await this._pagesCapability.promise;
-    this._currentPageId = pagesMapper.getPageId(this._currentPageNumber);
-  }
+  onPagesEdited({ pagesMapper, type, hasBeenCut, pageNumbers }) {
+    if (type === "copy") {
+      this.#copiedPageViews = new Map();
+      for (const pageNum of pageNumbers) {
+        this.#copiedPageViews.set(pageNum, this._pages[pageNum - 1]);
+      }
+      return;
+    }
 
-  onPagesEdited({ pagesMapper }) {
-    this._currentPageNumber = pagesMapper.getPageNumber(this._currentPageId);
+    const isCut = type === "cut";
+    if (isCut || type === "delete") {
+      for (const pageNum of pageNumbers) {
+        this._pages[pageNum - 1].deleteMe(isCut);
+      }
+    }
+
+    this._currentPageNumber = 0;
     const prevPages = this._pages;
     const newPages = (this._pages = []);
-    for (let i = 0, ii = pagesMapper.pagesNumber; i < ii; i++) {
-      const prevPageNumber = pagesMapper.getPrevPageNumber(i + 1) - 1;
-      if (prevPageNumber === -1) {
+    for (let i = 1, ii = pagesMapper.pagesNumber; i <= ii; i++) {
+      const prevPageNumber = pagesMapper.getPrevPageNumber(i);
+      if (prevPageNumber < 0) {
+        let page = this.#copiedPageViews.get(-prevPageNumber);
+        if (hasBeenCut) {
+          page.updatePageNumber(i);
+        } else {
+          page = page.clone(i);
+        }
+        newPages.push(page);
         continue;
       }
-      const page = prevPages[prevPageNumber];
-      newPages[i] = page;
-      page.updatePageNumber(i + 1);
+      const page = prevPages[prevPageNumber - 1];
+      newPages.push(page);
+      page.updatePageNumber(i);
+    }
+
+    if (!isCut) {
+      this.#copiedPageViews = null;
     }
 
     const viewerElement =
@@ -1579,6 +1597,7 @@ class PDFViewer {
       }
       viewerElement.append(fragment);
     }
+
     setTimeout(() => {
       this.forceRendering();
     });
@@ -3075,15 +3094,12 @@ class PDFViewer {
     this.update();
   }
 
-  /**
-   * @private
-   */
-  _getPageAdvance(currentPageNumber, previous = false) {
-    // #1695 modified by ngx-extended-pdf-viewer
+  // #1695 modified by ngx-extended-pdf-viewer
+  #getPageAdvance(currentPageNumber, previous = false) {
     if (this.pageViewMode === "book") {
       return 2;
     }
-    // end of modification by ngx-extended-pdf-viewer
+    // #1695 end of modification by ngx-extended-pdf-viewer
     switch (this._scrollMode) {
       case ScrollMode.WRAPPED: {
         const { views } = this._getVisiblePages(),
@@ -3094,11 +3110,7 @@ class PDFViewer {
           if (percent === 0 || widthPercent < 100) {
             continue;
           }
-          let yArray = pageLayout.get(y);
-          if (!yArray) {
-            pageLayout.set(y, (yArray ||= []));
-          }
-          yArray.push(id);
+          pageLayout.getOrInsertComputed(y, makeArr).push(id);
         }
         // Find the row of the current page.
         for (const yArray of pageLayout.values()) {
@@ -3189,7 +3201,7 @@ class PDFViewer {
       return false;
     }
     const advance =
-      this._getPageAdvance(currentPageNumber, /* previous = */ false) || 1;
+      this.#getPageAdvance(currentPageNumber, /* previous = */ false) || 1;
 
     this.currentPageNumber = Math.min(currentPageNumber + advance, pagesCount);
     return true;
@@ -3206,7 +3218,7 @@ class PDFViewer {
       return false;
     }
     const advance =
-      this._getPageAdvance(currentPageNumber, /* previous = */ true) || 1;
+      this.#getPageAdvance(currentPageNumber, /* previous = */ true) || 1;
 
     this.currentPageNumber = Math.max(currentPageNumber - advance, 1);
     return true;

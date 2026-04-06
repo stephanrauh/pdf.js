@@ -56,7 +56,6 @@ class LZWStream extends DecodeStream {
     }
     this.bitsCached = bitsCached -= n;
     this.cachedData = cachedData;
-    this.lastCode = null;
     return (cachedData >>> bitsCached) & ((1 << n) - 1);
   }
 

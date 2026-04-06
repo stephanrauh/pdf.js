@@ -28,6 +28,8 @@ class Menu {
 
   #lastIndex = -1;
 
+  #onFocusOutBound = this.#onFocusOut.bind(this);
+
   /**
    * Create a menu for the given button.
    * @param {HTMLElement} menuContainer
@@ -71,6 +73,47 @@ class Menu {
   }
 
   /**
+   * Open the menu.
+   */
+  #openMenu() {
+    if (this.#openMenuAC) {
+      return;
+    }
+
+    const menu = this.#menu;
+    this.#triggeringButton.ariaExpanded = "true";
+    this.#openMenuAC = new AbortController();
+    const signal = AbortSignal.any([
+      this.#menuAC.signal,
+      this.#openMenuAC.signal,
+    ]);
+    window.addEventListener(
+      "pointerdown",
+      ({ target }) => {
+        if (
+          !this.#triggeringButton.contains(target) &&
+          !menu.contains(target)
+        ) {
+          this.#closeMenu();
+        }
+      },
+      { signal }
+    );
+    const closeMenu = this.#closeMenu.bind(this);
+    window.addEventListener("blur", closeMenu, { signal });
+    menu.addEventListener("focusout", this.#onFocusOutBound, { signal });
+  }
+
+  #onFocusOut({ relatedTarget }) {
+    if (
+      !this.#triggeringButton.contains(relatedTarget) &&
+      !this.#menu.contains(relatedTarget)
+    ) {
+      this.#closeMenu();
+    }
+  }
+
+  /**
    * Set up the menu.
    */
   #setUpMenu() {
@@ -80,24 +123,9 @@ class Menu {
         return;
       }
 
-      const menu = this.#menu;
-      this.#triggeringButton.ariaExpanded = "true";
-      this.#openMenuAC = new AbortController();
-      const signal = AbortSignal.any([
-        this.#menuAC.signal,
-        this.#openMenuAC.signal,
-      ]);
-      window.addEventListener(
-        "pointerdown",
-        ({ target }) => {
-          if (target !== this.#triggeringButton && !menu.contains(target)) {
-            this.#closeMenu();
-          }
-        },
-        { signal }
-      );
-      window.addEventListener("blur", this.#closeMenu.bind(this), { signal });
+      this.#openMenu();
     });
+    this.#triggeringButton.addEventListener("focusout", this.#onFocusOutBound);
 
     const { signal } = this.#menuAC;
 
@@ -110,12 +138,10 @@ class Menu {
             stopEvent(e);
             break;
           case "ArrowDown":
-          case "Tab":
             this.#goToNextItem(e.target, true);
             stopEvent(e);
             break;
           case "ArrowUp":
-          case "ShiftTab":
             this.#goToNextItem(e.target, false);
             stopEvent(e);
             break;
@@ -124,7 +150,7 @@ class Menu {
               .find(
                 item => !item.disabled && !item.classList.contains("hidden")
               )
-              .focus();
+              ?.focus();
             stopEvent(e);
             break;
           case "End":
@@ -132,11 +158,16 @@ class Menu {
               .findLast(
                 item => !item.disabled && !item.classList.contains("hidden")
               )
-              .focus();
+              ?.focus();
             stopEvent(e);
             break;
           default:
-            const char = e.key.toLocaleLowerCase();
+            const { key } = e;
+            if (!/^\p{L}$/u.test(key)) {
+              // It isn't a single letter, so ignore it.
+              break;
+            }
+            const char = key.toLocaleLowerCase();
             this.#goToNextItem(e.target, true, item =>
               item.textContent.trim().toLowerCase().startsWith(char)
             );
@@ -159,27 +190,27 @@ class Menu {
           case "Enter":
           case "ArrowDown":
           case "Home":
+            stopEvent(e);
             if (!this.#openMenuAC) {
-              this.#triggeringButton.click();
+              this.#openMenu();
             }
             this.#menuItems
               .find(
                 item => !item.disabled && !item.classList.contains("hidden")
               )
-              .focus();
-            stopEvent(e);
+              ?.focus();
             break;
           case "ArrowUp":
           case "End":
+            stopEvent(e);
             if (!this.#openMenuAC) {
-              this.#triggeringButton.click();
+              this.#openMenu();
             }
             this.#menuItems
               .findLast(
                 item => !item.disabled && !item.classList.contains("hidden")
               )
-              .focus();
-            stopEvent(e);
+              ?.focus();
             break;
           case "Escape":
             this.#closeMenu();

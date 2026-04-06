@@ -17,10 +17,6 @@
 
 :root {
   --dir-factor: 1;
-  /*#if !MOZCENTRAL*/
-  --inline-start: left;
-  --inline-end: right;
-  /*#endif*/
 
   --sidebar-width: 200px;
   --sidebar-transition-duration: 200ms;
@@ -132,10 +128,6 @@
 
 :root:dir(rtl) {
   --dir-factor: -1;
-  /*#if !MOZCENTRAL*/
-  --inline-start: right;
-  --inline-end: left;
-  /*#endif*/
 }
 
 @media screen and (forced-colors: active) {
@@ -417,7 +409,7 @@ body {
 }
 
 .splitToolbarButtonSeparator {
-  float: var(--inline-start);
+  float: inline-start;
   width: 0;
   height: 62%;
   border-left: 1px solid var(--separator-color);
@@ -1378,9 +1370,13 @@ dialog :link {
       height: 1px;
     }
 
-    #toolbarViewerLeft #numPages.toolbarLabel {
-      padding-inline-start: 3px;
-      flex: none;
+    #toolbarViewerLeft {
+      margin-inline-start: 8px;
+
+      #numPages.toolbarLabel {
+        padding-inline-start: 3px;
+        flex: none;
+      }
     }
   }
 

@@ -1,0 +1,49 @@
+name: Update locales
+
+on:
+  schedule:
+    - cron: "0 0 * * 5" # Every Friday at midnight UTC
+  workflow_dispatch: # Allow manual triggering
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  update-locales:
+    name: Update locales
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Use Node.js LTS
+        uses: actions/setup-node@v6
+        with:
+          node-version: lts/*
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Import translations from mozilla-central
+        run: npx gulp importl10n
+
+      - name: Create Pull Request
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ -z "$(git status --porcelain l10n/)" ]; then
+            echo "No locale changes to commit."
+            exit 0
+          fi
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git switch -C update-locales
+          git add l10n/
+          git commit -m "l10n: Update locale files"
+          git push --force origin update-locales
+          gh pr create \
+            --title "l10n: Update locale files" \
+            --body "Automated weekly update of locale files from mozilla-central." \
+            --label l10n || true

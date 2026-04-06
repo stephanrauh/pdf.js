@@ -401,9 +401,7 @@ class RefSet {
 }
 
 class RefSetCache {
-  constructor() {
-    this._map = new Map();
-  }
+  _map = new Map();
 
   get size() {
     return this._map.size;

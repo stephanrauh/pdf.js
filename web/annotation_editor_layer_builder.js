@@ -20,7 +20,6 @@
 /** @typedef {import("../src/display/editor/tools.js").AnnotationEditorUIManager} AnnotationEditorUIManager */
 // eslint-disable-next-line max-len
 /** @typedef {import("./text_accessibility.js").TextAccessibilityManager} TextAccessibilityManager */
-/** @typedef {import("./interfaces").IL10n} IL10n */
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/annotation_layer.js").AnnotationLayer} AnnotationLayer */
 // eslint-disable-next-line max-len
@@ -32,14 +31,15 @@ import { GenericL10n } from "web-null_l10n";
 /**
  * @typedef {Object} AnnotationEditorLayerBuilderOptions
  * @property {AnnotationEditorUIManager} [uiManager]
- * @property {PDFPageProxy} pdfPage
- * @property {IL10n} [l10n]
+ * @property {number} pageIndex
+ * @property {L10n} [l10n]
  * @property {StructTreeLayerBuilder} [structTreeLayer]
  * @property {TextAccessibilityManager} [accessibilityManager]
  * @property {AnnotationLayer} [annotationLayer]
  * @property {TextLayer} [textLayer]
  * @property {DrawLayer} [drawLayer]
  * @property {function} [onAppend]
+ * @property {AnnotationEditorLayer} [clonedFrom]
  */
 
 /**
@@ -61,11 +61,13 @@ class AnnotationEditorLayerBuilder {
 
   #uiManager;
 
+  #clonedFrom = null;
+
   /**
    * @param {AnnotationEditorLayerBuilderOptions} options
    */
   constructor(options) {
-    this.pdfPage = options.pdfPage;
+    this.pageIndex = options.pageIndex;
     this.accessibilityManager = options.accessibilityManager;
     this.l10n = options.l10n;
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
@@ -81,6 +83,12 @@ class AnnotationEditorLayerBuilder {
     this.#onAppend = options.onAppend || null;
     this.eventBus = options.eventBus; // #2256 modified by ngx-extended-pdf-viewer
     this.#structTreeLayer = options.structTreeLayer || null;
+    this.#clonedFrom = options.clonedFrom || null;
+  }
+
+  updatePageIndex(newPageIndex) {
+    this.pageIndex = newPageIndex;
+    this.annotationEditorLayer?.updatePageIndex(newPageIndex);
   }
 
   /**
@@ -115,7 +123,7 @@ class AnnotationEditorLayerBuilder {
       div,
       structTreeLayer: this.#structTreeLayer,
       accessibilityManager: this.accessibilityManager,
-      pageIndex: this.pdfPage.pageNumber - 1,
+      pageIndex: this.pageIndex,
       l10n: this.l10n,
       viewport: clonedViewport,
       annotationLayer: this.#annotationLayer,
@@ -123,6 +131,11 @@ class AnnotationEditorLayerBuilder {
       drawLayer: this.#drawLayer,
       eventBus: this.eventBus, // modified by ngx-extended-pdf-viewer #2256
     });
+
+    this.annotationEditorLayer.setClonedFrom(
+      this.#clonedFrom?.annotationEditorLayer
+    );
+    this.#clonedFrom = null;
 
     const parameters = {
       viewport: clonedViewport,

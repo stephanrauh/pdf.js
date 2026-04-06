@@ -492,6 +492,11 @@ function updateUrlHash(url, hash, allowRel = false) {
   return "";
 }
 
+// Extract the final component from a path string.
+function stripPath(str) {
+  return str.substring(str.lastIndexOf("/") + 1);
+}
+
 function shadow(obj, prop, value, nonSerializable = false) {
   if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
     // modified by ngx-extended-pdf-viewer
@@ -1250,15 +1255,24 @@ function _isValidExplicitDest(validRef, validName, dest) {
   return true;
 }
 
+// Helpers for simple `Map.prototype.getOrInsertComputed()` invocations,
+// to avoid duplicate function creation.
+const makeArr = () => [];
+const makeMap = () => new Map();
+const makeObj = () => Object.create(null);
+
 // TODO: Replace all occurrences of this function with `Math.clamp` once
 //       https://github.com/tc39/proposal-math-clamp/ is generally available.
 function MathClamp(v, min, max) {
   return Math.min(Math.max(v, min), max);
 }
 
-// TODO: Remove this once the `javascript.options.experimental.math_sumprecise`
-//       preference is removed from Firefox.
-if (typeof Math.sumPrecise !== "function") {
+// TODO: Remove this once `Math.sumPrecise` is generally available.
+if (
+  (typeof PDFJSDev === "undefined" ||
+    PDFJSDev.test("SKIP_BABEL && !MOZCENTRAL")) &&
+  typeof Math.sumPrecise !== "function"
+) {
   // Note that this isn't a "proper" polyfill, but since we're only using it to
   // replace `Array.prototype.reduce()` invocations it should be fine.
   Math.sumPrecise = function (numbers) {
@@ -1266,6 +1280,18 @@ if (typeof Math.sumPrecise !== "function") {
   };
 }
 
+// See https://developer.mozilla.org/en-US/docs/Web/API/Response/bytes#browser_compatibility
+if (
+  typeof PDFJSDev !== "undefined" &&
+  !PDFJSDev.test("SKIP_BABEL") &&
+  typeof Response.prototype.bytes !== "function"
+) {
+  Response.prototype.bytes = async function () {
+    return new Uint8Array(await this.arrayBuffer());
+  };
+}
+
+// TODO: Remove this once Safari 17.4 is the lowest supported version.
 if (
   typeof PDFJSDev !== "undefined" &&
   !PDFJSDev.test("SKIP_BABEL") &&
@@ -1332,6 +1358,9 @@ export {
   isNodeJS,
   LINE_DESCENT_FACTOR,
   LINE_FACTOR,
+  makeArr,
+  makeMap,
+  makeObj,
   MathClamp,
   MeshFigureType,
   normalizeUnicode,
@@ -1349,6 +1378,7 @@ export {
   stringToBytes,
   stringToPDFString,
   stringToUTF8String,
+  stripPath,
   TextRenderingMode,
   UnknownErrorException,
   unreachable,

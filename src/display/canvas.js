@@ -22,6 +22,7 @@ import {
   FONT_IDENTITY_MATRIX,
   ImageKind,
   info,
+  makeMap,
   OPS,
   shadow,
   TextRenderingMode,
@@ -667,8 +668,6 @@ class CanvasGraphics {
     this.stateStack = [];
     this.pendingClip = null;
     this.pendingEOFill = false;
-    this.res = null;
-    this.xobjs = null;
     this.commonObjs = commonObjs;
     this.objs = objs;
     this.canvasFactory = canvasFactory;
@@ -991,11 +990,7 @@ class CanvasGraphics {
           : [currentTransform.slice(0, 4), fillColor]
       );
 
-      cache = this._cachedBitmapsMap.get(mainKey);
-      if (!cache) {
-        cache = new Map();
-        this._cachedBitmapsMap.set(mainKey, cache);
-      }
+      cache = this._cachedBitmapsMap.getOrInsertComputed(mainKey, makeMap);
       const cachedImage = cache.get(cacheKey);
       if (cachedImage && !isPatternFill) {
         const offsetX = Math.round(
@@ -2671,6 +2666,7 @@ class CanvasGraphics {
       ["BM", "source-over"],
       ["ca", 1],
       ["CA", 1],
+      ["TR", null],
     ]);
     this.groupStack.push(currentCtx);
     this.groupLevel++;

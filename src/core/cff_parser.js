@@ -991,24 +991,31 @@ class CFFParser {
 
 // Compact Font Format
 class CFF {
-  constructor() {
-    this.header = null;
-    this.names = [];
-    this.topDict = null;
-    this.strings = new CFFStrings();
-    this.globalSubrIndex = null;
+  header = null;
 
-    // The following could really be per font, but since we only have one font
-    // store them here.
-    this.encoding = null;
-    this.charset = null;
-    this.charStrings = null;
-    this.fdArray = [];
-    this.fdSelect = null;
+  names = [];
 
-    this.isCIDFont = false;
-    this.charStringCount = 0;
-  }
+  topDict = null;
+
+  strings = new CFFStrings();
+
+  globalSubrIndex = null;
+
+  // The following could really be per font, but since we only have one font
+  // store them here.
+  encoding = null;
+
+  charset = null;
+
+  charStrings = null;
+
+  fdArray = [];
+
+  fdSelect = null;
+
+  isCIDFont = false;
+
+  charStringCount = 0;
 
   duplicateFirstGlyph() {
     // Browsers will not display a glyph at position 0. Typically glyph 0 is
@@ -1044,9 +1051,7 @@ class CFFHeader {
 }
 
 class CFFStrings {
-  constructor() {
-    this.strings = [];
-  }
+  strings = [];
 
   get(index) {
     if (index >= 0 && index <= NUM_STANDARD_CFF_STRINGS - 1) {
@@ -1080,10 +1085,9 @@ class CFFStrings {
 }
 
 class CFFIndex {
-  constructor() {
-    this.objects = [];
-    this.length = 0;
-  }
+  objects = [];
+
+  length = 0;
 
   add(data) {
     this.length += data.length;
@@ -1316,9 +1320,7 @@ class CFFFDSelect {
 // Helper class to keep track of where an offset is within the data and helps
 // filling in that offset once it's known.
 class CFFOffsetTracker {
-  constructor() {
-    this.offsets = Object.create(null);
-  }
+  offsets = Object.create(null);
 
   isTracking(key) {
     return key in this.offsets;

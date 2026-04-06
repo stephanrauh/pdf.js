@@ -14,7 +14,7 @@
  */
 
 import { arrayBuffersToBytes, MissingDataException } from "./core_utils.js";
-import { assert } from "../shared/util.js";
+import { assert, MathClamp } from "../shared/util.js";
 import { Stream } from "./stream.js";
 
 class ChunkedStream extends Stream {
@@ -70,6 +70,12 @@ class ChunkedStream extends Stream {
       throw new Error(`Bad end offset: ${end}`);
     }
 
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+      assert(
+        chunk instanceof ArrayBuffer,
+        "onReceiveData - expected an ArrayBuffer."
+      );
+    }
     this.bytes.set(new Uint8Array(chunk), begin);
     const beginChunk = Math.floor(begin / chunkSize);
     const endChunk = Math.floor((end - 1) / chunkSize) + 1;
@@ -85,6 +91,12 @@ class ChunkedStream extends Stream {
     let position = this.progressiveDataLength;
     const beginChunk = Math.floor(position / this.chunkSize);
 
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+      assert(
+        data instanceof ArrayBuffer,
+        "onReceiveProgressiveData - expected an ArrayBuffer."
+      );
+    }
     this.bytes.set(new Uint8Array(data), position);
     position += data.byteLength;
     this.progressiveDataLength = position;
@@ -281,37 +293,37 @@ class ChunkedStreamManager {
     this.msgHandler = args.msgHandler;
   }
 
-  sendRequest(begin, end) {
+  async sendRequest(begin, end) {
     const rangeReader = this.pdfStream.getRangeReader(begin, end);
-
     let chunks = [];
-    return new Promise((resolve, reject) => {
-      const readChunk = ({ value, done }) => {
-        try {
-          if (done) {
-            resolve(arrayBuffersToBytes(chunks));
-            chunks = null;
-            return;
-          }
-          if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-            assert(
-              value instanceof ArrayBuffer,
-              "readChunk (sendRequest) - expected an ArrayBuffer."
-            );
-          }
-          chunks.push(value);
-          rangeReader.read().then(readChunk, reject);
-        } catch (e) {
-          reject(e);
-        }
-      };
-      rangeReader.read().then(readChunk, reject);
-    }).then(data => {
+
+    while (true) {
+      const { value, done } = await rangeReader.read();
+
       if (this.aborted) {
+        chunks = null;
         return; // Ignoring any data after abort.
       }
-      this.onReceiveData({ chunk: data, begin });
-    });
+      if (done) {
+        break;
+      }
+      if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+        assert(
+          value instanceof ArrayBuffer,
+          "sendRequest - expected an ArrayBuffer."
+        );
+      }
+      chunks.push(value);
+    }
+
+    if (chunks.length === 0 && this.disableAutoFetch) {
+      // The range request wasn't dispatched, see the "GetRangeReader" handler
+      // in the `src/display/api.js` file.
+      return;
+    }
+    const data = arrayBuffersToBytes(chunks);
+    chunks = null;
+    this.onReceiveData({ chunk: data.buffer, begin });
   }
 
   /**
@@ -511,7 +523,11 @@ class ChunkedStreamManager {
     }
 
     this.msgHandler.send("DocProgress", {
-      loaded: stream.numChunksLoaded * chunkSize,
+      loaded: MathClamp(
+        stream.numChunksLoaded * chunkSize,
+        stream.progressiveDataLength,
+        length
+      ),
       total: length,
     });
   }

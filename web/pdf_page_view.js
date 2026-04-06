@@ -18,11 +18,10 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/optional_content_config").OptionalContentConfig} OptionalContentConfig */
 /** @typedef {import("./event_utils").EventBus} EventBus */
-/** @typedef {import("./interfaces").IL10n} IL10n */
-/** @typedef {import("./interfaces").IRenderableView} IRenderableView */
 // eslint-disable-next-line max-len
 /** @typedef {import("./pdf_rendering_queue").PDFRenderingQueue} PDFRenderingQueue */
 /** @typedef {import("./comment_manager.js").CommentManager} CommentManager */
+/** @typedef {import("./l10n.js").L10n} L10n */
 
 import {
   AbortException,
@@ -37,7 +36,6 @@ import {
   calcRound,
   DEFAULT_SCALE,
   floorToDivide,
-  RenderingStates,
   TextLayerMode,
 } from "./ui_utils.js";
 import { AnnotationEditorLayerBuilder } from "./annotation_editor_layer_builder.js";
@@ -51,6 +49,7 @@ import { GenericL10n } from "web-null_l10n";
 import { MaxCanvasSize } from "./max_canvas_size.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { PDFPageDetailView } from "./pdf_page_detail_view.js";
+import { RenderingStates } from "./renderable_view.js";
 import { SimpleLinkService } from "./pdf_link_service.js";
 import { StructTreeLayerBuilder } from "./struct_tree_layer_builder.js";
 import { TextAccessibilityManager } from "./text_accessibility.js";
@@ -102,12 +101,14 @@ import { XfaLayerBuilder } from "./xfa_layer_builder.js";
  * @property {Object} [pageColors] - Overwrites background and foreground colors
  *   with user defined ones in order to improve readability in high contrast
  *   mode.
- * @property {IL10n} [l10n] - Localization service.
+ * @property {L10n} [l10n] - Localization service.
  * @property {Object} [layerProperties] - The object that is used to lookup
  *   the necessary layer-properties.
  * @property {boolean} [enableAutoLinking] - Enable creation of hyperlinks from
  *   text that look like URLs. The default value is `true`.
  * @property {CommentManager} [commentManager] - The comment manager instance.
+ * @property {PDFPageView} [clonedFrom] - The page view that is cloned
+ *   to.
  */
 
 const DEFAULT_LAYER_PROPERTIES =
@@ -134,9 +135,6 @@ const LAYERS_ORDER = new Map([
   ["xfaLayer", 3],
 ]);
 
-/**
- * @implements {IRenderableView}
- */
 class PDFPageView extends BasePDFPageView {
   #annotationMode = AnnotationMode.ENABLE_FORMS;
 
@@ -174,14 +172,15 @@ class PDFPageView extends BasePDFPageView {
 
   #layers = [null, null, null, null];
 
+  #clonedFrom = null;
+
   /**
    * @param {PDFPageViewOptions} options
    */
   constructor(options) {
     super(options);
 
-    const container = options.container;
-    const defaultViewport = options.defaultViewport;
+    const { container, defaultViewport } = options;
 
     this.renderingId = "page" + this.id;
     this.#layerProperties = options.layerProperties || DEFAULT_LAYER_PROPERTIES;
@@ -206,6 +205,7 @@ class PDFPageView extends BasePDFPageView {
       options.capCanvasAreaFactor ?? AppOptions.get("capCanvasAreaFactor");
     this.#enableAutoLinking = options.enableAutoLinking !== false;
     this.#commentManager = options.commentManager || null;
+    this.#clonedFrom = options.clonedFrom || null;
 
     this.l10n = options.l10n;
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
@@ -235,7 +235,6 @@ class PDFPageView extends BasePDFPageView {
     div.setAttribute("data-l10n-id", "pdfjs-page-landmark");
     div.setAttribute("data-l10n-args", JSON.stringify({ page: this.id }));
     this.div = div;
-
     this.#setDimensions();
     container?.append(div);
 
@@ -277,6 +276,35 @@ class PDFPageView extends BasePDFPageView {
         this.l10n.translate(this.div);
       }
     }
+  }
+
+  clone(id) {
+    const clone = new PDFPageView({
+      container: null,
+      eventBus: this.eventBus,
+      pagesColors: this.pageColors,
+      renderingQueue: this.renderingQueue,
+      enableOptimizedPartialRendering: this.enableOptimizedPartialRendering,
+      minDurationToUpdateCanvas: this.minDurationToUpdateCanvas,
+      defaultViewport: this.viewport,
+      id,
+      layerProperties: this.#layerProperties,
+      scale: this.scale,
+      optionalContentConfigPromise: this._optionalContentConfigPromise,
+      textLayerMode: this.#textLayerMode,
+      annotationMode: this.#annotationMode,
+      imageResourcesPath: this.imageResourcesPath,
+      enableDetailCanvas: this.enableDetailCanvas,
+      maxCanvasPixels: this.maxCanvasPixels,
+      maxCanvasDim: this.maxCanvasDim,
+      capCanvasAreaFactor: this.capCanvasAreaFactor,
+      enableAutoLinking: this.#enableAutoLinking,
+      commentManager: this.#commentManager,
+      l10n: this.l10n,
+      clonedFrom: this,
+    });
+    clone.setPdfPage(this.pdfPage);
+    return clone;
   }
 
   #addLayer(div, name) {
@@ -340,6 +368,7 @@ class PDFPageView extends BasePDFPageView {
     this._textHighlighter.pageIdx = newPageNumber - 1;
     // Don't update the page index for the draw layer, since it's just used as
     // an identifier.
+    this.annotationEditorLayer?.updatePageIndex(newPageNumber - 1);
   }
 
   setPdfPage(pdfPage) {
@@ -385,6 +414,15 @@ class PDFPageView extends BasePDFPageView {
   destroy() {
     this.reset();
     this.pdfPage?.cleanup();
+  }
+
+  deleteMe(isCut) {
+    if (isCut) {
+      this.div.remove();
+      return;
+    }
+    this.destroy();
+    this.#layerProperties.annotationEditorUIManager?.deletePage(this.id);
   }
 
   hasEditableAnnotations() {
@@ -1189,18 +1227,20 @@ class PDFPageView extends BasePDFPageView {
       ) {
         this.annotationEditorLayer ||= new AnnotationEditorLayerBuilder({
           uiManager: annotationEditorUIManager,
-          pdfPage,
+          pageIndex: this.id - 1,
           l10n,
           structTreeLayer: this.structTreeLayer,
           accessibilityManager: this._accessibilityManager,
           annotationLayer: this.annotationLayer?.annotationLayer,
           textLayer: this.textLayer,
           drawLayer: this.drawLayer.getDrawLayer(),
+          clonedFrom: this.#clonedFrom?.annotationEditorLayer,
           onAppend: annotationEditorLayerDiv => {
             this.#addLayer(annotationEditorLayerDiv, "annotationEditorLayer");
           },
           eventBus: this.eventBus // #2256 modified by ngx-extended-pdf-viewer
         });
+        this.#clonedFrom = null;
         this.#renderAnnotationEditorLayer();
       }
     });

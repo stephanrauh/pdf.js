@@ -64,11 +64,9 @@ class DOMCMapReaderFactory extends BaseCMapReaderFactory {
   async _fetch(url) {
     const data = await fetchData(
       url,
-      /* type = */ this.isCompressed ? "arraybuffer" : "text"
+      /* type = */ this.isCompressed ? "bytes" : "text"
     );
-    return data instanceof ArrayBuffer
-      ? new Uint8Array(data)
-      : stringToBytes(data);
+    return data instanceof Uint8Array ? data : stringToBytes(data);
   }
 }
 

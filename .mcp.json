@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "firefox-devtools": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@padenot/firefox-devtools-mcp"]
+    }
+  }
+}

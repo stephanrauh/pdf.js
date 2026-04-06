@@ -31,7 +31,11 @@ import {
 } from "../shared/util.js";
 import { CMapFactory, IdentityCMap } from "./cmap.js";
 import { Cmd, Dict, EOF, isName, Name, Ref, RefSet } from "./primitives.js";
-import { compileType3Glyph, FontFlags } from "./fonts_utils.js";
+import {
+  compileType3Glyph,
+  FontFlags,
+  normalizeFontName,
+} from "./fonts_utils.js";
 import { ErrorFont, Font } from "./fonts.js";
 import {
   fetchBinaryData,
@@ -904,6 +908,11 @@ class PartialEvaluator {
     let transferArray;
     if (Array.isArray(tr)) {
       transferArray = tr;
+      if (tr.length > 1 && tr.every(map => map === tr[0])) {
+        // All entries in the array are the same, so we can just use one of
+        // them.
+        transferArray = [tr[0]];
+      }
     } else if (isPDFFunction(tr)) {
       transferArray = [tr];
     } else {
@@ -2543,7 +2552,7 @@ class PartialEvaluator {
 
     const preprocessor = new EvaluatorPreprocessor(stream, xref, stateManager);
 
-    let textState;
+    let textState, currentTextState;
 
     function pushWhitespace({
       width = 0,
@@ -2805,7 +2814,9 @@ class PartialEvaluator {
 
         // When the total height of the current chunk is negative
         // then we're writing from bottom to top.
-        const textOrientation = Math.sign(textContentItem.height);
+        const textOrientation = Math.sign(
+          textContentItem.height || textContentItem.totalHeight
+        );
         if (advanceY < textOrientation * textContentItem.negativeSpaceMax) {
           if (
             Math.abs(advanceX) >
@@ -2869,7 +2880,9 @@ class PartialEvaluator {
 
       // When the total width of the current chunk is negative
       // then we're writing from right to left.
-      const textOrientation = Math.sign(textContentItem.width);
+      const textOrientation = Math.sign(
+        textContentItem.width || textContentItem.totalWidth
+      );
       if (advanceX < textOrientation * textContentItem.negativeSpaceMax) {
         if (
           Math.abs(advanceY) >
@@ -2927,6 +2940,15 @@ class PartialEvaluator {
     }
 
     function buildTextContentItem({ chars, extraSpacing }) {
+      if (
+        currentTextState !== textState &&
+        (currentTextState.fontName !== textState.fontName ||
+          currentTextState.fontSize !== textState.fontSize)
+      ) {
+        flushTextContentItem();
+        currentTextState = textState.clone();
+      }
+
       const font = textState.font;
       if (!chars) {
         // Just move according to the space we have.
@@ -3182,8 +3204,8 @@ class PartialEvaluator {
           break;
         }
 
-        const previousState = textState;
         textState = stateManager.state;
+        currentTextState ||= textState.clone();
         const fn = operation.fn;
         args = operation.args;
 
@@ -3200,7 +3222,6 @@ class PartialEvaluator {
               break;
             }
 
-            flushTextContentItem();
             textState.fontName = fontNameArg;
             textState.fontSize = fontSizeArg;
             next(handleSetFont(fontNameArg, null));
@@ -3557,14 +3578,10 @@ class PartialEvaluator {
             }
             break;
           case OPS.restore:
-            if (
-              previousState &&
-              (previousState.font !== textState.font ||
-                previousState.fontSize !== textState.fontSize ||
-                previousState.fontName !== textState.fontName)
-            ) {
-              flushTextContentItem();
-            }
+            stateManager.restore();
+            break;
+          case OPS.save:
+            stateManager.save();
             break;
         } // switch
         if (textContent.items.length >= (sink?.desiredSize ?? 1)) {
@@ -4235,16 +4252,17 @@ class PartialEvaluator {
     let defaultWidth = 0;
     let widths = Object.create(null);
     let monospace = false;
+
+    let fontName = normalizeFontName(name);
     const stdFontMap = getStdFontMap();
-    let lookupName = stdFontMap[name] || name;
+    fontName = stdFontMap[fontName] || fontName;
     const Metrics = getMetrics();
 
-    if (!(lookupName in Metrics)) {
+    const glyphWidths =
+      Metrics[fontName] ??
       // Use default fonts for looking up font metrics if the passed
       // font is not a base font
-      lookupName = this.isSerifFont(name) ? "Times-Roman" : "Helvetica";
-    }
-    const glyphWidths = Metrics[lookupName];
+      Metrics[this.isSerifFont(name) ? "Times-Roman" : "Helvetica"];
 
     if (typeof glyphWidths === "number") {
       defaultWidth = glyphWidths;
@@ -4455,7 +4473,7 @@ class PartialEvaluator {
         }
 
         // Using base font name as a font name.
-        baseFontName = baseFontName.name.replaceAll(/[,_]/g, "-");
+        baseFontName = normalizeFontName(baseFontName.name);
         const metrics = this.getBaseFontMetrics(baseFontName);
 
         // Simulating descriptor flags attribute
@@ -5034,21 +5052,31 @@ class StateManager {
 }
 
 class TextState {
-  constructor() {
-    this.ctm = new Float32Array(IDENTITY_MATRIX);
-    this.fontName = null;
-    this.fontSize = 0;
-    this.loadedName = null;
-    this.font = null;
-    this.fontMatrix = FONT_IDENTITY_MATRIX;
-    this.textMatrix = IDENTITY_MATRIX.slice();
-    this.textLineMatrix = IDENTITY_MATRIX.slice();
-    this.charSpacing = 0;
-    this.wordSpacing = 0;
-    this.leading = 0;
-    this.textHScale = 1;
-    this.textRise = 0;
-  }
+  ctm = new Float32Array(IDENTITY_MATRIX);
+
+  fontName = null;
+
+  fontSize = 0;
+
+  loadedName = null;
+
+  font = null;
+
+  fontMatrix = FONT_IDENTITY_MATRIX;
+
+  textMatrix = IDENTITY_MATRIX.slice();
+
+  textLineMatrix = IDENTITY_MATRIX.slice();
+
+  charSpacing = 0;
+
+  wordSpacing = 0;
+
+  leading = 0;
+
+  textHScale = 1;
+
+  textRise = 0;
 
   setTextMatrix(a, b, c, d, e, f) {
     const m = this.textMatrix;
@@ -5088,7 +5116,7 @@ class TextState {
   }
 
   clone() {
-    const clone = Object.create(this);
+    const clone = Object.assign(Object.create(this), this);
     clone.textMatrix = this.textMatrix.slice();
     clone.textLineMatrix = this.textLineMatrix.slice();
     clone.fontMatrix = this.fontMatrix.slice();
@@ -5097,24 +5125,28 @@ class TextState {
 }
 
 class EvalState {
-  constructor() {
-    this.ctm = new Float32Array(IDENTITY_MATRIX);
-    this.font = null;
-    this.textRenderingMode = TextRenderingMode.FILL;
-    this._fillColorSpace = this._strokeColorSpace = ColorSpaceUtils.gray;
-    this.patternFillColorSpace = null;
-    this.patternStrokeColorSpace = null;
+  ctm = new Float32Array(IDENTITY_MATRIX);
 
-    // Path stuff.
-    this.currentPointX = this.currentPointY = 0;
-    this.pathMinMax = new Float32Array([
-      Infinity,
-      Infinity,
-      -Infinity,
-      -Infinity,
-    ]);
-    this.pathBuffer = [];
-  }
+  font = null;
+
+  textRenderingMode = TextRenderingMode.FILL;
+
+  _fillColorSpace = ColorSpaceUtils.gray;
+
+  _strokeColorSpace = ColorSpaceUtils.gray;
+
+  patternFillColorSpace = null;
+
+  patternStrokeColorSpace = null;
+
+  // Path stuff.
+  currentPointX = 0;
+
+  currentPointY = 0;
+
+  pathMinMax = new Float32Array([Infinity, Infinity, -Infinity, -Infinity]);
+
+  pathBuffer = [];
 
   get fillColorSpace() {
     return this._fillColorSpace;

@@ -18,8 +18,6 @@
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/display_utils").PageViewport} PageViewport */
 /** @typedef {import("./event_utils").EventBus} EventBus */
-/** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
-/** @typedef {import("./interfaces").IRenderableView} IRenderableView */
 // eslint-disable-next-line max-len
 /** @typedef {import("./pdf_rendering_queue").PDFRenderingQueue} PDFRenderingQueue */
 
@@ -28,9 +26,9 @@ import {
   OutputScale,
   RenderingCancelledException,
 } from "pdfjs-lib";
+import { RenderableView, RenderingStates } from "./renderable_view.js";
 import { AppOptions } from "./app_options.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
-import { RenderingStates } from "./ui_utils.js";
 // #2943 modified by ngx-extended-pdf-viewer
 import { PDFViewerApplication } from "./app.js";
 // #2943 end of modification by ngx-extended-pdf-viewer
@@ -51,7 +49,7 @@ let initialDragY = 0;
  * @property {Promise<OptionalContentConfig>} [optionalContentConfigPromise] -
  *   A promise that is resolved with an {@link OptionalContentConfig} instance.
  *   The default value is `null`.
- * @property {IPDFLinkService} linkService - The navigation/linking service.
+ * @property {PDFLinkService} linkService - The navigation/linking service.
  * @property {PDFRenderingQueue} renderingQueue - The rendering queue object.
  * @property {number} [maxCanvasPixels] - The maximum supported canvas size in
  *   total pixels, i.e. width * height. Use `-1` for no limit, or `0` for
@@ -86,10 +84,9 @@ class TempImageFactory {
   }
 }
 
-/**
- * @implements {IRenderableView}
- */
-class PDFThumbnailView {
+class PDFThumbnailView extends RenderableView {
+  #renderingState = RenderingStates.INITIAL;
+
   /**
    * @param {PDFThumbnailViewOptions} options
    */
@@ -106,6 +103,7 @@ class PDFThumbnailView {
     pageColors,
     enableSplitMerge = false,
   }) {
+    super();
     this.id = id;
     this.renderingId = `thumbnail${id}`;
     this.pageLabel = null;
@@ -123,14 +121,9 @@ class PDFThumbnailView {
     this.linkService = linkService;
     this.renderingQueue = renderingQueue;
 
-    this.renderTask = null;
-    this.renderingState = RenderingStates.INITIAL;
-    this.resume = null;
     this.placeholder = null;
 
     // #1696 modified by ngx-extended-pdf-viewer
-    // PDF.js v5.4.530 changed thumbnail creation from anchor/div to direct div/checkbox/img structure
-    // We preserve the custom thumbnail event dispatch and adapt to the new structure
     // Dispatch custom thumbnail event to allow ngx-extended-pdf-viewer to customize thumbnails
     eventBus.dispatch("rendercustomthumbnail", {
       pdfThumbnailView: this,
@@ -145,21 +138,21 @@ class PDFThumbnailView {
     if (existingThumbnail) {
       // Use the existing custom thumbnail
       this.div = existingThumbnail;
+      this.imageContainer = this.div.querySelector(".thumbnailImageContainer") || this.div;
       this.image = this.div.querySelector(".thumbnailImage");
       this.checkbox = this.div.querySelector("input[type='checkbox']");
       if (!this.image) {
         // Fallback: create standard thumbnail if custom one is malformed
-        this.#createStandardThumbnail(container);
+        this.#createStandardThumbnail(container, id, enableSplitMerge);
       }
     } else {
-      // Create standard thumbnail using new PDF.js v5.4.530 structure
-      this.#createStandardThumbnail(container);
+      // Create standard thumbnail using upstream structure
+      this.#createStandardThumbnail(container, id, enableSplitMerge);
     }
     // #1696 end of modification by ngx-extended-pdf-viewer
 
     // #2943 modified by ngx-extended-pdf-viewer
     // Enable drag-and-drop for page reordering functionality
-    // Adapted to new thumbnail structure (div instead of anchor)
     if (AppOptions.get("enablePageReordering") && this.div) {
       this.div.addEventListener('dragstart', this._dragStartHandler.bind(this));
       this.div.addEventListener('dragover', this._dragOverHandler.bind(this));
@@ -170,13 +163,29 @@ class PDFThumbnailView {
   }
 
   // #1696 modified by ngx-extended-pdf-viewer
-  // Helper method to create standard PDF.js v5.4.530 thumbnail structure
-  // This method creates the new direct div/checkbox/img structure (no anchor element)
-  #createStandardThumbnail(container) {
-    const imageContainer = (this.div = document.createElement("div"));
-    imageContainer.className = "thumbnail";
+  // Helper method to create standard thumbnail structure
+  #createStandardThumbnail(container, id, enableSplitMerge) {
+    const thumbnailContainer = (this.div = document.createElement("div"));
+    thumbnailContainer.className = "thumbnail";
+    thumbnailContainer.setAttribute("page-number", id);
+
+    const imageContainer = (this.imageContainer =
+      document.createElement("div"));
+    thumbnailContainer.append(imageContainer);
+    imageContainer.classList.add(
+      "thumbnailImageContainer",
+      "missingThumbnailImage"
+    );
+    imageContainer.role = "button";
+    imageContainer.tabIndex = -1;
+    imageContainer.draggable = false;
+  // #1696 end of modification by ngx-extended-pdf-viewer
     imageContainer.setAttribute("page-number", id);
-    imageContainer.setAttribute("page-id", id);
+    imageContainer.setAttribute("data-l10n-id", "pdfjs-thumb-page-title1");
+    imageContainer.setAttribute("data-l10n-args", this.#getPageL10nArgs(true));
+
+    const image = (this.image = document.createElement("img"));
+    imageContainer.append(image);
 
     // #2943 modified by ngx-extended-pdf-viewer
     // Make thumbnail draggable for page reordering
@@ -189,20 +198,62 @@ class PDFThumbnailView {
       const checkbox = (this.checkbox = document.createElement("input"));
       checkbox.type = "checkbox";
       checkbox.tabIndex = -1;
-      imageContainer.append(checkbox);
+      checkbox.setAttribute("data-l10n-id", "pdfjs-thumb-page-checkbox1");
+      checkbox.setAttribute("data-l10n-args", this.#getPageL10nArgs());
+      thumbnailContainer.append(checkbox);
+      this.pasteButton = null;
     }
 
-    const image = (this.image = document.createElement("img"));
-    image.classList.add("thumbnailImage", "missingThumbnailImage");
-    image.role = "button";
-    image.tabIndex = -1;
-    image.draggable = false;
     this.#updateDims();
 
-    imageContainer.append(image);
-    container.append(imageContainer);
+    container.append(thumbnailContainer);
   }
-  // #1696 end of modification by ngx-extended-pdf-viewer
+
+  clone(container, id) {
+    const thumbnailView = new PDFThumbnailView({
+      container,
+      id,
+      eventBus: this.eventBus,
+      defaultViewport: this.viewport,
+      optionalContentConfigPromise: this._optionalContentConfigPromise,
+      linkService: this.linkService,
+      renderingQueue: this.renderingQueue,
+      maxCanvasPixels: this.maxCanvasPixels,
+      maxCanvasDim: this.maxCanvasDim,
+      pageColors: this.pageColors,
+      enableSplitMerge: !!this.checkbox,
+    });
+    thumbnailView.setPdfPage(this.pdfPage);
+    const { imageContainer } = this;
+    if (!imageContainer.classList.contains("missingThumbnailImage")) {
+      thumbnailView.image.replaceWith(this.image.cloneNode(true));
+      thumbnailView.imageContainer.classList.remove("missingThumbnailImage");
+    }
+    return thumbnailView;
+  }
+
+  addPasteButton(pasteCallback) {
+    if (this.pasteButton) {
+      return;
+    }
+    const pasteButton = (this.pasteButton = document.createElement("button"));
+    pasteButton.classList.add("thumbnailPasteButton", "viewsManagerButton");
+    pasteButton.tabIndex = 0;
+    const span = document.createElement("span");
+    span.setAttribute("data-l10n-id", "pdfjs-views-manager-paste-button-label");
+    pasteButton.append(span);
+    pasteButton.addEventListener("click", () => {
+      pasteCallback(this.id);
+    });
+
+    this.imageContainer.after(pasteButton);
+  }
+
+  toggleSelected(isSelected) {
+    if (this.checkbox) {
+      this.checkbox.checked = isSelected;
+    }
+  }
 
   // #2943 modified by ngx-extended-pdf-viewer
   // Page reordering drag-and-drop handlers
@@ -271,6 +322,7 @@ class PDFThumbnailView {
     this.id = newId;
     this.renderingId = `thumbnail${newId}`;
     this.div.setAttribute("page-number", newId);
+    this.imageContainer.setAttribute("page-number", newId);
     // TODO: do we set the page label ?
     this.setPageLabel(this.pageLabel);
   }
@@ -283,7 +335,15 @@ class PDFThumbnailView {
     const canvasHeight = (this.canvasHeight = (canvasWidth / ratio) | 0);
     this.scale = canvasWidth / width;
 
-    this.image.style.height = `${canvasHeight}px`;
+    this.imageContainer.style.height = `${canvasHeight}px`;
+  }
+
+  get renderingState() {
+    return this.#renderingState;
+  }
+
+  set renderingState(state) {
+    this.#renderingState = state;
   }
 
   // #2943 modified by ngx-extended-pdf-viewer
@@ -305,15 +365,21 @@ class PDFThumbnailView {
     this.renderingState = RenderingStates.INITIAL;
     this.#updateDims();
 
-    const { image } = this;
+    const { image, imageContainer } = this;
     const url = image.src;
     if (url) {
       URL.revokeObjectURL(url);
-      image.removeAttribute("data-l10n-id");
-      image.removeAttribute("data-l10n-args");
       image.src = "";
-      this.image.classList.add("missingThumbnailImage");
+      imageContainer.removeAttribute("data-l10n-id");
+      imageContainer.removeAttribute("data-l10n-args");
+      imageContainer.classList.add("missingThumbnailImage");
     }
+  }
+
+  destroy() {
+    this.reset();
+    this.toggleCurrent(false);
+    this.div.remove();
   }
 
   update({ rotation = null }) {
@@ -329,12 +395,19 @@ class PDFThumbnailView {
   }
 
   toggleCurrent(isCurrent) {
+    const { imageContainer } = this;
     if (isCurrent) {
-      this.image.ariaCurrent = "page";
-      this.image.tabIndex = 0;
+      imageContainer.ariaCurrent = "page";
+      imageContainer.tabIndex = 0;
+      if (this.checkbox) {
+        this.checkbox.tabIndex = 0;
+      }
     } else {
-      this.image.ariaCurrent = false;
-      this.image.tabIndex = -1;
+      imageContainer.ariaCurrent = false;
+      imageContainer.tabIndex = -1;
+      if (this.checkbox) {
+        this.checkbox.tabIndex = -1;
+      }
     }
   }
 
@@ -381,14 +454,14 @@ class PDFThumbnailView {
       throw new Error("#convertCanvasToImage: Rendering has not finished.");
     }
     const reducedCanvas = this.#reduceImage(canvas);
-    const { image } = this;
+    const { imageContainer, image } = this;
     const { promise, resolve } = Promise.withResolvers();
     reducedCanvas.toBlob(resolve);
     const blob = await promise;
     image.src = URL.createObjectURL(blob);
     image.setAttribute("data-l10n-id", "pdfjs-thumb-page-canvas");
-    image.setAttribute("data-l10n-args", this.#pageL10nArgs);
-    image.classList.remove("missingThumbnailImage");
+    image.setAttribute("data-l10n-args", this.#getPageL10nArgs());
+    imageContainer.classList.remove("missingThumbnailImage");
     if (!FeatureTest.isOffscreenCanvasSupported) {
       // Clean up the canvas element since it is no longer needed.
       reducedCanvas.width = reducedCanvas.height = 0;
@@ -580,8 +653,11 @@ class PDFThumbnailView {
     return canvas;
   }
 
-  get #pageL10nArgs() {
-    return JSON.stringify({ page: this.pageLabel ?? this.id });
+  #getPageL10nArgs(hasTotal = false) {
+    return JSON.stringify({
+      page: this.pageLabel ?? this.id,
+      total: hasTotal ? this.linkService.pagesCount : undefined,
+    });
   }
 
   /**
@@ -589,7 +665,12 @@ class PDFThumbnailView {
    */
   setPageLabel(label) {
     this.pageLabel = typeof label === "string" ? label : null;
-    this.image.setAttribute("data-l10n-args", this.#pageL10nArgs);
+    this.imageContainer.setAttribute(
+      "data-l10n-args",
+      this.#getPageL10nArgs(true)
+    );
+    this.image.setAttribute("data-l10n-args", this.#getPageL10nArgs());
+    this.checkbox?.setAttribute("data-l10n-args", this.#getPageL10nArgs());
   }
 }
 

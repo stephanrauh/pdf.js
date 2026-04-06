@@ -14,7 +14,6 @@
  */
 
 /** @typedef {import("./event_utils").EventBus} EventBus */
-/** @typedef {import("./interfaces").IPDFLinkService} IPDFLinkService */
 
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { isValidExplicitDest } from "pdfjs-lib";
@@ -46,7 +45,6 @@ const LinkTarget = {
 /**
  * Performs navigation functions inside PDF, such as opening specified page,
  * or destination.
- * @implements {IPDFLinkService}
  */
 class PDFLinkService {
   externalLinkEnabled = true;
@@ -88,7 +86,7 @@ class PDFLinkService {
    * @type {number}
    */
   get pagesCount() {
-    return this.pdfDocument ? this.pdfDocument.numPages : 0;
+    return this.pdfDocument?.pagesMapper.pagesNumber || 0;
   }
 
   /**
@@ -442,7 +440,7 @@ class PDFLinkService {
 
       // Support opening of PDF attachments in the Firefox PDF Viewer,
       // which uses a couple of non-standard hash parameters; refer to
-      // `DownloadManager.openOrDownloadData` in the firefoxcom.js file.
+      // `DownloadManager._getOpenDataUrl` in the firefoxcom.js file.
       if (!params.has("filename") || !params.has("filedest")) {
         return;
       }
@@ -534,9 +532,6 @@ class PDFLinkService {
   }
 }
 
-/**
- * @implements {IPDFLinkService}
- */
 class SimpleLinkService extends PDFLinkService {
   setDocument(pdfDocument, baseUrl = null) {}
 }

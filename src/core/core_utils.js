@@ -18,6 +18,7 @@ import {
   assert,
   BaseException,
   hexNumbers,
+  makeArr,
   objectSize,
   stringToPDFString,
   Util,
@@ -129,7 +130,7 @@ async function fetchBinaryData(url) {
       `Failed to fetch file "${url}" with "${response.statusText}".`
     );
   }
-  return new Uint8Array(await response.arrayBuffer());
+  return response.bytes();
 }
 
 /**
@@ -669,12 +670,9 @@ function getNewAnnotationsMap(annotationStorage) {
     if (!key.startsWith(AnnotationEditorPrefix)) {
       continue;
     }
-    let annotations = newAnnotationsByPage.get(value.pageIndex);
-    if (!annotations) {
-      annotations = [];
-      newAnnotationsByPage.set(value.pageIndex, annotations);
-    }
-    annotations.push(value);
+    newAnnotationsByPage
+      .getOrInsertComputed(value.pageIndex, makeArr)
+      .push(value);
   }
   return newAnnotationsByPage.size > 0 ? newAnnotationsByPage : null;
 }

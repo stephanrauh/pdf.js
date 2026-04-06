@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { stringToPDFString, warn } from "../shared/util.js";
+import { stringToPDFString, stripPath, warn } from "../shared/util.js";
 import { BaseStream } from "./base_stream.js";
 import { Dict } from "./primitives.js";
 
@@ -27,10 +27,6 @@ function pickPlatformItem(dict) {
     }
   }
   return null;
-}
-
-function stripPath(str) {
-  return str.substring(str.lastIndexOf("/") + 1);
 }
 
 /**
