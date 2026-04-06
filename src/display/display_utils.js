@@ -470,7 +470,9 @@ function isValidFetchUrl(url, baseUrl) {
   const res = baseUrl ? URL.parse(url, baseUrl) : URL.parse(url);
   // The Fetch API only supports the http/https protocols, and not file/ftp.
   // #864 modified by ngx-extended-pdf-viewer
-  return /https?:|capacitor:/.test(res?.protocol ?? "");
+  // Added blob: (used by ngx-extended-pdf-viewer to load PDFs) and
+  // capacitor: (used by Ionic/Capacitor apps) to the allowed protocols.
+  return /https?:|blob:|capacitor:/.test(res?.protocol ?? "");
   // #864 end of modification by ngx-extended-pdf-viewer
 }
 

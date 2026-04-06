@@ -68,10 +68,14 @@ class PDFFetchStream extends BasePDFStream {
     super(source, PDFFetchStreamReader, PDFFetchStreamRangeReader);
     const { httpHeaders, url } = source;
 
+    // #864 modified by ngx-extended-pdf-viewer
+    // Upstream only allows http(s). Added blob: (used by ngx-extended-pdf-viewer
+    // to load PDFs via blob URLs) and capacitor: (for Ionic/Capacitor apps).
     assert(
-      /https?:/.test(url.protocol),
-      "PDFFetchStream only supports http(s):// URLs."
+      /https?:|blob:|capacitor:/.test(url.protocol),
+      "PDFFetchStream only supports http(s)://, blob:, and capacitor:// URLs."
     );
+    // #864 end of modification by ngx-extended-pdf-viewer
     this.headers = createHeaders(/* isHttp = */ true, httpHeaders);
   }
 }

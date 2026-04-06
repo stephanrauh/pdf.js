@@ -130,7 +130,7 @@ class PDFThumbnailView extends RenderableView {
       linkService,
       id,
       container,
-      thumbPageTitlePromiseOrPageL10nArgs: this.#pageL10nArgs,
+      thumbPageTitlePromiseOrPageL10nArgs: this.#getPageL10nArgs(), // upstream renamed #pageL10nArgs to #getPageL10nArgs()
     });
 
     // Check if custom thumbnail was already created by ngx-extended-pdf-viewer

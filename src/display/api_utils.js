@@ -43,9 +43,11 @@ function getUrlProp(val, baseHref) {
 
     // The full path is required in the 'url' field.
     // #929/#813 modified by ngx-extended-pdf-viewer
-    // to restore the drag'n'drop functionality
+    // Resolve relative URLs against baseHref to restore drag'n'drop functionality.
+    // Must return a URL object (not .href string) because upstream now expects
+    // getUrlProp() to return URL instances for PDFFetchStream's url.protocol check.
     if (baseHref) {
-      return new URL(val, window.location.origin + baseHref).href;
+      return new URL(val, window.location.origin + baseHref);
     }
     // #929/#813 end of modification by ngx-extended-pdf-viewer
     const url = URL.parse(val, window.location);
