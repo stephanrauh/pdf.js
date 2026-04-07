@@ -86,6 +86,10 @@ class PDFThumbnailViewer {
 
   #enableSplitMerge = false;
 
+  // #2943 modified by ngx-extended-pdf-viewer
+  #enablePageReordering = false;
+  // #2943 end of modification by ngx-extended-pdf-viewer
+
   #dragAC = null;
 
   #draggedContainer = null;
@@ -177,6 +181,7 @@ class PDFThumbnailViewer {
     pageColors,
     abortSignal,
     enableSplitMerge,
+    enablePageReordering, // #2943 modified by ngx-extended-pdf-viewer
     enableNewBadge,
     statusBar,
     undoBar,
@@ -192,6 +197,9 @@ class PDFThumbnailViewer {
     this.maxCanvasDim = maxCanvasDim;
     this.pageColors = pageColors || null;
     this.#enableSplitMerge = enableSplitMerge || false;
+    // #2943 modified by ngx-extended-pdf-viewer
+    this.#enablePageReordering = enablePageReordering || false;
+    // #2943 end of modification by ngx-extended-pdf-viewer
     this.#statusLabel = statusBar?.viewsManagerStatusActionLabel || null;
     this.#deselectButton =
       statusBar?.viewsManagerStatusActionDeselectButton || null;
@@ -465,6 +473,7 @@ class PDFThumbnailViewer {
             pageColors: this.pageColors,
             eventBus: this.eventBus,   // #1696 modified by ngx-extended-pdf-viewer
             enableSplitMerge: this.#enableSplitMerge,
+            enablePageReordering: this.#enablePageReordering, // #2943 modified by ngx-extended-pdf-viewer
           });
           this._thumbnails.push(thumbnail);
         }
@@ -1313,9 +1322,12 @@ class PDFThumbnailViewer {
   }
 
   #addDragListeners() {
-    if (!this.#enableSplitMerge) {
+    // #2943 modified by ngx-extended-pdf-viewer
+    // Allow drag-and-drop with just enablePageReordering (upstream gates on enableSplitMerge only)
+    if (!this.#enableSplitMerge && !this.#enablePageReordering) {
       return;
     }
+    // #2943 end of modification by ngx-extended-pdf-viewer
     this.container.addEventListener("pointerdown", e => {
       const {
         target: draggedImage,

@@ -658,6 +658,7 @@ appConfig: null,
         pageColors,
         abortSignal,
         enableSplitMerge,
+        enablePageReordering: AppOptions.get("enablePageReordering"), // #2943 modified by ngx-extended-pdf-viewer
         enableNewBadge: AppOptions.get("enableNewBadge"),
         statusBar: viewsManager.viewsManagerStatusBar,
         undoBar: viewsManager.viewsManagerUndoBar,

@@ -102,6 +102,7 @@ class PDFThumbnailView extends RenderableView {
     maxCanvasDim,
     pageColors,
     enableSplitMerge = false,
+    enablePageReordering = false, // #2943 modified by ngx-extended-pdf-viewer
   }) {
     super();
     this.id = id;
@@ -163,7 +164,7 @@ class PDFThumbnailView extends RenderableView {
 
     // #2943 modified by ngx-extended-pdf-viewer
     // Enable drag-and-drop for page reordering functionality
-    if (AppOptions.get("enablePageReordering") && this.div) {
+    if (enablePageReordering && this.div) {
       this.div.addEventListener('dragstart', this._dragStartHandler.bind(this));
       this.div.addEventListener('dragover', this._dragOverHandler.bind(this));
       this.div.addEventListener('drop', this._dropHandler.bind(this));
@@ -199,7 +200,7 @@ class PDFThumbnailView extends RenderableView {
 
     // #2943 modified by ngx-extended-pdf-viewer
     // Make thumbnail draggable for page reordering
-    if (AppOptions.get("enablePageReordering")) {
+    if (enablePageReordering) {
       imageContainer.draggable = true;
     }
     // #2943 end of modification by ngx-extended-pdf-viewer
