@@ -1707,6 +1707,13 @@ function buildLib(defines, dir) {
       encoding: false,
       sourcemaps: enableSourceMaps,
     }),
+    // #2943 modified by ngx-extended-pdf-viewer
+    gulp.src("external/ngx-logger/*.js", {
+      base: ".",
+      encoding: false,
+      sourcemaps: enableSourceMaps,
+    }),
+    // #2943 end of modification by ngx-extended-pdf-viewer
   ]);
 
   return buildLibHelper(bundleDefines, inputStream, dir);
