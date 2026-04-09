@@ -160,6 +160,15 @@ class PDFThumbnailView extends RenderableView {
     } else {
       this.#createStandardThumbnail(container, id, enableSplitMerge);
     }
+
+    // When reusing Angular template thumbnails, #createStandardThumbnail (which
+    // calls #updateDims) is skipped. We must still call #updateDims so that
+    // imageContainer gets an explicit height — without it, the upstream CSS
+    // content-visibility:hidden on .missingThumbnailImage collapses the
+    // container to 0px and thumbnails become invisible.
+    if (existingThumbnail) {
+      this.#updateDims();
+    }
     // #1696 end of modification by ngx-extended-pdf-viewer
 
     // #2943 modified by ngx-extended-pdf-viewer
