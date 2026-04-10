@@ -69,6 +69,7 @@ const CursorTool = {
   SELECT: 0, // The default value.
   HAND: 1,
   ZOOM: 2,
+  PAGE_FLIP: -3, // #3140 added by ngx-extended-pdf-viewer (negative to avoid collision with upstream)
 };
 
 // Used by `PDFViewerApplication`, and by the API unit-tests.

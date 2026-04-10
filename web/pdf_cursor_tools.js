@@ -89,6 +89,10 @@ class PDFCursorTools {
         case CursorTool.HAND:
           this._handTool.deactivate();
           break;
+        // #3140 modified by ngx-extended-pdf-viewer
+        case CursorTool.PAGE_FLIP:
+          break;
+        // #3140 end of modification by ngx-extended-pdf-viewer
         case CursorTool.ZOOM:
         /* falls through */
       }
@@ -103,6 +107,11 @@ class PDFCursorTools {
         disableActiveTool();
         this._handTool.activate();
         break;
+      // #3140 modified by ngx-extended-pdf-viewer
+      case CursorTool.PAGE_FLIP:
+        disableActiveTool();
+        break;
+      // #3140 end of modification by ngx-extended-pdf-viewer
       case CursorTool.ZOOM:
       /* falls through */
       default:

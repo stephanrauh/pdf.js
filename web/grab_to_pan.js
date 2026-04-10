@@ -89,11 +89,13 @@ class GrabToPan {
    * @returns {boolean} Whether to not react to the click event.
    */
   ignoreTarget(node) {
-      // #716 modified by ngx-extended-pdf-viewer
-    if (document.querySelector(".stf__item")) {
-      return true;
-    }
-	// #716 end of modification
+      // #716 removed by ngx-extended-pdf-viewer
+      // #3140: The original #716 check disabled the hand tool entirely when .stf__item
+      // elements existed (book mode). Now the enableFlipByDrag guard in page-flip.module.js
+      // handles the conflict: when HAND mode is active, enableFlipByDrag is false, so
+      // the page-flip module yields to the hand tool. The hand tool's capture-phase
+      // listener + stopEvent() prevents page-flip from interfering.
+	// #3140 end of modification
 
     // Check whether the clicked element is, a child of, an input element/link.
     return node.matches(

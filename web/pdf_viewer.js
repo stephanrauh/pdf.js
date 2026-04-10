@@ -418,6 +418,10 @@ class PDFViewer {
     this.#enableAutoLinking = options.enableAutoLinking !== false;
     this.#minDurationToUpdateCanvas = options.minDurationToUpdateCanvas ?? 500;
 
+    // #3140 modified by ngx-extended-pdf-viewer
+    this._enableFlipByDrag = true;
+    // #3140 end of modification by ngx-extended-pdf-viewer
+
     this.defaultRenderingQueue = !options.renderingQueue;
     if (
       (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
@@ -706,6 +710,7 @@ class PDFViewer {
             viewer.style.overflow = "hidden";
             viewer.style.marginLeft = "auto";
             viewer.style.marginRight = "auto";
+            // #3140 modified by ngx-extended-pdf-viewer
             this.pageFlip = new PageFlip(
               htmlParentElement,
               {
@@ -713,9 +718,11 @@ class PDFViewer {
                 height: page1.clientHeight,
                 showCover: true,
                 size: "fixed",
+                enableFlipByDrag: this._enableFlipByDrag,
               },
               this.cspPolicyService
             ); // #2362 modified by ngx-extended-pdf-viewer
+            // #3140 end of modification by ngx-extended-pdf-viewer
             this.pageFlip.loadFromHTML(this.container.querySelectorAll(".page"));
             // triggered by page turning
             this.pageFlip.on("flip", e => {
@@ -2577,10 +2584,36 @@ class PDFViewer {
             this.pageFlip.render.setting.height = height;
             this.pageFlip.render.update();
           }
+          // #3140 modified by ngx-extended-pdf-viewer
+          // When zoomed in beyond the page-fit scale, disable drag-to-flip
+          // so the user can pan the zoomed content instead.
+          if (this._enableFlipByDrag) {
+            let hPadding = SCROLLBAR_PADDING, vPadding = VERTICAL_PADDING;
+            if (this.removePageBorders) { hPadding = vPadding = 0; }
+            const pageWidthScale = ((this.container.clientWidth - hPadding) / page.width) * page.scale / 2;
+            const pageHeightScale = ((this.container.clientHeight - vPadding) / page.height) * page.scale;
+            const pageFitScale = Math.min(pageWidthScale, pageHeightScale);
+            const isZoomedIn = evt.scale > pageFitScale + 0.01;
+            this.pageFlip.setting.enableFlipByDrag = !isZoomedIn;
+          }
+          // #3140 end of modification by ngx-extended-pdf-viewer
         }
       }
     }
   }
+
+  // #3140 modified by ngx-extended-pdf-viewer
+  set enableFlipByDrag(value) {
+    this._enableFlipByDrag = value;
+    if (this.pageFlip) {
+      this.pageFlip.setting.enableFlipByDrag = value;
+    }
+  }
+
+  get enableFlipByDrag() {
+    return this._enableFlipByDrag;
+  }
+  // #3140 end of modification by ngx-extended-pdf-viewer
 
   #switchToEditAnnotationMode() {
     const visible = this._getVisiblePages();

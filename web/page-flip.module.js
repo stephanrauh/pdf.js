@@ -1813,15 +1813,29 @@ class UI {
         this.onResize = () => {
             this.update();
         };
+        // #3140 modified by ngx-extended-pdf-viewer
         this.onMouseDown = (e) => {
             if (this.checkTarget(e.target)) {
+                if (!this.app.getSettings().enableFlipByDrag) {
+                    // Record position for click-to-flip detection (handled in onMouseUp).
+                    // Don't call startUserTouch or preventDefault so text selection and panning still work.
+                    this._clickStartPos = this.getMousePos(e.clientX, e.clientY);
+                    this._clickStartClientX = e.clientX;
+                    this._clickStartClientY = e.clientY;
+                    return;
+                }
                 const pos = this.getMousePos(e.clientX, e.clientY);
                 this.app.startUserTouch(pos);
                 e.preventDefault();
             }
         };
+        // #3140 end of modification by ngx-extended-pdf-viewer
+        // #3140 modified by ngx-extended-pdf-viewer
         this.onTouchStart = (e) => {
             if (this.checkTarget(e.target)) {
+                if (!this.app.getSettings().enableFlipByDrag) {
+                    return; // allow native behavior (panning, scrolling)
+                }
                 if (e.changedTouches.length > 0) {
                     const t = e.changedTouches[0];
                     const pos = this.getMousePos(t.clientX, t.clientY);
@@ -1840,14 +1854,34 @@ class UI {
                 }
             }
         };
+        // #3140 end of modification by ngx-extended-pdf-viewer
+        // #3140 modified by ngx-extended-pdf-viewer
         this.onMouseUp = (e) => {
+            if (this._clickStartPos) {
+                // Click-to-flip: if mouse hasn't moved significantly, treat as a click
+                const dx = e.clientX - this._clickStartClientX;
+                const dy = e.clientY - this._clickStartClientY;
+                if (dx * dx + dy * dy < 25) { // 5px threshold
+                    const pos = this._clickStartPos;
+                    this.app.startUserTouch(pos);
+                    this.app.userStop(pos);
+                }
+                this._clickStartPos = null;
+                return;
+            }
+            // #3140 end of modification by ngx-extended-pdf-viewer
             const pos = this.getMousePos(e.clientX, e.clientY);
             this.app.userStop(pos);
         };
+        // #3140 modified by ngx-extended-pdf-viewer
         this.onMouseMove = (e) => {
+            if (!this.app.getSettings().enableFlipByDrag) {
+                return; // suppress corner fold and drag animations
+            }
             const pos = this.getMousePos(e.clientX, e.clientY);
             this.app.userMove(pos, false);
         };
+        // #3140 end of modification by ngx-extended-pdf-viewer
         this.onTouchMove = (e) => {
             if (e.changedTouches.length > 0) {
                 const t = e.changedTouches[0];
@@ -2463,6 +2497,7 @@ class Settings {
             useMouseEvents: true,
             showPageCorners: true,
             disableFlipByClick: false,
+            enableFlipByDrag: true,
         };
     }
     /**
