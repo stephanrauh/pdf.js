@@ -147,7 +147,7 @@ class PDFThumbnailView extends RenderableView {
       this.image = this.div.querySelector(".thumbnailImage") || this.imageContainer.querySelector("img");
       this.checkbox = this.div.querySelector("input[type='checkbox']");
       if (!this.image) {
-        this.#createStandardThumbnail(container, id, enableSplitMerge);
+        this.#createStandardThumbnail(container, id, enableSplitMerge, enablePageReordering);
       } else if (enableSplitMerge && !this.checkbox) {
         const checkbox = (this.checkbox = document.createElement("input"));
         checkbox.type = "checkbox";
@@ -184,7 +184,7 @@ class PDFThumbnailView extends RenderableView {
 
   // #1696 modified by ngx-extended-pdf-viewer
   // Helper method to create standard thumbnail structure
-  #createStandardThumbnail(container, id, enableSplitMerge) {
+  #createStandardThumbnail(container, id, enableSplitMerge, enablePageReordering = false) {
     const thumbnailContainer = (this.div = document.createElement("div"));
     thumbnailContainer.className = "thumbnail";
     thumbnailContainer.setAttribute("page-number", id);

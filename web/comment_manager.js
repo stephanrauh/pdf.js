@@ -199,6 +199,12 @@ class CommentSidebar extends Sidebar {
       /* isResizerOnTheLeft = */ true,
       globalAbortSignal
     );
+    // #2853 modified by ngx-extended-pdf-viewer
+    // When using [customPdfViewer], sidebar elements may not exist.
+    if (!sidebar) {
+      return
+    }
+    // #2853 end of modification by ngx-extended-pdf-viewer
     this.#sidebarTitle = sidebarTitle;
     this.#commentsList = commentsList;
     this.#commentCount = commentCount;

@@ -339,7 +339,7 @@ class ViewsManager extends Sidebar {
   }
 
   open() {
-    if (this.isOpen) {
+    if (this.isOpen || !this._sidebar) {
       return;
     }
     this.isOpen = true;
@@ -374,7 +374,7 @@ class ViewsManager extends Sidebar {
   }
 
   close(evt = null) {
-    if (!this.isOpen) {
+    if (!this.isOpen || !this._sidebar) {
       return;
     }
     this.isOpen = false;
