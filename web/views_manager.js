@@ -360,7 +360,9 @@ class ViewsManager extends Sidebar {
       });
     } else {
       this.outerContainer.classList.add("viewsManagerOpen");
-      this.eventBus.dispatch("resize", { source: this });
+      // #2809 modified by ngx-extended-pdf-viewer
+      this.eventBus.dispatch("resize", { source: this, sidebarToggle: true });
+      // #2809 end of modification by ngx-extended-pdf-viewer
     }
     if (this.active === SidebarView.THUMBS) {
       this.onUpdateThumbnails();
@@ -384,6 +386,13 @@ class ViewsManager extends Sidebar {
 
     this.onToggled();
     this.#dispatchEvent();
+
+    // #2809 modified by ngx-extended-pdf-viewer
+    // Setting hidden = true above prevents CSS transitions from running,
+    // so transitionend never fires and no resize event is dispatched.
+    // Dispatch it explicitly to trigger re-layout after the sidebar closes.
+    this.eventBus.dispatch("resize", { source: this, sidebarToggle: true });
+    // #2809 end of modification by ngx-extended-pdf-viewer
 
     if (evt?.detail > 0) {
       // Remove focus from the toggleButton if it's clicked (see issue 17361).
@@ -450,7 +459,9 @@ class ViewsManager extends Sidebar {
           outerContainer.classList.remove("viewsManagerMoving");
           // Ensure that rendering is triggered after opening/closing the
           // sidebar.
-          eventBus.dispatch("resize", { source: this });
+          // #2809 modified by ngx-extended-pdf-viewer
+          eventBus.dispatch("resize", { source: this, sidebarToggle: true });
+          // #2809 end of modification by ngx-extended-pdf-viewer
         }
       });
     }

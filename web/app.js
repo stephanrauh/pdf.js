@@ -3188,7 +3188,7 @@ function onViewerModesChanged(name, evt) {
   }
 }
 
-function onResize() {
+function onResize(evt) {
   const { pdfDocument, pdfViewer, pdfRenderingQueue } = this;
 
   if (pdfRenderingQueue.printing && window.matchMedia("print").matches) {
@@ -3199,6 +3199,12 @@ function onResize() {
   if (!pdfDocument) {
     return;
   }
+  // #2809 modified by ngx-extended-pdf-viewer
+  // When the sidebar opens/closes, the viewport width changes and update()
+  // recalculates the "first visible page," jumping to a wrong page.
+  // Save the page number so we can restore it after layout settles.
+  const savedPageNumber = evt?.sidebarToggle ? pdfViewer.currentPageNumber : 0;
+  // #2809 end of modification by ngx-extended-pdf-viewer
   const currentScaleValue = pdfViewer.currentScaleValue;
   if (
     currentScaleValue === "auto" ||
@@ -3209,6 +3215,11 @@ function onResize() {
     pdfViewer.currentScaleValue = currentScaleValue;
   }
   pdfViewer.update();
+  // #2809 modified by ngx-extended-pdf-viewer
+  if (savedPageNumber && pdfViewer.currentPageNumber !== savedPageNumber) {
+    pdfViewer.currentPageNumber = savedPageNumber;
+  }
+  // #2809 end of modification by ngx-extended-pdf-viewer
 }
 
 function onHashchange(evt) {
