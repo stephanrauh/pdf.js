@@ -310,7 +310,7 @@ class PDFThumbnailViewer {
         this.#updateStatus("select");
       });
       this.#deselectButton.classList.toggle("hidden", true);
-    } else {
+    } else if (manageMenu) {
       manageMenu.button.hidden = true;
     }
 
