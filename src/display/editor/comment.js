@@ -307,11 +307,31 @@ class Comment {
     if (text === null) {
       this.#text = "";
       this.#deleted = true;
+      // #2556 modified by ngx-extended-pdf-viewer
+      this.#editor.eventBus?.dispatch("annotation-editor-event", {
+        source: this.#editor,
+        type: "commentRemoved",
+        page: this.#editor.pageIndex + 1,
+        editorType: this.#editor.constructor.name,
+        id: this.#editor.uid,
+        value: this.#editor,
+      });
+      // #2556 end of modification by ngx-extended-pdf-viewer
       return;
     }
     this.#text = text;
     this.#date = new Date();
     this.#deleted = false;
+    // #2556 modified by ngx-extended-pdf-viewer
+    this.#editor.eventBus?.dispatch("annotation-editor-event", {
+      source: this.#editor,
+      type: "commented",
+      page: this.#editor.pageIndex + 1,
+      editorType: this.#editor.constructor.name,
+      id: this.#editor.uid,
+      value: this.#editor,
+    });
+    // #2556 end of modification by ngx-extended-pdf-viewer
   }
 
   /**

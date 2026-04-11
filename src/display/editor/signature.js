@@ -309,6 +309,17 @@ class SignatureEditor extends DrawingEditor {
     });
 
     this.div.hidden = false;
+    // #2556 modified by ngx-extended-pdf-viewer
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "signatureAdded",
+      page: this.pageIndex + 1,
+      editorType: this.constructor.name,
+      id: this.uid,
+      value: this,
+      description,
+    });
+    // #2556 end of modification by ngx-extended-pdf-viewer
   }
 
   getFromImage(bitmap) {
