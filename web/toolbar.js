@@ -539,12 +539,18 @@ class Toolbar {
       // #2843 modified by ngx-extended-pdf-viewer:
       // always set the custom value field
     }
+    // #2843 modified by ngx-extended-pdf-viewer: guard against NaN
+    // when pageScale is undefined (e.g. during reset with a named preset)
+    const scaleValue = typeof pageScale === "number" && !Number.isNaN(pageScale)
+      ? Math.round(pageScale * 10000) / 100
+      : 0;
     opts.customScaleOption.setAttribute(
       "data-l10n-args",
       JSON.stringify({
-        scale: Math.round(pageScale * 10000) / 100,
+        scale: scaleValue,
       })
     );
+    // #2843 end of modification by ngx-extended-pdf-viewer
     // }
     // #2843 end of modification by ngx-extended-pdf-viewer
     // modified by ngx-extended-pdf-viewer
