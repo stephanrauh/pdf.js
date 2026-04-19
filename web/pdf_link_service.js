@@ -186,11 +186,26 @@ class PDFLinkService {
       this.pdfHistory.push({ namedDest, explicitDest, pageNumber });
     }
 
-    this.pdfViewer.scrollPageIntoView({
-      pageNumber,
-      destArray: explicitDest,
-      ignoreDestinationZoom: this._ignoreDestinationZoom,
-    });
+    // #3195 modified by ngx-extended-pdf-viewer
+    if (this.pdfViewer.pageViewMode === "book" && this.pdfViewer.pageFlip) {
+      this.pdfViewer.ensureAdjacentPagesAreLoaded();
+      const evenPage = this.pdfViewer.currentPageNumber - (this.pdfViewer.currentPageNumber % 2);
+      const evenTargetPage = pageNumber - (pageNumber % 2);
+      if (evenPage === evenTargetPage - 2) {
+        this.pdfViewer.pageFlip.flipNext();
+      } else if (evenPage === evenTargetPage + 2) {
+        this.pdfViewer.pageFlip.flipPrev();
+      } else {
+        this.pdfViewer.pageFlip.turnToPage(pageNumber - 1);
+      }
+    } else {
+      this.pdfViewer.scrollPageIntoView({
+        pageNumber,
+        destArray: explicitDest,
+        ignoreDestinationZoom: this._ignoreDestinationZoom,
+      });
+    }
+    // #3195 end of modification by ngx-extended-pdf-viewer
 
     const ac = new AbortController();
     this.eventBus._on(
