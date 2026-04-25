@@ -678,7 +678,10 @@ class PDFViewer {
     }
 
     // #716 modified by ngx-extended-pdf-viewer
-    const flip = Math.abs(this._currentPageNumber - val) <= 2;
+    // #3197: skip flip if page hasn't changed — prevents double-flip when
+    // Angular's change detection echoes the page number back after a flip.
+    const pageChanged = this._currentPageNumber !== val;
+    const flip = pageChanged && Math.abs(this._currentPageNumber - val) <= 2;
     // #716 end of modification
 
     // The intent can be to just reset a scroll position and/or scale.
@@ -686,7 +689,7 @@ class PDFViewer {
       NgxConsole.error(`currentPageNumber: "${val}" is not a valid page.`);
     }
     // #716 modified by ngx-extended-pdf-viewer
-    if (this.pageFlip) {
+    if (this.pageFlip && pageChanged) {
       if (flip) {
         this.pageFlip.flip(val - 1);
       } else {
