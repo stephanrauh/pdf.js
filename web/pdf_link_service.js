@@ -191,15 +191,11 @@ class PDFLinkService {
     // #3195 modified by ngx-extended-pdf-viewer
     if (this.pdfViewer.pageViewMode === "book" && this.pdfViewer.pageFlip) {
       this.pdfViewer.ensureAdjacentPagesAreLoaded();
-      const evenPage = this.pdfViewer.currentPageNumber - (this.pdfViewer.currentPageNumber % 2);
-      const evenTargetPage = pageNumber - (pageNumber % 2);
-      if (evenPage === evenTargetPage - 2) {
-        this.pdfViewer.pageFlip.flipNext();
-      } else if (evenPage === evenTargetPage + 2) {
-        this.pdfViewer.pageFlip.flipPrev();
-      } else {
-        this.pdfViewer.pageFlip.turnToPage(pageNumber - 1);
-      }
+      // #3197: Use flip() for animated page turning — it delegates to flipToPage()
+      // which uses the page-flip library's own spread tracking, correctly
+      // handling cover pages and same-spread clicks (does nothing if already
+      // on the target spread).
+      this.pdfViewer.pageFlip.flip(pageNumber - 1);
     } else {
       this.pdfViewer.scrollPageIntoView({
         pageNumber,
@@ -252,22 +248,14 @@ class PDFLinkService {
       this.pdfHistory.pushPage(pageNumber);
     }
 
-    if (this.pdfViewer.pageViewMode === "book") {
-      if (this.pdfViewer.pageFlip) {
-        this.pdfViewer.ensureAdjacentPagesAreLoaded();
-        const evenPage = this.pdfViewer.currentPageNumber - (this.pdfViewer.currentPageNumber % 2);
-        const evenTargetPage = pageNumber - (pageNumber % 2);
-        if (evenPage === evenTargetPage - 2) {
-          this.pdfViewer.pageFlip.flipNext();
-        } else if (evenPage === evenTargetPage + 2) {
-          this.pdfViewer.pageFlip.flipPrev();
-        } else {
-          this.pdfViewer.pageFlip.turnToPage(pageNumber - 1);
-        }
-      }
-    } else {
-      this.pdfViewer.scrollPageIntoView({ pageNumber });
-    }
+    // #3197 modified by ngx-extended-pdf-viewer
+    // In book mode, don't flip here — the currentPageNumber setter
+    // (triggered via the Angular page binding) already handles the flip.
+    // Calling flip() here too would cause a double-flip.
+    // For TOC navigation (goToDestination), the flip is still needed
+    // because that path doesn't go through the Angular page binding.
+    this.pdfViewer.scrollPageIntoView({ pageNumber });
+    // #3197 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
