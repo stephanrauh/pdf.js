@@ -168,9 +168,10 @@ function getViewerConfiguration() {
       // #end of modification by ngx-extended-pdf-viewer
       attachmentsView: document.getElementById("attachmentsView"),
       layersView: document.getElementById("layersView"),
-      viewsManagerAddFileButton: document.getElementById(
-        "viewsManagerAddFileButton"
-      ),
+      viewsManagerAddFile: {
+        button: document.getElementById("viewsManagerAddFileButton"),
+        picker: document.getElementById("viewsManagerAddFilePicker"),
+      },
       // #modified by ngx-extended-pdf-viewer - fallback to old currentOutlineItem ID for backward compatibility
       viewsManagerCurrentOutlineButton: document.getElementById(
         "viewsManagerCurrentOutlineButton"
@@ -204,6 +205,13 @@ function getViewerConfiguration() {
         viewsManagerStatusUndoCloseButton: document.getElementById(
           "viewsManagerStatusUndoCloseButton"
         ),
+      },
+      viewsManagerWaitingBar: {
+        container: document.getElementById("viewsManagerStatusWaiting"),
+        closeButton: document.getElementById(
+          "viewsManagerStatusWaitingCloseButton"
+        ),
+        label: document.getElementById("viewsManagerStatusWaitingLabel"),
       },
       manageMenu: {
         button: document.getElementById("viewsManagerStatusActionButton"),

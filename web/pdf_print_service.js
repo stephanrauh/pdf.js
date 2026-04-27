@@ -205,6 +205,12 @@ class PDFPrintService {
       this.pageStyleSheet.remove();
       this.pageStyleSheet = null;
     }
+    if (this._blobURLs) {
+      for (const url of this._blobURLs) {
+        URL.revokeObjectURL(url);
+      }
+      this._blobURLs = null;
+    }
     this.scratchCanvas.width = this.scratchCanvas.height = 0;
     this.scratchCanvas = null;
     // #3126 modified by ngx-extended-pdf-viewer

@@ -17,7 +17,6 @@ import {
   AnnotationEditorPrefix,
   assert,
   BaseException,
-  hexNumbers,
   makeArr,
   objectSize,
   stringToPDFString,
@@ -29,7 +28,6 @@ import { BaseStream } from "./base_stream.js";
 
 const PDF_VERSION_REGEXP = /^[1-9]\.\d$/;
 const MAX_INT_32 = 2 ** 31 - 1;
-const MIN_INT_32 = -(2 ** 31);
 
 const IDENTITY_MATRIX = [1, 0, 0, 1, 0, 0];
 
@@ -266,35 +264,6 @@ function toRomanNumerals(number, lowerCase = false) {
     ROMAN_NUMBER_MAP[10 + (((number % 100) / 10) | 0)] +
     ROMAN_NUMBER_MAP[20 + (number % 10)];
   return lowerCase ? roman.toLowerCase() : roman;
-}
-
-// Calculate the base 2 logarithm of the number `x`. This differs from the
-// native function in the sense that it returns the ceiling value and that it
-// returns 0 instead of `Infinity`/`NaN` for `x` values smaller than/equal to 0.
-function log2(x) {
-  return x > 0 ? Math.ceil(Math.log2(x)) : 0;
-}
-
-function readInt8(data, offset) {
-  return (data[offset] << 24) >> 24;
-}
-
-function readInt16(data, offset) {
-  return ((data[offset] << 24) | (data[offset + 1] << 16)) >> 16;
-}
-
-function readUint16(data, offset) {
-  return (data[offset] << 8) | data[offset + 1];
-}
-
-function readUint32(data, offset) {
-  return (
-    ((data[offset] << 24) |
-      (data[offset + 1] << 16) |
-      (data[offset + 2] << 8) |
-      data[offset + 3]) >>>
-    0
-  );
 }
 
 // Checks if ch is one of the following characters: SPACE, TAB, CR or LF.
@@ -727,7 +696,7 @@ function stringToUTF16HexString(str) {
   const buf = [];
   for (let i = 0, ii = str.length; i < ii; i++) {
     const char = str.charCodeAt(i);
-    buf.push(hexNumbers[(char >> 8) & 0xff], hexNumbers[char & 0xff]);
+    buf.push(Util.hexNums[(char >> 8) & 0xff], Util.hexNums[char & 0xff]);
   }
   return buf.join("");
 }
@@ -793,21 +762,15 @@ export {
   isBooleanArray,
   isNumberArray,
   isWhiteSpace,
-  log2,
   lookupMatrix,
   lookupNormalRect,
   lookupRect,
   MAX_INT_32,
-  MIN_INT_32,
   MissingDataException,
   numberToString,
   ParserEOFException,
   parseXFAPath,
   PDF_VERSION_REGEXP,
-  readInt16,
-  readInt8,
-  readUint16,
-  readUint32,
   recoverJsURL,
   RESOURCES_KEYS_OPERATOR_LIST,
   RESOURCES_KEYS_TEXT_CONTENT,

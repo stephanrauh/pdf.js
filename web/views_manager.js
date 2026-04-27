@@ -91,7 +91,7 @@ class ViewsManager extends Sidebar {
       outlinesView,
       attachmentsView,
       layersView,
-      viewsManagerAddFileButton,
+      viewsManagerAddFile: { button: viewsManagerAddFileButton },
       viewsManagerCurrentOutlineButton,
       viewsManagerSelectorButton,
       viewsManagerSelectorOptions,
@@ -100,6 +100,7 @@ class ViewsManager extends Sidebar {
     },
     eventBus,
     l10n,
+    enableMerge = false,
     enableSplitMerge = false,
     globalAbortSignal,
   }) {
@@ -152,6 +153,10 @@ class ViewsManager extends Sidebar {
       viewsManagerStatus.hidden = true;
     }
     this._enableSplitMerge = enableSplitMerge;
+    this._enableMerge = enableMerge;
+    if (!enableMerge) {
+      viewsManagerAddFileButton.hidden = true;
+    }
 
     // PDF.js v5.4.530 introduced a new Menu component for view selector
     // ngx-extended-pdf-viewer's HTML doesn't include these elements yet, so we conditionally create the menu
@@ -172,7 +177,7 @@ class ViewsManager extends Sidebar {
       attachmentsTitle: "pdfjs-views-manager-attachments-title",
       layersTitle: "pdfjs-views-manager-layers-title1",
       notificationButton: "pdfjs-toggle-views-manager-notification-button",
-      toggleButton: "pdfjs-toggle-views-manager-button",
+      toggleButton: "pdfjs-toggle-views-manager-button1",
     });
 
     this.#addEventListeners();
@@ -286,7 +291,8 @@ class ViewsManager extends Sidebar {
       this.viewsManagerStatus.hidden = view !== SidebarView.THUMBS;
     }
     if (this.viewsManagerAddFileButton) {
-      this.viewsManagerAddFileButton.hidden = view !== SidebarView.THUMBS;
+      this.viewsManagerAddFileButton.hidden =
+        !this._enableMerge || view !== SidebarView.THUMBS;
     }
     if (this.viewsManagerCurrentOutlineButton) {
       this.viewsManagerCurrentOutlineButton.hidden = view !== SidebarView.OUTLINE;

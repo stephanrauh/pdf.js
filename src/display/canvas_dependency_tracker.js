@@ -13,7 +13,8 @@
  * limitations under the License.
  */
 
-import { FeatureTest, Util } from "../shared/util.js";
+import { BBOX_INIT, FeatureTest, Util } from "../shared/util.js";
+import { MathClamp } from "../shared/math_clamp.js";
 
 const FORCED_DEPENDENCY_LABEL = "__forcedDependency";
 
@@ -77,10 +78,11 @@ const ensureDebugMetadata = (map, key) =>
 class CanvasBBoxTracker {
   #baseTransformStack = [[1, 0, 0, 1, 0, 0]];
 
+  // minX, minY, maxX, maxY
   #clipBox = [-Infinity, -Infinity, Infinity, Infinity];
 
-  // Float32Array<minX, minY, maxX, maxY>
-  #pendingBBox = new Float64Array([Infinity, Infinity, -Infinity, -Infinity]);
+  // minX, minY, maxX, maxY
+  #pendingBBox = new Float64Array(BBOX_INIT);
 
   _pendingBBoxIdx = -1;
 
@@ -208,10 +210,7 @@ class CanvasBBoxTracker {
   resetBBox(idx) {
     if (this._pendingBBoxIdx !== idx) {
       this._pendingBBoxIdx = idx;
-      this.#pendingBBox[0] = Infinity;
-      this.#pendingBBox[1] = Infinity;
-      this.#pendingBBox[2] = -Infinity;
-      this.#pendingBBox[3] = -Infinity;
+      this.#pendingBBox.set(BBOX_INIT, 0);
     }
     return this;
   }
@@ -221,7 +220,7 @@ class CanvasBBoxTracker {
       this.#baseTransformStack.at(-1),
       ctx.getTransform()
     );
-    const clipBox = [Infinity, Infinity, -Infinity, -Infinity];
+    const clipBox = BBOX_INIT.slice();
     Util.axialAlignedBoundingBox([minX, minY, maxX, maxY], transform, clipBox);
     const intersection = Util.intersect(this.#clipBox, clipBox);
     if (intersection) {
@@ -255,24 +254,13 @@ class CanvasBBoxTracker {
       return this;
     }
 
-    const bbox = [Infinity, Infinity, -Infinity, -Infinity];
+    const bbox = BBOX_INIT.slice();
     Util.axialAlignedBoundingBox([minX, minY, maxX, maxY], transform, bbox);
-    this.#pendingBBox[0] = Math.min(
-      this.#pendingBBox[0],
-      Math.max(bbox[0], clipBox[0])
-    );
-    this.#pendingBBox[1] = Math.min(
-      this.#pendingBBox[1],
-      Math.max(bbox[1], clipBox[1])
-    );
-    this.#pendingBBox[2] = Math.max(
-      this.#pendingBBox[2],
-      Math.min(bbox[2], clipBox[2])
-    );
-    this.#pendingBBox[3] = Math.max(
-      this.#pendingBBox[3],
-      Math.min(bbox[3], clipBox[3])
-    );
+
+    this.#pendingBBox[0] = MathClamp(bbox[0], clipBox[0], this.#pendingBBox[0]);
+    this.#pendingBBox[1] = MathClamp(bbox[1], clipBox[1], this.#pendingBBox[1]);
+    this.#pendingBBox[2] = MathClamp(bbox[2], this.#pendingBBox[2], clipBox[2]);
+    this.#pendingBBox[3] = MathClamp(bbox[3], this.#pendingBBox[3], clipBox[3]);
     return this;
   }
 
@@ -1140,7 +1128,7 @@ class CanvasImagesTracker {
     let coords;
 
     if (clipBox[0] !== Infinity) {
-      const bbox = [Infinity, Infinity, -Infinity, -Infinity];
+      const bbox = BBOX_INIT.slice();
       Util.axialAlignedBoundingBox([0, -height, width, 0], transform, bbox);
 
       const finalBBox = Util.intersect(clipBox, bbox);

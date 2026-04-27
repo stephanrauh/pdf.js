@@ -86,8 +86,8 @@ const ENV_TARGETS = [
   "last 2 versions",
   "Chrome >= 118",
   "Firefox ESR",
-  "Safari >= 15.0",
-  "Node >= 20",
+  "Safari >= 16.4",
+  "Node >= 22",
   "> 1%",
   "not IE > 0",
   "not dead",
@@ -102,7 +102,7 @@ const AUTOPREFIXER_CONFIG = {
 const BABEL_TARGETS = ENV_TARGETS.join(", ");
 
 const BABEL_PRESET_ENV_OPTS = Object.freeze({
-  corejs: "3.48.0",
+  corejs: "3.49.0",
   exclude: ["web.structured-clone"],
   shippedProposals: true,
   useBuiltIns: "usage",
@@ -111,6 +111,7 @@ const BABEL_PRESET_ENV_OPTS = Object.freeze({
 const DEFINES = Object.freeze({
   SKIP_BABEL: true,
   TESTING: undefined,
+  COVERAGE: undefined,
   // The main build targets:
   GENERIC: false,
   MOZCENTRAL: false,
@@ -169,7 +170,9 @@ function startNode(args, options) {
   // (such as `issue6360.pdf`), so we need to restore this value. Note that
   // this argument needs to be before all other arguments as it needs to be
   // passed to the Node.js process itself and not to the script that it runs.
-  args.unshift("--max-http-header-size=80000");
+  // Increase the max heap size to avoid OOM caused by a Puppeteer/BiDi memory
+  // leak: https://github.com/puppeteer/puppeteer/issues/14876
+  args.unshift("--max-http-header-size=80000", "--max-old-space-size=8192");
   return spawn("node", args, options);
 }
 
@@ -290,6 +293,10 @@ function createWebpackConfig(
     BUNDLE_VERSION: versionInfo.version,
     BUNDLE_BUILD: versionInfo.commit,
     TESTING: defines.TESTING ?? process.env.TESTING === "true",
+    COVERAGE:
+      defines.COVERAGE ??
+      (process.argv.includes("--coverage") ||
+        process.argv.includes("--coverage-per-test")),
     DEFAULT_FTL: defines.GENERIC ? getDefaultFtl() : "",
   };
   const licenseHeaderLibre = fs
@@ -306,7 +313,7 @@ function createWebpackConfig(
     !bundleDefines.CHROME &&
     !bundleDefines.LIB &&
     !bundleDefines.MINIFIED &&
-    !bundleDefines.TESTING &&
+    (!bundleDefines.TESTING || bundleDefines.COVERAGE) &&
     !disableSourceMaps;
   const isModule = output.library?.type === "module";
   const isMinified = bundleDefines.MINIFIED;
@@ -345,6 +352,9 @@ function createWebpackConfig(
       },
     ],
   ];
+  if (bundleDefines.COVERAGE) {
+    babelPlugins.push("babel-plugin-istanbul");
+  }
 
   const plugins = [];
   if (!disableLicenseHeader) {
@@ -632,8 +642,8 @@ function createStandardFontBundle() {
   );
 }
 
-function createWasmBundle() {
-  return ordered([
+function createWasmBundle({ includeQuickJS = true } = {}) {
+  const sources = [
     gulp.src(
       [
         "external/openjpeg/*.wasm",
@@ -649,11 +659,33 @@ function createWasmBundle() {
       base: "external/qcms",
       encoding: false,
     }),
-    gulp.src(["external/jbig2/*.wasm", "external/jbig2/LICENSE_*"], {
-      base: "external/jbig2",
-      encoding: false,
-    }),
-  ]);
+    gulp.src(
+      [
+        "external/jbig2/*.wasm",
+        "external/jbig2/jbig2_nowasm_fallback.js",
+        "external/jbig2/LICENSE_*",
+      ],
+      {
+        base: "external/jbig2",
+        encoding: false,
+      }
+    ),
+  ];
+  if (includeQuickJS) {
+    sources.push(
+      gulp.src(
+        [
+          "external/quickjs/quickjs-eval.js",
+          "external/quickjs/quickjs-eval.wasm",
+        ],
+        {
+          base: "external/quickjs",
+          encoding: false,
+        }
+      )
+    );
+  }
+  return ordered(sources);
 }
 
 function checkFile(filePath) {
@@ -688,6 +720,18 @@ function getTempFile(prefix, suffix) {
   return filePath;
 }
 
+function getArgValue(name) {
+  for (let i = 0; i < process.argv.length; i++) {
+    if (process.argv[i] === name && i + 1 < process.argv.length) {
+      return process.argv[i + 1];
+    }
+    if (process.argv[i].startsWith(name + "=")) {
+      return process.argv[i].slice(name.length + 1);
+    }
+  }
+  return null;
+}
+
 function runTests(testsName, { bot = false } = {}) {
   return new Promise((resolve, reject) => {
     console.log("\n### Running " + testsName + " tests");
@@ -706,10 +750,10 @@ function runTests(testsName, { bot = false } = {}) {
         }
         args.push("--manifestFile=" + PDF_TEST);
         collectArgs(
-          {
-            names: ["-t", "--testfilter"],
-            hasValue: true,
-          },
+          [
+            { names: ["-t", "--testfilter"], hasValue: true },
+            { names: ["-j", "--jobs"], hasValue: true },
+          ],
           args
         );
         break;
@@ -738,7 +782,10 @@ function runTests(testsName, { bot = false } = {}) {
     if (process.argv.includes("--headless")) {
       args.push("--headless");
     }
-    if (process.argv.includes("--coverage")) {
+    if (
+      process.argv.includes("--coverage") ||
+      process.argv.includes("--coverage-per-test")
+    ) {
       args.push("--coverage");
     }
     if (process.argv.includes("--coverage-output")) {
@@ -746,6 +793,45 @@ function runTests(testsName, { bot = false } = {}) {
         "--coverageOutput",
         process.argv[process.argv.indexOf("--coverage-output") + 1]
       );
+    }
+    const coverageFormatsArg = getArgValue("--coverage-formats");
+    if (coverageFormatsArg) {
+      args.push("--coverageFormats", coverageFormatsArg);
+    }
+    if (process.argv.includes("--coverage-per-test")) {
+      args.push("--coveragePerTest");
+    }
+
+    const codeArg = testsName === "browser" ? getArgValue("--code") : null;
+    if (codeArg) {
+      const coverageDir =
+        getArgValue("--coverage-output") || BUILD_DIR + "coverage";
+      const result = spawnSync(
+        "node",
+        [
+          path.join(__dirname, "external/coverage_search/coverage_search.mjs"),
+          `--code=${codeArg}`,
+          `--coverage-dir=${coverageDir}`,
+        ],
+        { encoding: "utf8" }
+      );
+      if (result.status !== 0) {
+        reject(new Error(result.stderr?.trim() || "coverage_search failed"));
+        return;
+      }
+      const testIds = result.stdout.trim().split("\n").filter(Boolean);
+      if (testIds.length === 0) {
+        console.log(`\n### No tests found covering "${codeArg}"`);
+        resolve();
+        return;
+      }
+      console.log(
+        `\n### Found ${testIds.length} test(s) covering "${codeArg}":\n` +
+          testIds.map(id => `  ${id}`).join("\n")
+      );
+      for (const id of testIds) {
+        args.push(`-t=${id}`);
+      }
     }
 
     const testProcess = startNode(args, { cwd: TEST_DIR, stdio: "inherit" });
@@ -764,18 +850,49 @@ function collectArgs(options, args) {
   }
   for (let i = 0, ii = process.argv.length; i < ii; i++) {
     const arg = process.argv[i];
-    const option = options.find(opt => opt.names.includes(arg));
-    if (!option) {
+
+    // Exact name match (flag only, or flag with space-separated value).
+    const exactOption = options.find(opt => opt.names.includes(arg));
+    if (exactOption) {
+      if (!exactOption.hasValue) {
+        args.push(arg);
+        continue;
+      }
+      const next = process.argv[i + 1];
+      if (next && !next.startsWith("-")) {
+        args.push(arg, next);
+        i += 1;
+      }
       continue;
     }
-    if (!option.hasValue) {
-      args.push(arg);
-      continue;
-    }
-    const next = process.argv[i + 1];
-    if (next && !next.startsWith("-")) {
-      args.push(arg, next);
-      i += 1;
+
+    // Also handle --flag=value and -fvalue (concatenated short) forms.
+    for (const option of options) {
+      if (!option.hasValue) {
+        continue;
+      }
+      let matched = false;
+      for (const name of option.names) {
+        if (name.startsWith("--") && arg.startsWith(name + "=")) {
+          // --flag=value
+          args.push(name, arg.slice(name.length + 1));
+          matched = true;
+          break;
+        }
+        if (
+          !name.startsWith("--") &&
+          arg.startsWith(name) &&
+          arg.length > name.length
+        ) {
+          // -fvalue (short option with concatenated value)
+          args.push(name, arg.slice(name.length));
+          matched = true;
+          break;
+        }
+      }
+      if (matched) {
+        break;
+      }
     }
   }
 }
@@ -801,11 +918,30 @@ function makeRef(done, bot) {
   if (process.argv.includes("--headless")) {
     args.push("--headless");
   }
+  if (
+    process.argv.includes("--coverage") ||
+    process.argv.includes("--coverage-per-test")
+  ) {
+    args.push("--coverage");
+  }
+  if (process.argv.includes("--coverage-output")) {
+    args.push(
+      "--coverageOutput",
+      process.argv[process.argv.indexOf("--coverage-output") + 1]
+    );
+  }
+  const coverageFormatsArg = getArgValue("--coverage-formats");
+  if (coverageFormatsArg) {
+    args.push("--coverageFormats", coverageFormatsArg);
+  }
+  if (process.argv.includes("--coverage-per-test")) {
+    args.push("--coveragePerTest");
+  }
   collectArgs(
-    {
-      names: ["-t", "--testfilter"],
-      hasValue: true,
-    },
+    [
+      { names: ["-t", "--testfilter"], hasValue: true },
+      { names: ["-j", "--jobs"], hasValue: true },
+    ],
     args
   );
 
@@ -818,6 +954,39 @@ function makeRef(done, bot) {
     done();
   });
 }
+
+// Queries the per-test coverage index built by --coverage-per-test and prints
+// the IDs of tests that exercised a given source file location. Run with
+// --code=<file>::<line|function>, e.g. --code=canvas.js::205
+gulp.task("coverage_search", function (done) {
+  const codeArg = getArgValue("--code");
+  if (!codeArg) {
+    done(new Error('Missing --code argument, e.g. --code="canvas.js::205"'));
+    return;
+  }
+  const coverageDir =
+    getArgValue("--coverage-output") || BUILD_DIR + "coverage";
+  const result = spawnSync(
+    "node",
+    [
+      path.join(__dirname, "external/coverage_search/coverage_search.mjs"),
+      `--code=${codeArg}`,
+      `--coverage-dir=${coverageDir}`,
+    ],
+    { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] }
+  );
+  if (result.stderr) {
+    process.stderr.write(result.stderr);
+  }
+  if (result.stdout) {
+    process.stdout.write(result.stdout);
+  }
+  if (result.status !== 0) {
+    done(new Error("coverage_search failed"));
+    return;
+  }
+  done();
+});
 
 gulp.task("default", function (done) {
   console.log("Available tasks:");
@@ -1396,7 +1565,9 @@ gulp.task(
         createStandardFontBundle().pipe(
           gulp.dest(MOZCENTRAL_CONTENT_DIR + "web/standard_fonts")
         ),
-        createWasmBundle().pipe(gulp.dest(MOZCENTRAL_CONTENT_DIR + "web/wasm")),
+        createWasmBundle({ includeQuickJS: false }).pipe(
+          gulp.dest(MOZCENTRAL_CONTENT_DIR + "web/wasm")
+        ),
 
         preprocessHTML("web/viewer.html", defines).pipe(
           gulp.dest(MOZCENTRAL_CONTENT_DIR + "web")
@@ -1956,7 +2127,7 @@ gulp.task(
   "typestest",
   gulp.series(
     setTestEnv,
-    "generic",
+    createBuildNumber,
     "types",
     function createTypesTest() {
       return ordered([
@@ -2028,6 +2199,23 @@ gulp.task(
     setTestEnv,
     "generic-legacy",
     "lib-legacy",
+    function downloadPDFs(done) {
+      console.log("\n### Downloading PDFs");
+
+      const PDF_TEST = process.env.PDF_TEST || "test_manifest.json";
+      const args = ["test.mjs", "--manifestFile=" + PDF_TEST, "--downloadOnly"];
+
+      const testProcess = startNode(args, {
+        cwd: TEST_DIR,
+        stdio: "inherit",
+      });
+      testProcess.on("close", function (code) {
+        if (code !== 0) {
+          done(new Error(`Downloading PDFs failed.`));
+        }
+        done();
+      });
+    },
     function runUnitTestCli(done) {
       const useCoverage = process.argv.includes("--coverage");
 
@@ -2305,7 +2493,12 @@ gulp.task(
     },
     function watchWasm() {
       gulp.watch(
-        ["external/openjpeg/*", "external/qcms/*", "external/jbig2/*"],
+        [
+          "external/openjpeg/*",
+          "external/qcms/*",
+          "external/jbig2/*",
+          "external/quickjs/*",
+        ],
         { ignoreInitial: false },
         gulp.series("dev-wasm")
       );
@@ -2316,7 +2509,6 @@ gulp.task(
           "src/pdf.{sandbox,sandbox.external,scripting}.js",
           "src/scripting_api/*.js",
           "src/shared/scripting_utils.js",
-          "external/quickjs/*.js",
         ],
         { ignoreInitial: false },
         gulp.series("dev-sandbox")
@@ -2548,8 +2740,7 @@ function packageJson() {
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
     optionalDependencies: {
-      "@napi-rs/canvas": "^0.1.96",
-      "node-readable-to-web-readable-stream": "^0.4.2",
+      "@napi-rs/canvas": "^0.1.100",
     },
     browser: {
       canvas: false,
@@ -2563,7 +2754,7 @@ function packageJson() {
       url: `git+${DIST_GIT_URL}`,
     },
     engines: {
-      node: ">=20.19.0 || >=22.13.0 || >=24",
+      node: ">=22.13.0 || >=24",
     },
     scripts: {},
   };

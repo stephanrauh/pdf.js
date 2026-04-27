@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-import { assert, FeatureTest, MeshFigureType, Util } from "../shared/util.js";
+import { assert, BBOX_INIT, FeatureTest, Util } from "../shared/util.js";
 import {
   CSS_FONT_INFO,
   FONT_INFO,
@@ -348,13 +348,12 @@ class PatternInfo {
     const nCoord = dataView.getUint32(PATTERN_INFO.N_COORD, true);
     const nColor = dataView.getUint32(PATTERN_INFO.N_COLOR, true);
     const nStop = dataView.getUint32(PATTERN_INFO.N_STOP, true);
-    const nFigures = dataView.getUint32(PATTERN_INFO.N_FIGURES, true);
 
     let offset = 20;
     const coords = new Float32Array(this.buffer, offset, nCoord * 2);
     offset += nCoord * 8;
-    const colors = new Uint8Array(this.buffer, offset, nColor * 3);
-    offset += nColor * 3;
+    const colors = new Uint8Array(this.buffer, offset, nColor * 4);
+    offset += nColor * 4;
     const stops = [];
     for (let i = 0; i < nStop; ++i) {
       const p = dataView.getFloat32(offset, true);
@@ -376,37 +375,6 @@ class PatternInfo {
     if (hasBackground) {
       background = new Uint8Array(this.buffer, offset, 3);
       offset += 3;
-    }
-
-    const figures = [];
-    for (let i = 0; i < nFigures; ++i) {
-      const type = dataView.getUint8(offset);
-      offset += 1;
-      // Ensure 4-byte alignment
-      offset = Math.ceil(offset / 4) * 4;
-
-      const coordsLength = dataView.getUint32(offset, true);
-      offset += 4;
-      const figureCoords = new Int32Array(this.buffer, offset, coordsLength);
-      offset += coordsLength * 4;
-
-      const colorsLength = dataView.getUint32(offset, true);
-      offset += 4;
-      const figureColors = new Int32Array(this.buffer, offset, colorsLength);
-      offset += colorsLength * 4;
-
-      const figure = {
-        type,
-        coords: figureCoords,
-        colors: figureColors,
-      };
-
-      if (type === MeshFigureType.LATTICE) {
-        figure.verticesPerRow = dataView.getUint32(offset, true);
-        offset += 4;
-      }
-
-      figures.push(figure);
     }
 
     if (kind === 1) {
@@ -438,7 +406,7 @@ class PatternInfo {
       const shadingType = this.data[PATTERN_INFO.SHADING_TYPE];
       let bounds = null;
       if (coords.length > 0) {
-        bounds = [Infinity, Infinity, -Infinity, -Infinity];
+        bounds = BBOX_INIT.slice();
 
         for (let i = 0, ii = coords.length; i < ii; i += 2) {
           Util.pointBoundingBox(coords[i], coords[i + 1], bounds);
@@ -449,7 +417,7 @@ class PatternInfo {
         shadingType,
         coords,
         colors,
-        figures,
+        nCoord,
         bounds,
         bbox,
         background,

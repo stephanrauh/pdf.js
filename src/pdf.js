@@ -36,7 +36,6 @@ import {
   makeArr,
   makeMap,
   makeObj,
-  MathClamp,
   normalizeUnicode,
   OPS,
   PasswordResponses,
@@ -55,6 +54,7 @@ import {
   getFilenameFromUrl,
   getPdfFilenameFromUrl,
   getRGB,
+  getRGBA,
   getXfaPageViewport,
   isDataScheme,
   isPdfFile,
@@ -84,6 +84,7 @@ import { DrawLayer } from "./display/draw_layer.js";
 import { GlobalWorkerOptions } from "./display/worker_options.js";
 import { HighlightOutliner } from "./display/editor/drawers/highlight.js";
 import { isValidExplicitDest } from "./display/api_utils.js";
+import { MathClamp } from "./shared/math_clamp.js";
 import { SignatureExtractor } from "./display/editor/drawers/signaturedraw.js";
 import { TextLayer } from "./display/text_layer.js";
 import { TextLayerImages } from "./display/text_layer_images.js";
@@ -119,6 +120,7 @@ globalThis.pdfjsLib = {
   getFilenameFromUrl,
   getPdfFilenameFromUrl,
   getRGB,
+  getRGBA,
   getUuid,
   getXfaPageViewport,
   GlobalWorkerOptions,
@@ -182,6 +184,7 @@ export {
   getFilenameFromUrl,
   getPdfFilenameFromUrl,
   getRGB,
+  getRGBA,
   getUuid,
   getXfaPageViewport,
   GlobalWorkerOptions,

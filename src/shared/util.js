@@ -27,6 +27,9 @@ const isNodeJS =
   !process.versions.nw &&
   !(process.versions.electron && process.type && process.type !== "browser");
 
+const BBOX_INIT = [Infinity, Infinity, -Infinity, -Infinity];
+const F32_BBOX_INIT = new Float32Array(BBOX_INIT);
+
 const FONT_IDENTITY_MATRIX = [0.001, 0, 0, 0.001, 0, 0];
 
 // Represent the percentage of the height of a single-line field over
@@ -91,6 +94,7 @@ const AnnotationEditorParamsType = {
   INK_COLOR: 21,
   INK_THICKNESS: 22,
   INK_OPACITY: 23,
+  INK_COLOR_AND_OPACITY: 24,
   HIGHLIGHT_COLOR: 31,
   HIGHLIGHT_THICKNESS: 32,
   HIGHLIGHT_FREE: 33,
@@ -614,21 +618,6 @@ function stringToBytes(str) {
   return bytes;
 }
 
-function string32(value) {
-  if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-    assert(
-      typeof value === "number" && Math.abs(value) < 2 ** 32,
-      `string32: Unexpected input "${value}".`
-    );
-  }
-  return String.fromCharCode(
-    (value >> 24) & 0xff,
-    (value >> 16) & 0xff,
-    (value >> 8) & 0xff,
-    value & 0xff
-  );
-}
-
 function objectSize(obj) {
   return Object.keys(obj).length;
 }
@@ -641,23 +630,9 @@ function isLittleEndian() {
   return view32[0] === 1;
 }
 
-// Checks if it's possible to eval JS expressions.
-function isEvalSupported() {
-  try {
-    new Function(""); // eslint-disable-line no-new, no-new-func
-    return true;
-  } catch {
-    return false;
-  }
-}
-
 class FeatureTest {
   static get isLittleEndian() {
     return shadow(this, "isLittleEndian", isLittleEndian());
-  }
-
-  static get isEvalSupported() {
-    return shadow(this, "isEvalSupported", isEvalSupported());
   }
 
   static get isOffscreenCanvasSupported() {
@@ -688,7 +663,6 @@ class FeatureTest {
     return shadow(
       this,
       "isSanitizerSupported",
-      // eslint-disable-next-line no-undef
       typeof Sanitizer !== "undefined"
     );
   }
@@ -714,15 +688,38 @@ class FeatureTest {
       globalThis.CSS?.supports?.("width: round(1.5px, 1px)")
     );
   }
+
+  static get isAlphaColorInputSupported() {
+    return shadow(
+      this,
+      "isAlphaColorInputSupported",
+      (() => {
+        if (typeof document === "undefined") {
+          return false;
+        }
+        const input = document.createElement("input");
+        input.type = "color";
+        input.setAttribute("alpha", "");
+        input.value = "#ff000080";
+        // If alpha is supported the color picker retains the alpha channel, so
+        // the value won't be a plain opaque color (7-char #rrggbb).
+        return input.value !== "#ff0000";
+      })()
+    );
+  }
 }
 
-const hexNumbers = Array.from(Array(256).keys(), n =>
-  n.toString(16).padStart(2, "0")
-);
-
 class Util {
+  static get hexNums() {
+    return shadow(
+      this,
+      "hexNums",
+      Array.from(Array(256).keys(), n => n.toString(16).padStart(2, "0"))
+    );
+  }
+
   static makeHexColor(r, g, b) {
-    return `#${hexNumbers[r]}${hexNumbers[g]}${hexNumbers[b]}`;
+    return `#${this.hexNums[r]}${this.hexNums[g]}${this.hexNums[b]}`;
   }
 
   static domMatrixToTransform(dm) {
@@ -1261,25 +1258,6 @@ const makeArr = () => [];
 const makeMap = () => new Map();
 const makeObj = () => Object.create(null);
 
-// TODO: Replace all occurrences of this function with `Math.clamp` once
-//       https://github.com/tc39/proposal-math-clamp/ is generally available.
-function MathClamp(v, min, max) {
-  return Math.min(Math.max(v, min), max);
-}
-
-// TODO: Remove this once `Math.sumPrecise` is generally available.
-if (
-  (typeof PDFJSDev === "undefined" ||
-    PDFJSDev.test("SKIP_BABEL && !MOZCENTRAL")) &&
-  typeof Math.sumPrecise !== "function"
-) {
-  // Note that this isn't a "proper" polyfill, but since we're only using it to
-  // replace `Array.prototype.reduce()` invocations it should be fine.
-  Math.sumPrecise = function (numbers) {
-    return numbers.reduce((a, b) => a + b, 0);
-  };
-}
-
 // See https://developer.mozilla.org/en-US/docs/Web/API/Blob/bytes#browser_compatibility
 if (
   typeof PDFJSDev !== "undefined" &&
@@ -1351,17 +1329,18 @@ export {
   assert,
   BaseException,
   BASELINE_FACTOR,
+  BBOX_INIT,
   bytesToString,
   createValidAbsoluteUrl,
   DocumentActionEventType,
   DrawOPS,
+  F32_BBOX_INIT,
   FeatureTest,
   FONT_IDENTITY_MATRIX,
   FormatError,
   getModificationDate,
   getUuid,
   getVerbosityLevel,
-  hexNumbers,
   ImageKind,
   info,
   InvalidPDFException,
@@ -1372,7 +1351,6 @@ export {
   makeArr,
   makeMap,
   makeObj,
-  MathClamp,
   MeshFigureType,
   normalizeUnicode,
   objectSize,
@@ -1385,7 +1363,6 @@ export {
   ResponseException,
   setVerbosityLevel,
   shadow,
-  string32,
   stringToBytes,
   stringToPDFString,
   stringToUTF8String,

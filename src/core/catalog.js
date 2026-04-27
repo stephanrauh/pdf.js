@@ -726,7 +726,7 @@ class Catalog {
 
   getDestination(id) {
     // Avoid extra lookup/parsing when all destinations are already available.
-    if (this.hasOwnProperty("destinations")) {
+    if (Object.hasOwn(this, "destinations")) {
       return this.destinations[id] ?? null;
     }
 
@@ -1090,6 +1090,15 @@ class Catalog {
       }
     }
     return shadow(this, "attachments", attachments);
+  }
+
+  get rawEmbeddedFiles() {
+    const obj = this.#catDict.get("Names");
+    if (!(obj instanceof Dict) || !obj.has("EmbeddedFiles")) {
+      return null;
+    }
+    const nameTree = new NameTree(obj.getRaw("EmbeddedFiles"), this.xref);
+    return nameTree.getAll(/* isRaw = */ true);
   }
 
   get xfaImages() {

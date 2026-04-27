@@ -27,7 +27,11 @@ import {
   stringToAsciiOrUTF16BE,
 } from "../core_utils.js";
 import { Dict, isName, Name, Ref, RefSet, RefSetCache } from "../primitives.js";
-import { getModificationDate, stringToPDFString } from "../../shared/util.js";
+import {
+  getModificationDate,
+  stringToBytes,
+  stringToPDFString,
+} from "../../shared/util.js";
 import { incrementalUpdate, writeValue } from "../writer.js";
 import { NameTree, NumberTree } from "../name_number_tree.js";
 import { AnnotationFactory } from "../annotation.js";
@@ -76,6 +80,7 @@ class DocumentData {
     this.hasSignatureAnnotations = false;
     this.fieldToParent = new RefSetCache();
     this.outline = null;
+    this.embeddedFiles = null;
   }
 }
 
@@ -107,7 +112,16 @@ class XRefWrapper {
 }
 
 class PDFEditor {
+  // Whether the edited PDF contains only one file. This is used to determine if
+  // we can handle some potential duplications.
+  // For example, there are no obvious way to dedup page labels when merging
+  // multiple PDF files.
   hasSingleFile = false;
+
+  // Whether the edited PDF contains only one file used one or more times.
+  // This is used to determine if we can preserve some information such as
+  // passwords.
+  isSingleFile = false;
 
   #newAnnotationsParams = null;
 
@@ -162,6 +176,8 @@ class PDFEditor {
   acroFormQ = 0;
 
   outlineItems = null;
+
+  embeddedFiles = new Map();
 
   constructor({ useObjectStreams = true, title = "", author = "" } = {}) {
     [this.rootRef, this.rootDict] = this.newDict;
@@ -544,7 +560,214 @@ class PDFEditor {
    *  excluded ranges (inclusive) or indices.
    * @property {Array<number>} [pageIndices]
    *  position of the pages in the final document.
+   * @property {number} [insertAfter]
+   *  0-based index in the base sequential document after which to insert the
+   *  pages. Sequential pageInfos (those without pageIndices) have their indices
+   *  shifted to accommodate the insertion. Cannot be combined with pageIndices.
    */
+
+  /**
+   * Return the document-local page indices that pass the include/exclude
+   * filters for the given pageInfo, in document order.
+   * @param {PageInfo} pageInfo
+   * @returns {Array<number>}
+   */
+  #getFilteredPageIndices({ document, includePages, excludePages }) {
+    if (!document) {
+      return [];
+    }
+    let keptIndices, keptRanges, deletedIndices, deletedRanges;
+    for (const page of includePages || []) {
+      if (Array.isArray(page)) {
+        (keptRanges ||= []).push(page);
+      } else {
+        (keptIndices ||= new Set()).add(page);
+      }
+    }
+    for (const page of excludePages || []) {
+      if (Array.isArray(page)) {
+        (deletedRanges ||= []).push(page);
+      } else {
+        (deletedIndices ||= new Set()).add(page);
+      }
+    }
+    const indices = [];
+    for (let i = 0, ii = document.numPages; i < ii; i++) {
+      if (deletedIndices?.has(i)) {
+        continue;
+      }
+      if (deletedRanges) {
+        let isDeleted = false;
+        for (const [start, end] of deletedRanges) {
+          if (i >= start && i <= end) {
+            isDeleted = true;
+            break;
+          }
+        }
+        if (isDeleted) {
+          continue;
+        }
+      }
+      let takePage = false;
+      if (keptIndices) {
+        takePage = keptIndices.has(i);
+      }
+      if (!takePage && keptRanges) {
+        for (const [start, end] of keptRanges) {
+          if (i >= start && i <= end) {
+            takePage = true;
+            break;
+          }
+        }
+      }
+      if (!takePage && !keptIndices && !keptRanges) {
+        takePage = true;
+      }
+      if (takePage) {
+        indices.push(i);
+      }
+    }
+    return indices;
+  }
+
+  /**
+   * Resolve insertAfter pageInfos by converting them (and sequential pageInfos)
+   * to explicit pageIndices, shifting indices to accommodate each insertion.
+   * insertAfter values are relative to the base sequential sequence (i.e. the
+   * concatenation of pages from pageInfos that have neither pageIndices nor
+   * insertAfter), so they are independent of each other.
+   * @param {Array<PageInfo>} pageInfos
+   * @returns {Array<PageInfo>}
+   */
+  #resolveInsertAfterIndices(pageInfos) {
+    // Single pass: build the base sequential sequence and collect insertAfter
+    // entries, computing each pageInfo's filtered page count only once and only
+    // for pageInfos that actually contribute pages.
+    const sequence = []; // each element is the index into pageInfos
+    const insertAfterList = [];
+    for (let i = 0; i < pageInfos.length; i++) {
+      const info = pageInfos[i];
+      if (!info.document || info.pageIndices) {
+        continue;
+      }
+      const count = this.#getFilteredPageIndices(info).length;
+      if (info.insertAfter === undefined) {
+        for (let j = 0; j < count; j++) {
+          sequence.push(i);
+        }
+      } else {
+        insertAfterList.push({ i, insertAfter: info.insertAfter, count });
+      }
+    }
+
+    insertAfterList.sort((a, b) => a.insertAfter - b.insertAfter);
+
+    // Partial pageIndices would auto-fill into free slots at extraction time,
+    // which collides with the positions insertAfter shifts/assigns. Reject.
+    if (insertAfterList.length > 0) {
+      for (const info of pageInfos) {
+        if (!info.document || !info.pageIndices) {
+          continue;
+        }
+        const filteredCount = this.#getFilteredPageIndices(info).length;
+        if (info.pageIndices.length < filteredCount) {
+          throw new Error(
+            "extractPages: partial pageIndices cannot be combined with insertAfter entries."
+          );
+        }
+      }
+    }
+
+    // If the base sequential sequence is empty but some entries carry explicit
+    // pageIndices (e.g. after a deletion), resolve each insertAfter against
+    // that explicit layout: shift existing positions past the insertion point
+    // and fill the gap. Entries without a document are ignored. With no
+    // explicit entries we fall through to the sequential branch, whose
+    // Array.splice already clamps to position 0 on an empty sequence.
+    const hasExplicitLayout =
+      insertAfterList.length > 0 &&
+      pageInfos.some(info => info.document && info.pageIndices);
+    if (sequence.length === 0 && hasExplicitLayout) {
+      const updatedPageInfos = pageInfos.slice();
+      let maxExistingPos = -1;
+      for (const info of pageInfos) {
+        if (info.document && info.pageIndices) {
+          for (const idx of info.pageIndices) {
+            if (idx > maxExistingPos) {
+              maxExistingPos = idx;
+            }
+          }
+        }
+      }
+      let offset = 0;
+      for (const { i, insertAfter, count } of insertAfterList) {
+        // Clamp to [-1, maxExistingPos] so out-of-range values don't produce
+        // negative or gap-creating positions.
+        const threshold = Math.min(
+          Math.max(insertAfter, -1) + offset,
+          maxExistingPos
+        );
+        for (let j = 0; j < updatedPageInfos.length; j++) {
+          const existingInfo = updatedPageInfos[j];
+          if (
+            !existingInfo.document ||
+            !existingInfo.pageIndices ||
+            existingInfo.pageIndices.every(idx => idx <= threshold)
+          ) {
+            continue;
+          }
+          updatedPageInfos[j] = {
+            ...existingInfo,
+            pageIndices: existingInfo.pageIndices.map(idx =>
+              idx > threshold ? idx + count : idx
+            ),
+          };
+        }
+        const insertedIndices = [];
+        for (let k = 0; k < count; k++) {
+          insertedIndices.push(threshold + 1 + k);
+        }
+        const newInfo = {
+          ...updatedPageInfos[i],
+          pageIndices: insertedIndices,
+        };
+        delete newInfo.insertAfter;
+        updatedPageInfos[i] = newInfo;
+        offset += count;
+        maxExistingPos += count;
+      }
+      return updatedPageInfos;
+    }
+
+    // insertAfter values are relative to the base sequential sequence (stable
+    // across entries thanks to the sort above); offset converts them to
+    // current-sequence positions as we splice.
+    let offset = 0;
+    for (const { i, insertAfter, count } of insertAfterList) {
+      const insertPos = insertAfter + 1 + offset;
+      sequence.splice(insertPos, 0, ...new Array(count).fill(i));
+      offset += count;
+    }
+
+    // Map each pageInfo index to its final positions in the sequence using a
+    // plain array (keys are dense integers so no need for a Map).
+    const pageIndicesArr = new Array(pageInfos.length);
+    for (let pos = 0; pos < sequence.length; pos++) {
+      const infoIdx = sequence[pos];
+      (pageIndicesArr[infoIdx] ||= []).push(pos);
+    }
+
+    // Return updated pageInfos: sequential and insertAfter pageInfos now have
+    // explicit pageIndices; already-indexed pageInfos are left unchanged.
+    return pageInfos.map((info, i) => {
+      if (!info.document || info.pageIndices) {
+        return info;
+      }
+      const newInfo = { ...info, pageIndices: pageIndicesArr[i] || [] };
+      delete newInfo.insertAfter;
+      return newInfo;
+    });
+  }
 
   /**
    * Extract pages from the given documents.
@@ -558,8 +781,14 @@ class PDFEditor {
    * @return {Promise<void>}
    */
   async extractPages(pageInfos, annotationStorage, handler, task) {
+    if (pageInfos.some(info => info.insertAfter !== undefined)) {
+      pageInfos = this.#resolveInsertAfterIndices(pageInfos);
+    }
     const promises = [];
     let newIndex = 0;
+    this.isSingleFile =
+      pageInfos.length === 1 ||
+      pageInfos.every(info => info.document === pageInfos[0].document);
     this.hasSingleFile = pageInfos.length === 1;
     const allDocumentData = [];
 
@@ -591,57 +820,12 @@ class PDFEditor {
       const documentData = new DocumentData(document);
       allDocumentData.push(documentData);
       promises.push(this.#collectDocumentData(documentData));
-      let keptIndices, keptRanges, deletedIndices, deletedRanges;
-      for (const page of includePages || []) {
-        if (Array.isArray(page)) {
-          (keptRanges ||= []).push(page);
-        } else {
-          (keptIndices ||= new Set()).add(page);
-        }
-      }
-      for (const page of excludePages || []) {
-        if (Array.isArray(page)) {
-          (deletedRanges ||= []).push(page);
-        } else {
-          (deletedIndices ||= new Set()).add(page);
-        }
-      }
       let pageIndex = 0;
-      for (let i = 0, ii = document.numPages; i < ii; i++) {
-        if (deletedIndices?.has(i)) {
-          continue;
-        }
-        if (deletedRanges) {
-          let isDeleted = false;
-          for (const [start, end] of deletedRanges) {
-            if (i >= start && i <= end) {
-              isDeleted = true;
-              break;
-            }
-          }
-          if (isDeleted) {
-            continue;
-          }
-        }
-
-        let takePage = false;
-        if (keptIndices) {
-          takePage = keptIndices.has(i);
-        }
-        if (!takePage && keptRanges) {
-          for (const [start, end] of keptRanges) {
-            if (i >= start && i <= end) {
-              takePage = true;
-              break;
-            }
-          }
-        }
-        if (!takePage && !keptIndices && !keptRanges) {
-          takePage = true;
-        }
-        if (!takePage) {
-          continue;
-        }
+      for (const i of this.#getFilteredPageIndices({
+        document,
+        includePages,
+        excludePages,
+      })) {
         let newPageIndex;
         if (pageIndices) {
           newPageIndex = pageIndices[pageIndex++];
@@ -694,6 +878,7 @@ class PDFEditor {
     await this.#mergeStructTrees(allDocumentData);
     await this.#mergeAcroForms(allDocumentData);
     this.#buildOutline(allDocumentData);
+    await this.#collectEmbeddedFiles(allDocumentData);
 
     return this.writePDF();
   }
@@ -723,6 +908,9 @@ class PDFEditor {
       pdfManager
         .ensureCatalog("documentOutlineForEditor")
         .then(outline => (documentData.outline = outline)),
+      pdfManager
+        .ensureCatalog("rawEmbeddedFiles")
+        .then(ef => (documentData.embeddedFiles = ef)),
     ]);
     const structTreeRoot = documentData.structTreeRoot;
     if (structTreeRoot) {
@@ -1341,9 +1529,12 @@ class PDFEditor {
         result.push({
           ...item,
           // When the item's own destination is invalid (but it has surviving
-          // children), clear the destination so the output item is a plain
-          // container rather than a broken link.
+          // children), clear the destination and rawDict so the output item is
+          // a plain container rather than a broken link. Clearing rawDict
+          // prevents #setOutlineItemDest from cloning a GoTo action that
+          // references a deleted page via its D array.
           dest: hasValidOwnDest ? item.dest : null,
+          rawDict: hasValidOwnDest ? item.rawDict : null,
           items: filteredChildren,
           _documentData: documentData,
         });
@@ -1809,7 +2000,7 @@ class PDFEditor {
     const resourcesValuesCache = new Map();
     for (const field of drToFix) {
       const ap = field.get("AP");
-      for (const value of ap.getValues()) {
+      for (const [, value] of ap) {
         if (!(value instanceof BaseStream)) {
           continue;
         }
@@ -2078,13 +2269,15 @@ class PDFEditor {
     const maxLeaves =
       MAX_IN_NAME_TREE_NODE <= 1 ? allEntries.length : MAX_IN_NAME_TREE_NODE;
     const [treeRef, treeDict] = this.newDict;
-    const stack = [{ dict: treeDict, entries: allEntries }];
+    const stack = [{ dict: treeDict, entries: allEntries, isRoot: true }];
     const valueType = areNames ? "Names" : "Nums";
 
     while (stack.length > 0) {
-      const { dict, entries } = stack.pop();
+      const { dict, entries, isRoot } = stack.pop();
       if (entries.length <= maxLeaves) {
-        dict.set("Limits", [entries[0][0], entries.at(-1)[0]]);
+        if (!isRoot) {
+          dict.set("Limits", [entries[0][0], entries.at(-1)[0]]);
+        }
         dict.set(valueType, entries.flat());
         continue;
       }
@@ -2122,6 +2315,63 @@ class PDFEditor {
       /* areNames = */ false
     );
     rootDict.set("PageLabels", pageLabelsRef);
+  }
+
+  /**
+   * Collect and clone EmbeddedFiles from all source documents.
+   * @param {Array<DocumentData>} allDocumentData
+   */
+  async #collectEmbeddedFiles(allDocumentData) {
+    const { embeddedFiles } = this;
+    for (const documentData of allDocumentData) {
+      const {
+        embeddedFiles: docEmbeddedFiles,
+        document: { xref },
+      } = documentData;
+      if (!docEmbeddedFiles?.size) {
+        continue;
+      }
+      this.currentDocument = documentData;
+      for (const [key, valueRef] of docEmbeddedFiles) {
+        let name = key;
+        if (embeddedFiles.has(name)) {
+          const displayName = stringToPDFString(
+            key,
+            /* keepEscapeSequence = */ true
+          );
+          for (let i = 1; ; i++) {
+            const deduped = `${displayName}_${i}`;
+            if (!embeddedFiles.has(deduped)) {
+              name = deduped;
+              break;
+            }
+          }
+        }
+        embeddedFiles.set(
+          name,
+          await this.#collectDependencies(valueRef, true, xref)
+        );
+      }
+      this.currentDocument = null;
+    }
+  }
+
+  #makeEmbeddedFilesTree() {
+    const { embeddedFiles } = this;
+    if (embeddedFiles.size === 0) {
+      return;
+    }
+    if (!this.namesDict) {
+      [this.namesRef, this.namesDict] = this.newDict;
+      this.rootDict.set("Names", this.namesRef);
+    }
+    this.namesDict.set(
+      "EmbeddedFiles",
+      this.#makeNameNumTree(
+        Array.from(embeddedFiles.entries()),
+        /* areNames = */ true
+      )
+    );
   }
 
   #makeDestinationsTree() {
@@ -2245,6 +2495,7 @@ class PDFEditor {
     this.#makeAcroForm();
     this.#makePageTree();
     this.#makePageLabelsTree();
+    this.#makeEmbeddedFilesTree();
     this.#makeDestinationsTree();
     this.#makeStructTree();
     await this.#makeOutline();
@@ -2256,7 +2507,7 @@ class PDFEditor {
    */
   #makeInfo() {
     const infoMap = new Map();
-    if (this.hasSingleFile) {
+    if (this.isSingleFile) {
       const {
         xref: { trailer },
       } = this.oldPages[0].documentData.document;
@@ -2289,7 +2540,7 @@ class PDFEditor {
    * @returns {Promise<[Dict|null, CipherTransformFactory|null, Array|null]>}
    */
   async #makeEncrypt() {
-    if (!this.hasSingleFile) {
+    if (!this.isSingleFile) {
       return [null, null, null];
     }
     const { documentData } = this.oldPages[0];
@@ -2379,15 +2630,10 @@ class PDFEditor {
     // PDF version must be in the range 1.0 to 1.7 inclusive.
     // We add a binary comment line to ensure that the file is treated
     // as a binary file by applications that open it.
-    const header = [
-      ...`%PDF-${this.version}\n%`.split("").map(c => c.charCodeAt(0)),
-      0xfa,
-      0xde,
-      0xfa,
-      0xce,
-    ];
+    const header = stringToBytes(`%PDF-${this.version}\n%\xfa\xde\xfa\xce`);
+
     return incrementalUpdate({
-      originalData: new Uint8Array(header),
+      originalData: header,
       changes,
       xrefInfo: {
         startXRef: null,

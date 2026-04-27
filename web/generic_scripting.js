@@ -34,7 +34,7 @@ async function docProperties(pdfDocument) {
 }
 
 class GenericScripting {
-  constructor(sandboxBundleSrc) {
+  constructor(sandboxBundleSrc, wasmUrl) {
     if (sandboxBundleSrc?.constructor?.name === "Function") {
       sandboxBundleSrc = sandboxBundleSrc();
     }
@@ -45,7 +45,9 @@ class GenericScripting {
           : __raw_import__(sandboxBundleSrc);
       sandbox
         .then(pdfjsSandbox => {
-          resolve(pdfjsSandbox.QuickJSSandbox());
+          resolve(
+            pdfjsSandbox.QuickJSSandbox(new URL(wasmUrl, location.href).href)
+          );
         })
         .catch(reject);
     });

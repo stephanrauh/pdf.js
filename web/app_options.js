@@ -14,20 +14,7 @@
  */
 
 if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-  // eslint-disable-next-line no-var
-  var compatParams = new Map();
-  if (
-    typeof PDFJSDev !== "undefined" &&
-    PDFJSDev.test("LIB") &&
-    !globalThis.navigator?.language
-  ) {
-    globalThis.navigator = {
-      language: "en-US",
-      maxTouchPoints: 1,
-      platform: "",
-      userAgent: "",
-    };
-  }
+  var compatParams = new Map(); // eslint-disable-line no-var
   const { maxTouchPoints, platform, userAgent } = navigator;
 
   const isAndroid = /Android/.test(userAgent);
@@ -287,6 +274,11 @@ const defaultOptions = {
     // We'll probably want to make some experiments before enabling this
     // in Firefox release, but it has to be temporary.
     // TODO: remove it when unnecessary.
+    /** @type {boolean} */
+    value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
+  enableMerge: {
     /** @type {boolean} */
     value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
@@ -555,11 +547,6 @@ const defaultOptions = {
         : PDFJSDev.test("MOZCENTRAL")
           ? "resource://pdf.js/web/iccs/"
           : "../web/iccs/",
-    kind: OptionKind.API,
-  },
-  isEvalSupported: {
-    /** @type {boolean} */
-    value: true,
     kind: OptionKind.API,
   },
   isOffscreenCanvasSupported: {
