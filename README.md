@@ -1,5 +1,7 @@
 # PDF.js [![CI](https://github.com/mozilla/pdf.js/actions/workflows/ci.yml/badge.svg?query=branch%3Amaster)](https://github.com/mozilla/pdf.js/actions/workflows/ci.yml?query=branch%3Amaster) [![codecov](https://codecov.io/gh/mozilla/pdf.js/branch/master/graph/badge.svg)](https://codecov.io/gh/mozilla/pdf.js)
 
+> **Note on commit authorship in this fork:** A number of historical commits in this fork are authored as `Test User <test@example.com>` due to a stale local git config. All such commits were made by Stephan Rauh (the maintainer of [ngx-extended-pdf-viewer](https://github.com/stephanrauh/ngx-extended-pdf-viewer)) and the misattribution is unintentional. Future commits use the correct identity.
+
 [PDF.js](https://mozilla.github.io/pdf.js/) is a Portable Document Format (PDF) viewer that is built with HTML5.
 
 PDF.js is community-driven and supported by Mozilla. Our goal is to
