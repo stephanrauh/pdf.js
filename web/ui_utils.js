@@ -75,6 +75,21 @@ const CursorTool = {
 // Used by `PDFViewerApplication`, and by the API unit-tests.
 const AutoPrintRegExp = /\bprint\s*\(/;
 
+// #1321 added by ngx-extended-pdf-viewer
+// Tracks a deferred scroll request for a viewer that was hidden at the
+// moment scrollIntoView was called. See scrollIntoView() for details.
+let pendingHiddenScroll = null;
+
+function cancelPendingHiddenScroll() {
+  if (!pendingHiddenScroll) {
+    return;
+  }
+  pendingHiddenScroll.observer.disconnect();
+  clearTimeout(pendingHiddenScroll.watchdog);
+  pendingHiddenScroll = null;
+}
+// #1321 end of addition by ngx-extended-pdf-viewer
+
 /**
  * Scrolls specified element into view of its parent.
  * @param {HTMLElement} element - The element to be visible.
@@ -152,8 +167,58 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll = f
 
   let parent = element.offsetParent;
   if (!parent) {
-    NgxConsole.error("offsetParent is not set -- cannot scroll");
+    // #1321 modified by ngx-extended-pdf-viewer
+    // The viewer is hidden (display:none, detached, route transition, …).
+    // Dropping the scroll leaves the user on the wrong page once the viewer
+    // becomes visible. Defer via IntersectionObserver and retry when the
+    // element gains layout. Each new hidden-scroll request supersedes the
+    // pending one, so a stale deferred scroll cannot override a fresh
+    // request. A 60s watchdog guarantees cleanup if the viewer is
+    // destroyed without ever becoming visible — the watchdog is a memory
+    // safety net, not a UX timeout (after 60s of hidden time the request
+    // is almost certainly abandoned, and worst case we fall back to the
+    // pre-fix behaviour of dropping the scroll).
+    cancelPendingHiddenScroll();
+    if (typeof IntersectionObserver === "undefined" || !element.isConnected) {
+      NgxConsole.warn(
+        "offsetParent is not set -- cannot scroll viewer (element is not attached)"
+      );
+      return;
+    }
+    NgxConsole.warn(
+      "offsetParent is not set -- scroll deferred until viewer becomes visible"
+    );
+    let pendingSpot = spot;
+    let pendingScrollMatches = scrollMatches;
+    let pendingInfiniteScroll = infiniteScroll;
+    const observer = new IntersectionObserver(entries => {
+      for (const entry of entries) {
+        if (entry.isIntersecting && entry.target.offsetParent) {
+          const target = entry.target;
+          const replaySpot = pendingSpot;
+          const replayMatches = pendingScrollMatches;
+          const replayInfinite = pendingInfiniteScroll;
+          // Release closure captures so they can be GC'd even if the
+          // recursive call below decides to defer again.
+          pendingSpot = null;
+          pendingScrollMatches = null;
+          pendingInfiniteScroll = null;
+          cancelPendingHiddenScroll();
+          scrollIntoView(target, replaySpot, replayMatches, replayInfinite);
+          return;
+        }
+      }
+    });
+    const watchdog = setTimeout(() => {
+      pendingSpot = null;
+      pendingScrollMatches = null;
+      pendingInfiniteScroll = null;
+      cancelPendingHiddenScroll();
+    }, 60_000);
+    pendingHiddenScroll = { observer, watchdog };
+    observer.observe(element);
     return;
+    // #1321 end of modification by ngx-extended-pdf-viewer
   }
   let offsetY = element.offsetTop + element.clientTop;
   let offsetX = element.offsetLeft + element.clientLeft;
