@@ -83,15 +83,20 @@ class EventBus {
   }
 
   // modified by ngx-extended-pdf-viewer
-  // Backward-compat alias for fork code that uses `_on()`. Upstream
-  // removed this method in favor of `on(..., internalOpt)` but we keep
-  // it so the dozens of `_on()` callers across web/* continue to work
-  // without having to churn every file on every upstream merge.
+  // Backward-compat aliases for fork code that uses `_on()` / `_off()`.
+  // Upstream removed both in favor of `on(..., internalOpt)` / `off(...)`
+  // but we keep the aliases so the many `_on()` / `_off()` callers across
+  // web/* continue to work without having to churn every file on every
+  // upstream merge.
   _on(eventName, listener, options = null) {
     this.on(eventName, listener, {
       ...(options || {}),
       internal: INTERNAL_EVT,
     });
+  }
+
+  _off(eventName, listener, options = null) {
+    this.off(eventName, listener, options);
   }
   // end of modification by ngx-extended-pdf-viewer
 

@@ -98,6 +98,8 @@ page.on("response", res => {
 
 let renderedOk = false;
 let pageCountText = null;
+let dragOk = false;
+let saveOk = false;
 
 try {
   console.log(`[smoke] opening ${URL}`);
@@ -117,6 +119,88 @@ try {
   console.error(`[smoke] FAILED to render: ${err.message}`);
 }
 
+// Phase 2 — drag a thumbnail to reorder pages.
+// This exercises the thumbnail viewer's pointer-event drag flow, which
+// pdf.js v6 expanded with the new "merge / reorder pages" UI. Past
+// regressions: enablePageReordering=true + enableSplitMerge=false left
+// the manage-menu buttons null while still allowing drag, causing
+// #updateMenuEntries() to throw inside #onStartDragging.
+try {
+  // Force-open the sidebar by removing the `hidden` attribute. The fork
+  // deliberately disables the toggle button's click handler in
+  // web/sidebar.js (ngx-extended-pdf-viewer wires it up from Angular),
+  // so a real click on #viewsManagerToggleButton is a no-op in the
+  // standalone gulp-server context. Manipulating the attribute directly
+  // is enough to make thumbnails dispatch pointer events.
+  await page.evaluate(() => {
+    document.getElementById("viewsManager")?.removeAttribute("hidden");
+    // The thumbnails subview is hidden by default until the user opens
+    // the THUMBS sidebar view; reveal it the same way.
+    document.getElementById("thumbnailsView")?.classList.remove("hidden");
+  });
+  // Diagnostic snapshot before waiting.
+  const before = await page.evaluate(() => ({
+    thumbsCount: document.querySelectorAll(".thumbnail").length,
+    sidebarHidden: document.getElementById("viewsManager")?.hasAttribute("hidden"),
+  }));
+  console.log(`[smoke] sidebar opened: ${JSON.stringify(before)}`);
+  // Wait for at least two thumbnails to exist. They may not be visible yet
+  // (`visible:true` would also require non-zero size and no display:none
+  // ancestor), so just check for presence; in standalone mode the sidebar
+  // has no animations and the thumbnails appear as soon as setDocument
+  // populates them.
+  await page.waitForFunction(
+    () => document.querySelectorAll('.thumbnail[page-number]').length >= 2,
+    { timeout: TIMEOUT_MS }
+  );
+  const source = await page.$('.thumbnail[page-number="1"] .thumbnailImageContainer');
+  const target = await page.$('.thumbnail[page-number="3"] .thumbnailImageContainer');
+  const srcBox = await source.boundingBox();
+  const dstBox = await target.boundingBox();
+  if (!srcBox || !dstBox) {
+    throw new Error("could not get bounding box of thumbnails");
+  }
+  const sx = srcBox.x + srcBox.width / 2;
+  const sy = srcBox.y + srcBox.height / 2;
+  const dx = dstBox.x + dstBox.width / 2;
+  const dy = dstBox.y + dstBox.height / 2;
+  await page.mouse.move(sx, sy);
+  await page.mouse.down();
+  // Small initial movement exceeds the drag threshold and triggers
+  // #onStartDragging → #selectPage → #updateMenuEntries.
+  await page.mouse.move(sx, sy - 8, { steps: 5 });
+  await page.mouse.move(dx, dy, { steps: 12 });
+  await page.mouse.up();
+  // Let things settle.
+  await new Promise(r => setTimeout(r, 400));
+  dragOk = true;
+  console.log("[smoke] thumbnail drag completed");
+} catch (err) {
+  console.error(`[smoke] FAILED to drag thumbnail: ${err.message}`);
+}
+
+// Phase 3 — trigger a save. After the drag in phase 2, this.pageOrder
+// has been reordered, so clicking the download button takes the "save
+// with pageOrder" branch through web/app.js#save → worker SaveDocument.
+// Past regression: the worker's #2943 page-reorder handler used the
+// pre-v6 `Dict._map.set(...)` accessor, which crashed on v6 (where the
+// map became private `#map`).
+try {
+  // CDP allows downloads but never writes them to disk. We don't care
+  // about the file — only about errors thrown by the save flow.
+  const client = await page.target().createCDPSession();
+  await client.send("Browser.setDownloadBehavior", {
+    behavior: "deny",
+  });
+  await page.click("#downloadButton");
+  // Save is async; give the worker a moment to roundtrip + serialise.
+  await new Promise(r => setTimeout(r, 1500));
+  saveOk = true;
+  console.log("[smoke] save triggered (errors, if any, listed below)");
+} catch (err) {
+  console.error(`[smoke] FAILED to trigger save: ${err.message}`);
+}
+
 try {
   await page.screenshot({ path: SCREENSHOT_PATH, fullPage: false });
   console.log(`[smoke] screenshot: ${SCREENSHOT_PATH}`);
@@ -128,6 +212,7 @@ await browser.close();
 
 console.log(
   `[smoke] rendered=${renderedOk}, pageCount=${JSON.stringify(pageCountText)}, ` +
+  `dragOk=${dragOk}, saveOk=${saveOk}, ` +
   `pageErrors=${pageErrors.length}, consoleErrors=${consoleErrors.length}, ` +
   `consoleWarnings=${consoleWarnings.length}, failedRequests=${failedRequests.length}`
 );
@@ -151,6 +236,8 @@ if (consoleWarnings.length) {
 
 const exitOk =
   renderedOk &&
+  dragOk &&
+  saveOk &&
   pageErrors.length === 0 &&
   consoleErrors.length === 0 &&
   failedRequests.length === 0;

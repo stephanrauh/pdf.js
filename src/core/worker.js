@@ -734,12 +734,16 @@ class WorkerMessageHandler {
           const pagesDict = await xref.fetchIfRefAsync(pagesRef);
           const newPagesDict = pagesDict.clone();
 
-          // Update Kids using the Refs of the pages
+          // Update Kids using the Refs of the pages.
+          // (Use the public `Dict.set()` API — pdf.js v6 made the internal
+          // map private (#map), so the previous `_map.set(...)` access
+          // crashed with "Cannot read properties of undefined (reading
+          // 'set')" on save.)
           const updatedKids = pageOrder.map(i => pageEntries[i - 1][1][1]);
-          newPagesDict._map.set("Kids", updatedKids);
+          newPagesDict.set("Kids", updatedKids);
           for (const kidRef of updatedKids) {
             const kidDict = await xref.fetchIfRefAsync(kidRef);
-            kidDict._map.set("Parent", pagesRef);
+            kidDict.set("Parent", pagesRef);
             changes.put(kidRef, { data: kidDict });
           }
 

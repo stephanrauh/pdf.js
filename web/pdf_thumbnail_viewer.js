@@ -328,25 +328,31 @@ class PDFThumbnailViewer {
       });
       this.#deselectButton.classList.toggle("hidden", true);
 
-      if (this.#enableMerge && addFileComponent) {
-        const { picker, button } = addFileComponent;
-        picker.addEventListener("change", () => {
-          const files = Array.from(picker.files ?? []);
-          if (files.length) {
-            this.#mergeFiles(files, this._currentPageNumber - 1);
-          }
-        });
-        button.addEventListener("click", () => {
-          picker.click();
-        });
-        this.#waitingBar.closeButton?.addEventListener("click", () => {
-          this.#toggleBar("status");
-          picker.value = "";
-        });
-      }
     } else if (manageMenu) {
       manageMenu.button.hidden = true;
     }
+
+    // #3142 modified by ngx-extended-pdf-viewer
+    // Upstream gates this inside the `if (enableSplitMerge && manageMenu)` block,
+    // so enabling enableMerge alone (without enableSplitMerge) silently leaves the
+    // Add-file button unresponsive. Move the wiring out so it works standalone.
+    if (this.#enableMerge && addFileComponent?.button && addFileComponent.picker) {
+      const { picker, button } = addFileComponent;
+      picker.addEventListener("change", () => {
+        const files = Array.from(picker.files ?? []);
+        if (files.length) {
+          this.#mergeFiles(files, this._currentPageNumber - 1);
+        }
+      });
+      button.addEventListener("click", () => {
+        picker.click();
+      });
+      this.#waitingBar?.closeButton?.addEventListener("click", () => {
+        this.#toggleBar("status");
+        picker.value = "";
+      });
+    }
+    // #3142 end of modification by ngx-extended-pdf-viewer
 
     this.scroll = watchScroll(
       this.scrollableContainer,
@@ -409,7 +415,11 @@ class PDFThumbnailViewer {
           i < ii;
           i++
         ) {
-          this._thumbnails[i].checkbox.checked = true;
+          // #3142 modified by ngx-extended-pdf-viewer: checkbox is only created when enableSplitMerge is true
+          if (this._thumbnails[i].checkbox) {
+            this._thumbnails[i].checkbox.checked = true;
+          }
+          // #3142 end of modification by ngx-extended-pdf-viewer
           this.#selectPage(i + 1, true);
         }
         if (insertedPagesCount) {
@@ -761,7 +771,11 @@ class PDFThumbnailViewer {
       const prevPageNumber = pagesMapper.getPrevPageNumber(i);
       if (prevPageNumber < 0) {
         let thumbnail = this.#copiedThumbnails.get(-prevPageNumber);
-        thumbnail.checkbox.checked = false;
+        // #3142 modified by ngx-extended-pdf-viewer: checkbox is only created when enableSplitMerge is true
+        if (thumbnail.checkbox) {
+          thumbnail.checkbox.checked = false;
+        }
+        // #3142 end of modification by ngx-extended-pdf-viewer
         if (isCut) {
           thumbnail.updateId(i);
           fragment.append(thumbnail.div);
@@ -777,7 +791,11 @@ class PDFThumbnailViewer {
       const newThumbnail = prevThumbnails[prevPageNumber - 1];
       newThumbnails.push(newThumbnail);
       newThumbnail.updateId(i);
-      newThumbnail.checkbox.checked = false;
+      // #3142 modified by ngx-extended-pdf-viewer: checkbox is only created when enableSplitMerge is true
+      if (newThumbnail.checkbox) {
+        newThumbnail.checkbox.checked = false;
+      }
+      // #3142 end of modification by ngx-extended-pdf-viewer
       fragment.append(newThumbnail.div);
     }
     this.container.replaceChildren(fragment);
@@ -963,7 +981,11 @@ class PDFThumbnailViewer {
       for (let i = 1, ii = this.#savedThumbnails.length; i <= ii; i++) {
         const thumbnail = this.#savedThumbnails[i - 1];
         thumbnail.updateId(i);
-        thumbnail.checkbox.checked = false;
+        // #3142 modified by ngx-extended-pdf-viewer: checkbox is only created when enableSplitMerge is true
+        if (thumbnail.checkbox) {
+          thumbnail.checkbox.checked = false;
+        }
+        // #3142 end of modification by ngx-extended-pdf-viewer
         fragment.append(thumbnail.div);
       }
       this.container.replaceChildren(fragment);
@@ -1187,6 +1209,15 @@ class PDFThumbnailViewer {
   }
 
   #updateMenuEntries() {
+    // #2943 modified by ngx-extended-pdf-viewer
+    // The manage-menu buttons are only initialised when `enableSplitMerge`
+    // is true. Our #2943 customization allows drag-to-reorder via
+    // `enablePageReordering` alone, so the buttons can be null while
+    // selection/drag still operate. Guard against that.
+    if (!this.#manageExportButton) {
+      return;
+    }
+    // #2943 end of modification by ngx-extended-pdf-viewer
     const size = this.#selectedPages?.size || 0;
     this.#manageExportButton.disabled = this.#manageCopyButton.disabled = !size;
     this.#manageDeleteButton.disabled = this.#manageCutButton.disabled =
@@ -1194,6 +1225,11 @@ class PDFThumbnailViewer {
   }
 
   #toggleMenuEntries(enable) {
+    // #2943 modified by ngx-extended-pdf-viewer
+    if (!this.#manageExportButton) {
+      return;
+    }
+    // #2943 end of modification by ngx-extended-pdf-viewer
     this.#manageExportButton.disabled =
       this.#manageDeleteButton.disabled =
       this.#manageCopyButton.disabled =

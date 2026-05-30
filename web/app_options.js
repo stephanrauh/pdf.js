@@ -278,11 +278,14 @@ const defaultOptions = {
     value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  // #3141 modified by ngx-extended-pdf-viewer
+  // Default to false (upstream gates this on TESTING which strips the option in GENERIC builds)
   enableMerge: {
     /** @type {boolean} */
-    value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
+    value: false,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
+  // #3141 end of modification by ngx-extended-pdf-viewer
   enableNewAltTextWhenAddingImage: {
     /** @type {boolean} */
     value: true,
