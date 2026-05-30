@@ -84,7 +84,10 @@ function cancelPendingHiddenScroll() {
   if (!pendingHiddenScroll) {
     return;
   }
-  pendingHiddenScroll.observer.disconnect();
+  for (const o of pendingHiddenScroll.observers) {
+    o.disconnect();
+  }
+  clearInterval(pendingHiddenScroll.pollInterval);
   clearTimeout(pendingHiddenScroll.watchdog);
   pendingHiddenScroll = null;
 }
@@ -179,7 +182,7 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll = f
     // is almost certainly abandoned, and worst case we fall back to the
     // pre-fix behaviour of dropping the scroll).
     cancelPendingHiddenScroll();
-    if (typeof IntersectionObserver === "undefined" || !element.isConnected) {
+    if (!element.isConnected) {
       NgxConsole.warn(
         "offsetParent is not set -- cannot scroll viewer (element is not attached)"
       );
@@ -191,32 +194,59 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll = f
     let pendingSpot = spot;
     let pendingScrollMatches = scrollMatches;
     let pendingInfiniteScroll = infiniteScroll;
-    const observer = new IntersectionObserver(entries => {
-      for (const entry of entries) {
-        if (entry.isIntersecting && entry.target.offsetParent) {
-          const target = entry.target;
-          const replaySpot = pendingSpot;
-          const replayMatches = pendingScrollMatches;
-          const replayInfinite = pendingInfiniteScroll;
-          // Release closure captures so they can be GC'd even if the
-          // recursive call below decides to defer again.
-          pendingSpot = null;
-          pendingScrollMatches = null;
-          pendingInfiniteScroll = null;
-          cancelPendingHiddenScroll();
-          scrollIntoView(target, replaySpot, replayMatches, replayInfinite);
-          return;
-        }
+    // Primary signal: ResizeObserver fires when the element's box
+    // changes — including the `display:none → display:block` transition.
+    // Secondary signal: IntersectionObserver with a huge rootMargin
+    // covers edge cases where ResizeObserver doesn't fire. A 250 ms
+    // setInterval is the last-resort fallback for embeddings where
+    // neither observer is reliable. After the element gains layout we
+    // defer the actual scroll by two animation frames so PDF.js's own
+    // resize/scroll update() pass can settle — otherwise that pass
+    // runs on a viewer at scrollTop=0, sees only page 1 in
+    // _getVisiblePages(), and overwrites our scroll with
+    // _setCurrentPageNumber(1).
+    const tryReplay = () => {
+      if (!element.isConnected) {
+        // Viewer was destroyed before becoming visible — drop the
+        // request so the observers and interval can be GC'd.
+        cancelPendingHiddenScroll();
+        return;
       }
-    });
+      if (!element.offsetParent) {
+        return;
+      }
+      const replaySpot = pendingSpot;
+      const replayMatches = pendingScrollMatches;
+      const replayInfinite = pendingInfiniteScroll;
+      pendingSpot = null;
+      pendingScrollMatches = null;
+      pendingInfiniteScroll = null;
+      cancelPendingHiddenScroll();
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          scrollIntoView(element, replaySpot, replayMatches, replayInfinite);
+        });
+      });
+    };
+    const observers = [];
+    if (typeof ResizeObserver !== "undefined") {
+      const ro = new ResizeObserver(tryReplay);
+      ro.observe(element);
+      observers.push(ro);
+    }
+    if (typeof IntersectionObserver !== "undefined") {
+      const io = new IntersectionObserver(tryReplay, { rootMargin: "99999px" });
+      io.observe(element);
+      observers.push(io);
+    }
+    const pollInterval = setInterval(tryReplay, 250);
     const watchdog = setTimeout(() => {
       pendingSpot = null;
       pendingScrollMatches = null;
       pendingInfiniteScroll = null;
       cancelPendingHiddenScroll();
-    }, 60_000);
-    pendingHiddenScroll = { observer, watchdog };
-    observer.observe(element);
+    }, 10_000);
+    pendingHiddenScroll = { observers, pollInterval, watchdog };
     return;
     // #1321 end of modification by ngx-extended-pdf-viewer
   }

@@ -797,7 +797,12 @@ class AppOptions {
       const defaultOpt = defaultOptions[name];
       let userOpt = options[name];
 
-      if (!defaultOpt || !(typeof userOpt === typeof defaultOpt.value || Type[(typeof userOpt).toUpperCase()] & defaultOpt.type)) {
+      // #1321 modified by ngx-extended-pdf-viewer
+      // Unknown options (no entry in defaultOptions) are accepted as-is —
+      // ngx-extended-pdf-viewer carries extension flags that PDF.js does
+      // not know about.
+      if (defaultOpt && !(typeof userOpt === typeof defaultOpt.value || Type[(typeof userOpt).toUpperCase()] & defaultOpt.type)) {
+        // #1321 end of modification by ngx-extended-pdf-viewer
         // #2459 modified by ngx-extended-pdf-viewer
         if (typeof defaultOpt?.value === "number" && typeof userOpt === "string") {
           if (!Number.isNaN(Number(userOpt))) {
@@ -811,7 +816,9 @@ class AppOptions {
           }
         }
       }
-      const { kind } = defaultOpt;
+      // #1321 modified by ngx-extended-pdf-viewer
+      const kind = defaultOpt?.kind;
+      // #1321 end of modification by ngx-extended-pdf-viewer
 
       if (prefs && !(kind & OptionKind.BROWSER || kind & OptionKind.PREFERENCE)) {
         // #2459 modified by ngx-extended-pdf-viewer
