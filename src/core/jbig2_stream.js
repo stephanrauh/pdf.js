@@ -13,11 +13,11 @@
  * limitations under the License.
  */
 
-import { shadow, unreachable } from "../shared/util.js";
 import { BaseStream } from "./base_stream.js";
 import { DecodeStream } from "./decode_stream.js";
 import { Dict } from "./primitives.js";
 import { JBig2CCITTFaxImage } from "./jbig2_ccittFax.js";
+import { shadow } from "../shared/util.js";
 
 /**
  * For JBIG2's we use a library to decode these images and
@@ -41,10 +41,6 @@ class Jbig2Stream extends DecodeStream {
   ensureBuffer(requested) {
     // No-op, since `this.readBlock` will always parse the entire image and
     // directly insert all of its data into `this.buffer`.
-  }
-
-  readBlock() {
-    unreachable("Jbig2Stream.readBlock");
   }
 
   get isAsyncDecoder() {

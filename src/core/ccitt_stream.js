@@ -13,10 +13,10 @@
  * limitations under the License.
  */
 
-import { shadow, unreachable } from "../shared/util.js";
 import { DecodeStream } from "./decode_stream.js";
 import { Dict } from "./primitives.js";
 import { JBig2CCITTFaxImage } from "./jbig2_ccittFax.js";
+import { shadow } from "../shared/util.js";
 
 class CCITTFaxStream extends DecodeStream {
   constructor(str, maybeLength, params) {
@@ -44,10 +44,6 @@ class CCITTFaxStream extends DecodeStream {
   get bytes() {
     // If `this.maybeLength` is null, we'll get the entire stream.
     return shadow(this, "bytes", this.stream.getBytes(this.maybeLength));
-  }
-
-  readBlock() {
-    unreachable("CCITTFaxStream.readBlock");
   }
 
   get isImageStream() {

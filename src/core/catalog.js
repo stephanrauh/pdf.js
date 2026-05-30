@@ -1454,100 +1454,91 @@ class Catalog {
     return map;
   }
 
-  getPageIndex(pageRef) {
+  async getPageIndex(pageRef) {
     const cachedPageIndex = this.pageIndexCache.get(pageRef);
     if (cachedPageIndex !== undefined) {
-      return Promise.resolve(cachedPageIndex);
+      return cachedPageIndex;
     }
 
     // The page tree nodes have the count of all the leaves below them. To get
     // how many pages are before we just have to walk up the tree and keep
     // adding the count of siblings to the left of the node.
     const xref = this.xref;
+    let total = 0,
+      ref = pageRef;
 
-    function pagesBeforeRef(kidRef) {
-      let total = 0,
-        parentRef;
+    while (true) {
+      const node = await xref.fetchAsync(ref);
+      if (
+        isRefsEqual(ref, pageRef) &&
+        !isDict(node, "Page") &&
+        !(node instanceof Dict && !node.has("Type") && node.has("Contents"))
+      ) {
+        throw new FormatError(
+          "The reference does not point to a /Page dictionary."
+        );
+      }
+      if (!node) {
+        break;
+      }
+      if (!(node instanceof Dict)) {
+        throw new FormatError("Node must be a dictionary.");
+      }
+      const parentRef = node.getRaw("Parent");
 
-      return xref
-        .fetchAsync(kidRef)
-        .then(function (node) {
-          if (
-            isRefsEqual(kidRef, pageRef) &&
-            !isDict(node, "Page") &&
-            !(node instanceof Dict && !node.has("Type") && node.has("Contents"))
-          ) {
-            throw new FormatError(
-              "The reference does not point to a /Page dictionary."
-            );
-          }
-          if (!node) {
-            return null;
-          }
-          if (!(node instanceof Dict)) {
-            throw new FormatError("Node must be a dictionary.");
-          }
-          parentRef = node.getRaw("Parent");
-          return node.getAsync("Parent");
-        })
-        .then(function (parent) {
-          if (!parent) {
-            return null;
-          }
-          if (!(parent instanceof Dict)) {
-            throw new FormatError("Parent must be a dictionary.");
-          }
-          return parent.getAsync("Kids");
-        })
-        .then(function (kids) {
-          if (!kids) {
-            return null;
-          }
+      const parent = await node.getAsync("Parent");
+      if (!parent) {
+        break;
+      }
+      if (!(parent instanceof Dict)) {
+        throw new FormatError("Parent must be a dictionary.");
+      }
 
-          const kidPromises = [];
-          let found = false;
-          for (const kid of kids) {
-            if (!(kid instanceof Ref)) {
-              throw new FormatError("Kid must be a reference.");
+      const kids = await parent.getAsync("Kids");
+      if (!kids) {
+        break;
+      }
+      if (!Array.isArray(kids)) {
+        throw new FormatError("Kids must be an array.");
+      }
+
+      const kidPromises = [];
+      let found = false;
+      for (const kid of kids) {
+        if (!(kid instanceof Ref)) {
+          throw new FormatError("Kid must be a reference.");
+        }
+        if (isRefsEqual(kid, ref)) {
+          found = true;
+          break;
+        }
+        kidPromises.push(
+          xref.fetchAsync(kid).then(obj => {
+            if (!(obj instanceof Dict)) {
+              throw new FormatError("Kid node must be a dictionary.");
             }
-            if (isRefsEqual(kid, kidRef)) {
-              found = true;
-              break;
+            if (obj.has("Count")) {
+              const count = obj.get("Count");
+              if (Number.isInteger(count) && count >= 0) {
+                total += count;
+                return;
+              }
+              throw new FormatError("Count must be a (positive) integer.");
             }
-            kidPromises.push(
-              xref.fetchAsync(kid).then(function (obj) {
-                if (!(obj instanceof Dict)) {
-                  throw new FormatError("Kid node must be a dictionary.");
-                }
-                if (obj.has("Count")) {
-                  total += obj.get("Count");
-                } else {
-                  // Page leaf node.
-                  total++;
-                }
-              })
-            );
-          }
-          if (!found) {
-            throw new FormatError("Kid reference not found in parent's kids.");
-          }
-          return Promise.all(kidPromises).then(() => [total, parentRef]);
-        });
+            // Page leaf node.
+            total++;
+          })
+        );
+      }
+      if (!found) {
+        throw new FormatError("Kid reference not found in parent's kids.");
+      }
+      await Promise.all(kidPromises);
+      ref = parentRef;
     }
 
-    let total = 0;
-    const next = ref =>
-      pagesBeforeRef(ref).then(args => {
-        if (!args) {
-          this.pageIndexCache.put(pageRef, total);
-          return total;
-        }
-        const [count, parentRef] = args;
-        total += count;
-        return next(parentRef);
-      });
-
-    return next(pageRef);
+    this.pageIndexCache.put(pageRef, total);
+    return total;
   }
 
   get baseUrl() {

@@ -42,7 +42,6 @@ const FindState = {
   PENDING: 3,
 };
 
-const FIND_TIMEOUT = 250; // ms
 // #492 modified by ngx-extended-pdf-viewer
 const MATCH_SCROLL_OFFSET_TOP = -50; // px
 // #492 end of modification by ngx-extended-pdf-viewer
@@ -424,6 +423,10 @@ function getOriginalIndex(diffs, pos, len) {
  * @typedef {Object} PDFFindControllerOptions
  * @property {PDFLinkService} linkService - The navigation/linking service.
  * @property {EventBus} eventBus - The application event bus.
+ * @property {number} [delay] - The number of milliseconds to delay execution of
+ *   find commands. In the viewer each keystroke in the find bar triggers a
+ *   `find` event, so this delay avoids triggering a search prematurely when the
+ *   user is still typing the query. The default value is 250.
  * @property {boolean} [updateMatchesCountOnProgress] - True if the matches
  *   count must be updated on progress or only when the last page is reached.
  *   The default value is `true`.
@@ -437,6 +440,8 @@ class PDFFindController {
 
   #updateMatchesCountOnProgress = true;
 
+  #delay = 0;
+
   #visitedPagesCount = 0;
 
   #copiedPageData = null;
@@ -449,6 +454,7 @@ class PDFFindController {
   constructor({
     linkService,
     eventBus,
+    delay = 250,
     updateMatchesCountOnProgress = true,
     pageViewMode,
     listenToEventBus, // #2339 modified by ngx-extended-pdf-viewer
@@ -457,6 +463,7 @@ class PDFFindController {
     this._eventBus = eventBus;
     this.#updateMatchesCountOnProgress = updateMatchesCountOnProgress;
     this._pageViewMode = pageViewMode;
+    this.#delay = delay;
 
     /**
      * Callback used to check if a `pageNumber` is currently visible.
@@ -590,7 +597,7 @@ class PDFFindController {
         this._findTimeout = setTimeout(() => {
           this.#nextMatch();
           this._findTimeout = null;
-        }, FIND_TIMEOUT);
+        }, this.#delay);
       } else if (this._dirtyMatch) {
         // Immediately trigger searching for non-'find' operations, when the
         // current state needs to be reset and matches re-calculated.
@@ -1034,40 +1041,38 @@ class PDFFindController {
           resolve();
           return;
         }
-        await pdfDoc
-          .getPage(i + 1)
-          .then(pdfPage => pdfPage.getTextContent(textOptions))
-          .then(
-            textContent => {
-              const strBuf = [];
+        try {
+          const pdfPage = await pdfDoc.getPage(i + 1);
+          const textContent = await pdfPage.getTextContent(textOptions);
 
-              for (const textItem of textContent.items) {
-                strBuf.push(textItem.str);
-                if (textItem.hasEOL) {
-                  strBuf.push("\n");
-                }
-              }
+          if (pdfDoc !== this._pdfDocument) {
+            resolve();
+            return;
+          }
+          const strBuf = [];
 
-              // Store the normalized page content (text items) as one string.
-              [
-                this._pageContents[i],
-                this._pageDiffs[i],
-                this._hasDiacritics[i],
-              ] = normalize(strBuf.join(""));
-              resolve();
-            },
-            reason => {
-              NgxConsole.error(
-                `Unable to get text content for page ${i + 1}`,
-                reason
-              );
-              // Page error -- assuming no text content.
-              this._pageContents[i] = "";
-              this._pageDiffs[i] = null;
-              this._hasDiacritics[i] = false;
-              resolve();
+          for (const textItem of textContent.items) {
+            strBuf.push(textItem.str);
+            if (textItem.hasEOL) {
+              strBuf.push("\n");
             }
-          );
+          }
+          // Store the normalized page content (text items) as one string.
+          [this._pageContents[i], this._pageDiffs[i], this._hasDiacritics[i]] =
+            normalize(strBuf.join(""));
+        } catch (ex) {
+          if (pdfDoc !== this._pdfDocument) {
+            resolve();
+            return;
+          }
+          // modified by ngx-extended-pdf-viewer: use NgxConsole (filterable) instead of console
+          NgxConsole.error(`Unable to get text content for page ${i + 1}`, ex);
+          // end of modification by ngx-extended-pdf-viewer
+          // Page error -- assuming no text content.
+          [this._pageContents[i], this._pageDiffs[i], this._hasDiacritics[i]] =
+            ["", null, false];
+        }
+        resolve();
       });
     }
   }

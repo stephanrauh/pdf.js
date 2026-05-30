@@ -382,7 +382,7 @@ const defaultOptions = {
   imagesRightClickMinSize: {
     /** @type {number} */
     value:
-      typeof PDFJSDev !== "undefined" &&
+      typeof PDFJSDev === "undefined" ||
       // Firefox mobile does not support right-clicking on images,
       // see https://bugzilla.mozilla.org/show_bug.cgi?id=2014081.
       // This option is disabled by default outside of MOZCENTRAL

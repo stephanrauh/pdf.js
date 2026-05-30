@@ -826,8 +826,7 @@ class CFFParser {
       );
     }
 
-    const bytes = this.bytes;
-    const start = pos;
+    const { bytes } = this;
     const format = bytes[pos++];
     const charset = [cid ? 0 : ".notdef"];
     let id, count, i;
@@ -863,11 +862,8 @@ class CFFParser {
       default:
         throw new FormatError("Unknown charset format");
     }
-    // Raw won't be needed if we actually compile the charset.
-    const end = pos;
-    const raw = bytes.subarray(start, end);
 
-    return new CFFCharset(false, format, charset, raw);
+    return new CFFCharset(false, format, charset);
   }
 
   parseEncoding(pos, properties, strings, charset) {
@@ -1284,11 +1280,10 @@ const CFFCharsetPredefinedTypes = {
 };
 
 class CFFCharset {
-  constructor(predefined, format, charset, raw) {
+  constructor(predefined, format, charset) {
     this.predefined = predefined;
     this.format = format;
     this.charset = charset;
-    this.raw = raw;
   }
 }
 
@@ -1398,12 +1393,6 @@ class CompilerOutput {
 
   get data() {
     return this.#buf.subarray(0, this.#pos);
-  }
-
-  get finalData() {
-    const data = this.#buf.slice(0, this.#pos);
-    this.#buf = null;
-    return data;
   }
 
   get length() {
@@ -1534,7 +1523,7 @@ class CFFCompiler {
     // the sanitizer will bail out. Add a dummy byte to avoid that.
     output.add([0]);
 
-    return output.finalData;
+    return output.data;
   }
 
   encodeNumber(value) {
@@ -1851,9 +1840,7 @@ class CFFCompiler {
       case 0:
         out = new Uint8Array(1 + fdSelect.fdSelect.length);
         out[0] = format;
-        for (i = 0; i < fdSelect.fdSelect.length; i++) {
-          out[i + 1] = fdSelect.fdSelect[i];
-        }
+        out.set(fdSelect.fdSelect, 1);
         break;
       case 3:
         const start = 0;

@@ -18,6 +18,10 @@ import {
   babelPluginStripSrcPath,
   preprocessPDFJSCode,
 } from "./external/builder/babel-plugin-pdfjs-preprocessor.mjs";
+import {
+  COVERAGE_FORMAT_TO_REPORTER,
+  parseCoverageFormats,
+} from "./external/ccov/coverage_format.mjs";
 import { exec, execSync, spawn, spawnSync } from "child_process";
 import autoprefixer from "autoprefixer";
 import babel from "@babel/core";
@@ -27,16 +31,16 @@ import { finished } from "stream/promises";
 import fs from "fs";
 import gulp from "gulp";
 import hljs from "highlight.js";
+import istanbulCoverage from "istanbul-lib-coverage";
+import istanbulReportGenerator from "istanbul-reports";
 import layouts from "@metalsmith/layouts";
+import libReport from "istanbul-lib-report";
 import markdown from "@metalsmith/markdown";
 import Metalsmith from "metalsmith";
 import ordered from "ordered-read-streams";
 import path from "path";
 import postcss from "gulp-postcss";
-import postcssDirPseudoClass from "postcss-dir-pseudo-class";
 import postcssDiscardComments from "postcss-discard-comments";
-import postcssLightDarkFunction from "@csstools/postcss-light-dark-function";
-import postcssNesting from "postcss-nesting";
 import { preprocess } from "./external/builder/builder.mjs";
 import relative from "metalsmith-html-relative";
 import rename from "gulp-rename";
@@ -84,9 +88,9 @@ const config = JSON.parse(fs.readFileSync(CONFIG_FILE).toString());
 
 const ENV_TARGETS = [
   "last 2 versions",
-  "Chrome >= 118",
+  "Chrome >= 125",
   "Firefox ESR",
-  "Safari >= 16.4",
+  "Safari >= 18",
   "Node >= 22",
   "> 1%",
   "not IE > 0",
@@ -809,7 +813,7 @@ function runTests(testsName, { bot = false } = {}) {
       const result = spawnSync(
         "node",
         [
-          path.join(__dirname, "external/coverage_search/coverage_search.mjs"),
+          path.join(__dirname, "external/ccov/coverage_search.mjs"),
           `--code=${codeArg}`,
           `--coverage-dir=${coverageDir}`,
         ],
@@ -969,7 +973,7 @@ gulp.task("coverage_search", function (done) {
   const result = spawnSync(
     "node",
     [
-      path.join(__dirname, "external/coverage_search/coverage_search.mjs"),
+      path.join(__dirname, "external/ccov/coverage_search.mjs"),
       `--code=${codeArg}`,
       `--coverage-dir=${coverageDir}`,
     ],
@@ -1260,15 +1264,7 @@ function buildGeneric(defines, dir) {
 
     preprocessHTML("web/viewer.html", defines).pipe(gulp.dest(dir + "web")),
     preprocessCSS("web/viewer.css", defines)
-      .pipe(
-        postcss([
-          postcssDirPseudoClass(),
-          discardCommentsCSS(),
-          postcssNesting(),
-          postcssLightDarkFunction({ preserve: true }),
-          autoprefixer(AUTOPREFIXER_CONFIG),
-        ])
-      )
+      .pipe(postcss([discardCommentsCSS(), autoprefixer(AUTOPREFIXER_CONFIG)]))
       .pipe(gulp.dest(dir + "web")),
 
     gulp
@@ -1328,15 +1324,7 @@ function buildComponents(defines, dir) {
       .src(COMPONENTS_IMAGES, { encoding: false })
       .pipe(gulp.dest(dir + "images")),
     preprocessCSS("web/pdf_viewer.css", defines)
-      .pipe(
-        postcss([
-          postcssDirPseudoClass(),
-          discardCommentsCSS(),
-          postcssNesting(),
-          postcssLightDarkFunction({ preserve: true }),
-          autoprefixer(AUTOPREFIXER_CONFIG),
-        ])
-      )
+      .pipe(postcss([discardCommentsCSS(), autoprefixer(AUTOPREFIXER_CONFIG)]))
       .pipe(gulp.dest(dir)),
   ]);
 }
@@ -1688,13 +1676,7 @@ gulp.task(
         ),
         preprocessCSS("web/viewer.css", defines)
           .pipe(
-            postcss([
-              postcssDirPseudoClass(),
-              discardCommentsCSS(),
-              postcssNesting(),
-              postcssLightDarkFunction({ preserve: true }),
-              autoprefixer(AUTOPREFIXER_CONFIG),
-            ])
+            postcss([discardCommentsCSS(), autoprefixer(AUTOPREFIXER_CONFIG)])
           )
           .pipe(gulp.dest(CHROME_BUILD_CONTENT_DIR + "web")),
 
@@ -1761,6 +1743,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
     },
   };
   const enableSourceMaps = bundleDefines.TESTING;
+  const enableCoverage = bundleDefines.COVERAGE;
 
   function preprocessLib(file, _enc, callback) {
     const skipBabel = bundleDefines.SKIP_BABEL;
@@ -1780,7 +1763,32 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
       // Calculate relative path from output directory to source file
       const relativeSourcePath = path.relative(outputFileDir, file.path);
 
+      const plugins = [
+        [babelPluginPDFJSPreprocessor, ctx],
+        [babelPluginStripSrcPath],
+      ];
+      if (enableCoverage) {
+        plugins.push([
+          "babel-plugin-istanbul",
+          {
+            cwd: __dirname,
+            include: ["src/**/*.js", "web/**/*.js"],
+          },
+        ]);
+      }
+      plugins.push([
+        "add-header-comment",
+        {
+          header: licenseHeader,
+        },
+      ]);
+
       const result = babel.transform(file.contents.toString(), {
+        ...(enableCoverage && {
+          filename: file.path,
+          babelrc: false,
+          configFile: false,
+        }),
         sourceType: "module",
         presets: skipBabel
           ? undefined
@@ -1790,16 +1798,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
                 { ...BABEL_PRESET_ENV_OPTS, loose: false, modules: false },
               ],
             ],
-        plugins: [
-          [babelPluginPDFJSPreprocessor, ctx],
-          [babelPluginStripSrcPath],
-          [
-            "add-header-comment",
-            {
-              header: licenseHeader,
-            },
-          ],
-        ],
+        plugins,
         targets: BABEL_TARGETS,
         sourceMaps: enableSourceMaps,
         sourceFileName: relativeSourcePath,
@@ -1836,6 +1835,10 @@ function buildLib(defines, dir) {
     BUNDLE_VERSION: versionInfo.version,
     BUNDLE_BUILD: versionInfo.commit,
     TESTING: defines.TESTING ?? process.env.TESTING === "true",
+    COVERAGE:
+      defines.COVERAGE ??
+      (process.argv.includes("--coverage") ||
+        process.argv.includes("--coverage-per-test")),
     DEFAULT_FTL: getDefaultFtl(),
   };
 
@@ -2218,39 +2221,62 @@ gulp.task(
     },
     function runUnitTestCli(done) {
       const useCoverage = process.argv.includes("--coverage");
+      const coverageDir =
+        getArgValue("--coverage-output") || BUILD_DIR + "coverage";
+      const coverageFormats = parseCoverageFormats(
+        getArgValue("--coverage-formats")
+      );
 
+      const coverageFile = path.join(
+        __dirname,
+        BUILD_DIR,
+        "tmp",
+        "unittestcli-coverage.json"
+      );
+      const env = { ...process.env };
       if (useCoverage) {
         console.log("\n### Running unit tests with code coverage");
+        env.UNITTESTCLI_COVERAGE_FILE = coverageFile;
+        fs.rmSync(coverageFile, { force: true });
       }
 
-      let jasmineProcess;
-      if (useCoverage) {
-        const options = [
-          "node_modules/c8/bin/c8.js",
-          "node",
-          "--max-http-header-size=80000",
-          "node_modules/jasmine/bin/jasmine",
-          "JASMINE_CONFIG_PATH=test/unit/clitests.json",
-        ];
-        jasmineProcess = spawn("node", options, { stdio: "inherit" });
-      } else {
-        const options = [
-          "--enable-source-maps",
-          "node_modules/jasmine/bin/jasmine",
-          "JASMINE_CONFIG_PATH=test/unit/clitests.json",
-        ];
-        jasmineProcess = startNode(options, { stdio: "inherit" });
-      }
+      const options = [
+        "--enable-source-maps",
+        "node_modules/jasmine/bin/jasmine",
+        "JASMINE_CONFIG_PATH=test/unit/clitests.json",
+      ];
+      const jasmineProcess = startNode(options, { stdio: "inherit", env });
 
       jasmineProcess.on("close", function (code) {
+        if (useCoverage) {
+          if (fs.existsSync(coverageFile)) {
+            const rawCoverage = JSON.parse(
+              fs.readFileSync(coverageFile, "utf8")
+            );
+            const coverageMap = istanbulCoverage.createCoverageMap(rawCoverage);
+            const context = libReport.createContext({
+              dir: coverageDir,
+              coverageMap,
+            });
+            for (const fmt of coverageFormats) {
+              istanbulReportGenerator
+                .create(COVERAGE_FORMAT_TO_REPORTER[fmt], {
+                  projectRoot: __dirname,
+                })
+                .execute(context);
+            }
+            console.log(
+              `\n### Code coverage report generated in ${coverageDir} directory`
+            );
+          } else {
+            console.warn(
+              `\n### No coverage data found at ${coverageFile}. Did the build include 'babel-plugin-istanbul'?`
+            );
+          }
+        }
         if (code !== 0) {
           done(new Error("Unit tests failed."));
           return;
-        }
-        if (useCoverage) {
-          console.log(
-            "\n### Code coverage report generated in ./build/coverage directory"
-          );
         }
         done();
       });
@@ -2351,6 +2377,7 @@ gulp.task("lint", function (done) {
     "node_modules/eslint/bin/eslint",
     ".",
     "--report-unused-disable-directives",
+    "--concurrency=auto",
   ];
   if (process.argv.includes("--fix")) {
     esLintOptions.push("--fix");
@@ -2365,9 +2392,11 @@ gulp.task("lint", function (done) {
     styleLintOptions.push("--fix");
   }
 
+  // JSON files are intentionally not passed to Prettier here: ESLint already
+  // formats them via its prettier/prettier rule (with identical output), and
+  // running both in parallel would race on writes in --fix mode.
   const prettierOptions = [
     "node_modules/prettier/bin/prettier.cjs",
-    "**/*.json",
     "**/*.html",
   ];
   if (process.argv.includes("--fix")) {
@@ -2383,40 +2412,28 @@ gulp.task("lint", function (done) {
     "--no-summary",
   ];
 
-  const esLintProcess = startNode(esLintOptions, { stdio: "inherit" });
-  esLintProcess.on("close", function (esLintCode) {
-    if (esLintCode !== 0) {
-      done(new Error("ESLint failed."));
+  function runLinter(name, options) {
+    return new Promise(resolve => {
+      const proc = startNode(options, { stdio: "inherit" });
+      proc.on("close", code => {
+        resolve(code === 0 ? null : name);
+      });
+    });
+  }
+
+  Promise.all([
+    runLinter("ESLint", esLintOptions),
+    runLinter("Stylelint", styleLintOptions),
+    runLinter("Prettier", prettierOptions),
+    runLinter("svglint", svgLintOptions),
+  ]).then(results => {
+    const failures = results.filter(Boolean);
+    if (failures.length) {
+      done(new Error(`${failures.join(", ")} failed.`));
       return;
     }
 
-    const styleLintProcess = startNode(styleLintOptions, { stdio: "inherit" });
-    styleLintProcess.on("close", function (styleLintCode) {
-      if (styleLintCode !== 0) {
-        done(new Error("Stylelint failed."));
-        return;
-      }
-
-      const prettierProcess = startNode(prettierOptions, { stdio: "inherit" });
-      prettierProcess.on("close", function (prettierCode) {
-        if (prettierCode !== 0) {
-          done(new Error("Prettier failed."));
-          return;
-        }
-
-        const svgLintProcess = startNode(svgLintOptions, {
-          stdio: "inherit",
-        });
-        svgLintProcess.on("close", function (svgLintCode) {
-          if (svgLintCode !== 0) {
-            done(new Error("svglint failed."));
-            return;
-          }
-
-          gulp.task("lint-licenses")(done);
-        });
-      });
-    });
+    gulp.task("lint-licenses")(done);
   });
 });
 
@@ -2609,15 +2626,7 @@ function buildInternalViewer(defines, dir) {
       gulp.dest(dir + "web")
     ),
     preprocessCSS("web/internal/debugger.css", defines)
-      .pipe(
-        postcss([
-          postcssDirPseudoClass(),
-          discardCommentsCSS(),
-          postcssNesting(),
-          postcssLightDarkFunction({ preserve: true }),
-          autoprefixer(AUTOPREFIXER_CONFIG),
-        ])
-      )
+      .pipe(postcss([discardCommentsCSS(), autoprefixer(AUTOPREFIXER_CONFIG)]))
       .pipe(gulp.dest(dir + "web")),
     createCMapBundle().pipe(gulp.dest(dir + "web/cmaps")),
     createICCBundle().pipe(gulp.dest(dir + "web/iccs")),

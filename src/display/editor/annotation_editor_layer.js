@@ -502,6 +502,7 @@ class AnnotationEditorLayer {
       target === this.#textLayer.div ||
       ((target.getAttribute("role") === "img" ||
         target.classList.contains("endOfContent") ||
+        target.classList.contains("textLayerImages") ||
         target.classList.contains("textLayerImagePlaceholder")) &&
         this.#textLayer.div.contains(target))
     ) {

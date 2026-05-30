@@ -1519,6 +1519,12 @@ class Font {
         data[8] = data[9] = data[10] = data[11] = 0;
         data[17] |= 0x20; // Set font optimized for cleartype flag.
       }
+      // The "CFF " table may be replaced completely, hence its data shouldn't
+      // need to be read and/or modified piecewise through a `DataView`.
+      const view =
+        tag === "CFF "
+          ? null
+          : new DataView(data.buffer, data.byteOffset, data.byteLength);
 
       return {
         tag,
@@ -1526,7 +1532,7 @@ class Font {
         length,
         offset,
         data,
-        view: new DataView(data.buffer, data.byteOffset, data.byteLength),
+        view,
       };
     }
 

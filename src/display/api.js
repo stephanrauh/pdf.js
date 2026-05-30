@@ -21,7 +21,6 @@ import {
   AbortException,
   AnnotationMode,
   assert,
-  FeatureTest,
   getVerbosityLevel,
   info,
   isNodeJS,
@@ -42,14 +41,6 @@ import {
   CanvasDependencyTracker,
   CanvasImagesTracker,
 } from "./canvas_dependency_tracker.js";
-import {
-  deprecated,
-  isDataScheme,
-  isValidFetchUrl,
-  PageViewport,
-  RenderingCancelledException,
-  StatTimer,
-} from "./display_utils.js";
 import { FontFaceObject, FontLoader } from "./font_loader.js";
 import {
   FontInfo,
@@ -63,6 +54,13 @@ import {
   isRefProxy,
   LoopbackPort,
 } from "./api_utils.js";
+import {
+  isDataScheme,
+  isValidFetchUrl,
+  PageViewport,
+  RenderingCancelledException,
+  StatTimer,
+} from "./display_utils.js";
 import { MessageHandler, wrapReason } from "../shared/message_handler.js";
 import {
   NodeBinaryDataFactory,
@@ -170,17 +168,6 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  *   `ImageDecoder` in the worker. Primarily used to improve performance of
  *   image conversion/rendering.
  *   The default value is `true` in web environments and `false` in Node.js.
- *
- *   NOTE: Also temporarily disabled in Chromium browsers, until we no longer
- *   support the affected browser versions, because of various bugs:
- *
- *    - Crashes when using the BMP decoder with huge images, e.g. issue6741.pdf;
- *      see https://issues.chromium.org/issues/374807001
- *
- *    - Broken images when using the JPEG decoder with images that have custom
- *      colour profiles, e.g. GitHub discussion 19030;
- *      see https://issues.chromium.org/issues/378869810
- *
  * @property {number} [canvasMaxAreaInBytes] - The integer value is used to
  *   know when an image must be resized (uses `OffscreenCanvas` in the worker).
  *   If it's -1 then a possibly slow algorithm is used to guess the max value.
@@ -302,15 +289,9 @@ function getDocument(src = {}) {
       ? src.isOffscreenCanvasSupported
       : !isNodeJS;
   const isImageDecoderSupported =
-    // eslint-disable-next-line no-nested-ternary
     typeof src.isImageDecoderSupported === "boolean"
       ? src.isImageDecoderSupported
-      : // eslint-disable-next-line no-nested-ternary
-        typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")
-        ? true
-        : typeof PDFJSDev !== "undefined" && PDFJSDev.test("CHROME")
-          ? false
-          : !isNodeJS && (FeatureTest.platform.isFirefox || !globalThis.chrome);
+      : !isNodeJS;
   const canvasMaxAreaInBytes = Number.isInteger(src.canvasMaxAreaInBytes)
     ? src.canvasMaxAreaInBytes
     : -1;
@@ -447,9 +428,6 @@ function getDocument(src = {}) {
 
   Promise.all([worker.promise, gpuPromise])
     .then(function ([, hasGPU]) {
-      if (task.destroyed) {
-        throw new Error("Loading aborted");
-      }
       if (worker.destroyed) {
         throw new Error("Worker was destroyed");
       }
@@ -492,9 +470,6 @@ function getDocument(src = {}) {
       }
 
       return workerIdPromise.then(workerId => {
-        if (task.destroyed) {
-          throw new Error("Loading aborted");
-        }
         if (worker.destroyed) {
           throw new Error("Worker was destroyed");
         }
@@ -509,10 +484,18 @@ function getDocument(src = {}) {
           pagesMapper
         );
         task._transport = transport;
+
+        if (task.destroyed) {
+          // `destroy()` was called during the worker handshake; the orderly
+          // shutdown (including the "Terminate" message) will be issued
+          // through the transport once destroy resumes.
+          throw new Error("Loading aborted");
+        }
         messageHandler.send("Ready", null);
       });
     })
-    .catch(task._capability.reject);
+    .catch(task._capability.reject)
+    .finally(task._setupCapability.resolve);
 
   return task;
 }
@@ -537,6 +520,14 @@ class PDFDocumentLoadingTask {
    * @private
    */
   _capability = Promise.withResolvers();
+
+  /**
+   * Resolves once the load-time setup chain has settled, regardless of
+   * outcome; used by `destroy()` to wait until `_transport` is either set
+   * or definitely never going to be.
+   * @private
+   */
+  _setupCapability = Promise.withResolvers();
 
   /**
    * @private
@@ -591,11 +582,25 @@ class PDFDocumentLoadingTask {
    */
   async destroy() {
     this.destroyed = true;
+    // The setup chain rejects `_capability` with "Loading aborted" once the
+    // load-time chain unwinds (see `getDocument`). Claim that rejection
+    // here so it isn't reported as unhandled during the awaits below;
+    // callers awaiting `task.promise` still see it.
+    this._capability.promise.catch(() => {});
 
     try {
+      // `_pendingDestroy` must be set synchronously, before any `await`,
+      // so subsequent `PDFWorker.create()` calls on the shared `workerPort`
+      // observe it and throw (see issue 16777).
       if (this._worker?.port) {
         this._worker._pendingDestroy = true;
       }
+      // Wait for the load-time setup chain to settle so `_transport` is set
+      // (when applicable) before we tear down. This is what guarantees the
+      // "Terminate" message gets sent through `WorkerTransport.destroy` if
+      // `destroy` races with the initial worker handshake.
+      await this._setupCapability.promise;
+
       await this._transport?.destroy();
     } catch (ex) {
       if (this._worker?.port) {
@@ -648,18 +653,6 @@ class PDFDataRangeTransport {
     this.initialData = initialData;
     this.progressiveDone = progressiveDone;
     this.contentDispositionFilename = contentDispositionFilename;
-
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-      Object.defineProperty(this, "onDataProgress", {
-        value: () => {
-          deprecated(
-            "`PDFDataRangeTransport.prototype.onDataProgress` - method was " +
-              "removed, since loading progress is now reported automatically " +
-              "through the `PDFDataTransportStream` class (and related code)."
-          );
-        },
-      });
-    }
   }
 
   /**

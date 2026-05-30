@@ -192,11 +192,7 @@ class Intersector {
       const h = Math.floor((iMax - iMin) / STEPS);
       for (let i = iMin; i <= iMin + h * STEPS; i += STEPS) {
         for (let j = 0; j <= w; j++) {
-          let existing = this.#grid[i + j];
-          if (!existing) {
-            this.#grid[i + j] = existing = [];
-          }
-          existing.push(intersector);
+          (this.#grid[i + j] ??= []).push(intersector);
         }
       }
     }

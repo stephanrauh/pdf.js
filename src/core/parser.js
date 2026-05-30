@@ -808,7 +808,7 @@ class Parser {
           return new JpegStream(stream, maybeLength, params);
         case "JPX":
         case "JPXDecode":
-          return new JpxStream(stream, maybeLength, params);
+          return new JpxStream(stream, maybeLength);
         case "A85":
         case "ASCII85Decode":
           return new Ascii85Stream(stream, maybeLength);
