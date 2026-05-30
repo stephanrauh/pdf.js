@@ -13,6 +13,11 @@
  * limitations under the License.
  */
 
+// #1321 side-effect import: must come before any other import so the
+// AbortSignal.any polyfill is installed before depth-first ES module
+// evaluation touches any code that might use it.
+import "./polyfills.js";
+
 import { WorkerMessageHandler } from "./core/worker.js";
 
 globalThis.pdfjsWorker = {
