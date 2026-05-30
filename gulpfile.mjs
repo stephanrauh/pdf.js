@@ -2537,7 +2537,12 @@ gulp.task(
         }
       }
 
-      const { WebServer } = await import("./test/webserver.mjs");
+      // gulp-server modified by ngx-extended-pdf-viewer
+      // The `test/` folder is deliberately excluded from this fork, so the
+      // webserver lives in `dev-server/` (fork-only) instead. Keep this
+      // import path during upstream merges.
+      const { WebServer } = await import("./dev-server/webserver.mjs");
+      // gulp-server end of modification by ngx-extended-pdf-viewer
       // #3069 modified by ngx-extended-pdf-viewer
       // Listen on 0.0.0.0 so the server is reachable from other devices
       // (e.g. iPad on the same network) for testing.
