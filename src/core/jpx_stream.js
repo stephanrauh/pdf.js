@@ -49,7 +49,7 @@ class JpxStream extends DecodeStream {
       return this.buffer;
     }
     bytes ||= this.bytes;
-    this.buffer = await JpxImage.decode(bytes, decoderOptions);
+    this.buffer = await JpxImage.instance.decode(bytes, decoderOptions);
     this.bufferLength = this.buffer.length;
     this.eof = true;
 

@@ -144,7 +144,7 @@ class HighlightEditor extends AnnotationEditor {
     // #2256 / 2556 end of modification by ngx-extended-pdf-viewer
 
     if (!this.annotationElementId) {
-      this._uiManager.a11yAlert("pdfjs-editor-highlight-added-alert");
+      this._uiManager.a11yAlert(AnnotationEditor._l10nAlert.highlight);
     }
   }
 

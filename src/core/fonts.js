@@ -58,10 +58,10 @@ import {
 import { IdentityToUnicodeMap, ToUnicodeMap } from "./to_unicode_map.js";
 import { CFFFont } from "./cff_font.js";
 import { compileFontInfo } from "./obj_bin_transform_core.js";
+import { DataBuilder } from "./data_builder.js";
 import { FontRendererFactory } from "./font_renderer.js";
 import { getFontBasicMetrics } from "./metrics.js";
 import { GlyfTable } from "./glyf.js";
-import { MathClamp } from "../shared/math_clamp.js";
 import { OpenTypeFileBuilder } from "./opentype_file_builder.js";
 import { Stream } from "./stream.js";
 import { Type1Font } from "./type1_font.js";
@@ -300,112 +300,6 @@ function writeUint32(bytes, index, value) {
   bytes[index + 2] = value >>> 8;
   bytes[index + 1] = value >>> 16;
   bytes[index] = value >>> 24;
-}
-
-class TrueTypeTableBuilder {
-  #buf;
-
-  #bufLength = 1024;
-
-  #hasExactLength = false;
-
-  #pos = 0;
-
-  #view;
-
-  constructor({ exactLength, minLength }) {
-    this.#hasExactLength = !!exactLength;
-    this.#initBuf(exactLength || minLength);
-  }
-
-  #initBuf(minLength) {
-    if (this.#hasExactLength) {
-      this.#bufLength = minLength;
-    } else {
-      // Compute the first power of two that is as big as the `minLength`.
-      while (this.#bufLength < minLength) {
-        this.#bufLength *= 2;
-      }
-    }
-    const newBuf = new Uint8Array(this.#bufLength);
-
-    if (this.#buf) {
-      newBuf.set(this.#buf, 0);
-    }
-    this.#buf = newBuf;
-    this.#view = new DataView(newBuf.buffer);
-  }
-
-  get data() {
-    return this.#buf.subarray(0, this.#pos);
-  }
-
-  get length() {
-    return this.#pos;
-  }
-
-  skip(n) {
-    this.#pos += n;
-  }
-
-  setArray(arr) {
-    const newPos = this.#pos + arr.length;
-
-    if (!this.#hasExactLength && newPos > this.#bufLength) {
-      this.#initBuf(newPos);
-    }
-    this.#buf.set(arr, this.#pos);
-    this.#pos = newPos;
-  }
-
-  setInt16(val) {
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-      assert(
-        typeof val === "number" && Math.abs(val) < 2 ** 16,
-        `setInt16: Unexpected input "${val}".`
-      );
-    }
-    const newPos = this.#pos + 2;
-
-    if (!this.#hasExactLength && newPos > this.#bufLength) {
-      this.#initBuf(newPos);
-    }
-    this.#view.setInt16(this.#pos, val);
-    this.#pos = newPos;
-  }
-
-  setSafeInt16(val) {
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-      assert(
-        typeof val === "number" && !Number.isNaN(val),
-        `safeString16: Unexpected input "${val}".`
-      );
-    }
-    const newPos = this.#pos + 2;
-
-    if (!this.#hasExactLength && newPos > this.#bufLength) {
-      this.#initBuf(newPos);
-    }
-    // clamp value to the 16-bit int range
-    this.#view.setInt16(this.#pos, MathClamp(val, -0x8000, 0x7fff));
-    this.#pos = newPos;
-  }
-
-  setInt32(val) {
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-      assert(
-        typeof val === "number" && Math.abs(val) < 2 ** 32,
-        `setInt32: Unexpected input "${val}".`
-      );
-    }
-    const newPos = this.#pos + 4;
-
-    if (!this.#hasExactLength && newPos > this.#bufLength) {
-      this.#initBuf(newPos);
-    }
-    this.#view.setInt32(this.#pos, val);
-    this.#pos = newPos;
-  }
 }
 
 function isTrueTypeFile(file) {
@@ -679,7 +573,7 @@ function createCmapTable(glyphs, toUnicodeExtraMap, numGlyphs) {
   const ranges = getRanges(glyphs, toUnicodeExtraMap, numGlyphs);
   const numTables = ranges.at(-1)[1] > 0xffff ? 2 : 1;
 
-  const cmap = new TrueTypeTableBuilder({ exactLength: 12 });
+  const cmap = new DataBuilder({ exactLength: 12 });
   cmap.skip(2); // version, skip redundant "\x00\x00"
   cmap.setInt16(numTables); // numTables
   cmap.setArray([0x00, 0x03]); // platformID
@@ -703,11 +597,11 @@ function createCmapTable(glyphs, toUnicodeExtraMap, numGlyphs) {
 
   // Fill up the 4 parallel arrays describing the segments.
   const segmentsLength = bmpLength * 2 + trailingRangesCount * 2;
-  const startCount = new TrueTypeTableBuilder({ exactLength: segmentsLength }),
-    endCount = new TrueTypeTableBuilder({ exactLength: segmentsLength }),
-    idDeltas = new TrueTypeTableBuilder({ exactLength: segmentsLength }),
-    idRangeOffsets = new TrueTypeTableBuilder({ exactLength: segmentsLength }),
-    glyphsIds = new TrueTypeTableBuilder({});
+  const startCount = new DataBuilder({ exactLength: segmentsLength }),
+    endCount = new DataBuilder({ exactLength: segmentsLength }),
+    idDeltas = new DataBuilder({ exactLength: segmentsLength }),
+    idRangeOffsets = new DataBuilder({ exactLength: segmentsLength }),
+    glyphsIds = new DataBuilder({});
   let bias = 0;
 
   for (i = 0, ii = bmpLength; i < ii; i++) {
@@ -746,7 +640,7 @@ function createCmapTable(glyphs, toUnicodeExtraMap, numGlyphs) {
     idRangeOffsets.skip(2); // Skip redundant "\x00\x00"
   }
 
-  const format314 = new TrueTypeTableBuilder({
+  const format314 = new DataBuilder({
     exactLength:
       12 +
       startCount.length +
@@ -771,12 +665,12 @@ function createCmapTable(glyphs, toUnicodeExtraMap, numGlyphs) {
     format31012 = null,
     header31012 = null;
   if (numTables > 1) {
-    cmap31012 = new TrueTypeTableBuilder({ exactLength: 8 });
+    cmap31012 = new DataBuilder({ exactLength: 8 });
     cmap31012.setArray([0x00, 0x03]); // platformID
     cmap31012.setArray([0x00, 0x0a]); // encodingID
     cmap31012.setInt32(4 + numTables * 8 + 4 + format314.length); // start of the table record
 
-    format31012 = new TrueTypeTableBuilder({});
+    format31012 = new DataBuilder({});
     for (const range of ranges) {
       let start = range[0];
       const codes = range[2];
@@ -796,7 +690,7 @@ function createCmapTable(glyphs, toUnicodeExtraMap, numGlyphs) {
       format31012.setInt32(code); // startGlyphID
     }
 
-    header31012 = new TrueTypeTableBuilder({ exactLength: 16 });
+    header31012 = new DataBuilder({ exactLength: 16 });
     header31012.setArray([0x00, 0x0c]); // format
     header31012.skip(2); // reserved, skip redundant "\x00\x00"
     header31012.setInt32(format31012.length + 16); // length
@@ -804,7 +698,7 @@ function createCmapTable(glyphs, toUnicodeExtraMap, numGlyphs) {
     header31012.setInt32(format31012.length / 12); // nGroups
   }
 
-  const table = new TrueTypeTableBuilder({
+  const table = new DataBuilder({
     exactLength:
       4 +
       cmap.length +
@@ -927,7 +821,7 @@ function createOS2Table(properties, charstrings, override) {
   const winAscent = override.yMax || typoAscent;
   const winDescent = -override.yMin || -typoDescent;
 
-  const os2 = new TrueTypeTableBuilder({ exactLength: 96 });
+  const os2 = new DataBuilder({ exactLength: 96 });
   os2.setArray([0x00, 0x03]); // version
   os2.setArray([0x02, 0x24]); // xAvgCharWidth
   os2.setArray([0x01, 0xf4]); // usWeightClass
@@ -982,7 +876,7 @@ function createOS2Table(properties, charstrings, override) {
 }
 
 function createPostTable(properties) {
-  const post = new TrueTypeTableBuilder({ exactLength: 32 });
+  const post = new DataBuilder({ exactLength: 32 });
   post.setArray([0x00, 0x03, 0x00, 0x00]); // Version number
   post.setInt32(Math.floor(properties.italicAngle * 2 ** 16)); // italicAngle
   post.skip(
@@ -1028,7 +922,7 @@ function createNameTable(name, proto) {
   for (i = 0, ii = strings.length; i < ii; i++) {
     str = proto[1][i] || strings[i];
 
-    const strUnicode = new TrueTypeTableBuilder({
+    const strUnicode = new DataBuilder({
       exactLength: str.length * 2,
     });
     for (j = 0, jj = str.length; j < jj; j++) {
@@ -1058,7 +952,7 @@ function createNameTable(name, proto) {
     const strs = namesBytes[i];
     for (j = 0, jj = strs.length; j < jj; j++) {
       str = strs[j];
-      const nameRecord = new TrueTypeTableBuilder({
+      const nameRecord = new DataBuilder({
         exactLength:
           6 +
           platformsBytes[i].length +
@@ -1078,7 +972,7 @@ function createNameTable(name, proto) {
   }
 
   const namesRecordCount = stringsBytes.length * platformsBytes.length;
-  const nameTable = new TrueTypeTableBuilder({
+  const nameTable = new DataBuilder({
     exactLength:
       6 +
       Math.sumPrecise(nameRecords.map(arr => arr.length)) +
@@ -3407,7 +3301,7 @@ class Font {
       (function fontTableHead() {
         const dateArr = [0x00, 0x00, 0x00, 0x00, 0x9e, 0x0b, 0x7e, 0x27];
 
-        const head = new TrueTypeTableBuilder({ exactLength: 54 });
+        const head = new DataBuilder({ exactLength: 54 });
         head.setArray([0x00, 0x01, 0x00, 0x00]); // Version number
         head.setArray([0x00, 0x00, 0x10, 0x00]); // fontRevision
         head.skip(4); // checksumAdjustement, skip redundant "\x00\x00\x00\x00"
@@ -3435,7 +3329,7 @@ class Font {
     builder.addTable(
       "hhea",
       (function fontTableHhea() {
-        const hhea = new TrueTypeTableBuilder({ exactLength: 36 });
+        const hhea = new DataBuilder({ exactLength: 36 });
         hhea.setArray([0x00, 0x01, 0x00, 0x00]); // Version number
         hhea.setSafeInt16(properties.ascent); // Typographic Ascent
         hhea.setSafeInt16(properties.descent); // Typographic Descent
@@ -3470,7 +3364,7 @@ class Font {
         const charstrings = font.charstrings;
         const cffWidths = font.cff?.widths ?? null;
 
-        const hmtx = new TrueTypeTableBuilder({ exactLength: numGlyphs * 4 });
+        const hmtx = new DataBuilder({ exactLength: numGlyphs * 4 });
         // Fake .notdef (width=0 and lsb=0) first, skip redundant assignment.
         hmtx.skip(4);
 
@@ -3492,7 +3386,7 @@ class Font {
     builder.addTable(
       "maxp",
       (function fontTableMaxp() {
-        const maxp = new TrueTypeTableBuilder({ exactLength: 6 });
+        const maxp = new DataBuilder({ exactLength: 6 });
         maxp.setArray([0x00, 0x00, 0x50, 0x00]); // Version number
         maxp.setInt16(numGlyphs); // Num of glyphs
         return maxp.data;

@@ -64,7 +64,7 @@ class CCITTFaxStream extends DecodeStream {
         : this.bytes;
     }
 
-    this.buffer = await JBig2CCITTFaxImage.decode(
+    this.buffer = await JBig2CCITTFaxImage.instance.decode(
       bytes,
       this.dict.get("W", "Width"),
       this.dict.get("H", "Height"),

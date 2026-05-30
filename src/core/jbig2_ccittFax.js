@@ -13,9 +13,9 @@
  * limitations under the License.
  */
 
-import { BaseException, warn } from "../shared/util.js";
-import { fetchBinaryData } from "./core_utils.js";
+import { BaseException, shadow } from "../shared/util.js";
 import JBig2 from "../../external/jbig2/jbig2.js";
+import { WasmImage } from "./wasm_image.js";
 
 class Jbig2Error extends BaseException {
   constructor(msg) {
@@ -23,92 +23,21 @@ class Jbig2Error extends BaseException {
   }
 }
 
-class JBig2CCITTFaxImage {
-  static #buffer = null;
+class JBig2CCITTFaxImage extends WasmImage {
+  _filename = "jbig2.wasm";
 
-  static #handler = null;
+  _noWasmFilename = "jbig2_nowasm_fallback.js";
 
-  static #modulePromise = null;
-
-  static #useWasm = true;
-
-  static #useWorkerFetch = true;
-
-  static #wasmUrl = null;
-
-  static setOptions({ handler, useWasm, useWorkerFetch, wasmUrl }) {
-    this.#useWasm = useWasm;
-    this.#useWorkerFetch = useWorkerFetch;
-    this.#wasmUrl = wasmUrl;
-
-    if (!useWorkerFetch) {
-      this.#handler = handler;
-    }
+  static get instance() {
+    return shadow(
+      this,
+      "instance",
+      new JBig2CCITTFaxImage(/* trackInstance = */ true)
+    );
   }
 
-  static async #getJsModule(fallbackCallback) {
-    const path =
-      typeof PDFJSDev === "undefined"
-        ? `../${this.#wasmUrl}jbig2_nowasm_fallback.js`
-        : `${this.#wasmUrl}jbig2_nowasm_fallback.js`;
-
-    let instance = null;
-    try {
-      const mod = await (typeof PDFJSDev === "undefined"
-        ? import(path) // eslint-disable-line no-unsanitized/method
-        : __raw_import__(path));
-      instance = mod.default();
-    } catch (e) {
-      warn(`JBig2CCITTFaxImage#getJsModule: ${e}`);
-    }
-    fallbackCallback(instance);
-  }
-
-  static async #instantiateWasm(fallbackCallback, imports, successCallback) {
-    const filename = "jbig2.wasm";
-    try {
-      if (!this.#buffer) {
-        if (this.#useWorkerFetch) {
-          this.#buffer = await fetchBinaryData(`${this.#wasmUrl}${filename}`);
-        } else {
-          if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-            throw new Error("Only worker-thread fetching supported.");
-          }
-          this.#buffer = await this.#handler.sendWithPromise(
-            "FetchBinaryData",
-            { kind: "wasmUrl", filename }
-          );
-        }
-      }
-      const results = await WebAssembly.instantiate(this.#buffer, imports);
-      return successCallback(results.instance);
-    } catch (reason) {
-      warn(`JBig2CCITTFaxImage#instantiateWasm: ${reason}`);
-
-      this.#getJsModule(fallbackCallback);
-      return null;
-    } finally {
-      this.#handler = null;
-    }
-  }
-
-  static async decode(bytes, width, height, globals, CCITTOptions) {
-    if (!this.#modulePromise) {
-      const { promise, resolve } = Promise.withResolvers();
-      const promises = [promise];
-      if (!this.#useWasm) {
-        this.#getJsModule(resolve);
-      } else {
-        promises.push(
-          JBig2({
-            warn,
-            instantiateWasm: this.#instantiateWasm.bind(this, resolve),
-          })
-        );
-      }
-      this.#modulePromise = Promise.race(promises);
-    }
-    const module = await this.#modulePromise;
+  async decode(bytes, width, height, globals, CCITTOptions) {
+    const module = await this._getModule(JBig2);
 
     if (!module) {
       throw new Jbig2Error("JBig2 failed to initialize");
@@ -156,10 +85,6 @@ class JBig2CCITTFaxImage {
         module._free(globalsPtr);
       }
     }
-  }
-
-  static cleanup() {
-    this.#modulePromise = null;
   }
 }
 

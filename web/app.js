@@ -1380,11 +1380,12 @@ appConfig: null,
     }
     // #2480 end of modification by ngx-extended-pdf-viewer
 
-    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-      if (args.data && isPdfFile(args.filename)) {
-        this._contentDispositionFilename = args.filename;
-      }
-    } else if (args.url) {
+    if (args.data && isPdfFile(args.filename)) {
+      this._contentDispositionFilename = args.filename;
+    } else if (
+      (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
+      args.url
+    ) {
       // The Firefox built-in viewer always calls `setTitleUsingUrl`, before
       // `initPassiveLoading`, and it never provides an `originalUrl` here.
       this.setTitleUsingUrl(
@@ -2216,7 +2217,8 @@ appConfig: null,
     }
     this.pdfHistory.initialize({
       fingerprint,
-      resetHistory: viewOnLoad === ViewOnLoad.INITIAL,
+      resetHistory:
+        viewOnLoad === ViewOnLoad.INITIAL || !!this._mergedDocumentNeedsSaving,
       updateUrl: AppOptions.get("historyUpdateUrl"),
     });
 
@@ -2964,6 +2966,7 @@ appConfig: null,
       return;
     }
     this._mergedDocumentNeedsSaving = true;
+
     this.open({
       data: modifiedPdfBytes,
       filename: this._docFilename,

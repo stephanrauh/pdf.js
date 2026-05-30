@@ -28,6 +28,7 @@ import {
   ISOAdobeCharset,
 } from "./charsets.js";
 import { ExpertEncoding, StandardEncoding } from "./encodings.js";
+import { DataBuilder } from "./data_builder.js";
 
 // Maximum subroutine call depth of type 2 charstrings. Matches OTS.
 const MAX_SUBR_NESTING = 10;
@@ -1365,51 +1366,6 @@ class CFFOffsetTracker {
   }
 }
 
-class CompilerOutput {
-  #buf;
-
-  #bufLength = 1024;
-
-  #pos = 0;
-
-  constructor(minLength) {
-    // Note: Usually the compiled size is smaller than the initial data,
-    //       however in some cases it may increase slightly.
-    this.#initBuf(minLength);
-  }
-
-  #initBuf(minLength) {
-    // Compute the first power of two that is as big as the `minLength`.
-    while (this.#bufLength < minLength) {
-      this.#bufLength *= 2;
-    }
-    const newBuf = new Uint8Array(this.#bufLength);
-
-    if (this.#buf) {
-      newBuf.set(this.#buf, 0);
-    }
-    this.#buf = newBuf;
-  }
-
-  get data() {
-    return this.#buf.subarray(0, this.#pos);
-  }
-
-  get length() {
-    return this.#pos;
-  }
-
-  add(data) {
-    const newPos = this.#pos + data.length;
-    if (newPos > this.#bufLength) {
-      // It should be very rare that the buffer needs to grow.
-      this.#initBuf(newPos);
-    }
-    this.#buf.set(data, this.#pos);
-    this.#pos = newPos;
-  }
-}
-
 // Takes a CFF and converts it to the binary representation.
 class CFFCompiler {
   constructor(cff) {
@@ -1418,14 +1374,14 @@ class CFFCompiler {
 
   compile() {
     const cff = this.cff;
-    const output = new CompilerOutput(cff.rawFileLength);
+    const output = new DataBuilder({ minLength: cff.rawFileLength });
 
     // Compile the five entries that must be in order.
     const header = this.compileHeader(cff.header);
-    output.add(header);
+    output.setArray(header);
 
     const nameIndex = this.compileNameIndex(cff.names);
-    output.add(nameIndex);
+    output.setArray(nameIndex);
 
     if (cff.isCIDFont) {
       // The spec is unclear on how font matrices should relate to each other
@@ -1465,14 +1421,14 @@ class CFFCompiler {
       output.length,
       cff.isCIDFont
     );
-    output.add(compiled.output);
+    output.setArray(compiled.output);
     const topDictTracker = compiled.trackers[0];
 
     const stringIndex = this.compileStringIndex(cff.strings.strings);
-    output.add(stringIndex);
+    output.setArray(stringIndex);
 
     const globalSubrIndex = this.compileIndex(cff.globalSubrIndex);
-    output.add(globalSubrIndex);
+    output.setArray(globalSubrIndex);
 
     // Now start on the other entries that have no specific order.
     if (cff.encoding && cff.topDict.hasName("Encoding")) {
@@ -1485,7 +1441,7 @@ class CFFCompiler {
       } else {
         const encoding = this.compileEncoding(cff.encoding);
         topDictTracker.setEntryLocation("Encoding", [output.length], output);
-        output.add(encoding);
+        output.setArray(encoding);
       }
     }
     const charset = this.compileCharset(
@@ -1495,23 +1451,23 @@ class CFFCompiler {
       cff.isCIDFont
     );
     topDictTracker.setEntryLocation("charset", [output.length], output);
-    output.add(charset);
+    output.setArray(charset);
 
     const charStrings = this.compileCharStrings(cff.charStrings);
     topDictTracker.setEntryLocation("CharStrings", [output.length], output);
-    output.add(charStrings);
+    output.setArray(charStrings);
 
     if (cff.isCIDFont) {
       // For some reason FDSelect must be in front of FDArray on windows. OSX
       // and linux don't seem to care.
       topDictTracker.setEntryLocation("FDSelect", [output.length], output);
       const fdSelect = this.compileFDSelect(cff.fdSelect);
-      output.add(fdSelect);
+      output.setArray(fdSelect);
       // It is unclear if the sub font dictionary can have CID related
       // dictionary keys, but the sanitizer doesn't like them so remove them.
       compiled = this.compileTopDicts(cff.fdArray, output.length, true);
       topDictTracker.setEntryLocation("FDArray", [output.length], output);
-      output.add(compiled.output);
+      output.setArray(compiled.output);
       const fontDictTrackers = compiled.trackers;
 
       this.compilePrivateDicts(cff.fdArray, fontDictTrackers, output);
@@ -1521,7 +1477,7 @@ class CFFCompiler {
 
     // If the font data ends with INDEX whose object data is zero-length,
     // the sanitizer will bail out. Add a dummy byte to avoid that.
-    output.add([0]);
+    output.setArray([0]);
 
     return output.data;
   }
@@ -1689,7 +1645,7 @@ class CFFCompiler {
         [privateDictData.length, outputLength],
         output
       );
-      output.add(privateDictData);
+      output.setArray(privateDictData);
 
       if (privateDict.subrsIndex && privateDict.hasName("Subrs")) {
         const subrs = this.compileIndex(privateDict.subrsIndex);
@@ -1698,7 +1654,7 @@ class CFFCompiler {
           [privateDictData.length],
           output
         );
-        output.add(subrs);
+        output.setArray(subrs);
       }
     }
   }

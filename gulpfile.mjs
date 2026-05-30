@@ -1772,7 +1772,7 @@ function buildLibHelper(bundleDefines, inputStream, outputDir) {
           "babel-plugin-istanbul",
           {
             cwd: __dirname,
-            include: ["src/**/*.js", "web/**/*.js"],
+            include: ["external/**/*.js", "src/**/*.js", "web/**/*.js"],
           },
         ]);
       }
@@ -2754,7 +2754,7 @@ function packageJson() {
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
     optionalDependencies: {
-      "@napi-rs/canvas": "^0.1.100",
+      "@napi-rs/canvas": "^1.0.0",
     },
     browser: {
       canvas: false,

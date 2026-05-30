@@ -64,7 +64,7 @@ class Jbig2Stream extends DecodeStream {
         globals = globalsStream.getBytes();
       }
     }
-    this.buffer = await JBig2CCITTFaxImage.decode(
+    this.buffer = await JBig2CCITTFaxImage.instance.decode(
       bytes,
       this.dict.get("Width"),
       this.dict.get("Height"),

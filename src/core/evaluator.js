@@ -987,7 +987,8 @@ class PartialEvaluator {
     patternDict,
     operatorList,
     task,
-    localTilingPatternCache
+    localTilingPatternCache,
+    seenRefs
   ) {
     // Create an IR of the pattern code.
     const tilingOpList = new CheckedOperatorList();
@@ -1003,6 +1004,7 @@ class PartialEvaluator {
       task,
       resources: patternResources,
       operatorList: tilingOpList,
+      prevRefs: seenRefs,
     })
       .then(function () {
         const operatorListIR = tilingOpList.getIR();
@@ -1046,7 +1048,8 @@ class PartialEvaluator {
     task,
     state,
     fallbackFontDict = null,
-    cssFontInfo = null
+    cssFontInfo = null,
+    seenRefs = null
   ) {
     const fontName = fontArgs?.[0] instanceof Name ? fontArgs[0].name : null;
 
@@ -1056,7 +1059,8 @@ class PartialEvaluator {
       resources,
       task,
       fallbackFontDict,
-      cssFontInfo
+      cssFontInfo,
+      seenRefs
     );
 
     if (translated.font.isType3Font) {
@@ -1157,7 +1161,10 @@ class PartialEvaluator {
               value[0],
               operatorList,
               task,
-              stateManager.state
+              stateManager.state,
+              /* fallbackFontDict = */ null,
+              /* cssFontInfo = */ null,
+              seenRefs
             ).then(function (loadedName) {
               operatorList.addDependency(loadedName);
               gStateObj.push([key, [loadedName, value[1]]]);
@@ -1235,7 +1242,8 @@ class PartialEvaluator {
     resources,
     task,
     fallbackFontDict = null,
-    cssFontInfo = null
+    cssFontInfo = null,
+    seenRefs = null
   ) {
     const errorFont = async () =>
       new TranslatedFont({
@@ -1371,7 +1379,7 @@ class PartialEvaluator {
 
         if (translatedFont.isType3Font) {
           try {
-            await translated.loadType3Data(this, resources, task);
+            await translated.loadType3Data(this, resources, task, seenRefs);
           } catch (reason) {
             throw new Error(`Type3 font load error: ${reason}`);
           }
@@ -1582,7 +1590,8 @@ class PartialEvaluator {
     task,
     localColorSpaceCache,
     localTilingPatternCache,
-    localShadingPatternCache
+    localShadingPatternCache,
+    seenRefs
   ) {
     // compile tiling patterns
     const patternName = args.pop();
@@ -1624,7 +1633,8 @@ class PartialEvaluator {
             dict,
             operatorList,
             task,
-            localTilingPatternCache
+            localTilingPatternCache,
+            seenRefs
           );
         } else if (typeNum === PatternType.SHADING) {
           const shading = dict.get("Shading");
@@ -1939,7 +1949,9 @@ class PartialEvaluator {
                   operatorList,
                   task,
                   stateManager.state,
-                  fallbackFontDict
+                  fallbackFontDict,
+                  /* cssFontInfo = */ null,
+                  seenRefs
                 )
                 .then(function (loadedName) {
                   operatorList.addDependency(loadedName);
@@ -2117,7 +2129,8 @@ class PartialEvaluator {
                   task,
                   localColorSpaceCache,
                   localTilingPatternCache,
-                  localShadingPatternCache
+                  localShadingPatternCache,
+                  seenRefs
                 )
               );
               return;
@@ -2149,7 +2162,8 @@ class PartialEvaluator {
                   task,
                   localColorSpaceCache,
                   localTilingPatternCache,
-                  localShadingPatternCache
+                  localShadingPatternCache,
+                  seenRefs
                 )
               );
               return;
@@ -2736,7 +2750,10 @@ class PartialEvaluator {
         fontName,
         fontRef,
         resources,
-        task
+        task,
+        /* fallbackFontDict = */ null,
+        /* cssFontInfo = */ null,
+        seenRefs
       );
 
       textState.loadedName = translated.loadedName;
@@ -4898,7 +4915,7 @@ class TranslatedFont {
     );
   }
 
-  loadType3Data(evaluator, resources, task) {
+  loadType3Data(evaluator, resources, task, seenRefs = null) {
     if (this.#type3Loaded) {
       return this.#type3Loaded;
     }
@@ -4936,6 +4953,7 @@ class TranslatedFont {
             task,
             resources: fontResources,
             operatorList,
+            prevRefs: seenRefs,
           })
           .then(() => {
             // According to the PDF specification, section "9.6.5 Type 3 Fonts"

@@ -22,15 +22,14 @@ import {
 } from "../shared/util.js";
 import { ChunkedStreamManager } from "./chunked_stream.js";
 import { ImageResizer } from "./image_resizer.js";
-import { JBig2CCITTFaxImage } from "./jbig2_ccittFax.js";
 import { JpegStream } from "./jpeg_stream.js";
-import { JpxImage } from "./jpx.js";
 import { MissingDataException } from "./core_utils.js";
 import { OperatorList } from "./operator_list.js";
 import { Pattern } from "./pattern.js";
 import { PDFDocument } from "./document.js";
 import { PDFFunctionFactory } from "./function.js";
 import { Stream } from "./stream.js";
+import { WasmImage } from "./wasm_image.js";
 
 function parseDocBaseUrl(url) {
   if (url) {
@@ -88,12 +87,11 @@ class BasePdfManager {
     OperatorList.setOptions(evaluatorOptions);
 
     const options = { ...evaluatorOptions, handler };
-    JpxImage.setOptions(options);
     IccColorSpace.setOptions(options);
     CmykICCBasedCS.setOptions(options);
-    JBig2CCITTFaxImage.setOptions(options);
     PDFFunctionFactory.setOptions(options);
     Pattern.setOptions(options);
+    WasmImage.setOptions(options);
   }
 
   get docId() {

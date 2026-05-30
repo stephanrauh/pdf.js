@@ -684,6 +684,7 @@ class WorkerMessageHandler {
           const buffer = await pdfEditor.extractPages(
             pageInfos,
             annotationStorage,
+            pdfManager.pdfDocument,
             handler,
             task
           );
@@ -1114,6 +1115,9 @@ class WorkerMessageHandler {
         return pdfManager
           .getPage(data.pageIndex)
           .then(page => page.annotations.map(a => a.toString()));
+      });
+      handler.on("GetWorkerCoverage", function () {
+        return globalThis.__coverage__ ?? {};
       });
     }
 

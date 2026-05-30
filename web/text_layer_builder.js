@@ -155,6 +155,8 @@ class TextLayerBuilder {
   cancel() {
     this.#textLayer?.cancel();
     this.#textLayer = null;
+    this.#renderingDone = false;
+    this.div.replaceChildren();
 
     this.highlighter?.disable();
     this.accessibilityManager?.disable();

@@ -224,19 +224,10 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  * XHR as fallback) is used, which means it must follow same origin rules,
  * e.g. no cross-domain requests without CORS.
  *
- * @param {string | URL | TypedArray | ArrayBuffer | DocumentInitParameters}
- *   src - Can be a URL where a PDF file is located, a typed array (Uint8Array)
- *         already populated with data, or a parameter object.
+ * @param {DocumentInitParameters} src - Parameter object.
  * @returns {PDFDocumentLoadingTask}
  */
 function getDocument(src = {}) {
-  if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-    if (typeof src === "string" || src instanceof URL) {
-      src = { url: src };
-    } else if (src instanceof ArrayBuffer || ArrayBuffer.isView(src)) {
-      src = { data: src };
-    }
-  }
   const task = new PDFDocumentLoadingTask();
   const { docId } = task;
 
@@ -1058,13 +1049,6 @@ class PDFDocumentProxy {
    */
   cleanup(keepLoadedFonts = false) {
     return this._transport.startCleanup(keepLoadedFonts || this.isPureXfa);
-  }
-
-  /**
-   * Destroys the current document instance and terminates the worker.
-   */
-  destroy() {
-    return this.loadingTask.destroy();
   }
 
   /**
@@ -2947,9 +2931,32 @@ class WorkerTransport {
     };
     let transfer;
     if (this.annotationStorage.size > 0) {
-      const { map, transfer: t } = this.annotationStorage.serializable;
+      const serialized = this.annotationStorage.serializable;
+      let { map } = serialized;
+      transfer = serialized.transfer;
+      // Annotation pageIndex tracks the editor's current viewer position; the
+      // worker keys lookups by source index. Remap UI -> source via pagesMapper
+      // so reorganized pages still receive their annotations after extraction.
+      const mapping = this.pagesMapper.getMapping();
+      if (mapping) {
+        const remapped = new Map();
+        for (const [k, v] of map) {
+          if (
+            v?.pageIndex !== undefined &&
+            v.pageIndex >= 0 &&
+            v.pageIndex < mapping.length
+          ) {
+            const sourceIdx = mapping[v.pageIndex] - 1;
+            if (sourceIdx !== v.pageIndex) {
+              remapped.set(k, { ...v, pageIndex: sourceIdx });
+              continue;
+            }
+          }
+          remapped.set(k, v);
+        }
+        map = remapped;
+      }
       params.annotationStorage = map;
-      transfer = t;
     }
     return this.messageHandler
       .sendWithPromise("ExtractPages", params, transfer)

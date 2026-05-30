@@ -71,6 +71,7 @@ const AnnotationMode = {
   ENABLE_STORAGE: 3,
 };
 
+const AnnotationPrefix = "pdfjs_internal_id_";
 const AnnotationEditorPrefix = "pdfjs_internal_editor_";
 
 const AnnotationEditorType = {
@@ -677,6 +678,21 @@ class FeatureTest {
     });
   }
 
+  static get isCanvasFilterSupported() {
+    let ctx;
+    if (this.isOffscreenCanvasSupported) {
+      ctx = new OffscreenCanvas(1, 1).getContext("2d");
+    } else if (typeof document !== "undefined") {
+      ctx = document.createElement("canvas").getContext("2d");
+    }
+    // Spec-compliant Canvas2D defaults `ctx.filter` to "none". On
+    // browsers without filter support (Safari) the property is absent
+    // until you assign to it, after which it behaves like an ordinary
+    // JS property and stores whatever string you set without applying
+    // it. Probing the default lets us detect the difference reliably.
+    return shadow(this, "isCanvasFilterSupported", ctx?.filter !== undefined);
+  }
+
   static get isAlphaColorInputSupported() {
     return shadow(
       this,
@@ -1143,22 +1159,6 @@ function isArrayEqual(arr1, arr2) {
   return true;
 }
 
-function getModificationDate(date = new Date()) {
-  if (!(date instanceof Date)) {
-    date = new Date(date);
-  }
-  const buffer = [
-    date.getUTCFullYear().toString(),
-    (date.getUTCMonth() + 1).toString().padStart(2, "0"),
-    date.getUTCDate().toString().padStart(2, "0"),
-    date.getUTCHours().toString().padStart(2, "0"),
-    date.getUTCMinutes().toString().padStart(2, "0"),
-    date.getUTCSeconds().toString().padStart(2, "0"),
-  ];
-
-  return buffer.join("");
-}
-
 let NormalizeRegex = null;
 let NormalizationMap = null;
 function normalizeUnicode(str) {
@@ -1189,8 +1189,6 @@ function getUuid() {
   crypto.getRandomValues(buf);
   return bytesToString(buf);
 }
-
-const AnnotationPrefix = "pdfjs_internal_id_";
 
 function _isValidExplicitDest(validRef, validName, dest) {
   if (!Array.isArray(dest) || dest.length < 2) {
@@ -1294,7 +1292,6 @@ export {
   FeatureTest,
   FONT_IDENTITY_MATRIX,
   FormatError,
-  getModificationDate,
   getUuid,
   getVerbosityLevel,
   ImageKind,
