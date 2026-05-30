@@ -99,6 +99,10 @@ class PDFThumbnailViewer {
 
   #dragAC = null;
 
+  #abortSignal = undefined;
+
+  #externalDragActive = false;
+
   #draggedContainer = null;
 
   #thumbnailsPositions = null;
@@ -207,6 +211,7 @@ class PDFThumbnailViewer {
     this.maxCanvasPixels = maxCanvasPixels;
     this.maxCanvasDim = maxCanvasDim;
     this.pageColors = pageColors || null;
+    this.#abortSignal = abortSignal;
     this.#enableMerge = enableMerge || false;
     this.#enableSplitMerge = enableSplitMerge || false;
     // #2943 modified by ngx-extended-pdf-viewer
@@ -324,62 +329,11 @@ class PDFThumbnailViewer {
 
       if (this.#enableMerge && addFileComponent) {
         const { picker, button } = addFileComponent;
-        picker.addEventListener("change", async () => {
+        picker.addEventListener("change", () => {
           const file = picker.files?.[0];
-          if (!file) {
-            return;
+          if (file) {
+            this.#mergeFile(file, this._currentPageNumber - 1);
           }
-          if (file.type !== "application/pdf") {
-            const magic = await file.slice(0, 5).text();
-            if (magic !== "%PDF-") {
-              return;
-            }
-          }
-          this.#toggleBar("waiting", "pdfjs-views-manager-waiting-for-file");
-          const currentPageIndex = this._currentPageNumber - 1;
-          const buffer = await file.bytes();
-          const pagesCount = this.#pagesMapper.pagesNumber;
-          const data = this.hasStructuralChanges()
-            ? this.getStructuralChanges()
-            : [{ document: null }];
-          data.push({
-            document: buffer,
-            insertAfter: currentPageIndex ?? -1,
-          });
-          this.eventBus._on(
-            "pagesloaded",
-            () => {
-              // Clear any pre-merge selection: thumbnails are rebuilt fresh
-              // (all unchecked), so the old set would cause a label/visual
-              // mismatch.
-              this.#selectedPages = null;
-              this.#updateMenuEntries();
-              this.#toggleBar("status");
-              const newPagesCount = this.#pagesMapper.pagesNumber;
-              const insertedPagesCount = newPagesCount - pagesCount;
-              for (
-                let i = currentPageIndex + 1,
-                  ii = currentPageIndex + 1 + insertedPagesCount;
-                i < ii;
-                i++
-              ) {
-                this._thumbnails[i].checkbox.checked = true;
-                this.#selectPage(i + 1, true);
-              }
-              if (insertedPagesCount) {
-                this.#updateCurrentPage(
-                  currentPageIndex + 2,
-                  /* force = */ true
-                );
-              }
-            },
-            { once: true }
-          );
-          this.#reportTelemetry({ action: "merge" });
-          this.eventBus.dispatch("saveandload", {
-            source: this,
-            data,
-          });
         });
         button.addEventListener("click", () => {
           picker.click();
@@ -404,6 +358,55 @@ class PDFThumbnailViewer {
 
   #scrollUpdated() {
     this.renderingQueue.renderHighestPriority();
+  }
+
+  async #mergeFile(file, insertAfter) {
+    if (file.type !== "application/pdf") {
+      const magic = await file.slice(0, 5).text();
+      if (magic !== "%PDF-") {
+        return;
+      }
+    }
+    this.#toggleBar("waiting", "pdfjs-views-manager-waiting-for-file");
+    const buffer = await file.bytes();
+    const pagesCount = this.#pagesMapper.pagesNumber;
+    const data = this.hasStructuralChanges()
+      ? this.getStructuralChanges()
+      : [{ document: null }];
+    data.push({
+      document: buffer,
+      insertAfter,
+    });
+    this.eventBus._on(
+      "pagesloaded",
+      () => {
+        // Clear any pre-merge selection: thumbnails are rebuilt fresh
+        // (all unchecked), so the old set would cause a label/visual
+        // mismatch.
+        this.#selectedPages = null;
+        this.#updateMenuEntries();
+        this.#toggleBar("status");
+        const newPagesCount = this.#pagesMapper.pagesNumber;
+        const insertedPagesCount = newPagesCount - pagesCount;
+        for (
+          let i = insertAfter + 1, ii = insertAfter + 1 + insertedPagesCount;
+          i < ii;
+          i++
+        ) {
+          this._thumbnails[i].checkbox.checked = true;
+          this.#selectPage(i + 1, true);
+        }
+        if (insertedPagesCount) {
+          this.#updateCurrentPage(insertAfter + 2, /* force = */ true);
+        }
+      },
+      { once: true }
+    );
+    this.#reportTelemetry({ action: "merge" });
+    this.eventBus.dispatch("saveandload", {
+      source: this,
+      data,
+    });
   }
 
   getThumbnail(index) {
@@ -1205,6 +1208,10 @@ class PDFThumbnailViewer {
       this.#draggedImageX + this.#draggedImageWidth / 2,
       this.#draggedImageY + this.#draggedImageHeight / 2
     );
+    this.#positionDragMarker(positionData);
+  }
+
+  #positionDragMarker(positionData) {
     if (!positionData) {
       return;
     }
@@ -1222,7 +1229,7 @@ class PDFThumbnailViewer {
     if (index < 0) {
       if (xPos.length === 1) {
         y = bbox[1] - SPACE_FOR_DRAG_MARKER_WHEN_NO_NEXT_ELEMENT;
-        x = bbox[4];
+        x = bbox[0];
         width = bbox[2];
       } else {
         y = bbox[1];
@@ -1292,16 +1299,22 @@ class PDFThumbnailViewer {
         lastRightX ??= cx + w;
       }
     }
-    const space =
-      positionsX.length > 1
-        ? (positionsX[1] - firstRightX) / 2
-        : (positionsY[1] - firstBottomY) / 2;
+    let space;
+    if (positionsX.length > 1) {
+      space = (positionsX[1] - firstRightX) / 2;
+    } else if (positionsY.length > 1) {
+      space = (positionsY[1] - firstBottomY) / 2;
+    } else {
+      space = SPACE_FOR_DRAG_MARKER_WHEN_NO_NEXT_ELEMENT;
+    }
     this.#thumbnailsPositions = {
       x: positionsX,
       y: positionsY,
       lastX: positionsLastX,
       space,
-      lastSpace: (positionsLastX.at(-1) - lastRightX) / 2,
+      lastSpace: positionsLastX.length
+        ? (positionsLastX.at(-1) - lastRightX) / 2
+        : space,
       bbox,
     };
     this.#isOneColumnView = positionsX.length === 1;
@@ -1400,6 +1413,7 @@ class PDFThumbnailViewer {
       this.#goToPage(e);
     });
     this.#addDragListeners();
+    this.#addExternalFileDropListeners();
   }
 
   #selectPage(pageNumber, checked) {
@@ -1571,6 +1585,140 @@ class PDFThumbnailViewer {
         signal: pointerDownSignal,
       });
     });
+  }
+
+  #addExternalFileDropListeners() {
+    if (!this.#enableMerge) {
+      return;
+    }
+    const container = this.container;
+    const signal = this.#abortSignal;
+
+    const hasPdfItem = dataTransfer => {
+      if (!dataTransfer) {
+        return false;
+      }
+      // The file's bytes aren't readable during dragover, so the MIME type is
+      // the only available signal. Matches the existing global drop handler
+      // in app.js. Files with no MIME (e.g. some macOS sources) are rejected
+      // here to keep the "copy" cursor honest; if needed, drop-time magic-byte
+      // validation in #mergeFile would still catch a permissive variant.
+      for (const item of dataTransfer.items) {
+        if (item.kind === "file" && item.type === "application/pdf") {
+          return true;
+        }
+      }
+      return false;
+    };
+    const pointerInContainer = ({ clientX, clientY }) => {
+      const { left, right, top, bottom } = container.getBoundingClientRect();
+      return (
+        clientX >= left && clientX < right && clientY >= top && clientY < bottom
+      );
+    };
+
+    container.addEventListener(
+      "dragenter",
+      e => {
+        if (
+          this.#externalDragActive ||
+          // A page-move drag is already in progress.
+          !isNaN(this.#lastDraggedOverIndex) ||
+          !this._thumbnails.length ||
+          !hasPdfItem(e.dataTransfer)
+        ) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "copy";
+        this.#externalDragActive = true;
+        this.container.classList.add("isDraggingFile");
+        // Recompute positions in case the layout changed since last time.
+        this.#thumbnailsPositions = null;
+        this.#computeThumbnailsPosition();
+        // Marker hasn't been positioned yet — first dragover will do it.
+        this.#lastDraggedOverIndex = NaN;
+      },
+      { signal }
+    );
+
+    container.addEventListener(
+      "dragover",
+      e => {
+        if (!this.#externalDragActive) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        e.dataTransfer.dropEffect = "copy";
+        if (!this.#thumbnailsPositions) {
+          return;
+        }
+        const rect = container.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+        const positionData = this.#findClosestThumbnail(x, y);
+        this.#positionDragMarker(positionData);
+      },
+      { signal }
+    );
+
+    container.addEventListener(
+      "dragleave",
+      e => {
+        if (!this.#externalDragActive) {
+          return;
+        }
+        // dragleave fires when crossing into a child element too; only treat
+        // it as a true leave when the cursor has actually left the container.
+        if (
+          (e.relatedTarget && container.contains(e.relatedTarget)) ||
+          pointerInContainer(e)
+        ) {
+          return;
+        }
+        this.#endExternalFileDrag();
+      },
+      { signal }
+    );
+
+    container.addEventListener(
+      "drop",
+      e => {
+        if (!this.#externalDragActive) {
+          return;
+        }
+        e.preventDefault();
+        e.stopPropagation();
+        const file = e.dataTransfer.files?.[0];
+        // If no dragover ever ran (e.g. instant drop), compute the index from
+        // the drop event itself so we don't fall through to a stale fallback.
+        if (isNaN(this.#lastDraggedOverIndex) && this.#thumbnailsPositions) {
+          const rect = container.getBoundingClientRect();
+          this.#findClosestThumbnail(
+            e.clientX - rect.left,
+            e.clientY - rect.top
+          );
+        }
+        const insertAfter = isNaN(this.#lastDraggedOverIndex)
+          ? -1
+          : this.#lastDraggedOverIndex;
+        this.#endExternalFileDrag();
+        if (file) {
+          this.#mergeFile(file, insertAfter);
+        }
+      },
+      { signal }
+    );
+  }
+
+  #endExternalFileDrag() {
+    this.#externalDragActive = false;
+    this.container.classList.remove("isDraggingFile");
+    this.#dragMarker?.remove();
+    this.#dragMarker = null;
+    this.#lastDraggedOverIndex = NaN;
   }
 
   #goToPage(e) {

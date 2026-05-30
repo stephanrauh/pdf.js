@@ -13,7 +13,7 @@
  * limitations under the License.
  */
 
-/** @typedef {import("./display_utils").PageViewport} PageViewport */
+/** @typedef {import("./page_viewport").PageViewport} PageViewport */
 /** @typedef {import("./api").TextContent} TextContent */
 /** @typedef {import("./text_layer_images").TextLayerImages} TextLayerImages */
 
@@ -480,7 +480,8 @@ class TextLayer {
       // their replacements when they aren't embedded) and then we can use an
       // OffscreenCanvas.
       const canvas = document.createElement("canvas");
-      canvas.className = "hiddenCanvasElement";
+      canvas.style.cssText =
+        "position:absolute;top:0;left:0;width:0;height:0;display:none";
       canvas.lang = lang;
       // #2490 modified by ngx-extended-pdf-viewer
       canvas.width = canvas.height = 0;

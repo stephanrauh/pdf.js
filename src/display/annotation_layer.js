@@ -14,7 +14,7 @@
  */
 
 /** @typedef {import("./api").PDFPageProxy} PDFPageProxy */
-/** @typedef {import("./display_utils").PageViewport} PageViewport */
+/** @typedef {import("./page_viewport").PageViewport} PageViewport */
 // eslint-disable-next-line max-len
 /** @typedef {import("../../web/text_accessibility.js").TextAccessibilityManager} TextAccessibilityManager */
 // eslint-disable-next-line max-len
@@ -38,6 +38,7 @@ import {
   LINE_FACTOR,
   makeArr,
   shadow,
+  SVG_NS,
   unreachable,
   Util,
   warn,
@@ -666,8 +667,7 @@ class AnnotationElement {
       style.borderWidth = 0;
       svgBuffer = [
         "url('data:image/svg+xml;utf8,",
-        `<svg xmlns="http://www.w3.org/2000/svg"`,
-        ` preserveAspectRatio="none" viewBox="0 0 1 1">`,
+        `<svg xmlns="${SVG_NS}" preserveAspectRatio="none" viewBox="0 0 1 1">`,
         `<g fill="transparent" stroke="${borderColor}" stroke-width="${borderWidth}">`,
       ];
       this.container.classList.add("hasBorder");

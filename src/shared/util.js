@@ -38,6 +38,8 @@ const LINE_FACTOR = 1.35;
 const LINE_DESCENT_FACTOR = 0.35;
 const BASELINE_FACTOR = LINE_DESCENT_FACTOR / LINE_FACTOR;
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
 /**
  * Refer to the `WorkerTransport.getRenderingIntent`-method in the API, to see
  * how these flags are being used:
@@ -682,7 +684,10 @@ class FeatureTest {
     let ctx;
     if (this.isOffscreenCanvasSupported) {
       ctx = new OffscreenCanvas(1, 1).getContext("2d");
-    } else if (typeof document !== "undefined") {
+    } else if (
+      (typeof PDFJSDev === "undefined" || !PDFJSDev.test("WORKER_THREAD")) &&
+      typeof document !== "undefined"
+    ) {
       ctx = document.createElement("canvas").getContext("2d");
     }
     // Spec-compliant Canvas2D defaults `ctx.filter` to "none". On
@@ -694,21 +699,22 @@ class FeatureTest {
   }
 
   static get isAlphaColorInputSupported() {
+    if (
+      (typeof PDFJSDev !== "undefined" && PDFJSDev.test("WORKER_THREAD")) ||
+      typeof document === "undefined"
+    ) {
+      return shadow(this, "isAlphaColorInputSupported", false);
+    }
+    const input = document.createElement("input");
+    input.type = "color";
+    input.setAttribute("alpha", "");
+    input.value = "#ff000080";
+    // If alpha is supported the color picker retains the alpha channel, so
+    // the value won't be a plain opaque color (7-char #rrggbb).
     return shadow(
       this,
       "isAlphaColorInputSupported",
-      (() => {
-        if (typeof document === "undefined") {
-          return false;
-        }
-        const input = document.createElement("input");
-        input.type = "color";
-        input.setAttribute("alpha", "");
-        input.value = "#ff000080";
-        // If alpha is supported the color picker retains the alpha channel, so
-        // the value won't be a plain opaque color (7-char #rrggbb).
-        return input.value !== "#ff0000";
-      })()
+      input.value !== "#ff0000"
     );
   }
 }
@@ -724,61 +730,6 @@ class Util {
 
   static makeHexColor(r, g, b) {
     return `#${this.hexNums[r]}${this.hexNums[g]}${this.hexNums[b]}`;
-  }
-
-  static domMatrixToTransform(dm) {
-    return [dm.a, dm.b, dm.c, dm.d, dm.e, dm.f];
-  }
-
-  // Apply a scaling matrix to some min/max values.
-  // If a scaling factor is negative then min and max must be
-  // swapped.
-  static scaleMinMax(transform, minMax) {
-    let temp;
-    if (transform[0]) {
-      if (transform[0] < 0) {
-        temp = minMax[0];
-        minMax[0] = minMax[2];
-        minMax[2] = temp;
-      }
-      minMax[0] *= transform[0];
-      minMax[2] *= transform[0];
-
-      if (transform[3] < 0) {
-        temp = minMax[1];
-        minMax[1] = minMax[3];
-        minMax[3] = temp;
-      }
-      minMax[1] *= transform[3];
-      minMax[3] *= transform[3];
-    } else {
-      temp = minMax[0];
-      minMax[0] = minMax[1];
-      minMax[1] = temp;
-      temp = minMax[2];
-      minMax[2] = minMax[3];
-      minMax[3] = temp;
-
-      if (transform[1] < 0) {
-        temp = minMax[1];
-        minMax[1] = minMax[3];
-        minMax[3] = temp;
-      }
-      minMax[1] *= transform[1];
-      minMax[3] *= transform[1];
-
-      if (transform[2] < 0) {
-        temp = minMax[0];
-        minMax[0] = minMax[2];
-        minMax[2] = temp;
-      }
-      minMax[0] *= transform[2];
-      minMax[2] *= transform[2];
-    }
-    minMax[0] += transform[4];
-    minMax[1] += transform[5];
-    minMax[2] += transform[4];
-    minMax[3] += transform[5];
   }
 
   // Concatenates two transformation matrices together and returns the result.
@@ -1078,67 +1029,6 @@ class Util {
   }
 }
 
-const PDFStringTranslateTable = [
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0x2d8,
-  0x2c7, 0x2c6, 0x2d9, 0x2dd, 0x2db, 0x2da, 0x2dc, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-  0, 0, 0, 0, 0, 0, 0, 0, 0x2022, 0x2020, 0x2021, 0x2026, 0x2014, 0x2013, 0x192,
-  0x2044, 0x2039, 0x203a, 0x2212, 0x2030, 0x201e, 0x201c, 0x201d, 0x2018,
-  0x2019, 0x201a, 0x2122, 0xfb01, 0xfb02, 0x141, 0x152, 0x160, 0x178, 0x17d,
-  0x131, 0x142, 0x153, 0x161, 0x17e, 0, 0x20ac,
-];
-
-function stringToPDFString(str, keepEscapeSequence = false) {
-  // See section 7.9.2.2 Text String Type.
-  // The string can contain some language codes bracketed with 0x1b,
-  // so we must remove them.
-  if (str[0] >= "\xEF") {
-    let encoding;
-    if (str[0] === "\xFE" && str[1] === "\xFF") {
-      encoding = "utf-16be";
-      if (str.length % 2 === 1) {
-        str = str.slice(0, -1);
-      }
-    } else if (str[0] === "\xFF" && str[1] === "\xFE") {
-      encoding = "utf-16le";
-      if (str.length % 2 === 1) {
-        str = str.slice(0, -1);
-      }
-    } else if (str[0] === "\xEF" && str[1] === "\xBB" && str[2] === "\xBF") {
-      encoding = "utf-8";
-    }
-
-    if (encoding) {
-      try {
-        const decoder = new TextDecoder(encoding, { fatal: true });
-        const buffer = stringToBytes(str);
-        const decoded = decoder.decode(buffer);
-        if (keepEscapeSequence || !decoded.includes("\x1b")) {
-          return decoded;
-        }
-        return decoded.replaceAll(/\x1b[^\x1b]*(?:\x1b|$)/g, "");
-      } catch (ex) {
-        warn(`stringToPDFString: "${ex}".`);
-      }
-    }
-  }
-  // ISO Latin 1
-  const strBuf = [];
-  for (let i = 0, ii = str.length; i < ii; i++) {
-    const charCode = str.charCodeAt(i);
-    if (!keepEscapeSequence && charCode === 0x1b) {
-      // eslint-disable-next-line no-empty
-      while (++i < ii && str.charCodeAt(i) !== 0x1b) {}
-      continue;
-    }
-    const code = PDFStringTranslateTable[charCode];
-    strBuf.push(code ? String.fromCharCode(code) : str.charAt(i));
-  }
-  return strBuf.join("");
-}
-
 function stringToUTF8String(str) {
   return decodeURIComponent(escape(str));
 }
@@ -1317,9 +1207,9 @@ export {
   setVerbosityLevel,
   shadow,
   stringToBytes,
-  stringToPDFString,
   stringToUTF8String,
   stripPath,
+  SVG_NS,
   TextRenderingMode,
   UnknownErrorException,
   unreachable,

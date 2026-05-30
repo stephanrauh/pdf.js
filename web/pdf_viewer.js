@@ -16,7 +16,7 @@
 /** @typedef {import("../src/display/api").PDFDocumentProxy} PDFDocumentProxy */
 /** @typedef {import("../src/display/api").PDFPageProxy} PDFPageProxy */
 // eslint-disable-next-line max-len
-/** @typedef {import("../src/display/display_utils").PageViewport} PageViewport */
+/** @typedef {import("../src/display/page_viewport").PageViewport} PageViewport */
 // eslint-disable-next-line max-len
 /** @typedef {import("../src/display/optional_content_config").OptionalContentConfig} OptionalContentConfig */
 /** @typedef {import("./event_utils").EventBus} EventBus */
@@ -134,6 +134,9 @@ function isValidAnnotationEditorMode(mode) {
  *   pages would need a canvas that is larger than `maxCanvasPixels` or
  *   `maxCanvasDim`, it will draw a second canvas on top of the CSS-zoomed one,
  *   that only renders the part of the page that is close to the viewport.
+ *   The default value is `true`.
+ * @property {boolean} [enableSelectionRendering] - Enables rendering of text
+ *   selections in the draw layer.
  *   The default value is `true`.
  * @property {number} [imagesRightClickMinSize] - All images whose width and
  *  height are at least this value (in pixels) will be lazily inserted in the
@@ -406,6 +409,7 @@ class PDFViewer {
     this.enableDetailCanvas = options.enableDetailCanvas ?? true;
     this.enableOptimizedPartialRendering =
       options.enableOptimizedPartialRendering ?? false;
+    this.enableSelectionRendering = options.enableSelectionRendering !== false;
     this.imagesRightClickMinSize = options.imagesRightClickMinSize ?? -1;
     this.l10n = options.l10n;
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
@@ -646,6 +650,25 @@ class PDFViewer {
   }
 
   /**
+   * Clear text selections within the viewer.
+   */
+  clearSelection() {
+    const selection = document.getSelection();
+    if (!selection || selection.isCollapsed) {
+      return;
+    }
+
+    for (let i = 0, ii = selection.rangeCount; i < ii; i++) {
+      if (selection.getRangeAt(i).intersectsNode(this.viewer)) {
+        // `empty()` is non-standard; `removeAllRanges()` is the standard API.
+        selection.removeAllRanges?.();
+        selection.empty?.();
+        return;
+      }
+    }
+  }
+
+  /**
    * @type {boolean}
    */
   get renderForms() {
@@ -676,7 +699,6 @@ class PDFViewer {
     if (!this.pdfDocument) {
       return;
     }
-
     // #716 modified by ngx-extended-pdf-viewer
     // #3197: skip flip if page hasn't changed — prevents double-flip when
     // Angular's change detection echoes the page number back after a flip.
@@ -684,6 +706,9 @@ class PDFViewer {
     const flip = pageChanged && Math.abs(this._currentPageNumber - val) <= 2;
     // #716 end of modification
 
+    if (this._currentPageNumber !== val) {
+      this.clearSelection();
+    }
     // The intent can be to just reset a scroll position and/or scale.
     if (!this._setCurrentPageNumber(val, /* resetCurrentPageView = */ true)) {
       NgxConsole.error(`currentPageNumber: "${val}" is not a valid page.`);
@@ -906,6 +931,9 @@ class PDFViewer {
         page = i + 1;
       }
     }
+    if (this._currentPageNumber !== page) {
+      this.clearSelection();
+    }
     // The intent can be to just reset a scroll position and/or scale.
     if (!this._setCurrentPageNumber(page, /* resetCurrentPageView = */ true)) {
       NgxConsole.error(`currentPageLabel: "${val}" is not a valid page.`);
@@ -976,6 +1004,7 @@ class PDFViewer {
     if (this._pagesRotation === rotation) {
       return; // The rotation didn't change.
     }
+    this.clearSelection();
     this._pagesRotation = rotation;
 
     const pageNumber = this._currentPageNumber;
@@ -1332,6 +1361,8 @@ class PDFViewer {
           const element = (this.#hiddenCopyElement =
             document.createElement("div"));
           element.id = "hiddenCopyElement";
+          element.style.cssText =
+            "position:absolute;top:0;left:0;width:0;height:0;display:none";
           viewer.before(element);
         }
 
@@ -1429,6 +1460,7 @@ class PDFViewer {
             enableDetailCanvas: this.enableDetailCanvas,
             enableOptimizedPartialRendering:
               this.enableOptimizedPartialRendering,
+            enableSelectionRendering: this.enableSelectionRendering,
             imagesRightClickMinSize: this.imagesRightClickMinSize,
             pageColors,
             l10n: this.l10n,
@@ -1935,6 +1967,7 @@ class PDFViewer {
   ) {
     const previousScale = isNaN(Number(this.currentScale)) ? undefined : Number(this.currentScale);
     const previousScaleValue = this.currentScaleValue;
+    this.clearSelection();
     this._currentScaleValue = newValue.toString();
 
     if (this.#isSameScale(newScale)) {
@@ -3047,6 +3080,7 @@ class PDFViewer {
     }
     this._previousScrollMode = this._scrollMode;
 
+    this.clearSelection();
     this._scrollMode = mode;
     this.eventBus.dispatch("scrollmodechanged", { source: this, mode });
 
@@ -3128,6 +3162,7 @@ class PDFViewer {
     if (!isValidSpreadMode(mode)) {
       throw new Error(`Invalid spread mode: ${mode}`);
     }
+    this.clearSelection();
     this._spreadMode = mode;
     this.eventBus.dispatch("spreadmodechanged", { source: this, mode });
 
