@@ -87,6 +87,7 @@ import { getGlyphsUnicode } from "./glyphlist.js";
 import { getMetrics } from "./metrics.js";
 import { getUnicodeForGlyph } from "./unicode.js";
 import { MurmurHash3_64 } from "../shared/murmurhash3.js";
+import { parseMarkedContentProps } from "./evaluator_utils.js";
 import { PDFImage } from "./image.js";
 import { Stream } from "./stream.js";
 import { stringToPDFString } from "./string_utils.js";
@@ -548,6 +549,11 @@ class PartialEvaluator {
       if (smask?.backdrop) {
         colorSpace ||= ColorSpaceUtils.rgb;
         smask.backdrop = colorSpace.getRgbHex(smask.backdrop, 0);
+      } else if (smask?.subtype === "Luminosity") {
+        // Per PDF spec 11.6.5.2: when /BC is missing the backdrop is the
+        // initial value of the group colour space, which is black for all
+        // standard colour spaces.
+        smask.backdrop = "#000000";
       }
 
       newOpList = new CheckedOperatorList();
@@ -1656,105 +1662,8 @@ class PartialEvaluator {
     throw new FormatError(`Unknown PatternName: ${patternName}`);
   }
 
-  _parseVisibilityExpression(array, nestingCounter, currentResult) {
-    const MAX_NESTING = 10;
-    if (++nestingCounter > MAX_NESTING) {
-      warn("Visibility expression is too deeply nested");
-      return;
-    }
-    const length = array.length;
-    const operator = this.xref.fetchIfRef(array[0]);
-    if (length < 2 || !(operator instanceof Name)) {
-      warn("Invalid visibility expression");
-      return;
-    }
-    switch (operator.name) {
-      case "And":
-      case "Or":
-      case "Not":
-        currentResult.push(operator.name);
-        break;
-      default:
-        warn(`Invalid operator ${operator.name} in visibility expression`);
-        return;
-    }
-    for (let i = 1; i < length; i++) {
-      const raw = array[i];
-      const object = this.xref.fetchIfRef(raw);
-      if (Array.isArray(object)) {
-        const nestedResult = [];
-        currentResult.push(nestedResult);
-        // Recursively parse a subarray.
-        this._parseVisibilityExpression(object, nestingCounter, nestedResult);
-      } else if (raw instanceof Ref) {
-        // Reference to an OCG dictionary.
-        currentResult.push(raw.toString());
-      }
-    }
-  }
-
   async parseMarkedContentProps(contentProperties, resources) {
-    let optionalContent;
-    if (contentProperties instanceof Name) {
-      const properties = resources.get("Properties");
-      optionalContent = properties.get(contentProperties.name);
-    } else if (contentProperties instanceof Dict) {
-      optionalContent = contentProperties;
-    } else {
-      throw new FormatError("Optional content properties malformed.");
-    }
-
-    const optionalContentType = optionalContent.get("Type")?.name;
-    if (optionalContentType === "OCG") {
-      return {
-        type: optionalContentType,
-        id: optionalContent.objId,
-      };
-    } else if (optionalContentType === "OCMD") {
-      const expression = optionalContent.get("VE");
-      if (Array.isArray(expression)) {
-        const result = [];
-        this._parseVisibilityExpression(expression, 0, result);
-        if (result.length > 0) {
-          return {
-            type: "OCMD",
-            expression: result,
-          };
-        }
-      }
-
-      const optionalContentGroups = optionalContent.get("OCGs");
-      if (
-        Array.isArray(optionalContentGroups) ||
-        optionalContentGroups instanceof Dict
-      ) {
-        const groupIds = [];
-        if (Array.isArray(optionalContentGroups)) {
-          for (const ocg of optionalContentGroups) {
-            groupIds.push(ocg.toString());
-          }
-        } else {
-          // Dictionary, just use the obj id.
-          groupIds.push(optionalContentGroups.objId);
-        }
-
-        return {
-          type: optionalContentType,
-          ids: groupIds,
-          policy:
-            optionalContent.get("P") instanceof Name
-              ? optionalContent.get("P").name
-              : null,
-          expression: null,
-        };
-      } else if (optionalContentGroups instanceof Ref) {
-        return {
-          type: optionalContentType,
-          id: optionalContentGroups.toString(),
-        };
-      }
-    }
-    return null;
+    return parseMarkedContentProps(this.xref, contentProperties, resources);
   }
 
   async getOperatorList({
@@ -4304,9 +4213,7 @@ class PartialEvaluator {
   isSerifFont(baseFontName) {
     // Simulating descriptor flags attribute
     const fontNameWoStyle = baseFontName.split("-", 1)[0];
-    return (
-      fontNameWoStyle in getSerifFonts() || /serif/gi.test(fontNameWoStyle)
-    );
+    return fontNameWoStyle in getSerifFonts() || /serif/i.test(fontNameWoStyle);
   }
 
   getBaseFontMetrics(name) {
@@ -4537,6 +4444,13 @@ class PartialEvaluator {
         // FontDescriptor is only required for Type3 fonts when the document
         // is a tagged pdf.
         descriptor = Dict.empty;
+      } else if (composite) {
+        // Some PDFs omit the FontDescriptor on the descendant CIDFont when
+        // referencing one of the standard Acrobat CJK fonts via a predefined
+        // CMap (e.g. /Encoding /90ms-RKSJ-H with /BaseFont /HeiseiMin-W3).
+        // Fall through so the CMap is loaded by the composite-font path
+        // below; otherwise multi-byte codes would be decoded byte-by-byte.
+        descriptor = Dict.empty;
       } else {
         // Before PDF 1.5 if the font was one of the base 14 fonts, having a
         // FontDescriptor was not required.
@@ -4669,9 +4583,15 @@ class PartialEvaluator {
       throw new FormatError("invalid font name");
     }
 
-    let fontFile, subtype, length1, length2, length3;
+    let fontFile, fontFileN, subtype, length1, length2, length3;
     try {
-      fontFile = descriptor.get("FontFile", "FontFile2", "FontFile3");
+      for (const n of ["FontFile", "FontFile2", "FontFile3"]) {
+        fontFile = descriptor.get(n);
+        if (fontFile) {
+          fontFileN = n;
+          break;
+        }
+      }
 
       if (fontFile) {
         if (!(fontFile instanceof BaseStream)) {
@@ -4781,6 +4701,7 @@ class PartialEvaluator {
       name: fontName.name,
       subtype,
       file: fontFile,
+      fontFileN,
       length1,
       length2,
       length3,
@@ -4822,7 +4743,35 @@ class PartialEvaluator {
     const newProperties = await this.extractDataStructures(dict, properties);
     this.extractWidths(dict, descriptor, newProperties);
 
-    return new Font(fontName.name, fontFile, newProperties, this.options);
+    const font = new Font(fontName.name, fontFile, newProperties, this.options);
+    // The embedded font may have been too corrupt to parse, in which case
+    // we ended up in the fallback path without a substitution selected.
+    // Try the substitution map now so text renders in a font close to what
+    // the document asked for (issue 7625).
+    if (
+      font.missingFile &&
+      !font.systemFontInfo &&
+      !isType3Font &&
+      this.options.useSystemFonts
+    ) {
+      const standardFontName = getStandardFontName(fontName.name);
+      const substitution = getFontSubstitution(
+        this.systemFontCache,
+        this.idFactory,
+        this.options.standardFontDataUrl,
+        fontName.name,
+        standardFontName,
+        type
+      );
+      if (substitution) {
+        if (substitution.guessFallback) {
+          substitution.guessFallback = false;
+          substitution.css += `,${font.fallbackName}`;
+        }
+        font.systemFontInfo = substitution;
+      }
+    }
+    return font;
   }
 
   static buildFontPaths(font, glyphs, handler, evaluatorOptions) {

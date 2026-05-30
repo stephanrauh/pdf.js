@@ -15,7 +15,10 @@
 
 /** @typedef {import("./event_utils").EventBus} EventBus */
 
+// modified by ngx-extended-pdf-viewer
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
+// end of modification by ngx-extended-pdf-viewer
+import { internalOpt } from "./internal_evt.js";
 import { isValidExplicitDest } from "pdfjs-lib";
 import { parseQueryString } from "./ui_utils.js";
 
@@ -204,7 +207,7 @@ class PDFLinkService {
     // #3195 end of modification by ngx-extended-pdf-viewer
 
     const ac = new AbortController();
-    this.eventBus._on(
+    this.eventBus.on(
       "textlayerrendered",
       evt => {
         if (evt.pageNumber === pageNumber) {
@@ -212,7 +215,7 @@ class PDFLinkService {
           ac.abort();
         }
       },
-      { signal: ac.signal }
+      { signal: ac.signal, ...internalOpt }
     );
   }
 

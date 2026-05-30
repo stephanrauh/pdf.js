@@ -18,14 +18,15 @@
 /** @typedef {import("./pdf_link_service.js").PDFLinkService} PDFLinkService */
 
 import { getCharacterType, getNormalizeWithNFKC } from "./pdf_find_utils.js";
-// #modified by ngx-extended-pdf-viewer
+// modified by ngx-extended-pdf-viewer
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
-// #end of modification by ngx-extended-pdf-viewer
+// end of modification by ngx-extended-pdf-viewer
 // #492 modified by ngx-extended-pdf-viewer
 import { binarySearchFirstItem, scrollIntoView } from "./ui_utils.js";
 // #492 end of modification by ngx-extended-pdf-viewer
+import { internalOpt } from "./internal_evt.js";
 
-// #modified by ngx-extended-pdf-viewer
+// modified by ngx-extended-pdf-viewer
 /**
  * Search and replacements for ngx-extended-pdf-viewer
  *
@@ -33,7 +34,7 @@ import { binarySearchFirstItem, scrollIntoView } from "./ui_utils.js";
  * `#calculateMatch` -> `_calculateMatch`
  *
  */
-// #end of modification by ngx-extended-pdf-viewer
+// end of modification by ngx-extended-pdf-viewer
 
 const FindState = {
   FOUND: 0,
@@ -94,8 +95,8 @@ let DIACRITICS_EXCEPTION_STR; // Lazily initialized, see below.
 
 const DIACRITICS_REG_EXP = /\p{M}+/gu;
 const SPECIAL_CHARS_REG_EXP = /([+^$|])|(\p{P}+)|(\s+)|(\p{M})|(\p{L})/gu;
-const NOT_DIACRITIC_FROM_END_REG_EXP = /([^\p{M}])\p{M}*$/u;
-const NOT_DIACRITIC_FROM_START_REG_EXP = /^\p{M}*([^\p{M}])/u;
+const NOT_DIACRITIC_FROM_END_REG_EXP = /(\P{M})\p{M}*$/u;
+const NOT_DIACRITIC_FROM_START_REG_EXP = /^\p{M}*(\P{M})/u;
 
 // The range [AC00-D7AF] corresponds to the Hangul syllables.
 // The few other chars are some CJK Compatibility Ideographs.
@@ -168,7 +169,7 @@ function normalize(text, options = {}) {
     ];
     normalizationRegex = new RegExp(
       regexps.map(r => `(${r})`).join("|"),
-      "gum"
+      "gmu"
     );
 
     if (hasSyllables) {
@@ -478,9 +479,9 @@ class PDFFindController {
     });
     // #2503 end of modification by ngx-extended-pdf-viewer
     if (listenToEventBus) { // #2339 modified by ngx-extended-pdf-viewer
-      eventBus._on("find", this.#onFind.bind(this));
-      eventBus._on("findbarclose", this.#onFindBarClose.bind(this));
-      eventBus._on("pagesedited", this.#onPagesEdited.bind(this));
+      eventBus.on("find", this.#onFind.bind(this), internalOpt);
+      eventBus.on("findbarclose", this.#onFindBarClose.bind(this), internalOpt);
+      eventBus.on("pagesedited", this.#onPagesEdited.bind(this), internalOpt);
     } // #2339 modified by ngx-extended-pdf-viewer
   }
 

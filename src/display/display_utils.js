@@ -308,7 +308,7 @@ class PDFDateString {
         "(\\d{2})?" + // Hour (optional)
         "(\\d{2})?" + // Minute (optional)
         "(\\d{2})?" + // Second (optional)
-        "([Z|+|-])?" + // Universal time relation (optional)
+        "([Z|+\\-])?" + // Universal time relation (optional)
         "(\\d{2})?" + // Offset hour (optional)
         "'?" + // Splitting apostrophe (optional)
         "(\\d{2})?" + // Offset minute (optional)
@@ -774,7 +774,7 @@ function renderRichText({ html, dir, className }, container) {
   if (typeof html === "string") {
     const p = document.createElement("p");
     p.dir = dir || "auto";
-    const lines = html.split(/(?:\r\n?|\n)/);
+    const lines = html.split(/\r\n?|\n/);
     for (let i = 0, ii = lines.length; i < ii; ++i) {
       const line = lines[i];
       p.append(document.createTextNode(line));

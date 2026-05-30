@@ -24,6 +24,7 @@ import {
   BasePrintServiceFactory,
   getXfaHtmlForPrinting,
 } from "./print_utils.js";
+import { AppOptions } from "./app_options.js";
 
 // Creates a placeholder with div and canvas with right size for the page.
 function composePage(
@@ -32,6 +33,7 @@ function composePage(
   size,
   printContainer,
   printResolution,
+  shouldPostMessageAfterPrintCallback,
   optionalContentConfigPromise,
   printAnnotationStoragePromise
 ) {
@@ -95,6 +97,9 @@ function composePage(
             currentRenderTask = null;
           }
           obj.done();
+          if (shouldPostMessageAfterPrintCallback) {
+            window.postMessage("ready", "*");
+          }
         },
         function (reason) {
           if (!(reason instanceof RenderingCancelledException)) {
@@ -112,6 +117,9 @@ function composePage(
             obj.abort();
           } else {
             obj.done();
+          }
+          if (shouldPostMessageAfterPrintCallback) {
+            window.postMessage("error", "*");
           }
         }
       );
@@ -178,6 +186,9 @@ class FirefoxPrintService {
       return;
     }
 
+    const shouldPostMessageAfterPrintCallback = AppOptions.get(
+      "postMessageAfterPrintCallback"
+    );
     for (let i = 0, ii = pagesOverview.length; i < ii; ++i) {
       composePage(
         pdfDocument,
@@ -185,6 +196,7 @@ class FirefoxPrintService {
         pagesOverview[i],
         printContainer,
         _printResolution,
+        shouldPostMessageAfterPrintCallback,
         _optionalContentConfigPromise,
         _printAnnotationStoragePromise
       );

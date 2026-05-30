@@ -22,6 +22,7 @@ import {
   toggleCheckedBtn,
   toggleExpandedBtn,
 } from "./ui_utils.js";
+import { internalOpt } from "./internal_evt.js";
 import { PagesCountLimit } from "./pdf_viewer.js";
 
 /**

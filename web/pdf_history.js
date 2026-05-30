@@ -18,6 +18,7 @@
 
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { isValidRotation, parseQueryString } from "./ui_utils.js";
+import { internalOpt } from "./internal_evt.js";
 import { updateUrlHash } from "pdfjs-lib";
 import { waitOnEventOrTimeout } from "./event_utils.js";
 
@@ -55,7 +56,7 @@ function getCurrentHash() {
 }
 
 class PDFHistory {
-  #eventAbortController = null;
+  #eventAC = null;
 
   /**
    * @param {PDFHistoryOptions} options
@@ -70,17 +71,21 @@ class PDFHistory {
 
     // Ensure that we don't miss a "pagesinit" event,
     // by registering the listener immediately.
-    this.eventBus._on("pagesinit", () => {
-      this._isPagesLoaded = false;
+    this.eventBus.on(
+      "pagesinit",
+      () => {
+        this._isPagesLoaded = false;
 
-      this.eventBus._on(
-        "pagesloaded",
-        evt => {
-          this._isPagesLoaded = !!evt.pagesCount;
-        },
-        { once: true }
-      );
-    });
+        this.eventBus.on(
+          "pagesloaded",
+          evt => {
+            this._isPagesLoaded = !!evt.pagesCount;
+          },
+          { once: true, ...internalOpt }
+        );
+      },
+      internalOpt
+    );
   }
 
   /**
@@ -674,22 +679,23 @@ class PDFHistory {
   }
 
   #bindEvents() {
-    if (this.#eventAbortController) {
+    if (this.#eventAC) {
       return; // The event listeners were already added.
     }
-    this.#eventAbortController = new AbortController();
-    const { signal } = this.#eventAbortController;
+    this.#eventAC = new AbortController();
+    const { signal } = this.#eventAC;
 
-    this.eventBus._on("updateviewarea", this.#updateViewarea.bind(this), {
+    this.eventBus.on("updateviewarea", this.#updateViewarea.bind(this), {
       signal,
+      ...internalOpt,
     });
     window.addEventListener("popstate", this.#popState.bind(this), { signal });
     window.addEventListener("pagehide", this.#pageHide.bind(this), { signal });
   }
 
   #unbindEvents() {
-    this.#eventAbortController?.abort();
-    this.#eventAbortController = null;
+    this.#eventAC?.abort();
+    this.#eventAC = null;
   }
 }
 

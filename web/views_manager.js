@@ -23,6 +23,7 @@ import {
   toggleExpandedBtn,
   toggleSelectedBtn,
 } from "./ui_utils.js";
+import { internalOpt } from "./internal_evt.js";
 import { Menu } from "./menu.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { Sidebar } from "./sidebar.js";
@@ -525,43 +526,60 @@ class ViewsManager extends Sidebar {
       }
     };
 
-    eventBus._on("outlineloaded", evt => {
-      onTreeLoaded(evt.outlineCount, this.outlineButton, SidebarView.OUTLINE);
+    eventBus.on(
+      "outlineloaded",
+      evt => {
+        onTreeLoaded(evt.outlineCount, this.outlineButton, SidebarView.OUTLINE);
 
-      evt.currentOutlineItemPromise.then(enabled => {
-        if (!this.isInitialViewSet) {
-          return;
-        }
-        // #modified by ngx-extended-pdf-viewer
-        // viewsManagerCurrentOutlineButton may not exist, add null check for backward compatibility
-        if (this.viewsManagerCurrentOutlineButton) {
-          this.viewsManagerCurrentOutlineButton.disabled = !enabled;
-        }
-        // #end of modification by ngx-extended-pdf-viewer
-      });
-    });
+        evt.currentOutlineItemPromise.then(enabled => {
+          if (!this.isInitialViewSet) {
+            return;
+          }
+          // modified by ngx-extended-pdf-viewer
+          // viewsManagerCurrentOutlineButton may not exist, add null check
+          // for backward compatibility
+          if (this.viewsManagerCurrentOutlineButton) {
+            this.viewsManagerCurrentOutlineButton.disabled = !enabled;
+          }
+          // end of modification by ngx-extended-pdf-viewer
+        });
+      },
+      internalOpt
+    );
 
-    eventBus._on("attachmentsloaded", evt => {
-      onTreeLoaded(
-        evt.attachmentsCount,
-        this.attachmentsButton,
-        SidebarView.ATTACHMENTS
-      );
-    });
+    eventBus.on(
+      "attachmentsloaded",
+      evt => {
+        onTreeLoaded(
+          evt.attachmentsCount,
+          this.attachmentsButton,
+          SidebarView.ATTACHMENTS
+        );
+      },
+      internalOpt
+    );
 
-    eventBus._on("layersloaded", evt => {
-      onTreeLoaded(evt.layersCount, this.layersButton, SidebarView.LAYERS);
-    });
+    eventBus.on(
+      "layersloaded",
+      evt => {
+        onTreeLoaded(evt.layersCount, this.layersButton, SidebarView.LAYERS);
+      },
+      internalOpt
+    );
 
     // Update the thumbnailViewer, if visible, when exiting presentation mode.
-    eventBus._on("presentationmodechanged", evt => {
-      if (
-        evt.state === PresentationModeState.NORMAL &&
-        this.visibleView === SidebarView.THUMBS
-      ) {
-        this.onUpdateThumbnails();
-      }
-    });
+    eventBus.on(
+      "presentationmodechanged",
+      evt => {
+        if (
+          evt.state === PresentationModeState.NORMAL &&
+          this.visibleView === SidebarView.THUMBS
+        ) {
+          this.onUpdateThumbnails();
+        }
+      },
+      internalOpt
+    );
   }
 
   onStartResizing() {

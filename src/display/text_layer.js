@@ -481,7 +481,8 @@ class TextLayer {
       // OffscreenCanvas.
       const canvas = document.createElement("canvas");
       canvas.style.cssText =
-        "position:absolute;top:0;left:0;width:0;height:0;display:none";
+        "position:absolute;top:0;left:0;width:0;height:0;display:none;" +
+        "letter-spacing:normal;word-spacing:normal";
       canvas.lang = lang;
       // #2490 modified by ngx-extended-pdf-viewer
       canvas.width = canvas.height = 0;

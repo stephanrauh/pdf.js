@@ -27,6 +27,7 @@ import {
   watchScroll,
 } from "./ui_utils.js";
 import { MathClamp, noContextMenu, stopEvent } from "pdfjs-lib";
+import { internalOpt } from "./internal_evt.js";
 import { Menu } from "./menu.js";
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 import { PDFThumbnailView } from "./pdf_thumbnail_view.js";
@@ -80,7 +81,7 @@ const SPACE_FOR_DRAG_MARKER_WHEN_NO_NEXT_ELEMENT = 15;
  * @property {Object} [waitingBar] - The waiting bar elements shown during
  *   long-running operations.
  * @property {Object} [addFileComponent] - The file picker and button used to
- *   add a PDF file to merge with the current one.
+ *   add one or more PDF files to merge with the current one.
  */
 
 /**
@@ -330,9 +331,9 @@ class PDFThumbnailViewer {
       if (this.#enableMerge && addFileComponent) {
         const { picker, button } = addFileComponent;
         picker.addEventListener("change", () => {
-          const file = picker.files?.[0];
-          if (file) {
-            this.#mergeFile(file, this._currentPageNumber - 1);
+          const files = Array.from(picker.files ?? []);
+          if (files.length) {
+            this.#mergeFiles(files, this._currentPageNumber - 1);
           }
         });
         button.addEventListener("click", () => {
@@ -360,24 +361,39 @@ class PDFThumbnailViewer {
     this.renderingQueue.renderHighestPriority();
   }
 
-  async #mergeFile(file, insertAfter) {
-    if (file.type !== "application/pdf") {
-      const magic = await file.slice(0, 5).text();
-      if (magic !== "%PDF-") {
-        return;
+  async #mergeFiles(files, insertAfter) {
+    this.#toggleBar("waiting", "pdfjs-views-manager-waiting-for-file");
+    const entries = [];
+    for (const file of files) {
+      const isImage = file.type?.startsWith("image/");
+      if (!isImage && file.type !== "application/pdf") {
+        const magic = await file.slice(0, 5).text();
+        if (magic !== "%PDF-") {
+          continue;
+        }
+      }
+      if (isImage) {
+        let bitmap;
+        try {
+          bitmap = await PDFThumbnailViewer.#fileToImageBitmap(file);
+        } catch {
+          continue;
+        }
+        entries.push({ image: bitmap, insertAfter });
+      } else {
+        entries.push({ document: await file.bytes(), insertAfter });
       }
     }
-    this.#toggleBar("waiting", "pdfjs-views-manager-waiting-for-file");
-    const buffer = await file.bytes();
+    if (entries.length === 0) {
+      this.#toggleBar("status");
+      return;
+    }
     const pagesCount = this.#pagesMapper.pagesNumber;
     const data = this.hasStructuralChanges()
       ? this.getStructuralChanges()
       : [{ document: null }];
-    data.push({
-      document: buffer,
-      insertAfter,
-    });
-    this.eventBus._on(
+    data.push(...entries);
+    this.eventBus.on(
       "pagesloaded",
       () => {
         // Clear any pre-merge selection: thumbnails are rebuilt fresh
@@ -400,7 +416,7 @@ class PDFThumbnailViewer {
           this.#updateCurrentPage(insertAfter + 2, /* force = */ true);
         }
       },
-      { once: true }
+      { once: true, ...internalOpt }
     );
     this.#reportTelemetry({ action: "merge" });
     this.eventBus.dispatch("saveandload", {
@@ -666,6 +682,71 @@ class PDFThumbnailViewer {
     return (PDFThumbnailViewer.#draggingScaleFactor ||= parseFloat(
       getComputedStyle(image).getPropertyValue("--thumbnail-dragging-scale")
     ));
+  }
+
+  static #fitImageDimensions(width, height, { minSide = 0, maxSide }) {
+    const longest = Math.max(width, height);
+    let scale = 1;
+    if (minSide > 0 && longest < minSide) {
+      scale = minSide / longest;
+    } else if (longest > maxSide) {
+      scale = maxSide / longest;
+    }
+    return scale === 1
+      ? { width, height }
+      : {
+          width: Math.max(1, Math.round(width * scale)),
+          height: Math.max(1, Math.round(height * scale)),
+        };
+  }
+
+  static async #fileToImageBitmap(file) {
+    // Keep image pages large enough to look good when fitted to a PDF page, but
+    // bounded so saving does not allocate worker-side buffers at camera-photo
+    // dimensions.
+    const MIN_RASTER_SIDE = 1024;
+    const MAX_RASTER_SIDE = 4096;
+
+    if (file.type !== "image/svg+xml") {
+      const bitmap = await createImageBitmap(file);
+      const { width, height } = PDFThumbnailViewer.#fitImageDimensions(
+        bitmap.width,
+        bitmap.height,
+        { maxSide: MAX_RASTER_SIDE }
+      );
+      if (width === bitmap.width && height === bitmap.height) {
+        return bitmap;
+      }
+      const canvas = new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(bitmap, 0, 0, width, height);
+      bitmap.close();
+      return canvas.transferToImageBitmap();
+    }
+    // createImageBitmap doesn't work with SVG (mirroring the workaround in
+    // src/display/editor/tools.js ImageManager): load the file via an Image
+    // element and rasterize it through an OffscreenCanvas. The target raster
+    // size uses the SVG's intrinsic dimensions, clamped so the longest side
+    // falls in [1024, 4096]: large enough to avoid pixelation when fitted to
+    // a page, but capped to prevent a runaway SVG (e.g. a huge viewBox) from
+    // allocating a multi-gigabyte bitmap.
+    const url = URL.createObjectURL(file);
+    try {
+      const image = new Image();
+      image.src = url;
+      await image.decode();
+      const { width, height } = PDFThumbnailViewer.#fitImageDimensions(
+        image.naturalWidth || MIN_RASTER_SIDE,
+        image.naturalHeight || MIN_RASTER_SIDE,
+        { minSide: MIN_RASTER_SIDE, maxSide: MAX_RASTER_SIDE }
+      );
+      const canvas = new OffscreenCanvas(width, height);
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(image, 0, 0, width, height);
+      return canvas.transferToImageBitmap();
+    } finally {
+      URL.revokeObjectURL(url);
+    }
   }
 
   #updateThumbnails(currentPageNumber) {
@@ -1594,7 +1675,7 @@ class PDFThumbnailViewer {
     const container = this.container;
     const signal = this.#abortSignal;
 
-    const hasPdfItem = dataTransfer => {
+    const hasMergeableItem = dataTransfer => {
       if (!dataTransfer) {
         return false;
       }
@@ -1602,9 +1683,12 @@ class PDFThumbnailViewer {
       // the only available signal. Matches the existing global drop handler
       // in app.js. Files with no MIME (e.g. some macOS sources) are rejected
       // here to keep the "copy" cursor honest; if needed, drop-time magic-byte
-      // validation in #mergeFile would still catch a permissive variant.
+      // validation in #mergeFiles would still catch a permissive variant.
       for (const item of dataTransfer.items) {
-        if (item.kind === "file" && item.type === "application/pdf") {
+        if (
+          item.kind === "file" &&
+          (item.type === "application/pdf" || item.type.startsWith("image/"))
+        ) {
           return true;
         }
       }
@@ -1625,7 +1709,7 @@ class PDFThumbnailViewer {
           // A page-move drag is already in progress.
           !isNaN(this.#lastDraggedOverIndex) ||
           !this._thumbnails.length ||
-          !hasPdfItem(e.dataTransfer)
+          !hasMergeableItem(e.dataTransfer)
         ) {
           return;
         }
@@ -1691,7 +1775,7 @@ class PDFThumbnailViewer {
         }
         e.preventDefault();
         e.stopPropagation();
-        const file = e.dataTransfer.files?.[0];
+        const files = Array.from(e.dataTransfer.files ?? []);
         // If no dragover ever ran (e.g. instant drop), compute the index from
         // the drop event itself so we don't fall through to a stale fallback.
         if (isNaN(this.#lastDraggedOverIndex) && this.#thumbnailsPositions) {
@@ -1705,8 +1789,8 @@ class PDFThumbnailViewer {
           ? -1
           : this.#lastDraggedOverIndex;
         this.#endExternalFileDrag();
-        if (file) {
-          this.#mergeFile(file, insertAfter);
+        if (files.length) {
+          this.#mergeFiles(files, insertAfter);
         }
       },
       { signal }

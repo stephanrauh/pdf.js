@@ -19,7 +19,7 @@ if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
 
   const isAndroid = /Android/.test(userAgent);
   const isIOS =
-    /\b(iPad|iPhone|iPod)(?=;)/.test(userAgent) ||
+    /\b(?:iPad|iPhone|iPod)(?=;)/.test(userAgent) ||
     (platform === "MacIntel" && maxTouchPoints > 1);
 
   // Limit canvas size to 5 mega-pixels on mobile.
@@ -426,6 +426,11 @@ const defaultOptions = {
   pdfBugEnabled: {
     /** @type {boolean} */
     value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
+    kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+  },
+  postMessageAfterPrintCallback: {
+    /** @type {boolean} */
+    value: false,
     kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
   },
   printResolution: {

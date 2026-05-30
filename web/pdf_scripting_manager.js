@@ -16,7 +16,10 @@
 /** @typedef {import("./event_utils").EventBus} EventBus */
 
 import { apiPageLayoutToViewerModes } from "./ui_utils.js";
+// modified by ngx-extended-pdf-viewer
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
+// end of modification by ngx-extended-pdf-viewer
+import { internalOpt } from "./internal_evt.js";
 import { RenderingStates } from "./renderable_view.js";
 import { shadow } from "pdfjs-lib";
 
@@ -39,7 +42,7 @@ class PDFScriptingManager {
 
   #docProperties = null;
 
-  #eventAbortController = null;
+  #eventAC = null;
 
   #eventBus = null;
 
@@ -114,27 +117,27 @@ class PDFScriptingManager {
     }
     const eventBus = this.#eventBus;
 
-    this.#eventAbortController = new AbortController();
-    const { signal } = this.#eventAbortController;
+    this.#eventAC = new AbortController();
+    const evtOpts = { signal: this.#eventAC.signal, ...internalOpt };
 
-    eventBus._on(
+    eventBus.on(
       "updatefromsandbox",
       event => {
         if (event?.source === window) {
           this.#updateFromSandbox(event.detail);
         }
       },
-      { signal }
+      evtOpts
     );
-    eventBus._on(
+    eventBus.on(
       "dispatcheventinsandbox",
       event => {
         this.#scripting?.dispatchEventInSandbox(event.detail);
       },
-      { signal }
+      evtOpts
     );
 
-    eventBus._on(
+    eventBus.on(
       "pagechanging",
       ({ pageNumber, previous }) => {
         if (pageNumber === previous) {
@@ -143,9 +146,9 @@ class PDFScriptingManager {
         this.#dispatchPageClose(previous);
         this.#dispatchPageOpen(pageNumber);
       },
-      { signal }
+      evtOpts
     );
-    eventBus._on(
+    eventBus.on(
       "pagerendered",
       ({ pageNumber }) => {
         if (!this._pageOpenPending.has(pageNumber)) {
@@ -156,9 +159,9 @@ class PDFScriptingManager {
         }
         this.#dispatchPageOpen(pageNumber);
       },
-      { signal }
+      evtOpts
     );
-    eventBus._on(
+    eventBus.on(
       "pagesdestroy",
       async () => {
         await this.#dispatchPageClose(this.#pdfViewer.currentPageNumber);
@@ -170,7 +173,7 @@ class PDFScriptingManager {
 
         this.#closeCapability?.resolve();
       },
-      { signal }
+      evtOpts
     );
 
     try {
@@ -483,8 +486,8 @@ class PDFScriptingManager {
     this.#willPrintCapability?.reject(new Error("Scripting destroyed."));
     this.#willPrintCapability = null;
 
-    this.#eventAbortController?.abort();
-    this.#eventAbortController = null;
+    this.#eventAC?.abort();
+    this.#eventAC = null;
 
     this._pageOpenPending.clear();
     this._visitedPages.clear();

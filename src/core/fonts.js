@@ -55,13 +55,13 @@ import {
   getSupplementalGlyphMapForArialBlack,
   getSupplementalGlyphMapForCalibri,
 } from "./standard_fonts.js";
+import { GlyfTable, pruneCompositeGlyphCycles } from "./glyf.js";
 import { IdentityToUnicodeMap, ToUnicodeMap } from "./to_unicode_map.js";
 import { CFFFont } from "./cff_font.js";
 import { compileFontInfo } from "./obj_bin_transform_core.js";
 import { DataBuilder } from "./data_builder.js";
 import { FontRendererFactory } from "./font_renderer.js";
 import { getFontBasicMetrics } from "./metrics.js";
-import { GlyfTable } from "./glyf.js";
 import { OpenTypeFileBuilder } from "./opentype_file_builder.js";
 import { Stream } from "./stream.js";
 import { Type1Font } from "./type1_font.js";
@@ -720,6 +720,11 @@ function createCmapTable(glyphs, toUnicodeExtraMap, numGlyphs) {
 function validateOS2Table(os2, file) {
   file.pos = (file.start || 0) + os2.offset;
   const version = file.getUint16();
+  // https://learn.microsoft.com/en-us/typography/opentype/spec/os2
+  const minLength = [78, 86, 96, 96, 96, 100][version];
+  if (minLength === undefined || os2.length < minLength) {
+    return false;
+  }
   // TODO verify all OS/2 tables fields, but currently we validate only those
   // that give us issues
   file.skip(60); // skipping type, misc sizes, panose, unicode ranges
@@ -1230,16 +1235,16 @@ class Font {
       }
     }
 
-    this.bold = /bold/gi.test(fontName);
-    this.italic = /oblique|italic/gi.test(fontName);
+    this.bold = /bold/i.test(fontName);
+    this.italic = /oblique|italic/i.test(fontName);
 
     // Use 'name' instead of 'fontName' here because the original
     // name ArialBlack for example will be replaced by Helvetica.
-    this.black = /Black/g.test(name);
+    this.black = /Black/.test(name);
 
     // Use 'name' instead of 'fontName' here because the original
     // name ArialNarrow for example will be replaced by Helvetica.
-    const isNarrow = /Narrow/g.test(name);
+    const isNarrow = /Narrow/.test(name);
 
     // if at least one width is present, remeasure all chars when exists
     this.remeasure =
@@ -2195,18 +2200,25 @@ class Font {
         last.endOffset = oldGlyfDataLength;
       }
 
+      const droppedGlyphs = pruneCompositeGlyphCycles(
+        oldGlyfData,
+        locaEntries,
+        numGlyphs
+      );
       const missingGlyphs = Object.create(null);
       let writeOffset = 0;
       itemEncode(locaData, 0, writeOffset);
       for (i = 0, j = itemSize; i < numGlyphs; i++, j += itemSize) {
-        const glyphProfile = sanitizeGlyph(
-          oldGlyfData,
-          locaEntries[i].offset,
-          locaEntries[i].endOffset,
-          newGlyfData,
-          writeOffset,
-          hintsValid
-        );
+        const glyphProfile = droppedGlyphs.has(i)
+          ? { length: 0, sizeOfInstructions: 0 }
+          : sanitizeGlyph(
+              oldGlyfData,
+              locaEntries[i].offset,
+              locaEntries[i].endOffset,
+              newGlyfData,
+              writeOffset,
+              hintsValid
+            );
         const newLength = glyphProfile.length;
         if (newLength === 0) {
           missingGlyphs[i] = true;
@@ -2670,10 +2682,23 @@ class Font {
     }
 
     const isTrueType = !tables["CFF "];
+    let parsedCff = null;
     if (!isTrueType) {
+      try {
+        parsedCff = new CFFParser(
+          new Stream(tables["CFF "].data),
+          properties,
+          SEAC_ANALYSIS_ENABLED
+        ).parse();
+      } catch {
+        warn("Failed to parse font " + properties.loadedName);
+      }
+
       // OpenType font (skip composite fonts with non-default glyph mapping).
       if (
-        (header.version === "OTTO" && !properties.composite) ||
+        (header.version === "OTTO" &&
+          (!properties.composite ||
+            (properties.fontFileN === "FontFile3" && parsedCff?.isCIDFont))) ||
         !tables.head ||
         !tables.hhea ||
         !tables.maxp ||
@@ -2713,19 +2738,11 @@ class Font {
     }
 
     let numGlyphsFromCFF;
-    if (!isTrueType) {
+    if (parsedCff) {
       try {
-        // Trying to repair CFF file
-        const parser = new CFFParser(
-          new Stream(tables["CFF "].data),
-          properties,
-          SEAC_ANALYSIS_ENABLED
-        );
-        const cff = parser.parse();
-        cff.duplicateFirstGlyph();
-        const compiler = new CFFCompiler(cff);
-        tables["CFF "].data = compiler.compile();
-        numGlyphsFromCFF = cff.charStringCount;
+        parsedCff.duplicateFirstGlyph();
+        tables["CFF "].data = new CFFCompiler(parsedCff).compile();
+        numGlyphsFromCFF = parsedCff.charStringCount;
       } catch {
         warn("Failed to compile font " + properties.loadedName);
       }
@@ -2837,6 +2854,19 @@ class Font {
       maxFunctionDefs = font.getUint16();
       font.pos += 4;
       maxSizeOfInstructions = font.getUint16();
+    } else if (isTrueType && version === 0x00005000) {
+      const newMaxp = new Uint8Array(32);
+      writeUint32(newMaxp, 0, 0x00010000);
+      newMaxp[4] = (numGlyphs >> 8) & 0xff;
+      newMaxp[5] = numGlyphs & 0xff;
+      newMaxp.fill(0xff, 6, 14);
+      newMaxp[15] = 2;
+      newMaxp[28] = 0xff;
+      newMaxp[29] = 0xff;
+      newMaxp[31] = 0x10;
+      tables.maxp.data = newMaxp;
+      tables.maxp.length = 32;
+      version = 0x00010000;
     }
 
     tables.maxp.data[4] = numGlyphsOut >> 8;

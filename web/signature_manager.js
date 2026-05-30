@@ -21,7 +21,10 @@ import {
   stopEvent,
   SupportedImageMimeTypes,
 } from "pdfjs-lib";
+// modified by ngx-extended-pdf-viewer
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
+// end of modification by ngx-extended-pdf-viewer
+import { internalOpt } from "./internal_evt.js";
 
 // Default height of the added signature in page coordinates.
 const DEFAULT_HEIGHT_IN_PAGE = 40;
@@ -230,7 +233,11 @@ class SignatureManager {
     this.#initTabButtons(typeButton, drawButton, imageButton, panels);
     imagePicker.accept = SupportedImageMimeTypes.join(",");
 
-    eventBus._on("storedsignatureschanged", this.#signaturesChanged.bind(this));
+    eventBus.on(
+      "storedsignatureschanged",
+      this.#signaturesChanged.bind(this),
+      internalOpt
+    );
 
     overlayManager.register(dialog);
   }

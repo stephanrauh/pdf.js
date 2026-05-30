@@ -17,6 +17,7 @@ import {
   bytesToString,
   FormatError,
   info,
+  isArrayEqual,
   shadow,
   stringToBytes,
   Util,
@@ -29,9 +30,24 @@ import {
 } from "./charsets.js";
 import { ExpertEncoding, StandardEncoding } from "./encodings.js";
 import { DataBuilder } from "./data_builder.js";
+import { MathClamp } from "../shared/math_clamp.js";
 
 // Maximum subroutine call depth of type 2 charstrings. Matches OTS.
 const MAX_SUBR_NESTING = 10;
+
+function looksLikeUnsigned16BitNegative(coord) {
+  return coord > 0x7fff && coord <= 0xffff;
+}
+
+function recoverSigned16BitBBox(bbox, onlyLowerLeft = false) {
+  return Util.normalizeRect(
+    bbox.map((coord, i) =>
+      (!onlyLowerLeft || i < 2) && looksLikeUnsigned16BitNegative(coord)
+        ? coord - 0x10000
+        : coord
+    )
+  );
+}
 
 /**
  * The CFF class takes a Type1 file and wrap it into a
@@ -268,13 +284,36 @@ class CFFParser {
     }
 
     let fontBBox = topDict.getByName("FontBBox");
-    if (fontBBox?.every(coord => coord === 0) && properties.bbox) {
-      fontBBox = Util.normalizeRect(
-        properties.bbox.map(coord =>
-          coord > 0x7fff && coord <= 0xffff ? coord - 0x10000 : coord
-        )
-      );
+    const descriptorBBox = properties.bbox?.some(coord => coord !== 0)
+      ? recoverSigned16BitBBox(properties.bbox)
+      : null;
+    const cffBBoxHasUnsignedLowerLeft = fontBBox
+      ?.slice(0, 2)
+      .some(looksLikeUnsigned16BitNegative);
+    const cffBBoxHasUnsignedCoords = fontBBox?.some(
+      looksLikeUnsigned16BitNegative
+    );
+    if (fontBBox?.every(coord => coord === 0) && descriptorBBox) {
+      // The CFF FontBBox is empty, hence fall back to the FontDescriptor bbox.
+      fontBBox = descriptorBBox;
       topDict.setByName("FontBBox", fontBBox);
+    } else if (cffBBoxHasUnsignedCoords) {
+      const recoveredFontBBox = recoverSigned16BitBBox(fontBBox);
+      const descriptorCorroborates =
+        descriptorBBox &&
+        properties.bbox.some(coord => coord < 0) &&
+        !properties.bbox.some(looksLikeUnsigned16BitNegative) &&
+        isArrayEqual(recoveredFontBBox, descriptorBBox);
+
+      if (descriptorCorroborates || cffBBoxHasUnsignedLowerLeft) {
+        // Some Ghostscript-generated CFF fonts encode negative lower-left
+        // coordinates as unsigned 16-bit values. Preserve large upper-right
+        // coordinates unless the descriptor independently confirms the repair.
+        fontBBox = descriptorCorroborates
+          ? recoveredFontBBox
+          : recoverSigned16BitBBox(fontBBox, /* onlyLowerLeft = */ true);
+        topDict.setByName("FontBBox", fontBBox);
+      }
     }
     if (fontBBox?.some(coord => coord !== 0)) {
       // adjusting ascent/descent
@@ -787,6 +826,12 @@ class CFFParser {
       this.emptyPrivateDictionary(parentDict);
       return;
     }
+    // The Private DICT extends past the end of the font data, which means
+    // the embedded font is truncated; abort so the caller can substitute a
+    // system font instead of rendering blank glyphs (issue 7625).
+    if (offset + size > this.bytes.length) {
+      throw new FormatError("CFF Private DICT extends past end of font");
+    }
 
     const privateDictEnd = offset + size;
     const dictData = this.bytes.subarray(offset, privateDictEnd);
@@ -820,6 +865,43 @@ class CFFParser {
       // Firefox doesn't render correctly such a font on Windows (see issue
       // 15289), hence we just reset it to its default value.
       privateDict.setByName("ExpansionFactor", DEFAULT_EXPANSION_FACTOR);
+    }
+    if (blueScale > 0) {
+      // Adobe's font validator (AFDKO, see `absfont.cpp`) flags BlueScale as
+      // out-of-range when `BlueScale * maxZoneHeight` is below 0.5 or above 1.
+      // The Type 2 hinting engine in coretype/FreeType disables the lower
+      // clamp at render time because library fonts with small zones and a
+      // default BlueScale (0.039625) trip the threshold even though they
+      // render correctly. To avoid changing those fonts here, only apply
+      // the lower clamp when BlueScale is also smaller than the default,
+      // i.e. when the font genuinely deviates from the standard value.
+      // The upper clamp matches what FreeType already enforces (psblues.c)
+      // and is safe to apply unconditionally.
+      let maxZoneHeight = 0;
+      for (const zones of [
+        privateDict.getByName("BlueValues"),
+        privateDict.getByName("OtherBlues"),
+      ]) {
+        if (!zones) {
+          continue;
+        }
+        // BlueValues/OtherBlues are stored as deltas where the odd-indexed
+        // entries are the heights of each zone.
+        for (let i = 1; i < zones.length; i += 2) {
+          if (zones[i] > maxZoneHeight) {
+            maxZoneHeight = zones[i];
+          }
+        }
+      }
+      if (maxZoneHeight > 0) {
+        const minBlueScale =
+          blueScale < DEFAULT_BLUE_SCALE ? 0.5 / maxZoneHeight : -Infinity;
+        const maxBlueScale = 1 / maxZoneHeight;
+        const clamped = MathClamp(blueScale, minBlueScale, maxBlueScale);
+        if (clamped !== blueScale) {
+          privateDict.setByName("BlueScale", clamped);
+        }
+      }
     }
 
     // Parse the Subrs index also since it's relative to the private dict.

@@ -1397,7 +1397,7 @@ class PDFDocument {
       }
       let fontFamily = descriptor.get("FontFamily");
       // For example, "Wingdings 3" is not a valid font name in the css specs.
-      fontFamily = fontFamily.replaceAll(/[ ]+(\d)/g, "$1");
+      fontFamily = fontFamily.replaceAll(/ +(\d)/g, "$1");
       const fontWeight = descriptor.get("FontWeight");
 
       // Angle is expressed in degrees counterclockwise in PDF
@@ -2159,4 +2159,4 @@ class PDFDocument {
   }
 }
 
-export { Page, PDFDocument };
+export { LETTER_SIZE_MEDIABOX, Page, PDFDocument };

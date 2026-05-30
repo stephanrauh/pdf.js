@@ -373,6 +373,7 @@ function parseQueryString(query) {
   return params;
 }
 
+// eslint-disable-next-line no-control-regex
 const InvisibleCharsRegExp = /[\x00-\x1F]/g;
 
 /**
@@ -464,14 +465,11 @@ function approximateFraction(x) {
       b = q;
     }
   }
-  let result;
   // Select closest of the neighbours to x.
   if (x_ - a / b < c / d - x_) {
-    result = x_ === x ? [a, b] : [b, a];
-  } else {
-    result = x_ === x ? [c, d] : [d, c];
+    return x_ === x ? [a, b] : [b, a];
   }
-  return result;
+  return x_ === x ? [c, d] : [d, c];
 }
 
 /**
