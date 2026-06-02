@@ -614,6 +614,16 @@ const defaultOptions = {
     kind: OptionKind.API,
     type: Type.BOOLEAN + Type.UNDEFINED,
   },
+  // #3209 added by ngx-extended-pdf-viewer
+  // Lets CSP-restricted apps disable WebAssembly. When false, pdf.js loads the
+  // `*_nowasm_fallback.js` siblings of each .wasm file instead, so consumers can
+  // serve a CSP without `'wasm-unsafe-eval'`.
+  useWasm: {
+    /** @type {boolean} */
+    value: true,
+    kind: OptionKind.API,
+  },
+  // #3209 end of addition by ngx-extended-pdf-viewer
   verbosity: {
     /** @type {number} */
     value: 1,
