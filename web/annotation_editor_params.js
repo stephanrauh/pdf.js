@@ -84,7 +84,12 @@ class AnnotationEditorParams {
       // Enable alpha on the color input and remove the now-redundant opacity
       // slider from the DOM.
       editorInkColor.setAttribute("alpha", "");
-      editorInkOpacity.closest(".editorParamsSetter").remove();
+      // #3216 modified by ngx-extended-pdf-viewer
+      // In custom-toolbar mode (and Webkit, which exposes isAlphaColorInputSupported=true),
+      // editorInkOpacity is a bare dummy <span> with no .editorParamsSetter wrapper to remove.
+      // Guard with ?. so the unhandled rejection no longer halts viewer init.
+      editorInkOpacity.closest(".editorParamsSetter")?.remove();
+      // #3216 end of modification by ngx-extended-pdf-viewer
 
       // Track last-known color/opacity so that sync-back events for either
       // property can reconstruct the full #RRGGBBAA without re-parsing the
