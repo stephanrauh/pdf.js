@@ -1800,6 +1800,23 @@ class AnnotationEditorUIManager {
         const useCurrentPage = ignorePageNumber || pageNumberMissing;
         const layer = useCurrentPage ? this.currentLayer : this.getLayer(editor.pageIndex);
         // #1783 end of modification by ngx-extended-pdf-viewer
+        // #2656 modified by ngx-extended-pdf-viewer
+        // The annotation editor layer only exists once its page has been
+        // rendered. Calling addEditorAnnotation()/addImageToAnnotationLayer()
+        // for a not-yet-rendered page leaves `layer` undefined, which used to
+        // crash with "Cannot read properties of undefined (reading
+        // 'deserialize')". Skip that editor with an actionable message instead.
+        if (!layer) {
+          const missingPageIndex = useCurrentPage
+            ? this.#currentPageIndex
+            : editor.pageIndex;
+          warn(
+            `addSerializedEditor: the annotation editor layer for page ${missingPageIndex} is not rendered yet. ` +
+              `Wait for the "annotationeditorlayerrendered" event (not "annotationlayerrendered") before adding an annotation to that page.`
+          );
+          continue;
+        }
+        // #2656 end of modification by ngx-extended-pdf-viewer
         const deserializedEditor = await layer.deserialize(editor);
         if (!deserializedEditor) {
           return;
