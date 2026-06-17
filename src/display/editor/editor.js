@@ -121,6 +121,16 @@ class AnnotationEditor {
 
   doNotMove = false; // #1825 modified by ngx-extended-pdf-viewer
 
+  // #3225 modified by ngx-extended-pdf-viewer
+  // A developer-supplied, stable identifier (e.g. a UUID) that survives the
+  // getSerializedAnnotations() -> store -> addEditorAnnotation() round-trip.
+  // It is deliberately kept separate from the internal `id` (the temporary
+  // `pdfjs_internal_editor_N` DOM id pdf.js mints fresh every session): pdf.js
+  // never uses `customId` for its own logic, so an arbitrary value is safe.
+  // It is only ever set when the embedder supplies one; otherwise it stays null.
+  customId = null;
+  // #3225 end of modification by ngx-extended-pdf-viewer
+
   static _borderLineWidth = -1;
 
   static _colorManager = new ColorManager();
@@ -1957,6 +1967,15 @@ class AnnotationEditor {
     editor.rotation = data.rotation;
     editor.#accessibilityData = data.accessibilityData;
     editor._isCopy = data.isCopy || false;
+    // #3225 modified by ngx-extended-pdf-viewer
+    // Honor a developer-supplied stable id when restoring an annotation, so it
+    // keeps the same `customId` instead of being assigned a brand-new internal
+    // id. Only adopted when actually supplied; the internal `id` above is still
+    // freshly minted and used for the DOM element.
+    if (data.customId !== undefined && data.customId !== null) {
+      editor.customId = data.customId;
+    }
+    // #3225 end of modification by ngx-extended-pdf-viewer
 
     const [pageWidth, pageHeight] = editor.pageDimensions;
     const [x, y, width, height] = editor.getRectInCurrentCoords(

@@ -3623,6 +3623,14 @@ class PDFViewer {
         // for proper JSON serialization, but pass includeId=true to get IDs
         const serialized = annotation.serialize(true, null, true);
         // #3038 end of modification by ngx-extended-pdf-viewer
+        // #3225 modified by ngx-extended-pdf-viewer
+        // Surface the developer-supplied stable id alongside the temporary
+        // internal `id`. It only travels through this JS export/import API, not
+        // into the saved PDF, so it lives here rather than in editor.serialize().
+        if (serialized && annotation.customId !== undefined && annotation.customId !== null) {
+          serialized.customId = annotation.customId;
+        }
+        // #3225 end of modification by ngx-extended-pdf-viewer
         if (serialized && serialized.annotationType !== undefined) {
           annotations.push(serialized);
         }
