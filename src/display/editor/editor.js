@@ -1740,6 +1740,33 @@ class AnnotationEditor {
     }
   }
 
+  // #3234 added by ngx-extended-pdf-viewer
+  /**
+   * The editor's bounding box in the page's un-rotated coordinate space, as
+   * normalized fractions (0..1) with a top-left origin. Unlike `x`/`y`/`width`/
+   * `height` (stored in whatever rotation the page had when the annotation was
+   * added: for 90/270 the axes swap and `y` is the bottom edge), this is
+   * rotation-independent, so it can be handed straight to the ngx service's
+   * getPageAsCanvas() / getPageAsImage() as a cropBox.
+   * @returns {{ x: number, y: number, width: number, height: number }}
+   */
+  get normalizedPageRect() {
+    const [pageWidth, pageHeight] = this.pageDimensions;
+    const [pageX, pageY] = this.pageTranslation;
+    const [x1, y1, x2, y2] = this.getRect(0, 0);
+    const left = Math.min(x1, x2) - pageX;
+    const right = Math.max(x1, x2) - pageX;
+    const bottom = Math.min(y1, y2) - pageY;
+    const top = Math.max(y1, y2) - pageY;
+    return {
+      x: left / pageWidth,
+      y: (pageHeight - top) / pageHeight,
+      width: (right - left) / pageWidth,
+      height: (top - bottom) / pageHeight,
+    };
+  }
+  // #3234 end of addition by ngx-extended-pdf-viewer
+
   getRectInCurrentCoords(rect, pageHeight) {
     const [x1, y1, x2, y2] = rect;
 
