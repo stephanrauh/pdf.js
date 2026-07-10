@@ -249,14 +249,33 @@ class PDFLinkService {
       this.pdfHistory.pushPage(pageNumber);
     }
 
-    // #3197 modified by ngx-extended-pdf-viewer
-    // In book mode, don't flip here — the currentPageNumber setter
-    // (triggered via the Angular page binding) already handles the flip.
-    // Calling flip() here too would cause a double-flip.
-    // For TOC navigation (goToDestination), the flip is still needed
-    // because that path doesn't go through the Angular page binding.
+    // #3197 / #3229 modified by ngx-extended-pdf-viewer
+    // Update the current-page state. In book mode this keeps _currentPageNumber
+    // and the toolbar in sync (esp. for turnToPage jumps, which don't emit the
+    // page-flip "flip" event that would otherwise sync it).
+    const previousPageNumber = this.pdfViewer.currentPageNumber;
     this.pdfViewer.scrollPageIntoView({ pageNumber });
-    // #3197 end of modification by ngx-extended-pdf-viewer
+    // In book mode we must additionally trigger the page-flip animation here:
+    // the page-number input path does not round-trip through the Angular page
+    // binding — its pagechanging event is guarded (#3157) — so the flip would
+    // otherwise never happen (#3229). Mirror the currentPageNumber setter:
+    // animate small jumps, jump instantly for larger ones. These are absolute,
+    // idempotent flip()/turnToPage() calls (unlike the old relative
+    // flipNext/flipPrev heuristic), so they cannot reintroduce the #3197
+    // even-page double-flip.
+    if (
+      this.pdfViewer.pageViewMode === "book" &&
+      this.pdfViewer.pageFlip &&
+      previousPageNumber !== pageNumber
+    ) {
+      if (Math.abs(previousPageNumber - pageNumber) <= 2) {
+        this.pdfViewer.pageFlip.flip(pageNumber - 1);
+      } else {
+        this.pdfViewer.pageFlip.turnToPage(pageNumber - 1);
+      }
+      this.pdfViewer.ensureAdjacentPagesAreLoaded();
+    }
+    // #3197 / #3229 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
