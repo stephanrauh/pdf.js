@@ -48,6 +48,7 @@ import {
   lookupMatrix,
   lookupNormalRect,
   lookupRect,
+  MissingDataException,
   numberToString,
   RESOURCES_KEYS_OPERATOR_LIST,
   RESOURCES_KEYS_TEXT_CONTENT,
@@ -1216,6 +1217,9 @@ class Annotation {
           /* resources = */ null
         );
       } catch (ex) {
+        if (ex instanceof MissingDataException) {
+          throw ex;
+        }
         warn(`#setOptionalContent: ${ex}`);
       }
     }
@@ -2601,9 +2605,6 @@ class WidgetAnnotation extends Annotation {
         fontSize,
         totalWidth,
         totalHeight,
-        defaultVPadding,
-        descent,
-        lineHeight,
         alignment,
         bidi(lines[0]).dir === "rtl",
         annotationStorage
@@ -2965,9 +2966,6 @@ class TextWidgetAnnotation extends WidgetAnnotation {
     fontSize,
     width,
     height,
-    vPadding,
-    descent,
-    lineHeight,
     alignment,
     isRTL,
     annotationStorage
@@ -3004,11 +3002,18 @@ class TextWidgetAnnotation extends WidgetAnnotation {
       previousWidth = glyphWidth;
     }
     const renderedComb = buf.join(" ");
+
+    // Vertically center the glyphs within the field: comb fields are mostly
+    // filled with uppercase letters and/or digits, hence we use the cap height
+    // (with a fallback on the ascent or the font size) to center them.
+    const vShift =
+      (height - (font.capHeight || font.ascent || 1) * fontSize) / 2;
+
     return (
       `/Tx BMC q ${colors}BT ` +
       defaultAppearance +
       ` 1 0 0 1 ${numberToString(hShift)} ${numberToString(
-        vPadding + descent
+        vShift
       )} Tm ${renderedComb}` +
       " ET Q EMC"
     );
@@ -5435,33 +5440,28 @@ class FileAttachmentAnnotation extends MarkupAnnotation {
     super(params);
 
     const { annotationGlobals, dict } = params;
-    const fileSpecRef = dict.getRaw("FS");
     const fsDict = dict.get("FS");
     const file = new FileSpec(fsDict);
     /** @type {{catalog?: Catalog}} */
     const { catalog } = annotationGlobals.pdfManager.pdfDocument;
 
-    // When this annotation references an embedded file that’s already in the
-    // catalog `NameTree` (such as `EFOpen`), reuse that `NameTree` id so the
-    // sidebar and annotation paths resolve the same attachment identity.
-    let fileId =
-      fileSpecRef instanceof Ref
-        ? catalog?.attachmentIdByRef.get(fileSpecRef)
-        : undefined;
-
-    // Fallback ids are namespaced to keep annotation-local ids distinct from
-    // `NameTree` ids (which are filename-based).
-    if (catalog && fsDict instanceof Dict && typeof fileId !== "string") {
-      const baseFileId = `annotation:${this.data.id}`;
-      fileId = baseFileId;
-
-      let i = 1;
-      while (catalog.attachmentDictById.has(fileId)) {
-        fileId = `${baseFileId}-${i++}`;
+    // Encode the embedded content's reference in the id so it can be
+    // re-fetched from the xref on demand (see `Catalog.attachmentContent`)
+    // instead of being cached where `cleanup` would wipe it. The file-spec is
+    // usually indirect; when it's inline its embedded-file stream still isn't
+    // (streams are always indirect), so fall back to that ref.
+    let fileId;
+    if (fsDict instanceof Dict) {
+      let contentRef = dict.getRaw("FS");
+      if (!(contentRef instanceof Ref)) {
+        contentRef = FileSpec.pickPlatformItem(
+          fsDict.get("EF"),
+          /* raw = */ true
+        );
       }
-
-      // Cache only fallbacks.
-      catalog.attachmentDictById.set(fileId, fsDict);
+      if (contentRef instanceof Ref) {
+        fileId = catalog?.getAttachmentIdForAnnotation(contentRef);
+      }
     }
 
     this.data.hasOwnCanvas = this.data.noRotate;

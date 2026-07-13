@@ -320,11 +320,6 @@ class CanvasExtraState {
 }
 
 function putBinaryImageData(ctx, imgData) {
-  if (imgData instanceof ImageData) {
-    ctx.putImageData(imgData, 0, 0);
-    return;
-  }
-
   // Put the image data to the canvas in chunks, rather than putting the
   // whole image at once.  This saves JS memory, because the ImageData object
   // is smaller. It also possibly saves C++ memory within the implementation
@@ -2675,13 +2670,13 @@ class CanvasGraphics {
       this.showType3Text(opIdx, glyphs);
       this.dependencyTracker?.recordShowTextOperation(opIdx);
       this.#endKnockoutElement(started);
-      return undefined;
+      return;
     }
 
     const fontSize = current.fontSize;
     if (fontSize === 0) {
       this.dependencyTracker?.recordOperation(opIdx);
-      return undefined;
+      return;
     }
 
     const started = this.#beginKnockoutElement(current.fillAlpha);
@@ -2799,7 +2794,7 @@ class CanvasGraphics {
       ctx.restore();
       this.compose();
       this.#endKnockoutElement(started);
-      return undefined;
+      return;
     }
 
     let x = 0,
@@ -2915,7 +2910,6 @@ class CanvasGraphics {
 
     this.dependencyTracker?.recordShowTextOperation(opIdx);
     this.#endKnockoutElement(started);
-    return undefined;
   }
 
   showType3Text(opIdx, glyphs) {
@@ -3996,12 +3990,6 @@ class CanvasGraphics {
       const result = this.applyTransferMapsToBitmap(imgData);
       imgToPaint = result.img;
       inlineImgCanvas = result.canvasEntry;
-    } else if (
-      (typeof HTMLElement === "function" && imgData instanceof HTMLElement) ||
-      !imgData.data
-    ) {
-      // typeof check is needed due to node.js support, see issue #8489
-      imgToPaint = imgData;
     } else {
       const tmpCanvas = this.canvasFactory.create(width, height);
       putBinaryImageData(tmpCanvas.context, imgData);

@@ -119,17 +119,11 @@ function fetchRemoteDest(action) {
 class Catalog {
   #actualNumPages = null;
 
-  /** @type {RefSetCache | null} */
-  #attachmentIdByRef = null;
+  #annotationAttachmentIdByRef = new RefSetCache();
+
+  #annotationAttachmentRefById = new Map();
 
   #catDict = null;
-
-  /**
-   * Attachment dictionaries keyed by attachment id.
-   *
-   * @type {Map<string, Dict>}
-   */
-  attachmentDictById = new Map();
 
   builtInCMapCache = new Map();
 
@@ -172,31 +166,42 @@ class Catalog {
     this.toplevelPagesDict; // eslint-disable-line no-unused-expressions
   }
 
-  /**
-   * Attachment ids keyed by embedded-file reference.
-   *
-   * @type {RefSetCache}
-   */
-  get attachmentIdByRef() {
-    if (this.#attachmentIdByRef) {
-      return this.#attachmentIdByRef;
-    }
-
-    const attachmentIdByRef = new RefSetCache();
-    for (const [name, ref] of this.rawEmbeddedFiles || []) {
-      if (!(ref instanceof Ref)) {
-        continue;
-      }
-      attachmentIdByRef.put(
-        ref,
-        stringToPDFString(name, /* keepEscapeSequence = */ true)
-      );
-    }
-    return (this.#attachmentIdByRef = attachmentIdByRef);
-  }
-
   cloneDict() {
     return this.#catDict.clone();
+  }
+
+  /**
+   * Create an id for an attachment from a FileAttachment annotation.
+   *
+   * The id is registered here rather than parsed from a public string prefix in
+   * `attachmentContent`, since catalog attachment names can be arbitrary PDF
+   * strings and may otherwise collide with annotation-local ids.
+   *
+   * @param {Ref} ref
+   *   File-spec or embedded-file stream reference.
+   * @returns {string}
+   *   Attachment id.
+   */
+  getAttachmentIdForAnnotation(ref) {
+    let id = this.#annotationAttachmentIdByRef.get(ref);
+    if (id) {
+      return id;
+    }
+
+    const baseId = `attachmentRef:${ref.toString()}`;
+    id = baseId;
+
+    let i = 1;
+    while (
+      this.#annotationAttachmentRefById.has(id) ||
+      this.attachments?.has(id)
+    ) {
+      id = `${baseId}-${i++}`;
+    }
+
+    this.#annotationAttachmentIdByRef.put(ref, id);
+    this.#annotationAttachmentRefById.set(id, ref);
+    return id;
   }
 
   get version() {
@@ -282,19 +287,18 @@ class Catalog {
         /* suppressEncryption = */ !this.xref.encrypt?.encryptMetadata
       );
 
-      if (stream instanceof BaseStream && stream.dict instanceof Dict) {
-        const type = stream.dict.get("Type");
-        const subtype = stream.dict.get("Subtype");
-
-        if (isName(type, "Metadata") && isName(subtype, "XML")) {
-          // XXX: This should examine the charset the XML document defines,
-          // however since there are currently no real means to decode arbitrary
-          // charsets, let's just hope that the author of the PDF was reasonable
-          // enough to stick with the XML default charset, which is UTF-8.
-          const data = stringToUTF8String(stream.getString());
-          if (data) {
-            metadata = new MetadataParser(data).serializable;
-          }
+      if (
+        stream instanceof BaseStream &&
+        isDict(stream.dict, "Metadata") &&
+        isName(stream.dict.get("Subtype"), "XML")
+      ) {
+        // XXX: This should examine the charset the XML document defines,
+        // however since there are currently no real means to decode arbitrary
+        // charsets, let's just hope that the author of the PDF was reasonable
+        // enough to stick with the XML default charset, which is UTF-8.
+        const data = stringToUTF8String(stream.getString());
+        if (data) {
+          metadata = new MetadataParser(data).serializable;
         }
       }
     } catch (ex) {
@@ -1165,19 +1169,12 @@ class Catalog {
   }
 
   /**
-   * Get content for an attachment.
-   *
    * @param {string} id
-   *   Unique attachment identifier (required).
-   * @returns {CatalogAttachmentContent}
-   *   Content.
+   *   Unique attachment identifier.
+   * @returns {CatalogAttachmentContent | undefined}
+   *   Content, or `undefined` when no named attachment exists for the id.
    */
-  attachmentContent(id) {
-    const dict = this.attachmentDictById.get(id);
-    if (dict) {
-      return FileSpec.readContent(dict);
-    }
-
+  #attachmentContentByName(id) {
     const obj = this.#catDict.get("Names");
     if (obj instanceof Dict && obj.has("EmbeddedFiles")) {
       const nameTree = new NameTree(obj.getRaw("EmbeddedFiles"), this.xref);
@@ -1186,6 +1183,36 @@ class Catalog {
           return FileSpec.readContent(value);
         }
       }
+    }
+    return undefined;
+  }
+
+  /**
+   * Get content for an attachment.
+   *
+   * @param {string} id
+   *   Unique attachment identifier (required).
+   * @returns {CatalogAttachmentContent}
+   *   Content.
+   */
+  attachmentContent(id) {
+    const namedContent = this.#attachmentContentByName(id);
+    if (namedContent !== undefined) {
+      return namedContent;
+    }
+
+    // Annotation-local attachments register the reference of their embedded
+    // content in the catalog, so it's re-fetched from the xref on demand
+    // instead of being cached (which would then need to survive `cleanup`).
+    // The reference points either at the file-spec dictionary or, for an inline
+    // file-spec, straight at the embedded-file stream.
+    const ref = this.#annotationAttachmentRefById.get(id);
+    if (ref) {
+      const target = this.xref.fetch(ref);
+      if (target instanceof BaseStream) {
+        return FileSpec.readStreamContent(target);
+      }
+      return target instanceof Dict ? FileSpec.readContent(target) : null;
     }
     return null;
   }
@@ -1288,9 +1315,6 @@ class Catalog {
 
   async cleanup(manuallyTriggered = false) {
     clearGlobalCaches();
-    this.#attachmentIdByRef?.clear();
-    this.#attachmentIdByRef = null;
-    this.attachmentDictById.clear();
     this.globalColorSpaceCache.clear();
     this.globalImageCache.clear(/* onlyData = */ manuallyTriggered);
     this.pageKidsCountCache.clear();

@@ -894,9 +894,22 @@ class CFFParser {
         }
       }
       if (maxZoneHeight > 0) {
+        // The lower bound of AFDKO's valid window is `0.5 / maxZoneHeight`.
+        // When that bound is itself above the default BlueScale the font simply
+        // has small zones (e.g. Eurostile LT Std, or the SofiaPro fonts shipped
+        // with a near-default 0.037): even the default 0.039625 would be
+        // flagged as out-of-range, so this is the rendered intent and forcing
+        // BlueScale up only misaligns/collapses overshooting glyphs (notably
+        // with macOS's Core Text rasterizer). Only apply the lower clamp when
+        // its target does not exceed the default.
+        // Round the bound in order to avoid too long operand (issue 21466).
+        const PRECISION = 1e5;
+        const lowerBound = 0.5 / maxZoneHeight;
         const minBlueScale =
-          blueScale < DEFAULT_BLUE_SCALE ? 0.5 / maxZoneHeight : -Infinity;
-        const maxBlueScale = 1 / maxZoneHeight;
+          lowerBound <= DEFAULT_BLUE_SCALE
+            ? Math.ceil(lowerBound * PRECISION) / PRECISION
+            : -Infinity;
+        const maxBlueScale = Math.floor(PRECISION / maxZoneHeight) / PRECISION;
         const clamped = MathClamp(blueScale, minBlueScale, maxBlueScale);
         if (clamped !== blueScale) {
           privateDict.setByName("BlueScale", clamped);
