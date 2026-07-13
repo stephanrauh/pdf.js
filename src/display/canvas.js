@@ -349,48 +349,16 @@ function putBinaryImageData(ctx, imgData) {
   // imgData.kind tells us which one this is.
   if (imgData.kind === ImageKind.GRAYSCALE_1BPP) {
     // Grayscale, 1 bit per pixel (i.e. black-and-white).
-    const srcLength = src.byteLength;
-    const dest32 = new Uint32Array(dest.buffer, 0, dest.byteLength >> 2);
-    const dest32DataLength = dest32.length;
-    const fullSrcDiff = (width + 7) >> 3;
-    const white = 0xffffffff;
-    const black = FeatureTest.isLittleEndian ? 0xff000000 : 0x000000ff;
-
     for (i = 0; i < totalChunks; i++) {
       thisChunkHeight = i < fullChunks ? FULL_CHUNK_HEIGHT : partialChunkHeight;
-      destPos = 0;
-      for (j = 0; j < thisChunkHeight; j++) {
-        const srcDiff = srcLength - srcPos;
-        let k = 0;
-        const kEnd = srcDiff > fullSrcDiff ? width : srcDiff * 8 - 7;
-        const kEndUnrolled = kEnd & ~7;
-        let mask = 0;
-        let srcByte = 0;
-        for (; k < kEndUnrolled; k += 8) {
-          srcByte = src[srcPos++];
-          dest32[destPos++] = srcByte & 128 ? white : black;
-          dest32[destPos++] = srcByte & 64 ? white : black;
-          dest32[destPos++] = srcByte & 32 ? white : black;
-          dest32[destPos++] = srcByte & 16 ? white : black;
-          dest32[destPos++] = srcByte & 8 ? white : black;
-          dest32[destPos++] = srcByte & 4 ? white : black;
-          dest32[destPos++] = srcByte & 2 ? white : black;
-          dest32[destPos++] = srcByte & 1 ? white : black;
-        }
-        for (; k < kEnd; k++) {
-          if (mask === 0) {
-            srcByte = src[srcPos++];
-            mask = 128;
-          }
 
-          dest32[destPos++] = srcByte & mask ? white : black;
-          mask >>= 1;
-        }
-      }
-      // We ran out of input. Make all remaining pixels transparent.
-      while (destPos < dest32DataLength) {
-        dest32[destPos++] = 0;
-      }
+      ({ srcPos } = convertBlackAndWhiteToRGBA({
+        src,
+        srcPos,
+        dest,
+        width,
+        height: thisChunkHeight,
+      }));
 
       ctx.putImageData(chunkImgData, 0, i * FULL_CHUNK_HEIGHT);
     }
@@ -3662,7 +3630,15 @@ class CanvasGraphics {
     }
   }
 
-  beginAnnotation(opIdx, id, rect, transform, matrix, hasOwnCanvas) {
+  beginAnnotation(
+    opIdx,
+    id,
+    rect,
+    transform,
+    matrix,
+    hasOwnCanvas,
+    canvasName
+  ) {
     // The annotations are drawn just after the page content.
     // The page content drawing can potentially have set a transform,
     // a clipping path, whatever...
@@ -3705,7 +3681,26 @@ class CanvasGraphics {
           canvasHeight
         );
         const { canvas, context } = this.annotationCanvas;
-        this.annotationCanvasMap.set(id, canvas);
+        if (canvasName) {
+          let canvases = this.annotationCanvasMap.get(id);
+          if (!canvases) {
+            canvases = [];
+            this.annotationCanvasMap.set(id, canvases);
+          }
+          canvas.setAttribute("data-canvas-name", canvasName);
+          // Replace any same-named canvas from a previous render so stale
+          // low-resolution canvases don't pile up across zooms.
+          const index = canvases.findIndex(
+            c => c.getAttribute("data-canvas-name") === canvasName
+          );
+          if (index === -1) {
+            canvases.push(canvas);
+          } else {
+            canvases[index] = canvas;
+          }
+        } else {
+          this.annotationCanvasMap.set(id, canvas);
+        }
         this.annotationCanvas.savedCtx = this.ctx;
         this.ctx = context;
         this.ctx.save();

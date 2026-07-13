@@ -202,8 +202,12 @@ class PDFPrintService {
     // #1131 end of modification
 
     if (this.pageStyleSheet) {
+      // #2362 modified by ngx-extended-pdf-viewer — the fork keeps this as a
+      // <style> element (via cspPolicyService), so remove it here rather than
+      // splicing document.adoptedStyleSheets.
       this.pageStyleSheet.remove();
       this.pageStyleSheet = null;
+      // #2362 end of modification by ngx-extended-pdf-viewer
     }
     if (this._blobURLs) {
       for (const url of this._blobURLs) {

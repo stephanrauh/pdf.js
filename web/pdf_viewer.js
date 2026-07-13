@@ -1085,6 +1085,11 @@ class PDFViewer {
     });
   }
 
+  #setPrintingAllowed(isAllowed) {
+    this.#printingAllowed = isAllowed;
+    this.eventBus.dispatch("printingallowed", { source: this, isAllowed });
+  }
+
   /**
    * Currently only *some* permissions are supported.
    * @returns {Object}
@@ -1096,22 +1101,14 @@ class PDFViewer {
       textLayerMode: this.#textLayerMode,
     };
     if (!permissions) {
-      this.#printingAllowed = true;
-      this.eventBus.dispatch("printingallowed", {
-        source: this,
-        isAllowed: this.#printingAllowed,
-      });
-
+      this.#setPrintingAllowed(true);
       return params;
     }
 
-    this.#printingAllowed =
+    this.#setPrintingAllowed(
       permissions.includes(PermissionFlag.PRINT_HIGH_QUALITY) ||
-      permissions.includes(PermissionFlag.PRINT);
-    this.eventBus.dispatch("printingallowed", {
-      source: this,
-      isAllowed: this.#printingAllowed,
-    });
+        permissions.includes(PermissionFlag.PRINT)
+    );
 
     if (
       !permissions.includes(PermissionFlag.COPY) &&
@@ -1288,7 +1285,6 @@ class PDFViewer {
       this.#annotationEditorUIManager = null;
 
       this.#annotationEditorMode = AnnotationEditorType.NONE;
-
       this.#printingAllowed = true;
     }
 

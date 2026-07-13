@@ -1144,21 +1144,21 @@ class Catalog {
   /**
    * Get attachments.
    *
-   * @returns {Record<string, CatalogAttachment> | null}
+   * @returns {Map<string, CatalogAttachment> | null}
    *   Attachments.
    */
   get attachments() {
     const obj = this.#catDict.get("Names");
-    /** @type {Record<string, CatalogAttachment> | null} */
+    /** @type {Map<string, CatalogAttachment> | null} */
     let attachments = null;
 
     if (obj instanceof Dict && obj.has("EmbeddedFiles")) {
       const nameTree = new NameTree(obj.getRaw("EmbeddedFiles"), this.xref);
       for (const [key, value] of nameTree.getAll()) {
-        const fs = new FileSpec(value);
-        attachments ??= Object.create(null);
-        attachments[stringToPDFString(key, /* keepEscapeSequence = */ true)] =
-          fs.serializable;
+        (attachments ??= new Map()).set(
+          stringToPDFString(key, /* keepEscapeSequence = */ true),
+          new FileSpec(value).serializable
+        );
       }
     }
     return shadow(this, "attachments", attachments);
@@ -1492,6 +1492,22 @@ class Catalog {
         }
       }
       if (!Array.isArray(kids)) {
+        // Prevent errors in corrupt PDF documents that violate the
+        // specification by *inlining* Page dicts (fixes issue21436.pdf).
+        let type = currentNode.getRaw("Type");
+        if (type instanceof Ref) {
+          try {
+            type = await xref.fetchAsync(type);
+          } catch (ex) {
+            addPageError(ex);
+            break;
+          }
+        }
+        if (isName(type, "Page") || !currentNode.has("Kids")) {
+          addPageDict(currentNode, null);
+          break;
+        }
+
         addPageError(
           new FormatError("Page dictionary kids object is not an array.")
         );
@@ -1888,7 +1904,7 @@ class Catalog {
 
           if (docAttachments && id) {
             resultObj.attachmentId = id;
-            resultObj.attachment = docAttachments[id];
+            resultObj.attachment = docAttachments.get(id);
 
             // NOTE: the destination is relative to the *attachment*.
             const attachmentDest = fetchRemoteDest(action);

@@ -439,9 +439,6 @@ class AnnotationElement {
       if (horizontalRadius > 0 || verticalRadius > 0) {
         const radius = `calc(${horizontalRadius}px * var(--total-scale-factor)) / calc(${verticalRadius}px * var(--total-scale-factor))`;
         style.borderRadius = radius;
-      } else if (this instanceof RadioButtonWidgetAnnotationElement) {
-        const radius = `calc(${width}px * var(--total-scale-factor)) / calc(${height}px * var(--total-scale-factor))`;
-        style.borderRadius = radius;
       }
 
       switch (data.borderStyle.style) {
@@ -1330,15 +1327,6 @@ class WidgetAnnotationElement extends AnnotationElement {
     return this.container;
   }
 
-  showElementAndHideCanvas(element) {
-    if (this.data.hasOwnCanvas) {
-      if (element.previousSibling?.nodeName === "CANVAS") {
-        element.previousSibling.hidden = true;
-      }
-      element.hidden = false;
-    }
-  }
-
   _getKeyModifier(event) {
     return FeatureTest.platform.isMac ? event.metaKey : event.ctrlKey;
   }
@@ -1472,7 +1460,7 @@ class WidgetAnnotationElement extends AnnotationElement {
 
     style.color = Util.makeHexColor(...fontColor);
 
-    if (this.data.textAlignment !== null) {
+    if (this.data.textAlignment !== null && !this.data.comb) {
       style.textAlign = TEXT_ALIGNMENT[this.data.textAlignment];
     }
   }
@@ -1568,7 +1556,14 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
         }
       }
       if (this.data.hasOwnCanvas) {
-        element.hidden = true;
+        // The rendered appearance (a canvas) is shown instead of this element.
+        this.container.classList.add("hasOwnCanvas");
+        if (storage.has(id)) {
+          // Once the field is modified, the `sandboxModified` class hides the
+          // (now outdated) canvas and shows this element instead.
+          // The field can already have been modified.
+          this.container.classList.add("sandboxModified");
+        }
       }
       GetElementsByNameSet.add(element);
       this.contentElement = element;
@@ -1668,7 +1663,7 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
         });
 
         element.addEventListener("updatefromsandbox", jsEvent => {
-          this.showElementAndHideCanvas(jsEvent.target);
+          this.container.classList.add("sandboxModified");
           const actions = {
             value(event) {
               elementData.userValue = event.detail.value ?? "";
@@ -1926,7 +1921,30 @@ class TextWidgetAnnotationElement extends WidgetAnnotationElement {
         const combWidth = fieldWidth / maxLen;
 
         element.classList.add("comb");
-        element.style.letterSpacing = `calc(${combWidth}px * var(--total-scale-factor) - 1ch)`;
+        element.style.setProperty(
+          "--comb-width",
+          `calc(${combWidth}px * var(--total-scale-factor))`
+        );
+
+        const alignment = this.data.textAlignment;
+        if (alignment === 1 || alignment === 2) {
+          const setCombOffset = () => {
+            const free = maxLen - element.value.length;
+            element.style.setProperty(
+              "--comb-offset",
+              `${alignment === 1 ? free >> 1 : free}`
+            );
+          };
+          setCombOffset();
+          for (const evt of [
+            "input",
+            "blur",
+            "resetform",
+            "updatefromsandbox",
+          ]) {
+            element.addEventListener(evt, setCombOffset);
+          }
+        }
       }
     } else {
       element = document.createElement("div");
@@ -2072,7 +2090,6 @@ class CheckboxWidgetAnnotationElement extends WidgetAnnotationElement {
       );
     }
 
-    this._setBackgroundColor(element);
     this._setDefaultPropertiesFromJS(element);
 
     this.container.append(element);
@@ -2093,7 +2110,9 @@ class RadioButtonWidgetAnnotationElement extends WidgetAnnotationElement {
     // #1737, #1887 modified by ngx-extended-pdf-viewer
     const angularData = window.getFormValueFromAngular(this.data.fieldName);
     // #2204 modified by ngx-extended-pdf-viewer
-    const defaultValue = data.fieldValue === data.buttonValue ? data.buttonValue : undefined;
+    // A radio with no on-state (`buttonValue === null`) must not be checked by
+    // default; else `null === null` would select it (upstream bug 1802506 guard).
+    const defaultValue = data.buttonValue !== null && data.fieldValue === data.buttonValue ? data.buttonValue : undefined;
     const formValue = storage.getValue(id, {
       value: defaultValue,
     }).value;
@@ -2202,7 +2221,6 @@ class RadioButtonWidgetAnnotationElement extends WidgetAnnotationElement {
       );
     }
 
-    this._setBackgroundColor(element);
     this._setDefaultPropertiesFromJS(element);
 
     this.container.append(element);
@@ -4269,18 +4287,44 @@ class AnnotationLayer {
       if (!element) {
         continue;
       }
-
-      canvas.className = "annotationContent";
+      if (Array.isArray(canvas)) {
+        for (const cvs of canvas) {
+          cvs.className = "annotationContent";
+          cvs.ariaHidden = true;
+        }
+      } else {
+        canvas.className = "annotationContent";
+        canvas.ariaHidden = true;
+      }
+      const toRemove = [];
+      for (const child of element.children) {
+        if (child.nodeName === "CANVAS") {
+          toRemove.push(child);
+        }
+      }
+      for (const child of toRemove) {
+        child.remove();
+      }
+      const firstCanvas = Array.isArray(canvas) ? canvas[0] : canvas;
       const { firstChild } = element;
       if (!firstChild) {
-        element.append(canvas);
-      } else if (firstChild.nodeName === "CANVAS") {
-        firstChild.replaceWith(canvas);
+        element.append(firstCanvas);
       } else if (!firstChild.classList.contains("annotationContent")) {
-        firstChild.before(canvas);
+        firstChild.before(firstCanvas);
       } else {
-        firstChild.after(canvas);
+        firstChild.after(firstCanvas);
       }
+      if (Array.isArray(canvas)) {
+        let lastCanvas = firstCanvas;
+        for (let i = 1, ii = canvas.length; i < ii; i++) {
+          lastCanvas.after(canvas[i]);
+          lastCanvas = canvas[i];
+        }
+      }
+      // Drop only the entries we inserted; keep ones whose element isn't in the
+      // DOM yet so a later refresh can still pick them up instead of losing
+      // them.
+      this.#annotationCanvasMap.delete(id);
 
       const editableAnnotation = this.#editableAnnotations.get(id);
       if (!editableAnnotation) {
@@ -4298,7 +4342,12 @@ class AnnotationLayer {
         editableAnnotation.canvas = canvas;
       }
     }
-    this.#annotationCanvasMap.clear();
+  }
+
+  // Move any pending annotation canvases (e.g. higher-resolution ones rendered
+  // by the detail view) into their elements.
+  refreshCanvases() {
+    this.#setAnnotationCanvasMap();
   }
 
   getEditableAnnotations() {
