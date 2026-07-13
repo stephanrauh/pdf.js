@@ -839,6 +839,7 @@ appConfig: null,
         eventBus,
         l10n,
         downloadManager,
+        linkService,
       });
     }
 
@@ -982,8 +983,10 @@ appConfig: null,
     if (!this.supportsPrinting) {
       togglePrintingButtons(false);
     } else {
-      eventBus.on("printingallowed", ({ isAllowed }) =>
-        togglePrintingButtons(isAllowed)
+      eventBus.on(
+        "printingallowed",
+        ({ isAllowed }) => togglePrintingButtons(isAllowed),
+        internalOpt
       );
     }
 
@@ -1736,7 +1739,7 @@ appConfig: null,
           }
           resolve(isAllowed);
         },
-        { once: true }
+        { once: true, ...internalOpt }
       );
     });
 

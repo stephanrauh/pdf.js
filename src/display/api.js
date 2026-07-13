@@ -89,6 +89,13 @@ import { AppOptions } from "../../web/app_options.js";
 const RENDERING_CANCELLED_TIMEOUT = 100; // ms
 
 /**
+ * @import {
+ *   CatalogAttachmentContent,
+ *   CatalogAttachment
+ * } from "../core/catalog.js";
+ */
+
+/**
  * @typedef { Int8Array | Uint8Array | Uint8ClampedArray |
  *            Int16Array | Uint16Array |
  *            Int32Array | Uint32Array | Float32Array |
@@ -854,11 +861,22 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @returns {Promise<any>} A promise that is resolved with a lookup table
-   *   for mapping named attachments to their content.
+   * @returns {Promise<Record<string, CatalogAttachment> | null>}
+   *   Promise that is resolved with a lookup table for mapping named
+   *   attachments to their content.
    */
   getAttachments() {
     return this._transport.getAttachments();
+  }
+
+  /**
+   * @param {string} id
+   *   Unique attachment identifier (required).
+   * @returns {Promise<CatalogAttachmentContent>}
+   *   Promise that resolves to attachment content.
+   */
+  getAttachmentContent(id) {
+    return this._transport.getAttachmentContent(id);
   }
 
   /**
@@ -3108,8 +3126,23 @@ class WorkerTransport {
     return this.messageHandler.sendWithPromise("GetOpenAction", null);
   }
 
+  /**
+   * @returns {Promise<Record<string, CatalogAttachment> | null>}
+   *   Promise that is resolved with a lookup table for mapping named
+   *   attachments to their content.
+   */
   getAttachments() {
     return this.messageHandler.sendWithPromise("GetAttachments", null);
+  }
+
+  /**
+   * @param {string} id
+   *   Unique attachment identifier (required).
+   * @returns {Promise<CatalogAttachmentContent>}
+   *   Promise that resolves to attachment content.
+   */
+  getAttachmentContent(id) {
+    return this.messageHandler.sendWithPromise("GetAttachmentContent", id);
   }
 
   getAnnotationsByType(types, pageIndexesToSkip) {

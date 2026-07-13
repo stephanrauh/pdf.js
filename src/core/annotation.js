@@ -79,6 +79,10 @@ import { parseMarkedContentProps } from "./evaluator_utils.js";
 import { StringStream } from "./stream.js";
 import { XFAFactory } from "./xfa/factory.js";
 
+/**
+ * @import { Catalog } from "./catalog.js";
+ */
+
 class AnnotationFactory {
   static createGlobals(pdfManager) {
     return Promise.all([
@@ -1240,8 +1244,7 @@ class Annotation {
           separateCanvas: false,
         };
       }
-      appearance = new StringStream("");
-      appearance.dict = new Dict();
+      appearance = new StringStream("", new Dict());
     }
 
     const appearanceDict = appearance.dict;
@@ -1790,8 +1793,10 @@ class MarkupAnnotation extends Annotation {
     const appearanceStreamDict = new Dict(xref);
     appearanceStreamDict.setIfName("Subtype", "Form");
 
-    const appearanceStream = new StringStream(buffer.join(" "));
-    appearanceStream.dict = appearanceStreamDict;
+    const appearanceStream = new StringStream(
+      buffer.join(" "),
+      appearanceStreamDict
+    );
     formDict.set("Fm0", appearanceStream);
 
     const gsDict = new Dict(xref);
@@ -1812,8 +1817,7 @@ class MarkupAnnotation extends Annotation {
     appearanceDict.set("Resources", resources);
     appearanceDict.set("BBox", bbox);
 
-    this.appearance = new StringStream("/GS0 gs /Fm0 Do");
-    this.appearance.dict = appearanceDict;
+    this.appearance = new StringStream("/GS0 gs /Fm0 Do", appearanceDict);
 
     // This method is only called if there is no appearance for the annotation,
     // so `this.appearance` is not pushed yet in the `Annotation` constructor.
@@ -2319,9 +2323,8 @@ class WidgetAnnotation extends Annotation {
       dict.set("AP", AP);
       AP.set("N", newRef);
 
-      const resources = this._getSaveFieldResources(xref);
-      const appearanceStream = new StringStream(appearance);
-      const appearanceDict = (appearanceStream.dict = new Dict(xref));
+      const resources = this._getSaveFieldResources(xref),
+        appearanceDict = new Dict(xref);
       appearanceDict.setIfName("Subtype", "Form");
       appearanceDict.set("Resources", resources);
       const bbox =
@@ -2329,6 +2332,8 @@ class WidgetAnnotation extends Annotation {
           ? [0, 0, this.width, this.height]
           : [0, 0, this.height, this.width];
       appearanceDict.set("BBox", bbox);
+
+      const appearanceStream = new StringStream(appearance, appearanceDict);
 
       const rotationMatrix = this.getRotationMatrix(annotationStorage);
       if (rotationMatrix !== IDENTITY_MATRIX) {
@@ -3429,8 +3434,7 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
 
     appearanceStreamDict.set("Resources", resources);
 
-    this.checkedAppearance = new StringStream(appearance);
-    this.checkedAppearance.dict = appearanceStreamDict;
+    this.checkedAppearance = new StringStream(appearance, appearanceStreamDict);
 
     this._streams.push(this.checkedAppearance);
   }
@@ -4280,10 +4284,7 @@ class FreeTextAnnotation extends MarkupAnnotation {
     appearanceStreamDict.set("Resources", resources);
     appearanceStreamDict.set("Matrix", [1, 0, 0, 1, -rect[0], -rect[1]]);
 
-    const ap = new StringStream(appearance);
-    ap.dict = appearanceStreamDict;
-
-    return ap;
+    return new StringStream(appearance, appearanceStreamDict);
   }
 }
 
@@ -4772,10 +4773,7 @@ class InkAnnotation extends MarkupAnnotation {
       appearanceStreamDict.set("Resources", resources);
     }
 
-    const ap = new StringStream(appearance);
-    ap.dict = appearanceStreamDict;
-
-    return ap;
+    return new StringStream(appearance, appearanceStreamDict);
   }
 
   static async createNewAppearanceStreamForHighlight(annotation, xref, params) {
@@ -4833,10 +4831,7 @@ class InkAnnotation extends MarkupAnnotation {
       r0.setIfName("Type", "ExtGState");
     }
 
-    const ap = new StringStream(appearance);
-    ap.dict = appearanceStreamDict;
-
-    return ap;
+    return new StringStream(appearance, appearanceStreamDict);
   }
 }
 
@@ -4976,10 +4971,7 @@ class HighlightAnnotation extends MarkupAnnotation {
       r0.setIfName("Type", "ExtGState");
     }
 
-    const ap = new StringStream(appearance);
-    ap.dict = appearanceStreamDict;
-
-    return ap;
+    return new StringStream(appearance, appearanceStreamDict);
   }
 }
 
@@ -5206,10 +5198,7 @@ class StampAnnotation extends MarkupAnnotation {
     appearanceStreamDict.set("BBox", rect);
     appearanceStreamDict.set("Length", appearance.length);
 
-    const ap = new StringStream(appearance);
-    ap.dict = appearanceStreamDict;
-
-    return ap;
+    return new StringStream(appearance, appearanceStreamDict);
   }
 
   static async createNewAppearanceStream(annotation, xref, params) {
@@ -5241,10 +5230,7 @@ class StampAnnotation extends MarkupAnnotation {
       appearanceStreamDict.set("Matrix", matrix);
     }
 
-    const ap = new StringStream(appearance);
-    ap.dict = appearanceStreamDict;
-
-    return ap;
+    return new StringStream(appearance, appearanceStreamDict);
   }
 }
 
@@ -5252,11 +5238,39 @@ class FileAttachmentAnnotation extends MarkupAnnotation {
   constructor(params) {
     super(params);
 
-    const { dict } = params;
-    const file = new FileSpec(dict.get("FS"));
+    const { annotationGlobals, dict } = params;
+    const fileSpecRef = dict.getRaw("FS");
+    const fsDict = dict.get("FS");
+    const file = new FileSpec(fsDict);
+    /** @type {{catalog?: Catalog}} */
+    const { catalog } = annotationGlobals.pdfManager.pdfDocument;
+
+    // When this annotation references an embedded file that’s already in the
+    // catalog `NameTree` (such as `EFOpen`), reuse that `NameTree` id so the
+    // sidebar and annotation paths resolve the same attachment identity.
+    let fileId =
+      fileSpecRef instanceof Ref
+        ? catalog?.attachmentIdByRef.get(fileSpecRef)
+        : undefined;
+
+    // Fallback ids are namespaced to keep annotation-local ids distinct from
+    // `NameTree` ids (which are filename-based).
+    if (catalog && fsDict instanceof Dict && typeof fileId !== "string") {
+      const baseFileId = `annotation:${this.data.id}`;
+      fileId = baseFileId;
+
+      let i = 1;
+      while (catalog.attachmentDictById.has(fileId)) {
+        fileId = `${baseFileId}-${i++}`;
+      }
+
+      // Cache only fallbacks.
+      catalog.attachmentDictById.set(fileId, fsDict);
+    }
 
     this.data.hasOwnCanvas = this.data.noRotate;
     this.data.noHTML = false;
+    this.data.fileId = fileId;
     this.data.file = file.serializable;
 
     const name = dict.get("Name");

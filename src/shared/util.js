@@ -416,6 +416,10 @@ function warn(msg) {
   }
 }
 
+/**
+ * @param {string} msg
+ * @returns {never}
+ */
 function unreachable(msg) {
   throw new Error(msg);
 }

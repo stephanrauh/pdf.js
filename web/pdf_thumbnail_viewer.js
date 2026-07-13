@@ -246,12 +246,12 @@ class PDFThumbnailViewer {
         this.#newBadge = newSpan;
       }
 
-      this.eventBus.on(
+      eventBus.on(
         "pagesloaded",
         () => {
           menuButton.disabled = false;
         },
-        { once: true }
+        { once: true, ...internalOpt }
       );
 
       this._manageMenu = new Menu(menu, menuButton, [
@@ -275,27 +275,31 @@ class PDFThumbnailViewer {
       this.#toggleMenuEntries(false);
       menuButton.disabled = true;
 
-      this.eventBus.on("editingaction", ({ name }) => {
-        switch (name) {
-          case "copyPage":
-            this.#copyPages();
-            break;
-          case "cutPage":
-            this.#cutPages();
-            break;
-          case "deletePage":
-            this.#deletePages("delete");
-            break;
-          case "savePage":
-            this.#saveExtractedPages();
-            break;
-        }
-      });
+      eventBus.on(
+        "editingaction",
+        ({ name }) => {
+          switch (name) {
+            case "copyPage":
+              this.#copyPages();
+              break;
+            case "cutPage":
+              this.#cutPages();
+              break;
+            case "deletePage":
+              this.#deletePages("delete");
+              break;
+            case "savePage":
+              this.#saveExtractedPages();
+              break;
+          }
+        },
+        internalOpt
+      );
 
       this.container.addEventListener(
         "contextmenu",
         e => {
-          this.eventBus.dispatch("editingstateschanged", {
+          eventBus.dispatch("editingstateschanged", {
             source: this,
             details: {
               thumbnailId:
@@ -1442,11 +1446,15 @@ class PDFThumbnailViewer {
   }
 
   #addEventListeners() {
-    this.eventBus.on("resize", ({ source }) => {
-      if (source.thumbnailsView === this.container) {
-        this.#computeThumbnailsPosition();
-      }
-    });
+    this.eventBus.on(
+      "resize",
+      ({ source }) => {
+        if (source.thumbnailsView === this.container) {
+          this.#computeThumbnailsPosition();
+        }
+      },
+      internalOpt
+    );
     this.container.addEventListener("keydown", e => {
       const { target } = e;
       const isCheckbox =
