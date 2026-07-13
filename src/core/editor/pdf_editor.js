@@ -27,9 +27,17 @@ import {
   getNewAnnotationsMap,
   numberToString,
 } from "../core_utils.js";
-import { Dict, isName, Name, Ref, RefSet, RefSetCache } from "../primitives.js";
+import {
+  Dict,
+  isDict,
+  isName,
+  Name,
+  Ref,
+  RefSet,
+  RefSetCache,
+} from "../primitives.js";
 import { incrementalUpdate, writeValue } from "../writer.js";
-import { isArrayEqual, stringToBytes } from "../../shared/util.js";
+import { isArrayEqual, makeArr, stringToBytes } from "../../shared/util.js";
 import { NameTree, NumberTree } from "../name_number_tree.js";
 import { stringToAsciiOrUTF16BE, stringToPDFString } from "../string_utils.js";
 import { AnnotationFactory } from "../annotation.js";
@@ -280,11 +288,7 @@ class PDFEditor {
       oldRefMapping.put(oldRef, newRef);
 
       if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-        if (
-          obj instanceof Dict &&
-          isName(obj.get("Type"), "Page") &&
-          !this.currentDocument.pagesMap.has(oldRef)
-        ) {
+        if (isDict(obj, "Page") && !this.currentDocument.pagesMap.has(oldRef)) {
           throw new Error(
             "Add a deleted page to the document is not supported."
           );
@@ -510,20 +514,15 @@ class PDFEditor {
     const bytes = this.#rawStreamBytes(stream);
     const key = this.#resourceStreamKey(dictStr, bytes);
 
-    let bucket = this.#resourceStreamCache.get(key);
-    if (bucket) {
-      // Same key only means "maybe equal": confirm with an exact comparison.
-      for (const entry of bucket) {
-        if (
-          entry.dictStr === dictStr &&
-          isArrayEqual(this.#rawStreamBytes(entry.stream), bytes)
-        ) {
-          return entry.ref;
-        }
+    const bucket = this.#resourceStreamCache.getOrInsertComputed(key, makeArr);
+    // Same key only means "maybe equal": confirm with an exact comparison.
+    for (const entry of bucket) {
+      if (
+        entry.dictStr === dictStr &&
+        isArrayEqual(this.#rawStreamBytes(entry.stream), bytes)
+      ) {
+        return entry.ref;
       }
-    } else {
-      bucket = [];
-      this.#resourceStreamCache.set(key, bucket);
     }
     const ref = this.newRef;
     this.xref[ref.num] = stream;
@@ -675,21 +674,13 @@ class PDFEditor {
     const classNames = node.get("C");
     if (classNames instanceof Name) {
       const newClassName = dedupClasses.get(classNames.name);
-      if (newClassName) {
-        newNode.set("C", Name.get(newClassName));
-      } else {
-        newNode.set("C", classNames);
-      }
+      newNode.set("C", newClassName ? Name.get(newClassName) : classNames);
     } else if (Array.isArray(classNames)) {
       const newClassNames = [];
       for (const className of classNames) {
         if (className instanceof Name) {
           const newClassName = dedupClasses.get(className.name);
-          if (newClassName) {
-            newClassNames.push(Name.get(newClassName));
-          } else {
-            newClassNames.push(className);
-          }
+          newClassNames.push(newClassName ? Name.get(newClassName) : className);
         }
       }
       newNode.set("C", newClassNames);
@@ -699,11 +690,7 @@ class PDFEditor {
     const roleName = node.get("S");
     if (roleName instanceof Name) {
       const newRoleName = dedupRoles.get(roleName.name);
-      if (newRoleName) {
-        newNode.set("S", Name.get(newRoleName));
-      } else {
-        newNode.set("S", roleName);
-      }
+      newNode.set("S", newRoleName ? Name.get(newRoleName) : roleName);
     }
 
     // Fix the ID.
@@ -711,11 +698,7 @@ class PDFEditor {
     if (typeof id === "string") {
       const stringId = stringToPDFString(id, /* keepEscapeSequence = */ false);
       const newId = dedupIDs.get(stringId);
-      if (newId) {
-        newNode.set("ID", stringToAsciiOrUTF16BE(newId));
-      } else {
-        newNode.set("ID", id);
-      }
+      newNode.set("ID", newId ? stringToAsciiOrUTF16BE(newId) : id);
     }
 
     // Table headers may contain IDs that need to be deduplicated.

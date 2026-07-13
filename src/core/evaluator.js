@@ -528,6 +528,7 @@ class PartialEvaluator {
         isolated: false,
         knockout: false,
         needsIsolation: false,
+        hasSoftMask: false,
         isGray: false,
       };
 
@@ -578,6 +579,7 @@ class PartialEvaluator {
 
     if (group) {
       groupOptions.needsIsolation = newOpList.needsIsolation || !!smask;
+      groupOptions.hasSoftMask = newOpList.hasSoftMask || !!smask;
       operatorList.addOp(OPS.beginGroup, [groupOptions]);
       operatorList.addOp(OPS.paintFormXObjectBegin, args);
       operatorList.addOpList(newOpList);
@@ -3540,10 +3542,7 @@ class PartialEvaluator {
             if (includeMarkedContent) {
               markedContentData.level++;
 
-              let mcid = null;
-              if (args[1] instanceof Dict) {
-                mcid = args[1].get("MCID");
-              }
+              const mcid = args[1] instanceof Dict ? args[1].get("MCID") : null;
               textContent.items.push({
                 type: "beginMarkedContentProps",
                 id: Number.isInteger(mcid)

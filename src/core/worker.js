@@ -190,16 +190,7 @@ class WorkerMessageHandler {
     }
 
     async function loadDocument(recoveryMode) {
-      await pdfManager.ensureDoc("checkHeader");
-      await pdfManager.ensureDoc("parseStartXRef");
-      await pdfManager.ensureDoc("parse", [recoveryMode]);
-
-      // Check that at least the first page can be successfully loaded,
-      // since otherwise the XRef table is definitely not valid.
-      await pdfManager.ensureDoc("checkFirstPage", [recoveryMode]);
-      // Check that the last page can be successfully loaded, to ensure that
-      // `numPages` is correct, and fallback to walking the entire /Pages-tree.
-      await pdfManager.ensureDoc("checkLastPage", [recoveryMode]);
+      await pdfManager.initDocument(recoveryMode);
 
       const isPureXfa = await pdfManager.ensureDoc("isPureXfa");
       if (isPureXfa) {
@@ -556,20 +547,17 @@ class WorkerMessageHandler {
               startWorkerTask(task);
             }
             pagePromises.push(
-              pdfManager.getPage(i).then(async page => {
-                if (!page) {
-                  return [];
-                }
-                return (
+              pdfManager
+                .getPage(i)
+                .then(page =>
                   page.collectAnnotationsByType(
                     handler,
                     task,
                     types,
                     annotationPromises,
                     annotationGlobals
-                  ) || []
-                );
-              })
+                  )
+                )
             );
           }
           await Promise.all(pagePromises);
@@ -616,16 +604,9 @@ class WorkerMessageHandler {
         const task = new WorkerTask(`GetAnnotations: page ${pageIndex}`);
         startWorkerTask(task);
 
-        return page.getAnnotationsData(handler, task, intent).then(
-          data => {
-            finishWorkerTask(task);
-            return data;
-          },
-          reason => {
-            finishWorkerTask(task);
-            throw reason;
-          }
-        );
+        return page.getAnnotationsData(handler, task, intent).finally(() => {
+          finishWorkerTask(task);
+        });
       });
     });
 
@@ -673,9 +654,7 @@ class WorkerMessageHandler {
             while (true) {
               try {
                 await manager.requestLoadedStream();
-                await manager.ensureDoc("checkHeader");
-                await manager.ensureDoc("parseStartXRef");
-                await manager.ensureDoc("parse", [recoveryMode]);
+                await manager.initDocument(recoveryMode);
                 break;
               } catch (e) {
                 if (e instanceof XRefParseException) {
@@ -844,7 +823,7 @@ class WorkerMessageHandler {
                     imagePromises,
                     changes
                   )
-                  .finally(function () {
+                  .finally(() => {
                     finishWorkerTask(task);
                   });
               })
@@ -889,7 +868,7 @@ class WorkerMessageHandler {
 
                 return page
                   .save(handler, task, annotationStorage, changes)
-                  .finally(function () {
+                  .finally(() => {
                     finishWorkerTask(task);
                   });
               })
@@ -999,9 +978,7 @@ class WorkerMessageHandler {
             pageIndex,
           })
           .then(
-            function (operatorListInfo) {
-              finishWorkerTask(task);
-
+            operatorListInfo => {
               if (start) {
                 info(
                   `page=${pageIndex + 1} - getOperatorList: time=` +
@@ -1010,8 +987,7 @@ class WorkerMessageHandler {
               }
               sink.close();
             },
-            function (reason) {
-              finishWorkerTask(task);
+            reason => {
               if (task.terminated) {
                 return; // ignoring errors from the terminated thread
               }
@@ -1020,7 +996,10 @@ class WorkerMessageHandler {
               // TODO: Should `reason` be re-thrown here (currently that casues
               //       "Uncaught exception: ..." messages in the console)?
             }
-          );
+          )
+          .finally(() => {
+            finishWorkerTask(task);
+          });
       });
     });
 
@@ -1044,9 +1023,7 @@ class WorkerMessageHandler {
             disableNormalization,
           })
           .then(
-            function () {
-              finishWorkerTask(task);
-
+            () => {
               if (start) {
                 info(
                   `page=${pageIndex + 1} - getTextContent: time=` +
@@ -1055,8 +1032,7 @@ class WorkerMessageHandler {
               }
               sink.close();
             },
-            function (reason) {
-              finishWorkerTask(task);
+            reason => {
               if (task.terminated) {
                 return; // ignoring errors from the terminated thread
               }
@@ -1065,7 +1041,10 @@ class WorkerMessageHandler {
               // TODO: Should `reason` be re-thrown here (currently that casues
               //       "Uncaught exception: ..." messages in the console)?
             }
-          );
+          )
+          .finally(() => {
+            finishWorkerTask(task);
+          });
       });
     });
 

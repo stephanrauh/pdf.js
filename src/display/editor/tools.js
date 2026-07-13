@@ -23,6 +23,7 @@ import {
   AnnotationEditorType,
   FeatureTest,
   getUuid,
+  makeArr,
   shadow,
   SVG_NS,
   Util,
@@ -558,7 +559,7 @@ class KeyboardManager {
           continue;
         }
         this.callbacks
-          .getOrInsertComputed(keyName, () => [])
+          .getOrInsertComputed(keyName, makeArr)
           .push({ callback, options, modifiers });
       }
     }
