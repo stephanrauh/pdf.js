@@ -931,7 +931,7 @@ appConfig: null,
 
       fileInput.addEventListener("change", function (evt) {
         const { files } = evt.target;
-        if (!files || files.length === 0) {
+        if (!files?.length) {
           return;
         }
         eventBus.dispatch("fileinputchange", {

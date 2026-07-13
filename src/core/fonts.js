@@ -1860,7 +1860,6 @@ class Font {
       }
 
       // removing duplicate entries
-      mappings.sort((a, b) => a.charCode - b.charCode);
       const finalMappings = [],
         seenCharCodes = new Set();
       for (const map of mappings) {
@@ -1876,7 +1875,7 @@ class Font {
       return {
         platformId: potentialTable.platformId,
         encodingId: potentialTable.encodingId,
-        mappings: finalMappings,
+        mappings: finalMappings.sort((a, b) => a.charCode - b.charCode),
         hasShortCmap,
       };
     }
@@ -3159,6 +3158,23 @@ class Font {
             charCodeToGlyphId[i] = glyphId;
           }
         }
+      }
+
+      // The char code 0 isn't associated with any glyph name in the standard
+      // encodings, hence it can only refer to glyph 0 (i.e. the ".notdef"
+      // glyph). Some embedded fonts use a non-empty glyph 0 (e.g. a checkbox
+      // in a symbol font) and the page content draws it with the char code 0,
+      // so map it explicitly when it would otherwise be left unmapped, but
+      // only when the glyph is non-empty to avoid displaying a ".notdef" box
+      // for fonts that don't (issue 17333). This is restricted to embedded
+      // fonts since the ".notdef" glyph of a standard substitution font must
+      // never be rendered.
+      if (
+        !properties.isInternalFont &&
+        charCodeToGlyphId[0] === undefined &&
+        hasGlyph(0)
+      ) {
+        charCodeToGlyphId[0] = 0;
       }
     }
 

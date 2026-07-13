@@ -19,6 +19,7 @@ import {
   AnnotationEditorType,
   AnnotationFieldFlag,
   AnnotationFlag,
+  AnnotationRenditionOperation,
   AnnotationReplyType,
   AnnotationType,
   assert,
@@ -80,10 +81,6 @@ import { parseMarkedContentProps } from "./evaluator_utils.js";
 import { StringStream } from "./stream.js";
 import { XFAFactory } from "./xfa/factory.js";
 
-/**
- * @import { Catalog } from "./catalog.js";
- */
-
 class AnnotationFactory {
   static createGlobals(pdfManager) {
     return Promise.all([
@@ -107,6 +104,7 @@ class AnnotationFactory {
         globalColorSpaceCache,
       ]) => ({
         pdfManager,
+        catalog: pdfManager.pdfDocument.catalog,
         acroForm: acroForm instanceof Dict ? acroForm : Dict.empty,
         xfaDatasets,
         structTreeRoot,
@@ -294,6 +292,12 @@ class AnnotationFactory {
 
       case "FileAttachment":
         return new FileAttachmentAnnotation(parameters);
+
+      case "RichMedia":
+        return new RichMediaAnnotation(parameters);
+
+      case "Screen":
+        return new ScreenAnnotation(parameters);
 
       default:
         if (!collectFields) {
@@ -691,6 +695,8 @@ function getTransformMatrix(rect, bbox, matrix) {
 }
 
 class Annotation {
+  appearance = null;
+
   _oc = undefined;
 
   constructor(params) {
@@ -1179,8 +1185,6 @@ class Annotation {
    * @param {Dict} dict - The annotation's data dictionary
    */
   setAppearance(dict) {
-    this.appearance = null;
-
     const appearanceStates = dict.get("AP");
     if (!(appearanceStates instanceof Dict)) {
       return;
@@ -1199,7 +1203,7 @@ class Annotation {
     // In case the normal appearance is a dictionary, the `AS` entry provides
     // the key of the stream in this dictionary.
     const as = dict.get("AS");
-    if (!(as instanceof Name) || !normalAppearanceState.has(as.name)) {
+    if (!(as instanceof Name)) {
       return;
     }
     const appearance = normalAppearanceState.get(as.name);
@@ -1504,6 +1508,25 @@ class Annotation {
       }
     }
     return fieldName.join(".");
+  }
+
+  /**
+   * Encode the embedded content's reference in the id so it can be
+   * re-fetched from the xref on demand (see `Catalog.attachmentContent`)
+   * instead of being cached where `cleanup` would wipe it. The file-spec is
+   * usually indirect; when it's inline its embedded-file stream still isn't
+   * (streams are always indirect), so fall back to that ref.
+   */
+  _getAttachmentId(fsDict, fsRef, annotationGlobals) {
+    if (!(fsDict instanceof Dict)) {
+      return undefined;
+    }
+    if (!(fsRef instanceof Ref)) {
+      fsRef = FileSpec.pickPlatformItem(fsDict.get("EF"), /* raw = */ true);
+    }
+    return fsRef instanceof Ref
+      ? annotationGlobals.catalog.getAttachmentIdForAnnotation(fsRef)
+      : undefined;
   }
 
   get width() {
@@ -3128,7 +3151,7 @@ class TextWidgetAnnotation extends WidgetAnnotation {
     }
 
     if (startChunk < line.length) {
-      chunks.push(line.substring(startChunk, line.length));
+      chunks.push(line.substring(startChunk));
     }
 
     return chunks;
@@ -5441,33 +5464,15 @@ class FileAttachmentAnnotation extends MarkupAnnotation {
 
     const { annotationGlobals, dict } = params;
     const fsDict = dict.get("FS");
-    const file = new FileSpec(fsDict);
-    /** @type {{catalog?: Catalog}} */
-    const { catalog } = annotationGlobals.pdfManager.pdfDocument;
-
-    // Encode the embedded content's reference in the id so it can be
-    // re-fetched from the xref on demand (see `Catalog.attachmentContent`)
-    // instead of being cached where `cleanup` would wipe it. The file-spec is
-    // usually indirect; when it's inline its embedded-file stream still isn't
-    // (streams are always indirect), so fall back to that ref.
-    let fileId;
-    if (fsDict instanceof Dict) {
-      let contentRef = dict.getRaw("FS");
-      if (!(contentRef instanceof Ref)) {
-        contentRef = FileSpec.pickPlatformItem(
-          fsDict.get("EF"),
-          /* raw = */ true
-        );
-      }
-      if (contentRef instanceof Ref) {
-        fileId = catalog?.getAttachmentIdForAnnotation(contentRef);
-      }
-    }
 
     this.data.hasOwnCanvas = this.data.noRotate;
     this.data.noHTML = false;
-    this.data.fileId = fileId;
-    this.data.file = file.serializable;
+    this.data.fileId = this._getAttachmentId(
+      fsDict,
+      dict.getRaw("FS"),
+      annotationGlobals
+    );
+    this.data.file = new FileSpec(fsDict).serializable;
 
     const name = dict.get("Name");
     this.data.name =
@@ -5478,6 +5483,372 @@ class FileAttachmentAnnotation extends MarkupAnnotation {
       typeof fillAlpha === "number" && fillAlpha >= 0 && fillAlpha <= 1
         ? fillAlpha
         : null;
+  }
+}
+
+/**
+ * Shared base for annotations that play an embedded audio/video clip:
+ * `RichMedia` (via `RichMediaContent`) and `Screen` (via a rendition action).
+ * Both resolve a single embedded media file and expose it identically through
+ * `data.richMedia`, so the display layer can render them with one element.
+ */
+class MediaAnnotation extends Annotation {
+  // The MIME types we can build a `<video>`/`<audio>` element for.
+  static #MEDIA_MIME_TYPE_RE = /^(?:video|audio)\//;
+
+  constructor(params) {
+    super(params);
+
+    // No HTML element until a playable asset is found below by the subclass.
+    this.data.noHTML = true;
+  }
+
+  /**
+   * Expose a resolved embedded media asset as `data.richMedia`.
+   *
+   * @param {Object} asset
+   * @param {Ref | null} asset.assetRef
+   *   Reference to the file-spec dictionary (or, for an inline file-spec, the
+   *   embedded-file stream); used to lazily fetch the bytes on the main thread.
+   * @param {Dict} asset.assetDict
+   *   The file-spec (or stream) dictionary, used to locate the embedded file
+   *   when `assetRef` isn't itself a reference.
+   * @param {string} asset.filename
+   * @param {string} asset.contentType
+   * @param {Object} annotationGlobals
+   */
+  _setMediaData(
+    { assetRef, assetDict, filename, contentType },
+    annotationGlobals
+  ) {
+    this.data.noHTML = false;
+    this.data.richMedia = {
+      fileId: this._getAttachmentId(assetDict, assetRef, annotationGlobals),
+      filename,
+      contentType,
+    };
+  }
+
+  /**
+   * Determine the MIME type used to build the `<video>`/`<audio>` element.
+   *
+   * When the media dictionary provides an explicit type (e.g. a MediaClip
+   * `/CT`), it's honored if it names an audio/video type. Otherwise, per the
+   * spec (ISO 32000-2, 7.11.4) an embedded file stream declares its MIME type
+   * through its own `/Subtype`, with characters not allowed in a name
+   * hex-escaped (e.g. `/video#2Fmp4` -> `video/mp4`). We trust that when it
+   * names an audio/video type, and otherwise fall back to mapping the filename
+   * extension. Returns `null` when the asset isn't a recognized audio/video
+   * type (e.g. Flash `.swf` or 3D models), so we don't build a player that
+   * can't play anything.
+   *
+   * @param {Dict} assetDict
+   * @param {string} filename
+   * @param {string | null} [contentType]
+   * @returns {string | null}
+   */
+  static _getContentType(assetDict, filename, contentType = null) {
+    if (
+      typeof contentType === "string" &&
+      MediaAnnotation.#MEDIA_MIME_TYPE_RE.test(contentType)
+    ) {
+      return contentType;
+    }
+
+    // The embedded file stream is keyed like a file-spec platform item.
+    const stream = FileSpec.pickPlatformItem(assetDict.get("EF"));
+    const subtype =
+      stream instanceof BaseStream ? stream.dict?.get("Subtype") : null;
+    if (
+      subtype instanceof Name &&
+      MediaAnnotation.#MEDIA_MIME_TYPE_RE.test(subtype.name)
+    ) {
+      return subtype.name;
+    }
+
+    const ext = filename.split(".").at(-1)?.toLowerCase();
+    switch (ext) {
+      case "mp4":
+      case "m4v":
+        return "video/mp4";
+      case "webm":
+        return "video/webm";
+      case "ogv":
+        return "video/ogg";
+      case "mov":
+        return "video/quicktime";
+      case "mp3":
+        return "audio/mpeg";
+      case "m4a":
+        return "audio/mp4";
+      case "wav":
+        return "audio/wav";
+      case "oga":
+      case "ogg":
+        return "audio/ogg";
+      default:
+        return null;
+    }
+  }
+}
+
+class RichMediaAnnotation extends MediaAnnotation {
+  constructor(params) {
+    super(params);
+
+    const { dict, xref, annotationGlobals } = params;
+
+    const content = dict.get("RichMediaContent");
+    if (!(content instanceof Dict)) {
+      return;
+    }
+
+    const asset = RichMediaAnnotation.#findAsset(content, xref);
+    if (!asset) {
+      warn("RichMedia annotation has no playable asset.");
+      return;
+    }
+    this._setMediaData(asset, annotationGlobals);
+  }
+
+  /**
+   * Locate the primary playable embedded media asset.
+   *
+   * Per the spec (ISO 32000-2, 13.7), the asset to play is selected through
+   * `Configurations -> Instances -> Asset`. We pick the first instance with a
+   * natively playable asset rather than honoring the default configuration
+   * indicated by `RichMediaSettings`/activation; this keeps selection simple
+   * and matches the common single-configuration case. The `/Assets` name tree
+   * merely enumerates every embedded file; we don't use it as a fallback, since
+   * Acrobat itself won't play media that's only reachable that way. Flash
+   * instances are skipped, since they can't be played natively.
+   *
+   * @returns {{
+   *   assetRef: Ref | null,
+   *   assetDict: Dict,
+   *   filename: string,
+   *   contentType: string,
+   * } | null}
+   */
+  static #findAsset(content, xref) {
+    const configurations = content.get("Configurations");
+    if (!Array.isArray(configurations)) {
+      return null;
+    }
+    for (const configRef of configurations) {
+      const config = xref.fetchIfRef(configRef);
+      if (!(config instanceof Dict)) {
+        continue;
+      }
+      const instances = config.get("Instances");
+      if (!Array.isArray(instances)) {
+        continue;
+      }
+      for (const instanceRef of instances) {
+        const instance = xref.fetchIfRef(instanceRef);
+        if (!(instance instanceof Dict)) {
+          continue;
+        }
+        // Skip Flash instances: it's obsolete.
+        if (isName(instance.get("Subtype"), "Flash")) {
+          // Flash has been supported (see PDF 1.7 Extension Level 3).
+          continue;
+        }
+        const rawAsset = instance.getRaw("Asset");
+        const asset = xref.fetchIfRef(rawAsset);
+        if (!(asset instanceof Dict)) {
+          continue;
+        }
+        // Skip assets that only reference an external file we can't read.
+        if (!FileSpec.hasEmbeddedFile(asset)) {
+          continue;
+        }
+        const { filename } = new FileSpec(asset).serializable;
+        const contentType = MediaAnnotation._getContentType(asset, filename);
+        if (!contentType) {
+          continue;
+        }
+        return {
+          assetRef: rawAsset instanceof Ref ? rawAsset : null,
+          assetDict: asset,
+          filename,
+          contentType,
+        };
+      }
+    }
+
+    return null;
+  }
+}
+
+class ScreenAnnotation extends MediaAnnotation {
+  constructor(params) {
+    super(params);
+
+    const { dict, xref, annotationGlobals } = params;
+    const asset = ScreenAnnotation.#findAsset(dict, xref);
+    if (!asset) {
+      // Not every Screen annotation plays embedded media (e.g. a URL stream or
+      // a /Movie); such ones simply render their appearance, so don't warn.
+      return;
+    }
+    this._setMediaData(asset, annotationGlobals);
+  }
+
+  /**
+   * Locate the embedded media played by the annotation's rendition action.
+   *
+   * Per the spec (ISO 32000-1, 12.6.4.13 and 13.2) the chain is:
+   *   Screen `/A` (or `/AA`) rendition action -> `/R` rendition (`/MR`)
+   *   -> `/C` media clip (`/MCD`) -> `/D` file-spec -> `/EF` embedded file.
+   * Selector renditions (`/SR`) are unwrapped to their first playable media
+   * rendition. This mirrors `RichMediaAnnotation`, which also targets the
+   * common single embedded-media case.
+   *
+   * @returns {{
+   *   assetRef: Ref | null,
+   *   assetDict: Dict,
+   *   filename: string,
+   *   contentType: string,
+   * } | null}
+   */
+  static #findAsset(dict, xref) {
+    for (const action of this.#renditionActions(dict)) {
+      const asset = this.#findRenditionAsset(
+        action.get("R"),
+        xref,
+        new RefSet()
+      );
+      if (asset) {
+        return asset;
+      }
+    }
+    return null;
+  }
+
+  static *#renditionActions(dict) {
+    // The rendition action may be the activation action (/A) or one of the
+    // additional actions (/AA), e.g. page-open.
+    const action = dict.get("A");
+    if (
+      action instanceof Dict &&
+      isName(action.get("S"), "Rendition") &&
+      this.#isPlayAction(action)
+    ) {
+      yield action;
+    }
+    const additionalActions = dict.get("AA");
+    if (additionalActions instanceof Dict) {
+      for (const [, aa] of additionalActions) {
+        if (
+          aa instanceof Dict &&
+          isName(aa.get("S"), "Rendition") &&
+          this.#isPlayAction(aa)
+        ) {
+          yield aa;
+        }
+      }
+    }
+  }
+
+  static #isPlayAction(action) {
+    // Rendition action /OP (ISO 32000-1, Table 214): PLAY_OR_RESUME and PLAY
+    // play; STOP/PAUSE/RESUME don't start playback. When absent, the action is
+    // JS-driven (/JS), which we can't run, so assume play.
+    const operation = action.get("OP");
+    return (
+      operation === undefined ||
+      operation === AnnotationRenditionOperation.PLAY_OR_RESUME ||
+      operation === AnnotationRenditionOperation.PLAY
+    );
+  }
+
+  static #findRenditionAsset(rendition, xref, seen) {
+    if (!(rendition instanceof Dict)) {
+      return null;
+    }
+    const subtype = rendition.get("S");
+    if (isName(subtype, "MR")) {
+      return this.#findClipAsset(rendition.get("C"), xref);
+    }
+    if (isName(subtype, "SR")) {
+      // A selector rendition lists candidate renditions; play the first that
+      // resolves to embedded media.
+      const renditions = rendition.get("R");
+      if (Array.isArray(renditions)) {
+        for (const ref of renditions) {
+          // Guard against renditions referencing each other in a cycle.
+          if (ref instanceof Ref) {
+            if (seen.has(ref)) {
+              continue;
+            }
+            seen.put(ref);
+          }
+          const asset = this.#findRenditionAsset(
+            xref.fetchIfRef(ref),
+            xref,
+            seen
+          );
+          if (asset) {
+            return asset;
+          }
+        }
+      }
+    }
+    return null;
+  }
+
+  static #findClipAsset(clip, xref) {
+    if (!(clip instanceof Dict) || !isName(clip.get("S"), "MCD")) {
+      return null;
+    }
+    const rawData = clip.getRaw("D");
+    const data = xref.fetchIfRef(rawData);
+    const contentTypeHint = clip.get("CT");
+    let explicitType =
+      typeof contentTypeHint === "string" ? contentTypeHint : null;
+
+    let assetDict, filename;
+    if (data instanceof BaseStream) {
+      // `/D` is the embedded media stream directly.
+      assetDict = data.dict;
+      // `/N` is a human-readable label, not a filename, so it's an unreliable
+      // source for a file extension. When `/CT` is absent, prefer the stream's
+      // own `/Subtype` if it declares a media MIME type (as embedded-file
+      // streams do); `_getContentType` ignores a non-media value.
+      const name = clip.get("N");
+      filename = typeof name === "string" ? stringToPDFString(name) : "";
+      if (!explicitType) {
+        const subtype = data.dict.get("Subtype");
+        if (subtype instanceof Name) {
+          explicitType = subtype.name;
+        }
+      }
+    } else if (data instanceof Dict) {
+      // `/D` is a file specification; require a readable embedded file.
+      if (!FileSpec.hasEmbeddedFile(data)) {
+        return null;
+      }
+      assetDict = data;
+      ({ filename } = new FileSpec(data).serializable);
+    } else {
+      return null;
+    }
+
+    const contentType = MediaAnnotation._getContentType(
+      assetDict,
+      filename,
+      explicitType
+    );
+    if (!contentType) {
+      return null;
+    }
+    return {
+      assetRef: rawData instanceof Ref ? rawData : null,
+      assetDict,
+      filename,
+      contentType,
+    };
   }
 }
 

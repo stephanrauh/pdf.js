@@ -78,6 +78,7 @@ import {
   LocalTilingPatternCache,
   RegionalImageCache,
 } from "./image_utils.js";
+import { parseMarkedContentProps, textSinkWrapper } from "./evaluator_utils.js";
 import { BaseStream } from "./base_stream.js";
 import { bidi } from "./bidi.js";
 import { ColorSpace } from "./colorspace.js";
@@ -87,7 +88,6 @@ import { getGlyphsUnicode } from "./glyphlist.js";
 import { getMetrics } from "./metrics.js";
 import { getUnicodeForGlyph } from "./unicode.js";
 import { MurmurHash3_64 } from "../shared/murmurhash3.js";
-import { parseMarkedContentProps } from "./evaluator_utils.js";
 import { PDFImage } from "./image.js";
 import { Stream } from "./stream.js";
 import { stringToPDFString } from "./string_utils.js";
@@ -2385,6 +2385,7 @@ class PartialEvaluator {
         stream = new Stream(bytes, 0, bytes.length, stream.dict);
       }
     }
+    sink ??= textSinkWrapper(null);
 
     const objId = stream.dict?.objId;
     const seenRefs = new RefSet(prevRefs);
@@ -3158,7 +3159,7 @@ class PartialEvaluator {
       if (batch && length < TEXT_CHUNK_BATCH_SIZE) {
         return;
       }
-      sink?.enqueue(textContent, length);
+      sink.enqueue(textContent, length);
       textContent.items = [];
       textContent.styles = Object.create(null);
     }
@@ -3168,7 +3169,7 @@ class PartialEvaluator {
     return new Promise(function promiseBody(resolve, reject) {
       const next = function (promise) {
         enqueueChunk(/* batch = */ true);
-        Promise.all([promise, sink?.ready]).then(function () {
+        Promise.all([promise, sink.ready]).then(function () {
           try {
             promiseBody(resolve, reject);
           } catch (ex) {
@@ -3414,22 +3415,7 @@ class PartialEvaluator {
                 // Enqueue the `textContent` chunk before parsing the /Form
                 // XObject.
                 enqueueChunk();
-                const sinkWrapper = {
-                  enqueueInvoked: false,
-
-                  enqueue(chunk, size) {
-                    this.enqueueInvoked = true;
-                    sink.enqueue(chunk, size);
-                  },
-
-                  get desiredSize() {
-                    return sink.desiredSize ?? 0;
-                  },
-
-                  get ready() {
-                    return sink.ready;
-                  },
-                };
+                const sinkWrapper = textSinkWrapper(sink);
 
                 self
                   .getTextContent({
@@ -3441,7 +3427,7 @@ class PartialEvaluator {
                         : resources,
                     stateManager: xObjStateManager,
                     includeMarkedContent,
-                    sink: sink && sinkWrapper,
+                    sink: sinkWrapper,
                     seenStyles,
                     viewBox,
                     lang,
@@ -3568,7 +3554,7 @@ class PartialEvaluator {
             }
             break;
         } // switch
-        if (textContent.items.length >= (sink?.desiredSize ?? 1)) {
+        if (textContent.items.length >= sink.desiredSize) {
           // Wait for ready, if we reach highWaterMark.
           stop = true;
           break;

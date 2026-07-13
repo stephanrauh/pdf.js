@@ -169,11 +169,22 @@ const AnnotationType = {
   WATERMARK: 24,
   THREED: 25,
   REDACT: 26,
+  RICHMEDIA: 27,
 };
 
 const AnnotationReplyType = {
   GROUP: "Group",
   REPLY: "R",
+};
+
+// Rendition action operations from Table 214, Section 12.6.4.13 of the PDF
+// specification (ISO 32000-1).
+const AnnotationRenditionOperation = {
+  PLAY_OR_RESUME: 0,
+  STOP: 1,
+  PAUSE: 2,
+  RESUME: 3,
+  PLAY: 4,
 };
 
 const AnnotationFlag = {
@@ -721,6 +732,14 @@ class FeatureTest {
       input.value !== "#ff0000"
     );
   }
+
+  static get isBackdropFilterSupported() {
+    return shadow(
+      this,
+      "isBackdropFilterSupported",
+      typeof CSS !== "undefined" && CSS.supports("backdrop-filter", "blur(1px)")
+    );
+  }
 }
 
 class Util {
@@ -1172,6 +1191,7 @@ export {
   AnnotationFlag,
   AnnotationMode,
   AnnotationPrefix,
+  AnnotationRenditionOperation,
   AnnotationReplyType,
   AnnotationType,
   assert,
