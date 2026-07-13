@@ -392,7 +392,7 @@ class WorkerMessageHandler {
             ensureNotTerminated();
 
             loadDocument(true).then(onSuccess, onFailure);
-          });
+          }, onFailure);
         });
       }
 
@@ -410,9 +410,14 @@ class WorkerMessageHandler {
           }
           pdfManager = newPdfManager;
 
-          pdfManager.requestLoadedStream(/* noFetch = */ true).then(stream => {
-            handler.send("DataLoaded", { length: stream.bytes.byteLength });
-          });
+          pdfManager.requestLoadedStream(/* noFetch = */ true).then(
+            stream => {
+              handler.send("DataLoaded", { length: stream.bytes.byteLength });
+            },
+            () => {
+              // Avoid errors if document loading was terminated.
+            }
+          );
         })
         .then(pdfManagerReady, onFailure);
     }

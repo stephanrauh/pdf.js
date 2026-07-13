@@ -467,7 +467,9 @@ class PDFPageView extends BasePDFPageView {
     });
   }
 
-  async #renderAnnotationLayer() {
+  async #renderAnnotationLayer(textLayerPromise = null) {
+    const { annotationLayer, textLayer } = this;
+
     let error = null;
     try {
       await this.annotationLayer.render({
@@ -481,6 +483,10 @@ class PDFPageView extends BasePDFPageView {
       error = ex;
     } finally {
       this.#dispatchLayerRendered("annotationlayerrendered", error, this.annotationLayer);
+    }
+
+    if (this.#enableAutoLinking && textLayerPromise) {
+      this.#injectLinkAnnotations(textLayerPromise, annotationLayer, textLayer);
     }
   }
 
@@ -538,9 +544,6 @@ class PDFPageView extends BasePDFPageView {
   }
 
   async #renderTextLayer() {
-    if (!this.textLayer) {
-      return;
-    }
     let error = null;
     try {
       await this.textLayer.render({
@@ -574,10 +577,6 @@ class PDFPageView extends BasePDFPageView {
    * aria-owns to work.
    */
   async #renderStructTreeLayer() {
-    if (!this.textLayer) {
-      return;
-    }
-
     const treeDom = await this.structTreeLayer?.render();
     if (treeDom) {
       this.l10n.pause();
@@ -601,15 +600,18 @@ class PDFPageView extends BasePDFPageView {
     this._textHighlighter.enable();
   }
 
-  async #injectLinkAnnotations(textLayerPromise) {
+  async #injectLinkAnnotations(textLayerPromise, annotationLayer, textLayer) {
     let error = null;
     try {
       await textLayerPromise;
 
-      if (!this.annotationLayer) {
+      if (
+        annotationLayer !== this.annotationLayer ||
+        textLayer !== this.textLayer
+      ) {
         return; // Rendering was cancelled while the textLayerPromise resolved.
       }
-      await this.annotationLayer.injectLinkAnnotations(
+      await annotationLayer.injectLinkAnnotations(
         Autolinker.processLinks(this)
       );
     } catch (ex) {
@@ -1236,14 +1238,10 @@ class PDFPageView extends BasePDFPageView {
         viewport.rawDims
       );
 
-      const textLayerPromise = this.#renderTextLayer();
+      const textLayerPromise = this.textLayer ? this.#renderTextLayer() : null;
 
       if (this.annotationLayer) {
-        await this.#renderAnnotationLayer();
-
-        if (this.#enableAutoLinking && this.annotationLayer && this.textLayer) {
-          await this.#injectLinkAnnotations(textLayerPromise);
-        }
+        await this.#renderAnnotationLayer(textLayerPromise);
       }
 
       this.drawLayer ||= new DrawLayerBuilder({
@@ -1260,7 +1258,6 @@ class PDFPageView extends BasePDFPageView {
       if (!annotationEditorUIManager) {
         return;
       }
-
       if (
         this.annotationLayer ||
         this.#annotationMode === AnnotationMode.DISABLE
