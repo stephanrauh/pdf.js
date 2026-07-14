@@ -446,6 +446,15 @@ class AnnotationElement {
       if (horizontalRadius > 0 || verticalRadius > 0) {
         const radius = `calc(${horizontalRadius}px * var(--total-scale-factor)) / calc(${verticalRadius}px * var(--total-scale-factor))`;
         style.borderRadius = radius;
+      } else if (this instanceof RadioButtonWidgetAnnotationElement) {
+        // #bug1802506 modified by ngx-extended-pdf-viewer
+        // pdf.js 6.1 (bug 1802506) dropped this branch because the radio
+        // appearance moved to a canvas. ngx keeps radios as HTML inputs, so the
+        // round container border must be restored here (else the field's border
+        // renders as a square around the round control).
+        const radius = `calc(${width}px * var(--total-scale-factor)) / calc(${height}px * var(--total-scale-factor))`;
+        style.borderRadius = radius;
+        // #bug1802506 end of modification by ngx-extended-pdf-viewer
       }
 
       switch (data.borderStyle.style) {

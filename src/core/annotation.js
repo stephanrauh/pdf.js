@@ -3218,7 +3218,13 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
     this.data.radioButton = isRadio && !isPushButton;
     this.data.pushButton = isPushButton;
     this.data.isTooltipOnly = false;
-    this.data.hasOwnCanvas = true;
+    // #bug1802506 modified by ngx-extended-pdf-viewer
+    // pdf.js 6.1 (bug 1802506) renders checkbox/radio appearance to a canvas by
+    // setting hasOwnCanvas unconditionally here. ngx keeps the pre-6.1 look
+    // (HTML <input> styled by CSS), so only push buttons get their own canvas —
+    // matching pdf.js <=6.0, where this was inside the pushButton branch.
+    this.data.hasOwnCanvas = isPushButton;
+    // #bug1802506 end of modification by ngx-extended-pdf-viewer
     this.data.noHTML = false;
 
     if (this.data.checkBox) {
