@@ -527,11 +527,15 @@ class FreeTextEditor extends AnnotationEditor {
     this.#setEditorDimensions();
     // #2256 modified by ngx-extended-pdf-viewer
     // #3076 modified by ngx-extended-pdf-viewer - added id field
+    // #3238 modified by ngx-extended-pdf-viewer - renamed "commit" -> "textChanged"
+    // so it no longer collides with the base editor's "commit" event (which
+    // carries the editor as `value`); this one carries the new text string.
     this.eventBus?.dispatch("annotation-editor-event", {
       source: this,
-      type: "commit",
+      type: "textChanged",
       page: this.pageIndex + 1,
       id: this.uid,
+      editorType: this.constructor.name,
       value: newText,
       previousValue: savedText,
     });
