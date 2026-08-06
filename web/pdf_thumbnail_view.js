@@ -117,7 +117,10 @@ class PDFThumbnailView extends RenderableView {
       linkService,
       id,
       container,
-      thumbPageTitlePromiseOrPageL10nArgs: this.#getPageL10nArgs(), // upstream renamed #pageL10nArgs to #getPageL10nArgs()
+      // #3255: pass the total, too - the Angular sidebar uses the same
+      // pdfjs-thumb-page-title1 string as #createStandardThumbnail below,
+      // and that one interpolates { $total }.
+      thumbPageTitlePromiseOrPageL10nArgs: this.#getPageL10nArgs(true), // upstream renamed #pageL10nArgs to #getPageL10nArgs()
     });
 
     // #1696 modified by ngx-extended-pdf-viewer
