@@ -546,7 +546,7 @@ class CFFParser {
 
     let length = data.length;
 
-    for (let j = 0; j < length; ) {
+    for (let j = 0; j < length;) {
       const value = data[j++];
       let validationCommand = null;
       if (value === 12) {
@@ -775,14 +775,12 @@ class CFFParser {
       } else if (localSubrIndex) {
         localSubrToUse = localSubrIndex;
       }
-      if (valid) {
-        valid = this.parseCharString(
-          state,
-          charstring,
-          localSubrToUse,
-          globalSubrIndex
-        );
-      }
+      valid &&= this.parseCharString(
+        state,
+        charstring,
+        localSubrToUse,
+        globalSubrIndex
+      );
       if (state.width !== null) {
         const nominalWidth = privateDictToUse.getByName("nominalWidthX");
         widths[i] = nominalWidth + state.width;

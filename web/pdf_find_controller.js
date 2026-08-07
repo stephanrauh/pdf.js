@@ -17,7 +17,7 @@
 /** @typedef {import("./event_utils").EventBus} EventBus */
 /** @typedef {import("./pdf_link_service.js").PDFLinkService} PDFLinkService */
 
-import { getCharacterType, getNormalizeWithNFKC } from "./pdf_find_utils.js";
+import { getNormalizeWithNFKC, isEntireWord } from "./pdf_find_utils.js";
 // modified by ngx-extended-pdf-viewer
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 // end of modification by ngx-extended-pdf-viewer
@@ -95,8 +95,6 @@ let DIACRITICS_EXCEPTION_STR; // Lazily initialized, see below.
 
 const DIACRITICS_REG_EXP = /\p{M}+/gu;
 const SPECIAL_CHARS_REG_EXP = /([+^$|])|(\p{P}+)|(\s+)|(\p{M})|(\p{L})/gu;
-const NOT_DIACRITIC_FROM_END_REG_EXP = /(\P{M})\p{M}*$/u;
-const NOT_DIACRITIC_FROM_START_REG_EXP = /^\p{M}*(\P{M})/u;
 
 // The range [AC00-D7AF] corresponds to the Hangul syllables.
 // The few other chars are some CJK Compatibility Ideographs.
@@ -764,36 +762,9 @@ class PDFFindController {
     return true;
   }
 
-  /**
-   * Determine if the search query constitutes a "whole word", by comparing the
-   * first/last character type with the preceding/following character type.
-   */
-  #isEntireWord(content, startIdx, length) {
-    let match = content
-      .slice(0, startIdx)
-      .match(NOT_DIACRITIC_FROM_END_REG_EXP);
-    if (match) {
-      const first = content.charCodeAt(startIdx);
-      const limit = match[1].charCodeAt(0);
-      if (getCharacterType(first) === getCharacterType(limit)) {
-        return false;
-      }
-    }
-
-    match = content
-      .slice(startIdx + length)
-      .match(NOT_DIACRITIC_FROM_START_REG_EXP);
-    if (match) {
-      const last = content.charCodeAt(startIdx + length - 1);
-      const limit = match[1].charCodeAt(0);
-      if (getCharacterType(last) === getCharacterType(limit)) {
-        return false;
-      }
-    }
-
-    return true;
-  }
-
+  // #isEntireWord() moved to pdf_find_utils.js upstream (6.2); the fork uses the
+  // shared isEntireWord() import. The method name below keeps the fork's
+  // documented `#` -> `_` rename.
   _convertToRegExpString(query, hasDiacritics) {
     const { matchDiacritics } = this.#state;
     let isUnicode = false;
@@ -1003,7 +974,7 @@ class PDFFindController {
     while ((match = query.exec(pageContent)) !== null) {
       if (
         entireWord &&
-        !this.#isEntireWord(pageContent, match.index, match[0].length)
+        !isEntireWord(pageContent, match.index, match[0].length)
       ) {
         continue;
       }

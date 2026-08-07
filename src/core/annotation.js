@@ -3351,13 +3351,11 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
       return super.getOperatorList(evaluator, task, intent, annotationStorage);
     }
 
-    if (value === null || value === undefined) {
-      // There is no default appearance so use the one derived
-      // from the field value.
-      value = this.data.checkBox
-        ? this.data.fieldValue === this.data.exportValue
-        : this.data.fieldValue === this.data.buttonValue;
-    }
+    // There is no default appearance, `value === null || value === undefined`,
+    // so use the one derived from the field value.
+    value ??= this.data.checkBox
+      ? this.data.fieldValue === this.data.exportValue
+      : this.data.fieldValue === this.data.buttonValue;
 
     return this.#getOperatorListForAppearance(
       evaluator,
@@ -4749,9 +4747,7 @@ class PolylineAnnotation extends MarkupAnnotation {
       const strokeAlpha = dict.get("CA");
 
       let fillColor = getRgbColor(dict.getArray("IC"), null);
-      if (fillColor) {
-        fillColor = getPdfColorArray(fillColor);
-      }
+      fillColor &&= getPdfColorArray(fillColor);
 
       let operator;
       if (fillColor) {

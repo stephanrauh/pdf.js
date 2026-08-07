@@ -1196,10 +1196,8 @@ class LinkAnnotationElement extends AnnotationElement {
     if (data.overlaidText) {
       link.title = data.overlaidText;
     }
+    link.onclick ||= () => false;
 
-    if (!link.onclick) {
-      link.onclick = () => false;
-    }
     this.#setInternalLink();
   }
 
