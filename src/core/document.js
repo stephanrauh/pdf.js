@@ -1199,7 +1199,10 @@ class PDFDocument {
           recursionDepth
         );
       }
-      const isSignature = isName(field.get("FT"), "Sig");
+      const isSignature = isName(
+        getInheritableProperty({ dict: field, key: "FT" }),
+        "Sig"
+      );
       const rectangle = field.get("Rect");
       const isInvisible =
         Array.isArray(rectangle) && rectangle.every(value => value === 0);
@@ -1882,12 +1885,15 @@ class PDFDocument {
       name = name === "" ? partName : `${name}.${partName}`;
     } else {
       let obj = field;
+      // The `Parent` chain can be cyclic, hence the local `RefSet`.
+      const walkedRefs = new RefSet();
       while (true) {
         obj = obj.getRaw("Parent") || parentRef;
         if (obj instanceof Ref) {
-          if (visitedRefs.has(obj)) {
+          if (visitedRefs.has(obj) || walkedRefs.has(obj)) {
             break;
           }
+          walkedRefs.put(obj);
           obj = await xref.fetchAsync(obj);
         }
         if (!(obj instanceof Dict)) {
@@ -1998,7 +2004,7 @@ class PDFDocument {
     return shadow(this, "fieldObjects", promise);
   }
 
-  #collectSignatureFields(fields, out, visitedRefs) {
+  async #collectSignatureFields(fields, out, visitedRefs) {
     if (!Array.isArray(fields)) {
       return;
     }
@@ -2009,14 +2015,18 @@ class PDFDocument {
         }
         visitedRefs.put(fieldRef);
       }
-      const field = this.xref.fetchIfRef(fieldRef);
+      const field = await this.xref.fetchIfRefAsync(fieldRef);
       if (!(field instanceof Dict)) {
         continue;
       }
-      if (isName(field.get("FT"), "Sig")) {
-        const sigDict = this.xref.fetchIfRef(field.get("V"));
+      if (isName(await field.getAsync("FT"), "Sig")) {
+        const sigDict = await field.getAsync("V");
         if (sigDict instanceof Dict) {
-          const parsed = this.#parseSignatureDict(field, sigDict, fieldRef);
+          const parsed = await this.#parseSignatureDict(
+            field,
+            sigDict,
+            fieldRef
+          );
           if (parsed) {
             out.push(parsed);
           }
@@ -2025,7 +2035,11 @@ class PDFDocument {
       if (field.has("Kids")) {
         // A terminal field can have Widget annotations as children, so its
         // own signature must be collected before walking the field tree.
-        this.#collectSignatureFields(field.get("Kids"), out, visitedRefs);
+        await this.#collectSignatureFields(
+          await field.getAsync("Kids"),
+          out,
+          visitedRefs
+        );
       }
     }
   }
@@ -2072,8 +2086,8 @@ class PDFDocument {
     return true;
   }
 
-  #parseSignatureDict(field, sigDict, fieldRef) {
-    const byteRange = sigDict.get("ByteRange");
+  async #parseSignatureDict(field, sigDict, fieldRef) {
+    const byteRange = await sigDict.getAsync("ByteRange");
     if (
       !Array.isArray(byteRange) ||
       byteRange.length !== 4 ||
@@ -2081,31 +2095,13 @@ class PDFDocument {
     ) {
       return null;
     }
-    const contents = sigDict.get("Contents");
-    if (typeof contents !== "string" || contents.length === 0) {
-      return null;
-    }
-
-    const filterName = sigDict.get("Filter");
-    const filter = filterName instanceof Name ? filterName.name : null;
-    const subFilterName = sigDict.get("SubFilter");
-    const subFilter = subFilterName instanceof Name ? subFilterName.name : null;
-
-    let signatureType = null;
-    if (subFilter === "adbe.pkcs7.detached") {
-      signatureType = 0;
-    } else if (subFilter === "adbe.pkcs7.sha1") {
-      signatureType = 1;
-    }
-
     // Slice the two ByteRange byte spans out of the underlying PDF stream.
     // ByteRange = [a, b, c, d] means signed bytes are [a..a+b] and [c..c+d];
     // the gap covers the /Contents hex blob itself.
     const [a, b, c, d] = byteRange;
-    const stream = this.stream;
     // `/ByteRange` offsets are absolute, so compare against `stream.end`
     // (raw buffer end), not `stream.length` (post-`moveStart` payload).
-    const fileLength = stream.end || 0;
+    const fileLength = this.stream.end || 0;
     // Reject signatures whose /ByteRange is structurally implausible: it
     // must start at the file head, define a non-empty first span, leave
     // room for the /Contents blob between the two spans, and fit within
@@ -2120,22 +2116,46 @@ class PDFDocument {
     ) {
       return null;
     }
-    const pkcs7 = stringToBytes(contents);
 
-    const t = field.get("T");
-    const fieldName = typeof t === "string" ? stringToPDFString(t) : "";
-    const name = sigDict.get("Name");
-    const reason = sigDict.get("Reason");
-    const location = sigDict.get("Location");
-    const contactInfo = sigDict.get("ContactInfo");
-    const m = sigDict.get("M");
+    const contents = await sigDict.getAsync("Contents");
+    if (typeof contents !== "string" || contents.length === 0) {
+      return null;
+    }
 
+    const [
+      filterName,
+      subFilterName,
+      t,
+      name,
+      reason,
+      location,
+      contactInfo,
+      m,
+    ] = await Promise.all([
+      sigDict.getAsync("Filter"),
+      sigDict.getAsync("SubFilter"),
+      field.getAsync("T"),
+      sigDict.getAsync("Name"),
+      sigDict.getAsync("Reason"),
+      sigDict.getAsync("Location"),
+      sigDict.getAsync("ContactInfo"),
+      sigDict.getAsync("M"),
+    ]);
+
+    const filter = filterName instanceof Name ? filterName.name : null,
+      subFilter = subFilterName instanceof Name ? subFilterName.name : null;
+
+    let signatureType = null;
+    if (subFilter === "adbe.pkcs7.detached") {
+      signatureType = 0;
+    } else if (subFilter === "adbe.pkcs7.sha1") {
+      signatureType = 1;
+    }
     const refKey = fieldRef instanceof Ref ? fieldRef.toString() : "inline";
-    const id = `${refKey}:${a}-${b}-${c}-${d}`;
 
     return {
-      id,
-      fieldName,
+      id: `${refKey}:${a}-${b}-${c}-${d}`,
+      fieldName: typeof t === "string" ? stringToPDFString(t) : "",
       signerName: typeof name === "string" ? stringToPDFString(name) : null,
       reason: typeof reason === "string" ? stringToPDFString(reason) : null,
       location:
@@ -2147,7 +2167,7 @@ class PDFDocument {
       subFilter,
       signatureType,
       byteRange,
-      pkcs7,
+      pkcs7: stringToBytes(contents),
       revisionIndex: 0,
       parentId: null,
     };
@@ -2167,7 +2187,7 @@ class PDFDocument {
         const fields = annotationGlobals.acroForm.get("Fields");
 
         const collected = [];
-        this.#collectSignatureFields(fields, collected, new RefSet());
+        await this.#collectSignatureFields(fields, collected, new RefSet());
 
         await Promise.all(
           collected.map(async signature => {

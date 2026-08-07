@@ -1249,13 +1249,9 @@ class Catalog {
     let javaScript = null;
 
     function appendIfJavaScriptDict(name, jsDict) {
-      if (!(jsDict instanceof Dict)) {
+      if (!(jsDict instanceof Dict) || !isName(jsDict.get("S"), "JavaScript")) {
         return;
       }
-      if (!isName(jsDict.get("S"), "JavaScript")) {
-        return;
-      }
-
       let js = jsDict.get("JS");
       if (js instanceof BaseStream) {
         js = js.getString();
@@ -1268,7 +1264,7 @@ class Catalog {
       );
       // Skip empty entries, similar to the `_collectJS` function.
       if (js) {
-        (javaScript ||= new Map()).set(name, js);
+        (javaScript ??= new Map()).set(name, js);
       }
     }
 
@@ -1299,14 +1295,10 @@ class Catalog {
     );
 
     if (javaScript) {
-      actions ||= Object.create(null);
+      actions ??= Object.create(null);
 
       for (const [key, val] of javaScript) {
-        if (key in actions) {
-          actions[key].push(val);
-        } else {
-          actions[key] = [val];
-        }
+        (actions[key] ??= []).push(val);
       }
     }
     return shadow(this, "jsActions", actions);
@@ -1606,6 +1598,9 @@ class Catalog {
     const xref = this.xref;
     let total = 0,
       ref = pageRef;
+    // Prevent circular references in the /Pages tree.
+    const visited = new RefSet();
+    visited.put(pageRef);
 
     while (true) {
       const node = await xref.fetchAsync(ref);
@@ -1625,6 +1620,12 @@ class Catalog {
         throw new FormatError("Node must be a dictionary.");
       }
       const parentRef = node.getRaw("Parent");
+      if (parentRef instanceof Ref) {
+        if (visited.has(parentRef)) {
+          throw new FormatError("Pages tree contains circular reference.");
+        }
+        visited.put(parentRef);
+      }
 
       const parent = await node.getAsync("Parent");
       if (!parent) {
@@ -1737,9 +1738,19 @@ class Catalog {
     // reached (e.g. integer MCIDs or MCR/OBJR dicts without further K).
     if (!pageRef) {
       const queue = [seDict];
+      // Prevent circular references in the structure tree.
+      const visited = new RefSet();
+      visited.put(seRef);
       while (queue.length > 0 && !pageRef) {
         const node = queue.shift();
-        const kids = node.get("K");
+        let kids = node.getRaw("K");
+        if (kids instanceof Ref) {
+          if (visited.has(kids)) {
+            continue;
+          }
+          visited.put(kids);
+          kids = xref.fetch(kids);
+        }
         let kidsArr;
         if (Array.isArray(kids)) {
           kidsArr = kids;
@@ -1749,6 +1760,12 @@ class Catalog {
           continue;
         }
         for (const kid of kidsArr) {
+          if (kid instanceof Ref) {
+            if (visited.has(kid)) {
+              continue;
+            }
+            visited.put(kid);
+          }
           const kidObj = xref.fetchIfRef(kid);
           if (!(kidObj instanceof Dict)) {
             continue; // integer MCID – leaf node, no Pg here
