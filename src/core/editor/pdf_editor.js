@@ -104,6 +104,10 @@ class XRefWrapper {
     return this._getNewRef();
   }
 
+  countUpdatesAfter(offset) {
+    return null;
+  }
+
   fetchIfRef(obj) {
     return obj instanceof Ref ? this.fetch(obj) : obj;
   }
@@ -2239,11 +2243,7 @@ class PDFEditor {
       if (data.parentRef) {
         newKid.set("Parent", data.parentRef);
       }
-      if (
-        acroFormDefaultAppearance &&
-        isName(newKid.get("FT"), "Tx") &&
-        !newKid.has("DA")
-      ) {
+      if (acroFormDefaultAppearance && !newKid.has("DA")) {
         // Fix the DA later since we need to have all the fields tree.
         daToFix.push(newKid);
       }
@@ -2261,6 +2261,10 @@ class PDFEditor {
     }
 
     for (const field of daToFix) {
+      const fieldType = getInheritableProperty({ dict: field, key: "FT" });
+      if (!isName(fieldType, "Tx")) {
+        continue;
+      }
       const da = getInheritableProperty({ dict: field, key: "DA" });
       if (!da) {
         // No DA in a parent field, we can set the default one.
@@ -2899,7 +2903,7 @@ class PDFEditor {
       acroForm.set("SigFlags", this.acroFormSigFlags);
     }
     acroForm.setIfArray("CO", this.acroFormCalculationOrder);
-    acroForm.setIfDict("DR", this.acroFormDefaultResources);
+    acroForm.setIfDefined("DR", this.acroFormDefaultResources);
     if (this.acroFormDefaultAppearance) {
       acroForm.set("DA", this.acroFormDefaultAppearance);
     }

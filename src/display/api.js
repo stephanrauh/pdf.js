@@ -843,18 +843,18 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @returns {Promise<Object | null>} A promise that is resolved with an
-   *   {Object} containing the viewer preferences, or `null` when no viewer
-   *   preferences are present in the PDF file.
+   * @returns {Promise<Map | null>} A promise that is resolved with a {Map}
+   *   containing the viewer preferences, or `null` when no viewer preferences
+   *   are present in the PDF file.
    */
   getViewerPreferences() {
     return this._transport.getViewerPreferences();
   }
 
   /**
-   * @returns {Promise<any | null>} A promise that is resolved with an {Array}
-   *   containing the destination, or `null` when no open action is present
-   *   in the PDF.
+   * @returns {Promise<Map | null>} A promise that is resolved with a {Map}
+   *   containing a destination or action, or `null` when no open action is
+   *   present in the PDF.
    */
   getOpenAction() {
     return this._transport.getOpenAction();

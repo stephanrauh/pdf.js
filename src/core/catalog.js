@@ -19,7 +19,6 @@ import {
   DocumentActionEventType,
   FormatError,
   info,
-  objectSize,
   PermissionFlag,
   shadow,
   stringToUTF8String,
@@ -1084,17 +1083,18 @@ class Catalog {
           break;
         case "PrintPageRange":
           // The number of elements must be even.
-          if (Array.isArray(value) && value.length % 2 === 0) {
-            const isValid = value.every(
+          if (
+            Array.isArray(value) &&
+            value.length % 2 === 0 &&
+            value.every(
               (page, i, arr) =>
                 Number.isInteger(page) &&
                 page > 0 &&
                 (i === 0 || page >= arr[i - 1]) &&
                 page <= this.numPages
-            );
-            if (isValid) {
-              prefValue = value;
-            }
+            )
+          ) {
+            prefValue = value;
           }
           break;
         case "NumCopies":
@@ -1111,15 +1111,14 @@ class Catalog {
         warn(`Bad value, for key "${key}", in ViewerPreferences: ${value}.`);
         continue;
       }
-      prefs ??= Object.create(null);
-      prefs[key] = prefValue;
+      (prefs ??= new Map()).set(key, prefValue);
     }
     return shadow(this, "viewerPreferences", prefs);
   }
 
   get openAction() {
     const obj = this.#catDict.get("OpenAction");
-    const openAction = Object.create(null);
+    const openAction = new Map();
 
     if (obj instanceof Dict) {
       // Convert the OpenAction dictionary into a format that works with
@@ -1131,18 +1130,14 @@ class Catalog {
       Catalog.parseDestDictionary({ destDict, resultObj });
 
       if (Array.isArray(resultObj.dest)) {
-        openAction.dest = resultObj.dest;
+        openAction.set("dest", resultObj.dest);
       } else if (resultObj.action) {
-        openAction.action = resultObj.action;
+        openAction.set("action", resultObj.action);
       }
     } else if (isValidExplicitDest(obj)) {
-      openAction.dest = obj;
+      openAction.set("dest", obj);
     }
-    return shadow(
-      this,
-      "openAction",
-      objectSize(openAction) > 0 ? openAction : null
-    );
+    return shadow(this, "openAction", openAction.size ? openAction : null);
   }
 
   /**
