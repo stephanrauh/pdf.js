@@ -1047,7 +1047,7 @@ class AnnotationEditorUIManager {
       },
       { capture: true, signal }
     );
-    window.addEventListener("beforeunload", this.#beforeUnload.bind(this), {
+    window.addEventListener("beforeunload", this.endCurrentEditing.bind(this), {
       capture: true,
       signal,
     });
@@ -1470,7 +1470,7 @@ class AnnotationEditorUIManager {
     this.highlightSelection(methodOfCreation, /* comment */ true);
   }
 
-  #beforeUnload(e) {
+  endCurrentEditing() {
     this.commitOrRemove();
     this.currentLayer?.endDrawingSession(/* isAborted = */ false);
   }
