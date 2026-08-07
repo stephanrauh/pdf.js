@@ -26,6 +26,7 @@ import {
   warn,
 } from "../shared/util.js";
 import { CFFParser } from "./cff_parser.js";
+import { compileFontPathInfo } from "./obj_bin_transform_core.js";
 import { getGlyphsUnicode } from "./glyphlist.js";
 import { isNumberArray } from "./core_utils.js";
 import { StandardEncoding } from "./encodings.js";
@@ -781,6 +782,10 @@ class Commands {
 }
 
 class CompiledFont {
+  #compiledCharCodes = new Set();
+
+  #compiledGlyphs = new Map();
+
   constructor(fontMatrix) {
     if (
       (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
@@ -789,9 +794,6 @@ class CompiledFont {
       unreachable("Cannot initialize CompiledFont.");
     }
     this.fontMatrix = fontMatrix;
-
-    this.compiledGlyphs = Object.create(null);
-    this.compiledCharCodeToGlyphId = Object.create(null);
   }
 
   static get NOOP() {
@@ -805,26 +807,29 @@ class CompiledFont {
     );
   }
 
-  getPathJs(unicode) {
+  getPath(unicode) {
     const { charCode, glyphId } = lookupCmap(this.cmap, unicode);
-    let fn = this.compiledGlyphs[glyphId],
-      compileEx;
-    if (fn === undefined) {
+
+    if (
+      this.#compiledGlyphs.has(glyphId) &&
+      this.#compiledCharCodes.has(charCode)
+    ) {
+      return null; // Previously compiled.
+    }
+
+    const path = this.#compiledGlyphs.getOrInsertComputed(glyphId, () => {
       try {
-        fn = this.compileGlyph(this.glyphs[glyphId], glyphId);
+        return this.compileGlyph(this.glyphs[glyphId], glyphId);
       } catch (ex) {
-        fn = CompiledFont.NOOP; // Avoid attempting to re-compile a corrupt glyph.
-
-        compileEx = ex;
+        return ex; // Avoid attempting to re-compile a corrupt glyph.
       }
-      this.compiledGlyphs[glyphId] = fn;
-    }
-    this.compiledCharCodeToGlyphId[charCode] ??= glyphId;
+    });
+    this.#compiledCharCodes.add(charCode);
 
-    if (compileEx) {
-      throw compileEx;
+    if (path instanceof Error) {
+      throw path;
     }
-    return fn;
+    return compileFontPathInfo(path);
   }
 
   compileGlyph(code, glyphId) {
@@ -856,14 +861,6 @@ class CompiledFont {
 
   compileGlyphImpl() {
     unreachable("Children classes should implement this.");
-  }
-
-  hasBuiltPath(unicode) {
-    const { charCode, glyphId } = lookupCmap(this.cmap, unicode);
-    return (
-      this.compiledGlyphs[glyphId] !== undefined &&
-      this.compiledCharCodeToGlyphId[charCode] !== undefined
-    );
   }
 }
 

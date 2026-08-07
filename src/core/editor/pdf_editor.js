@@ -709,12 +709,21 @@ class PDFEditor {
       }
       for (let attr of attributes) {
         attr = this.xrefWrapper.fetchIfRef(attr);
+        if (!(attr instanceof Dict)) {
+          // An attribute array may interleave dictionaries and revision
+          // numbers (ISO 32000-2, 14.7.6.3).
+          continue;
+        }
         if (isName(attr.get("O"), "Table") && attr.has("Headers")) {
           const headers = this.xrefWrapper.fetchIfRef(attr.getRaw("Headers"));
           if (Array.isArray(headers)) {
             for (let i = 0, ii = headers.length; i < ii; i++) {
+              const header = this.xrefWrapper.fetchIfRef(headers[i]);
+              if (typeof header !== "string") {
+                continue;
+              }
               const newId = dedupIDs.get(
-                stringToPDFString(headers[i], /* keepEscapeSequence = */ false)
+                stringToPDFString(header, /* keepEscapeSequence = */ false)
               );
               if (newId) {
                 headers[i] = newId;
@@ -1209,7 +1218,7 @@ class PDFEditor {
                 annotationDict.get("FT"),
                 "Sig"
               );
-              const parentRef = annotationDict.get("Parent") || null;
+              const parentRef = annotationDict.getRaw("Parent") || null;
               // We remove the parent to avoid visiting it when cloning the
               // annotation.
               // It'll be fixed later in #mergeAcroForms when merging the
@@ -1615,7 +1624,7 @@ class PDFEditor {
       }
       const { destinations, pagesMap } = documentData;
       const newDestinations = (documentData.destinations = new Map());
-      for (const [key, dest] of Object.entries(destinations)) {
+      for (const [key, dest] of destinations) {
         const pageRef = dest[0];
         const pageData = pageRef instanceof Ref && pagesMap.get(pageRef);
         if (!pageData) {
@@ -2109,14 +2118,14 @@ class PDFEditor {
    * If the document has some fields but no Fields entry in the AcroForm, we
    * need to fix that by creating a Fields entry with the oldest parent field
    * for each field.
-   * @param {Map<Ref, Ref>} fieldToParent
+   * @param {RefSetCache} fieldToParent
    * @param {XRef} xref
    * @returns {Array<Ref>}
    */
   #fixFields(fieldToParent, xref) {
     const newFields = [];
     const processed = new RefSet();
-    for (const [fieldRef, parentRef] of fieldToParent) {
+    for (const [fieldRef, parentRef] of fieldToParent.items()) {
       if (!parentRef) {
         newFields.push(fieldRef);
         continue;

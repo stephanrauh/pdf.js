@@ -4137,6 +4137,8 @@ class ChoiceWidgetAnnotation extends WidgetAnnotation {
 }
 
 class SignatureWidgetAnnotation extends WidgetAnnotation {
+  _hasValueFromXFA = false;
+
   constructor(params) {
     super(params);
 
