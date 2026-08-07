@@ -46,7 +46,7 @@ import {
   DEFAULT_SCALE,
   DEFAULT_SCALE_DELTA,
   DEFAULT_SCALE_VALUE,
-  docStyle,
+  getDocStyle, // #3253 modified by ngx-extended-pdf-viewer
   getVisibleElements,
   isPortraitOrientation,
   isValidRotation,
@@ -3418,7 +3418,9 @@ class PDFViewer {
   #updateContainerHeightCss(height = this.container.clientHeight) {
     if (height !== this.#previousContainerHeight) {
       this.#previousContainerHeight = height;
-      docStyle.setProperty("--viewer-container-height", `${height}px`);
+      // #3253 modified by ngx-extended-pdf-viewer
+      getDocStyle(this.container).setProperty("--viewer-container-height", `${height}px`);
+      // #3253 end of modification by ngx-extended-pdf-viewer
     }
   }
 

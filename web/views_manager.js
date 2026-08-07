@@ -16,7 +16,7 @@
 /** @typedef {import("./event_utils.js").EventBus} EventBus */
 
 import {
-  docStyle,
+  getDocStyle, // #3253 modified by ngx-extended-pdf-viewer
   isInsideNgxExtendedPdfViewer, // #2593 modified by ngx-extended-pdf-viewer
   PresentationModeState,
   SidebarView,
@@ -592,7 +592,9 @@ class ViewsManager extends Sidebar {
   }
 
   onResizing(newWidth) {
-    docStyle.setProperty(SIDEBAR_WIDTH_VAR, `${newWidth}px`);
+    // #3253 modified by ngx-extended-pdf-viewer
+    getDocStyle(this.outerContainer).setProperty(SIDEBAR_WIDTH_VAR, `${newWidth}px`);
+    // #3253 end of modification by ngx-extended-pdf-viewer
   }
 }
 

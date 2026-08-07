@@ -27,8 +27,8 @@ import {
   AutoPrintRegExp,
   CursorTool,
   DEFAULT_SCALE_VALUE,
-  docStyle,
   getActiveOrFocusedElement,
+  getDocStyle, // #3253 modified by ngx-extended-pdf-viewer
   isValidRotation,
   isValidScrollMode,
   isValidSpreadMode,
@@ -230,7 +230,9 @@ appConfig: null,
         break;
     }
     if (mode) {
-      docStyle.setProperty("color-scheme", mode);
+      // #3253 modified by ngx-extended-pdf-viewer
+      getDocStyle(appConfig.appContainer).setProperty("color-scheme", mode);
+      // #3253 end of modification by ngx-extended-pdf-viewer
     }
 
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {

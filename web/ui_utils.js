@@ -852,12 +852,23 @@ const animationStarted = new Promise(function (resolve) {
   window.requestAnimationFrame(resolve);
 });
 
-const docStyle =
-  typeof PDFJSDev !== "undefined" &&
-  PDFJSDev.test("LIB") &&
-  typeof document === "undefined"
-    ? null
-    : document.documentElement.style;
+// #3253 modified by ngx-extended-pdf-viewer
+// The viewer's global CSS variables used to be written to the document's
+// <html> element. ngx-extended-pdf-viewer embeds the viewer into an
+// application, so they would leak into - and outlive - that application.
+// Instead they go to the nearest ".html" element wrapping the viewer, which is
+// the viewer's own stand-in for <html> (like the ".html" element's ".body"
+// child, which serves as the appContainer). Resolving it from an element of
+// the viewer, instead of looking it up globally, keeps several viewers on the
+// same page independent of each other. Plain pdf.js has no ".html" element, so
+// it keeps writing to <html>.
+function getDocStyle(element) {
+  if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("LIB") && typeof document === "undefined") {
+    return null;
+  }
+  return (element?.closest(".html") ?? document.documentElement).style;
+}
+// #3253 end of modification by ngx-extended-pdf-viewer
 
 class ProgressBar {
   #classList = null;
@@ -1095,9 +1106,9 @@ export {
   DEFAULT_SCALE,
   DEFAULT_SCALE_DELTA,
   DEFAULT_SCALE_VALUE,
-  docStyle,
   floorToDivide,
   getActiveOrFocusedElement,
+  getDocStyle, // #3253 modified by ngx-extended-pdf-viewer
   getPageSizeInches,
   getVisibleElements,
   isInsideNgxExtendedPdfViewer, // #2593 modified by ngx-extended-pdf-viewer
