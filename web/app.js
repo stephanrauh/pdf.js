@@ -259,7 +259,14 @@ appConfig: null,
     // Ensure that the `L10n`-instance has been initialized before creating
     // e.g. the various viewer components.
     this.l10n = await this.externalServices.createL10n();
-    document.getElementsByTagName("html")[0].dir = this.l10n.getDirection();
+    // #3253 modified by ngx-extended-pdf-viewer
+    // Apply the reading direction of the UI language to the viewer's own container
+    // instead of <html>. Writing it to <html> flips the entire host application to
+    // RTL - and pdf.js has no way to restore it when the viewer is destroyed.
+    // dir is inherited, so every element of the viewer still gets the direction.
+    (appConfig.appContainer || document.documentElement).dir =
+      this.l10n.getDirection();
+    // #3253 end of modification by ngx-extended-pdf-viewer
     // Connect Fluent, when necessary, and translate what we already have.
     if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
       this.l10n.translate(appConfig.appContainer || document.documentElement);

@@ -126,9 +126,15 @@
   --comment-edit-button-icon: url(images/comment-editButton.svg);
 }
 
-:root:dir(rtl) {
+/* #3253 modified by ngx-extended-pdf-viewer
+   The reading direction is set on the viewer's app container (see app.js), not on
+   <html>, so --dir-factor has to be defined on that container, too. */
+:root:dir(rtl),
+body:dir(rtl),
+.body:dir(rtl) {
   --dir-factor: -1;
 }
+/* #3253 end of modification by ngx-extended-pdf-viewer */
 
 @media screen and (forced-colors: active) {
   :root {
