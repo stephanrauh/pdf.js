@@ -106,6 +106,24 @@ function getViewerConfiguration() {
       editorSignatureParamsToolbar: document.getElementById(
         "editorSignatureParamsToolbar"
       ),
+      signaturePropertiesButton: document.getElementById(
+        "signaturePropertiesButton"
+      ),
+      signaturePropertiesPanel: document.getElementById(
+        "signaturePropertiesPanel"
+      ),
+      signaturePropertiesContainer: document.getElementById(
+        "signaturePropertiesContainer"
+      ),
+      signaturePropertiesBanner: document.getElementById(
+        "signaturePropertiesBanner"
+      ),
+      signaturePropertiesList: document.getElementById(
+        "signaturePropertiesList"
+      ),
+      signaturePropertiesSeparator: document.getElementById(
+        "signaturePropertiesSeparator"
+      ),
       download: document.getElementById("downloadButton"),
       // #2943 modified by ngx-extended-pdf-viewer
       movePageUp: document.getElementById("movePageUpButton"),

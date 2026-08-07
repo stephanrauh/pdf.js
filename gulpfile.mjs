@@ -229,6 +229,8 @@ function createWebpackAlias(defines) {
     "web-print_service": "",
     "web-secondary_toolbar": "web/secondary_toolbar.js",
     "web-signature_manager": "web/signature_manager.js",
+    "web-digital_signature_properties_manager":
+      "web/digital_signature_properties_manager.js",
     "web-toolbar": "web/toolbar.js",
     "web-views_manager": "web/views_manager.js",
   };
@@ -2450,6 +2452,71 @@ gulp.task("lint-chmod", function (done) {
   done();
 });
 
+gulp.task("lint-bom", async function () {
+  console.log("\n### Checking for UTF-8 byte order marks");
+
+  // Cover untracked-but-not-ignored files too, so a BOM in a freshly created
+  // file is caught before `git add`.
+  const files = execSync("git ls-files -coz --exclude-standard", {
+    encoding: "utf8",
+    maxBuffer: 1 << 28,
+  })
+    .split("\0")
+    .filter(Boolean);
+
+  // Only the first three bytes matter: a leading EF BB BF is a UTF-8 BOM.
+  async function hasBOM(file) {
+    let handle;
+    try {
+      handle = await fs.promises.open(file, "r");
+    } catch {
+      return false; // Directory, broken symlink, removed file, etc.
+    }
+    try {
+      const { bytesRead, buffer } = await handle.read(Buffer.alloc(3), 0, 3, 0);
+      return (
+        bytesRead === 3 &&
+        buffer[0] === 0xef &&
+        buffer[1] === 0xbb &&
+        buffer[2] === 0xbf
+      );
+    } finally {
+      await handle.close();
+    }
+  }
+
+  // Don't exhaust file descriptors.
+  const offenders = [];
+  for (let i = 0; i < files.length; i += 256) {
+    const chunk = files.slice(i, i + 256);
+    const flags = await Promise.all(chunk.map(hasBOM));
+    chunk.forEach((file, j) => flags[j] && offenders.push(file));
+  }
+  offenders.sort();
+
+  if (offenders.length === 0) {
+    console.log("files checked, no errors found");
+    return;
+  }
+
+  if (!process.argv.includes("--fix")) {
+    for (const file of offenders) {
+      console.log(`  Unexpected byte order mark: ${file}`);
+    }
+    throw new Error("BOM check failed (run `gulp lint-bom --fix` to clear).");
+  }
+
+  // Strip the BOM on disk and let the user stage the change.
+  await Promise.all(
+    offenders.map(async file => {
+      const content = await fs.promises.readFile(file);
+      await fs.promises.writeFile(file, content.subarray(3));
+      console.log(`  removed byte order mark: ${file}`);
+    })
+  );
+  console.log(`done: ${offenders.length} file(s) updated`);
+});
+
 gulp.task("lint", function (done) {
   console.log();
   console.log("### Linting disabled (commented out)");
@@ -2518,7 +2585,7 @@ gulp.task("lint", function (done) {
       return;
     }
 
-    gulp.series("lint-licenses", "lint-chmod")(done);
+    gulp.series("lint-licenses", "lint-chmod", "lint-bom")(done);
   });
 });
 

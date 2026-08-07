@@ -96,6 +96,7 @@ import { Preferences } from "web-preferences";
 import { RenderingStates } from "./renderable_view.js";
 import { SecondaryToolbar } from "web-secondary_toolbar";
 import { SignatureManager } from "web-signature_manager";
+import { SignaturePropertiesManager } from "web-digital_signature_properties_manager";
 import { Toolbar } from "web-toolbar";
 import { ViewHistory } from "./view_history.js";
 import { ViewsManager } from "web-views_manager";
@@ -170,6 +171,8 @@ appConfig: null,
   l10n: null,
   /** @type {AnnotationEditorParams} */
   annotationEditorParams: null,
+  /** @type {SignaturePropertiesManager|null} */
+  signaturePropertiesManager: null,
   /** @type {ImageAltTextSettings} */
   imageAltTextSettings: null,
   isInitialViewSet: false,
@@ -1354,6 +1357,7 @@ appConfig: null,
       this.pdfViewer.setDocument(null);
       this.pdfLinkService.setDocument(null);
       this.pdfDocumentProperties?.setDocument(null);
+      this.signaturePropertiesManager?.setDocument(null);
     }
     this.pdfLinkService.externalLinkEnabled = true;
     this.store = null;
@@ -2208,7 +2212,12 @@ appConfig: null,
     }
 
     if (info.IsSignaturesPresent) {
-      NgxConsole.warn("Warning: Digital signatures validation is not supported");
+      const success = this._maybeInitSignatureProperties(pdfDocument);
+      if (!success) {
+        NgxConsole.warn(
+          "Warning: Digital signatures validation is not supported"
+        );
+      }
     }
 
     this.eventBus.dispatch("metadataloaded", { source: this });
@@ -2225,6 +2234,33 @@ appConfig: null,
     this.pageOrder = Array.from({length: this.pdfDocument.numPages}, (_, i) => i + 1);
   },
   // #2943 end of modification by ngx-extended-pdf-viewer
+
+  /**
+   * @private
+   * @returns {boolean} `true` when signature verification was wired up;
+   *   `false` when the runtime doesn't expose a verifier (everything
+   *   except the Firefox build) or the option is turned off.
+   */
+  _maybeInitSignatureProperties(pdfDocument) {
+    if (!AppOptions.get("enableSignatureVerification")) {
+      return false;
+    }
+    const verifier = this.externalServices.createSignatureVerifier();
+    if (!verifier) {
+      return false;
+    }
+    if (pdfDocument !== this.pdfDocument) {
+      // Don't warn about a previous document.
+      return true;
+    }
+    this.signaturePropertiesManager ??= new SignaturePropertiesManager({
+      appConfig: this.appConfig.toolbar,
+      verifier,
+      eventBus: this.eventBus,
+    });
+    this.signaturePropertiesManager.setDocument(pdfDocument);
+    return true;
+  },
 
   /**
    * @private
@@ -3612,6 +3648,12 @@ function closeEditorUndoBar(evt) {
   }
 }
 
+function closeSignatureProperties({ target }) {
+  if (this.signaturePropertiesManager?.shouldCloseOnClick(target)) {
+    this.signaturePropertiesManager.close();
+  }
+}
+
 function onBeforeUnload(evt) {
   if (this._hasChanges()) {
     evt.preventDefault();
@@ -3624,6 +3666,7 @@ function onBeforeUnload(evt) {
 function onClick(evt) {
   closeSecondaryToolbar.call(this, evt);
   closeEditorUndoBar.call(this, evt);
+  closeSignatureProperties.call(this, evt);
 }
 
 function onKeyUp(evt) {
@@ -3863,6 +3906,10 @@ function onKeyDown(evt) {
       case 27: // esc key
         if (this.secondaryToolbar?.isOpen) {
           this.secondaryToolbar.close();
+          handled = true;
+        }
+        if (this.signaturePropertiesManager?.isOpen) {
+          this.signaturePropertiesManager.close();
           handled = true;
         }
         if (!this.supportsIntegratedFind && this.findBar?.opened) {
