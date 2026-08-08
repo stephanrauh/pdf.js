@@ -99,12 +99,50 @@ const ENV_TARGETS = [
   "iOS >= 14",
 ];
 
+// #2687 #2536 modified by ngx-extended-pdf-viewer
+// Browsers served by the LEGACY build (ngx-extended-pdf-viewer ships it as the
+// `*-es5.mjs` bundle). This list is not cosmetic: it is the contract between two
+// halves of the library that must agree, or old browsers silently get code they
+// cannot parse.
+//
+//   upper bound - ngx-extended-pdf-viewer decides at runtime which bundle to load
+//   (op-chaining-support.js / pdf-script-loader.service.ts). The deciding check is
+//   iterator helpers, because the modern bundle calls them and carries no core-js
+//   polyfills: everything below Chrome/Edge 122, Firefox 131 and Safari/iOS 18.4
+//   lands here, so the legacy build must compile for all of it.
+//
+//   lower bound - the oldest browsers we promise to support. Mobile devices stay in
+//   use long after their last OS update, and the loader forces iOS <= 13 into this
+//   bundle (iOSVersionRequiresES5), so the floor is Safari 13.1 / iOS 13.4 (2020).
+//
+// Raising the floor here is a breaking change for those users; lowering it costs
+// bundle size in the `-es5` files only, which modern browsers never download.
+const LEGACY_ENV_TARGETS = [
+  "Chrome >= 80",
+  "Edge >= 80",
+  "Firefox >= 78",
+  "Safari >= 13.1",
+  "iOS >= 13.4",
+  "not IE > 0",
+  "not dead",
+  // Proxy/feature-phone engines cannot run a PDF viewer at all; the old
+  // percentage query ("> 1%") pulled them in and inflated the bundle.
+  "not op_mini all",
+  "not kaios > 0",
+  "not and_qq > 0",
+  "not and_uc > 0",
+];
+// #2687 #2536 end of modification by ngx-extended-pdf-viewer
+
 // Default Autoprefixer config used for generic, components, minified-pre
 const AUTOPREFIXER_CONFIG = {
   overrideBrowserslist: ENV_TARGETS,
 };
 // Default Babel targets used for generic, components, minified-pre
 const BABEL_TARGETS = ENV_TARGETS.join(", ");
+// #2687 #2536 modified by ngx-extended-pdf-viewer
+const LEGACY_BABEL_TARGETS = LEGACY_ENV_TARGETS.join(", ");
+// #2687 #2536 end of modification by ngx-extended-pdf-viewer
 
 const BABEL_COREJS_OPTS = Object.freeze({
   method: "usage-global",
@@ -450,7 +488,12 @@ function createWebpackConfig(
           options: {
             presets: babelPresets,
             plugins: babelPlugins,
-            targets: BABEL_TARGETS,
+            // #2687 #2536 modified by ngx-extended-pdf-viewer
+            // SKIP_BABEL is false exactly for the legacy builds, so it doubles as
+            // "this bundle is for old browsers" - compile it for LEGACY_ENV_TARGETS
+            // instead of the modern list, and let core-js polyfill accordingly.
+            targets: skipBabel ? BABEL_TARGETS : LEGACY_BABEL_TARGETS,
+            // #2687 #2536 end of modification by ngx-extended-pdf-viewer
           },
         },
       ],
