@@ -32,6 +32,9 @@ import {
 } from "../../shared/util.js";
 import { setLayerDimensions, stopEvent } from "../display_utils.js";
 import { AnnotationEditor } from "./editor.js";
+// #3260 modified by ngx-extended-pdf-viewer
+import { CurrentPointers } from "./tools.js";
+// #3260 end of modification by ngx-extended-pdf-viewer
 import { FreeTextEditor } from "./freetext.js";
 import { HighlightEditor } from "./highlight.js";
 import { InkEditor } from "./ink.js";
@@ -59,37 +62,15 @@ import { StampEditor } from "./stamp.js";
  * @property {PageViewport} viewport
  */
 
-
- class PointerType {
-      static current = null;
-      static editor = null;
-      constructor(t) {
-          if (PointerType.current === null) {
-              PointerType.current = "";
-              window.addEventListener("pointerdown", this.windowPointerDown, !0)
-          }
-      }
-      destroy() {
-          if (PointerType.current !== null) {
-              window.removeEventListener("pointerdown", this.windowPointerDown, !0);
-              PointerType.current = null
-          }
-      }
-      windowPointerDown(t) {
-          PointerType.current = t.pointerType;
-          return !0
-      }
-      static initializeEditor() {
-        setTimeout(() => PointerType.editor = PointerType.current);
-      }
-      static sameAsEditor(pointerType = undefined) {
-        if (pointerType) {
-          return PointerType.editor == pointerType;
-        }
-        return PointerType.editor == PointerType.current;
-      }
-  }
-  new PointerType;
+// #3260 modified by ngx-extended-pdf-viewer
+// A local `PointerType` class used to live here (#2512/#2527, "write with the
+// pen, scroll with the hand"). It has been superseded by `CurrentPointers` in
+// tools.js, which owns the same state with a sane lifetime: it is re-assigned
+// only when the user switches the editor mode, whereas `PointerType` re-latched
+// itself on every `updateMode()` call - including the ones a re-render fires
+// after a zoom, which handed the editor to a pinching finger and killed drawing
+// for good.
+// #3260 end of modification by ngx-extended-pdf-viewer
 
 /**
  * Manage all the different editors on a page.
@@ -227,7 +208,6 @@ class AnnotationEditorLayer {
         this.enableClick();
     }
 
-    PointerType.initializeEditor();
     this.toggleAnnotationLayerPointerEvents(false);
     const { classList } = this.div;
     classList.toggle("nonEditing", false);
@@ -918,17 +898,27 @@ class AnnotationEditorLayer {
    * @param {PointerEvent} event
    */
   pointerdown(event) {
+    // #3260 modified by ngx-extended-pdf-viewer
+    // Only the pointer type that owns the editor may use it (#2512): a pen
+    // writes while a finger scrolls and pinches. `CurrentPointers` replaces the
+    // former local `PointerType` class; the highlighter has no drawing session
+    // to claim the editor for it, so it claims it here on first use.
+    const { pointerType } = event;
     if (this.#uiManager.getMode() === AnnotationEditorType.HIGHLIGHT) {
-      if (!PointerType.sameAsEditor(event.pointerType)) {
+      if (CurrentPointers.isInitializedAndDifferentPointerType(pointerType)) {
         return;
       }
+      CurrentPointers.setPointerTypeIfUnset(pointerType);
       this.enableTextSelection();
-    } else if (this.#uiManager.getMode() === AnnotationEditorType.INK &&
-               !PointerType.sameAsEditor(event.pointerType)) {
+    } else if (
+      this.#uiManager.getMode() === AnnotationEditorType.INK &&
+      CurrentPointers.isInitializedAndDifferentPointerType(pointerType)
+    ) {
       // The goal is to ensure that only the right pointer type can start a
       // drawing session
       return;
     }
+    // #3260 end of modification by ngx-extended-pdf-viewer
 
     if (this.#hadPointerDown) {
       // It's possible to have a second pointerdown event before a pointerup one
