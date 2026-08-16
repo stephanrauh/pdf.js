@@ -189,7 +189,12 @@ class TouchManager {
     const pDistance = Math.hypot(prevGapX, prevGapY) || 1;
     if (
       !this.#isPinching &&
-      Math.abs(pDistance - distance) <= TouchManager.MIN_TOUCH_DISTANCE_TO_PINCH
+      // #3260 modified by ngx-extended-pdf-viewer
+      // MIN_TOUCH_DISTANCE_TO_PINCH is an instance getter, so reading it off
+      // the class gave `undefined` and the dead zone never applied: the
+      // slightest two-finger movement started a zoom. Fixed upstream too.
+      Math.abs(pDistance - distance) <= this.MIN_TOUCH_DISTANCE_TO_PINCH
+      // #3260 end of modification by ngx-extended-pdf-viewer
     ) {
       return;
     }
