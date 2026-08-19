@@ -16,7 +16,6 @@
 import { AnnotationEditorParamsType, unreachable } from "../../shared/util.js";
 import { noContextMenu, stopEvent } from "../display_utils.js";
 import { AnnotationEditor } from "./editor.js";
-import { CurrentPointers } from "./tools.js";
 
 class DrawingOptions {
   #svgProperties = Object.create(null);
@@ -63,6 +62,15 @@ class DrawingOptions {
 /**
  * Basic draw editor.
  */
+// #3260 modified by ngx-extended-pdf-viewer
+// `CurrentPointers` is no longer the static class it is upstream but an
+// instance owned by the `AnnotationEditorUIManager` (see the note on the class
+// itself in `tools.js`), so this file no longer imports it. Every upstream
+// `CurrentPointers.<member>` call below is now a call on that instance, reached
+// either through the `uiManager` handed to `startDrawing` or, for the statics
+// that have no viewer to ask, through `#currentPointers` right underneath.
+// Expect all of those lines to conflict when merging Mozilla's version.
+// #3260 end of modification by ngx-extended-pdf-viewer
 class DrawingEditor extends AnnotationEditor {
   #drawOutlines = null;
 
@@ -81,6 +89,15 @@ class DrawingEditor extends AnnotationEditor {
   static #currentDrawingAC = null;
 
   static #currentDrawingOptions = null;
+
+  // #3260 modified by ngx-extended-pdf-viewer
+  // The pointers of the ui manager that owns the running drawing session.
+  // `startDrawing` is handed the ui manager, but `_drawMove` and `_cleanup` are
+  // statics whose only link to a viewer is `_currentParent` - and `_cleanup`
+  // clears that before it is done with the pointers. Both only ever run inside
+  // a session, so the session keeps the pointers within reach.
+  static #currentPointers = null;
+  // #3260 end of modification by ngx-extended-pdf-viewer
 
   static _INNER_MARGIN = 3;
 
@@ -752,9 +769,13 @@ class DrawingEditor extends AnnotationEditor {
     // we just stop the current drawing and let the user zoom the document.
 
     const { target, offsetX: x, offsetY: y, pointerId, pointerType } = event;
-    if (CurrentPointers.isInitializedAndDifferentPointerType(pointerType)) {
+    // #3260 modified by ngx-extended-pdf-viewer
+    const currentPointers = uiManager.currentPointers;
+    if (currentPointers.isInitializedAndDifferentPointerType(pointerType)) {
       return;
     }
+    DrawingEditor.#currentPointers = currentPointers;
+    // #3260 end of modification by ngx-extended-pdf-viewer
 
     const {
       viewport: { rotation },
@@ -765,12 +786,12 @@ class DrawingEditor extends AnnotationEditor {
     const ac = (DrawingEditor.#currentDrawingAC = new AbortController());
     const signal = parent.combinedSignal(ac);
 
-    CurrentPointers.setPointer(pointerType, pointerId);
+    currentPointers.setPointer(pointerType, pointerId);
 
     window.addEventListener(
       "pointerup",
       e => {
-        if (CurrentPointers.isSamePointerIdOrRemove(e.pointerId)) {
+        if (currentPointers.isSamePointerIdOrRemove(e.pointerId)) {
           this._endDraw(e);
         }
       },
@@ -779,7 +800,7 @@ class DrawingEditor extends AnnotationEditor {
     window.addEventListener(
       "pointercancel",
       e => {
-        if (CurrentPointers.isSamePointerIdOrRemove(e.pointerId)) {
+        if (currentPointers.isSamePointerIdOrRemove(e.pointerId)) {
           this._currentParent.endDrawingSession();
         }
       },
@@ -788,14 +809,14 @@ class DrawingEditor extends AnnotationEditor {
     window.addEventListener(
       "pointerdown",
       e => {
-        if (!CurrentPointers.isSamePointerType(e.pointerType)) {
+        if (!currentPointers.isSamePointerType(e.pointerType)) {
           // For example, we started with a pen and the user
           // is now using a finger.
           return;
         }
 
         // For example, the user is using a second finger.
-        CurrentPointers.initializeAndAddPointerId(e.pointerId);
+        currentPointers.initializeAndAddPointerId(e.pointerId);
 
         // The first finger created a first point and a second finger just
         // started, so we stop the drawing and remove this only point.
@@ -821,7 +842,7 @@ class DrawingEditor extends AnnotationEditor {
     target.addEventListener(
       "touchmove",
       e => {
-        if (CurrentPointers.isSameTimeStamp(e.timeStamp)) {
+        if (currentPointers.isSameTimeStamp(e.timeStamp)) {
           // This move event is used to draw so we don't want to scroll.
           stopEvent(e);
         }
@@ -875,16 +896,18 @@ class DrawingEditor extends AnnotationEditor {
   }
 
   static _drawMove(event) {
-    CurrentPointers.isSameTimeStamp(event.timeStamp);
-    if (!DrawingEditor.#currentDraw) {
+    // #3260 modified by ngx-extended-pdf-viewer
+    const currentPointers = DrawingEditor.#currentPointers;
+    if (!DrawingEditor.#currentDraw || !currentPointers) {
       return;
     }
+    // #3260 end of modification by ngx-extended-pdf-viewer
     const { offsetX, offsetY, pointerId } = event;
 
-    if (!CurrentPointers.isSamePointerId(pointerId)) {
+    if (!currentPointers.isSamePointerId(pointerId)) {
       return;
     }
-    if (CurrentPointers.isUsingMultiplePointers()) {
+    if (currentPointers.isUsingMultiplePointers()) {
       // The user is using multiple fingers and the first one is moving.
       this._endDraw(event);
       return;
@@ -894,7 +917,7 @@ class DrawingEditor extends AnnotationEditor {
       DrawingEditor.#currentDraw.add(offsetX, offsetY)
     );
     // We track the timestamp to know if the touchmove event is used to draw.
-    CurrentPointers.setTimeStamp(event.timeStamp);
+    currentPointers.setTimeStamp(event.timeStamp);
     stopEvent(event);
   }
 
@@ -904,14 +927,28 @@ class DrawingEditor extends AnnotationEditor {
       this._currentParent = null;
       DrawingEditor.#currentDraw = null;
       DrawingEditor.#currentDrawingOptions = null;
-      CurrentPointers.clearTimeStamp();
+      // #3260 modified by ngx-extended-pdf-viewer
+      // `?.`: a session that never started has no pointers to clean up.
+      DrawingEditor.#currentPointers?.clearTimeStamp();
+      // #3260 end of modification by ngx-extended-pdf-viewer
     }
 
     if (DrawingEditor.#currentDrawingAC) {
       DrawingEditor.#currentDrawingAC.abort();
       DrawingEditor.#currentDrawingAC = null;
-      CurrentPointers.clearPointerIds();
+      // #3260 modified by ngx-extended-pdf-viewer
+      DrawingEditor.#currentPointers?.clearPointerIds();
+      // #3260 end of modification by ngx-extended-pdf-viewer
     }
+
+    // #3260 modified by ngx-extended-pdf-viewer
+    // Last, because both blocks above still need it. The pointer *type* stays
+    // untouched: it belongs to the editor mode, not to the stroke, so the pen
+    // that owns the editor keeps it from one stroke to the next.
+    if (all) {
+      DrawingEditor.#currentPointers = null;
+    }
+    // #3260 end of modification by ngx-extended-pdf-viewer
   }
 
   static _endDraw(event) {

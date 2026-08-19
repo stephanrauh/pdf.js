@@ -32,9 +32,6 @@ import {
 } from "../../shared/util.js";
 import { setLayerDimensions, stopEvent } from "../display_utils.js";
 import { AnnotationEditor } from "./editor.js";
-// #3260 modified by ngx-extended-pdf-viewer
-import { CurrentPointers } from "./tools.js";
-// #3260 end of modification by ngx-extended-pdf-viewer
 import { FreeTextEditor } from "./freetext.js";
 import { HighlightEditor } from "./highlight.js";
 import { InkEditor } from "./ink.js";
@@ -904,15 +901,16 @@ class AnnotationEditorLayer {
     // former local `PointerType` class; the highlighter has no drawing session
     // to claim the editor for it, so it claims it here on first use.
     const { pointerType } = event;
+    const currentPointers = this.#uiManager.currentPointers;
     if (this.#uiManager.getMode() === AnnotationEditorType.HIGHLIGHT) {
-      if (CurrentPointers.isInitializedAndDifferentPointerType(pointerType)) {
+      if (currentPointers.isInitializedAndDifferentPointerType(pointerType)) {
         return;
       }
-      CurrentPointers.setPointerTypeIfUnset(pointerType);
+      currentPointers.setPointerTypeIfUnset(pointerType);
       this.enableTextSelection();
     } else if (
       this.#uiManager.getMode() === AnnotationEditorType.INK &&
-      CurrentPointers.isInitializedAndDifferentPointerType(pointerType)
+      currentPointers.isInitializedAndDifferentPointerType(pointerType)
     ) {
       // The goal is to ensure that only the right pointer type can start a
       // drawing session
