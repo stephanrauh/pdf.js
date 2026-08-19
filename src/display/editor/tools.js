@@ -49,28 +49,40 @@ function bindEvents(obj, element, names) {
  * Class to store current pointers used by the editor to be able to handle
  * multiple pointers (e.g. two fingers, a pen, a mouse, ...).
  */
+// #3260 modified by ngx-extended-pdf-viewer
+// Upstream this is a static class, i.e. one per loaded script. Here it is an
+// instance owned by the `AnnotationEditorUIManager` (see `#currentPointers`
+// there), which is built and destroyed per document, so ownership of the editor
+// cannot outlive the document it was claimed in - nor leak between two viewers
+// on the same page. **Every** member below is therefore an instance member
+// where upstream has a static one, and every `CurrentPointers.<member>` call in
+// this file and in `draw.js` is now a call on that instance: expect the whole
+// class and all of its call sites to conflict when merging Mozilla's version.
+// `pickOwner`, `claimFor` and `setPointerTypeIfUnset` are ngx additions and
+// have no upstream counterpart at all.
+// #3260 end of modification by ngx-extended-pdf-viewer
 class CurrentPointers {
   // To manage the pointer events.
 
   // The pointerId  and pointerIds are used to keep track of
   // the pointers with a same type (e.g. two fingers).
-  static #pointerId = NaN;
+  #pointerId = NaN;
 
-  static #pointerIds = null;
+  #pointerIds = null;
 
   // Track the timestamp to know if the touchmove event is used.
-  static #moveTimestamp = NaN;
+  #moveTimestamp = NaN;
 
   // The pointerType is used to know if we are using a mouse, a pen or a touch.
-  static #pointerType = null;
+  #pointerType = null;
 
   // #3260 modified by ngx-extended-pdf-viewer
   // The pointer type of the most recent pointerdown anywhere in the window, and
   // when it happened. It tells us which kind of pointer switched the editor on:
   // a pen tap on the toolbar button, a finger tap, a mouse click.
-  static #lastPointerType = null;
+  #lastPointerType = null;
 
-  static #lastPointerTimeStamp = -Infinity;
+  #lastPointerTimeStamp = -Infinity;
 
   // How long a pointerdown still counts as "this is what turned the editor on".
   // A mode change arriving later than this came from somewhere else (a keyboard
@@ -78,91 +90,116 @@ class CurrentPointers {
   // until the first pointer actually draws.
   static #OWNERSHIP_WINDOW_MS = 1000;
 
-  static observePointerType(signal) {
+  /**
+   * One instance per `AnnotationEditorUIManager`, i.e. per viewer and per
+   * document. This used to be a static class, so a pointer that owned the
+   * editor kept owning it after the document had been closed and reopened -
+   * and, with two viewers on the same page, across both of them.
+   * @param {AbortSignal} signal - the ui manager's signal, so the observer dies
+   *   together with the ui manager.
+   */
+  constructor(signal) {
     window.addEventListener(
       "pointerdown",
-      ({ pointerType, timeStamp }) => {
-        CurrentPointers.#lastPointerType = pointerType;
-        CurrentPointers.#lastPointerTimeStamp = timeStamp;
+      ({ pointerType }) => {
+        this.#lastPointerType = pointerType;
+        // Deliberately not `event.timeStamp`: it shares its time origin with
+        // `performance.now()` only in the top-level document.
+        this.#lastPointerTimeStamp = performance.now();
       },
       { capture: true, signal }
     );
   }
 
   /**
-   * Give the editor to the pointer that just switched it on. Called only on a
-   * user-initiated mode change, so a re-render, a page change, a zoom or a
-   * pinch can never re-assign the editor to another pointer.
+   * Take note of the pointer that is switching the editor on, at the moment the
+   * mode change is requested. `updateMode` awaits several things (the previous
+   * mode change, the signature list) before it can hand the editor over, and
+   * measuring the age of the pointerdown after those awaits made the claim miss
+   * its own window.
+   * @param {boolean} isFromUser - a mode change nobody asked for (a re-render,
+   *   a document being loaded) has no owning pointer.
    * @param {boolean} isFromKeyboard - the mode was changed with the keyboard,
    *   so there is no owning pointer and the first one to draw wins.
+   * @returns {string|null} the pointer type to hand the editor to, if any.
    */
-  static claimForCurrentPointer(isFromKeyboard = false) {
-    const elapsed = performance.now() - CurrentPointers.#lastPointerTimeStamp;
-    const hasOwner = !isFromKeyboard && elapsed <= CurrentPointers.#OWNERSHIP_WINDOW_MS;
-    CurrentPointers.#pointerType = hasOwner ? CurrentPointers.#lastPointerType : null;
+  pickOwner(isFromUser, isFromKeyboard) {
+    if (!isFromUser || isFromKeyboard) {
+      return null;
+    }
+    const elapsed = performance.now() - this.#lastPointerTimeStamp;
+    return elapsed <= CurrentPointers.#OWNERSHIP_WINDOW_MS ? this.#lastPointerType : null;
+  }
+
+  /**
+   * Give the editor to the pointer that switched it on, and to nobody when the
+   * mode changed on its own. Called on every mode change, so a stale owner can
+   * never outlive the mode it was claimed for - but never in between two
+   * strokes, so a pinching finger cannot take the editor from a drawing pen.
+   * @param {string|null} pointerType - as returned by `pickOwner`.
+   */
+  claimFor(pointerType) {
+    this.#pointerType = pointerType ?? null;
   }
 
   /** Claim the editor for this pointer type unless one already owns it. */
-  static setPointerTypeIfUnset(pointerType) {
-    CurrentPointers.#pointerType ??= pointerType;
+  setPointerTypeIfUnset(pointerType) {
+    this.#pointerType ??= pointerType;
   }
   // #3260 end of modification by ngx-extended-pdf-viewer
 
-  static initializeAndAddPointerId(pointerId) {
+  initializeAndAddPointerId(pointerId) {
     // Store pointer ids. For example, the user is using a second finger.
-    (CurrentPointers.#pointerIds ||= new Set()).add(pointerId);
+    (this.#pointerIds ||= new Set()).add(pointerId);
   }
 
-  static setPointer(pointerType, pointerId) {
-    CurrentPointers.#pointerId ||= pointerId;
-    CurrentPointers.#pointerType ??= pointerType;
+  setPointer(pointerType, pointerId) {
+    this.#pointerId ||= pointerId;
+    this.#pointerType ??= pointerType;
   }
 
-  static setTimeStamp(timeStamp) {
-    CurrentPointers.#moveTimestamp = timeStamp;
+  setTimeStamp(timeStamp) {
+    this.#moveTimestamp = timeStamp;
   }
 
-  static isSamePointerId(pointerId) {
-    return CurrentPointers.#pointerId === pointerId;
+  isSamePointerId(pointerId) {
+    return this.#pointerId === pointerId;
   }
 
   // Check if it's the same pointer id, otherwise remove it from the set.
-  static isSamePointerIdOrRemove(pointerId) {
-    if (CurrentPointers.#pointerId === pointerId) {
+  isSamePointerIdOrRemove(pointerId) {
+    if (this.#pointerId === pointerId) {
       return true;
     }
 
-    CurrentPointers.#pointerIds?.delete(pointerId);
+    this.#pointerIds?.delete(pointerId);
     return false;
   }
 
-  static isSamePointerType(pointerType) {
-    return CurrentPointers.#pointerType === pointerType;
+  isSamePointerType(pointerType) {
+    return this.#pointerType === pointerType;
   }
 
-  static isInitializedAndDifferentPointerType(pointerType) {
-    return (
-      CurrentPointers.#pointerType !== null &&
-      !CurrentPointers.isSamePointerType(pointerType)
-    );
+  isInitializedAndDifferentPointerType(pointerType) {
+    return this.#pointerType !== null && !this.isSamePointerType(pointerType);
   }
 
-  static isSameTimeStamp(timeStamp) {
-    return CurrentPointers.#moveTimestamp === timeStamp;
+  isSameTimeStamp(timeStamp) {
+    return this.#moveTimestamp === timeStamp;
   }
 
-  static isUsingMultiplePointers() {
+  isUsingMultiplePointers() {
     // Check if the user is using multiple fingers
-    return CurrentPointers.#pointerIds?.size >= 1;
+    return this.#pointerIds?.size >= 1;
   }
 
-  static clearPointerIds() {
-    CurrentPointers.#pointerId = NaN;
-    CurrentPointers.#pointerIds = null;
+  clearPointerIds() {
+    this.#pointerId = NaN;
+    this.#pointerIds = null;
   }
 
-  static clearTimeStamp() {
-    CurrentPointers.#moveTimestamp = NaN;
+  clearTimeStamp() {
+    this.#moveTimestamp = NaN;
   }
 }
 
@@ -812,6 +849,10 @@ class AnnotationEditorUIManager {
 
   #currentPageIndex = 0;
 
+  // #3260 modified by ngx-extended-pdf-viewer
+  #currentPointers = null;
+  // #3260 end of modification by ngx-extended-pdf-viewer
+
   #deletedAnnotationsElementIds = new Set();
 
   #draggingEditors = null;
@@ -1081,7 +1122,7 @@ class AnnotationEditorUIManager {
       { capture: true, signal }
     );
     // #3260 modified by ngx-extended-pdf-viewer
-    CurrentPointers.observePointerType(signal);
+    this.#currentPointers = new CurrentPointers(signal);
     // #3260 end of modification by ngx-extended-pdf-viewer
     window.addEventListener(
       "pointerup",
@@ -2158,6 +2199,17 @@ class AnnotationEditorUIManager {
     return this.#currentPageIndex;
   }
 
+  // #3260 modified by ngx-extended-pdf-viewer
+  /**
+   * The pointers of this viewer and this document. Everything that has to know
+   * which pointer owns the editor goes through here.
+   * @type {CurrentPointers}
+   */
+  get currentPointers() {
+    return this.#currentPointers;
+  }
+  // #3260 end of modification by ngx-extended-pdf-viewer
+
   /**
    * Add a new layer for a page which will contains the editors.
    * @param {AnnotationEditorLayer} layer
@@ -2204,6 +2256,12 @@ class AnnotationEditorUIManager {
       return;
     }
 
+    // #3260 modified by ngx-extended-pdf-viewer
+    // Who owns the editor is decided here, before the awaits below, because the
+    // answer is "whoever just tapped" and that only stays true for a moment.
+    const newOwner = this.#currentPointers.pickOwner(isFromUser, isFromKeyboard);
+    // #3260 end of modification by ngx-extended-pdf-viewer
+
     if (this.#updateModeCapability) {
       await this.#updateModeCapability.promise;
       if (!this.#updateModeCapability) {
@@ -2221,6 +2279,15 @@ class AnnotationEditorUIManager {
     this.#commentManager?.destroyPopup();
 
     this.#mode = mode;
+
+    // #3260 modified by ngx-extended-pdf-viewer
+    // The pointer that switched the editor on owns it and keeps it until the
+    // mode changes again - a re-render, a page change, a zoom or a pinch never
+    // re-assigns it. Applied to every mode change, switching the editor off
+    // included, so an owner can never outlive the mode it was claimed for.
+    this.#currentPointers.claimFor(newOwner);
+    // #3260 end of modification by ngx-extended-pdf-viewer
+
     if (mode === AnnotationEditorType.NONE) {
       this.setEditingState(false);
       this.#disableAll();
@@ -2241,16 +2308,6 @@ class AnnotationEditorUIManager {
 
     if (mode === AnnotationEditorType.SIGNATURE) {
       await this.#signatureManager?.loadSignatures();
-    }
-
-    if (isFromUser) {
-      // #3260 modified by ngx-extended-pdf-viewer
-      // The pointer that switched the editor on owns it and keeps it until the
-      // user switches the mode again. This used to only clear the pointer type,
-      // which handed the editor to whichever pointer drew first - a pinching
-      // finger included, which is what broke drawing after a pinch.
-      CurrentPointers.claimForCurrentPointer(isFromKeyboard);
-      // #3260 end of modification by ngx-extended-pdf-viewer
     }
 
     this.setEditingState(true);
@@ -3201,6 +3258,5 @@ export {
   bindEvents,
   ColorManager,
   CommandManager,
-  CurrentPointers,
   KeyboardManager,
 };
