@@ -1919,7 +1919,9 @@ class AnnotationEditorUIManager {
     await this.addSerializedEditor(data);
   }
 
-  // #1783 end of modification by ngx-extended-pdf-viewer (extract a method)
+  // #1783 modified by ngx-extended-pdf-viewer - the body of paste() was
+  // extracted into this method so that addEditorAnnotation() can restore
+  // annotations through the same code path. The whole method is ours.
   async addSerializedEditor(
     data,
     activateEditorIfNecessary = false,
@@ -2044,6 +2046,7 @@ class AnnotationEditorUIManager {
     }
     // #1783 end of modification by ngx-extended-pdf-viewer
   }
+  // #1783 end of modification by ngx-extended-pdf-viewer (extracted method)
 
   /**
    * Keydown callback.
@@ -3090,7 +3093,7 @@ class AnnotationEditorUIManager {
               page: newPageIndex + 1,
             },
           });
-          // #2256 end of modification by ngx-extended-pdf-viewer
+          // #2256 / #3076 end of modification by ngx-extended-pdf-viewer
         }
       },
       undo: () => {

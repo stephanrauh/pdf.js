@@ -539,7 +539,7 @@ class FreeTextEditor extends AnnotationEditor {
       value: newText,
       previousValue: savedText,
     });
-    // #2256 end of modification by ngx-extended-pdf-viewer
+    // #2256 / #3076 / #3238 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */

@@ -417,18 +417,9 @@ class HighlightEditor extends AnnotationEditor {
       },
       /* mustWait = */ true
     );
-    // #2256 modified by ngx-extended-pdf-viewer
-    // #3076 modified by ngx-extended-pdf-viewer - added id field
-    this.eventBus?.dispatch("annotation-editor-event", {
-      source: this,
-      type: "colorChanged",
-      page: this.pageIndex + 1,
-      id: this.uid,
-      editorType: this.constructor.name,
-      value: color,
-      previousValue: savedColor,
-    });
-    // #2256 end of modification by ngx-extended-pdf-viewer
+    // #2256 / #3076 modified by ngx-extended-pdf-viewer
+    this._dispatchEditorEvent("colorChanged", { value: color, previousValue: savedColor });
+    // #2256 / #3076 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -454,18 +445,9 @@ class HighlightEditor extends AnnotationEditor {
       { action: "thickness_changed", thickness },
       /* mustWait = */ true
     );
-    // #2256 modified by ngx-extended-pdf-viewer
-    // #3076 modified by ngx-extended-pdf-viewer - added id field
-    this.eventBus?.dispatch("annotation-editor-event", {
-      source: this,
-      type: "thicknessChanged",
-      page: this.pageIndex + 1,
-      id: this.uid,
-      editorType: this.constructor.name,
-      value: thickness,
-      previousValue: savedThickness,
-    });
-    // #2256 end of modification by ngx-extended-pdf-viewer
+    // #2256 / #3076 modified by ngx-extended-pdf-viewer
+    this._dispatchEditorEvent("thicknessChanged", { value: thickness, previousValue: savedThickness });
+    // #2256 / #3076 end of modification by ngx-extended-pdf-viewer
   }
 
   /** @inheritdoc */
@@ -1023,6 +1005,10 @@ class HighlightEditor extends AnnotationEditor {
         commentDate: (!popup?.deleted && popup?.date) || null,
         // #3113 end of modification by ngx-extended-pdf-viewer
       };
+      // #3113 end of modification by ngx-extended-pdf-viewer (this whole
+      // `else if` branch deserializes the plain objects that
+      // addEditorAnnotation() takes; Mozilla only deserializes annotations
+      // that came out of a PDF file)
     } else if (data instanceof InkAnnotationElement) {
       const {
         data: {

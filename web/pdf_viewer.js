@@ -354,7 +354,7 @@ class PDFViewer {
     /** #2784 end of modification by ngx-extended-pdf-viewer */
     /** #495 modified by ngx-extended-pdf-viewer */
     this.pageViewMode = options.pageViewMode || "multiple";
-    /** end of modification */
+    /** #495 end of modification by ngx-extended-pdf-viewer */
     // #2459 modified by ngx-extended-pdf-viewer
     this.defaultCacheSize = options.defaultCacheSize;
     this.#maxZoom = options.maxZoom;
@@ -771,7 +771,7 @@ class PDFViewer {
       // #716 end of modification
     }
   }
-  /** end of modification */
+  /** #495 end of modification by ngx-extended-pdf-viewer */
 
   /**
    * @returns {boolean} Whether the pageNumber is valid (within bounds).
@@ -793,6 +793,7 @@ class PDFViewer {
 
     /** #495 modified by ngx-extended-pdf-viewer */
     this.hidePagesDependingOnpageViewMode();
+    /** #495 end of modification by ngx-extended-pdf-viewer */
     // #716 modified by ngx-extended-pdf-viewer
     if (this.pageViewMode === "book" || this.pageViewMode === "infinite-scroll") {
       const pageView = this._pages[this.currentPageNumber - 1];
@@ -812,10 +813,10 @@ class PDFViewer {
         if (this.#pageViewMode === "book") {
           this.ensureAdjacentPagesAreLoaded();
         }
-        // #716 modified by ngx-extended-pdf-viewer
+        // #716 end of modification by ngx-extended-pdf-viewer
       }
     }
-    /** end of modification */
+    /** #716 end of modification by ngx-extended-pdf-viewer */
 
     this.eventBus.dispatch("pagechanging", {
       source: this,
@@ -914,7 +915,7 @@ class PDFViewer {
     }
     return false;
   }
-  // #716 modified by ngx-extended-pdf-viewer
+  // #716 end of modification by ngx-extended-pdf-viewer
 
   /**
    * @type {string|null} Returns the current page label, or `null` if no page
@@ -1576,7 +1577,7 @@ class PDFViewer {
 
         /** #495 modified by ngx-extended-pdf-viewer */
         this.hidePagesDependingOnpageViewMode();
-        /** end of modification */
+        /** #495 end of modification by ngx-extended-pdf-viewer */
 
         eventBus.dispatch("pagesinit", { source: this });
 
@@ -2432,7 +2433,7 @@ class PDFViewer {
         }
       }
     });
-    /** end of modification */
+    /** #495 end of modification by ngx-extended-pdf-viewer */
 
     if (scale === "page-fit" && !destArray[4]) {
       this.#scrollIntoView(pageView);
@@ -2595,6 +2596,7 @@ class PDFViewer {
     // #2828 modified by ngx-extended-pdf-viewer - now the location is always
     // updated, preventing the page to jump to page 1 after zooming
     this._updateLocation(visible.first);
+    // #2828 end of modification by ngx-extended-pdf-viewer
     this.eventBus.dispatch("updateviewarea", {
       source: this,
       location: this._location,
@@ -3708,6 +3710,7 @@ class PDFViewer {
     // restored annotations unselected; selecting one asks the toolbar to switch
     // to that editor's mode, and the viewer stayed in it afterwards.
     await this.#annotationEditorUIManager.addSerializedEditor(data, true, true, false, false);
+    // #3240 end of modification by ngx-extended-pdf-viewer
   }
 
   // Method added for ngx-extended-pdf-viewer to remove editor annotations
