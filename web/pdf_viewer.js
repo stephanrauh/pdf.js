@@ -3704,7 +3704,10 @@ class PDFViewer {
     }
     // #3038 end of modification by ngx-extended-pdf-viewer
 
-    await this.#annotationEditorUIManager.addSerializedEditor(data, true, true, false);
+    // #3240 modified by ngx-extended-pdf-viewer - the last argument keeps the
+    // restored annotations unselected; selecting one asks the toolbar to switch
+    // to that editor's mode, and the viewer stayed in it afterwards.
+    await this.#annotationEditorUIManager.addSerializedEditor(data, true, true, false, false);
   }
 
   // Method added for ngx-extended-pdf-viewer to remove editor annotations

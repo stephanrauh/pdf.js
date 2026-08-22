@@ -861,6 +861,21 @@ class FreeTextEditor extends AnnotationEditor {
         creationDate,
         modificationDate,
       };
+    } else {
+      // #3237 modified by ngx-extended-pdf-viewer
+      // Restore the comment of a serialized free text annotation. The highlight
+      // and the stamp editor did this since #3113, the free text editor didn't,
+      // so a comment written on a free text annotation was lost on the way back
+      // in - although getSerializedAnnotations() had reported it faithfully.
+      const { popup, popupRef } = data;
+
+      initialData = data = {
+        ...data,
+        popupRef: popupRef || !!(popup && popup.contents && !popup.deleted) || null,
+        comment: (!popup?.deleted && popup?.contents) || null,
+        commentDate: (!popup?.deleted && popup?.date) || null,
+      };
+      // #3237 end of modification by ngx-extended-pdf-viewer
     }
     const editor = await super.deserialize(data, parent, uiManager);
     editor.#fontSize = data.fontSize;

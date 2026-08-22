@@ -128,25 +128,31 @@ class HighlightEditor extends AnnotationEditor {
     }
     // #2256 / 2556 modified by ngx-extended-pdf-viewer
     // #3076 modified by ngx-extended-pdf-viewer - added id field
-    this.eventBus?.dispatch("annotation-editor-event", {
-      source: this,
-      type: "added",
-      page: this.pageIndex + 1,
-      id: this.uid,
-      editorType: this.constructor.name,
-      value: {
-        color: this.color,
-        thickness: this.#thickness,
-        isFreeHighlight: this.#isFreeHighlight,
-        text: this.#text,
-      },
-    });
+    // #3240 modified by ngx-extended-pdf-viewer - while annotations are being
+    // restored, addSerializedEditor() sends the "added" event for every editor
+    // type once the editor is really part of the document. Sending it here too
+    // would announce a restored highlight twice.
+    if (!this._uiManager?.isRestoringAnnotations) {
+      this._dispatchAddedEvent();
+    }
     // #2256 / 2556 end of modification by ngx-extended-pdf-viewer
 
     if (!this.annotationElementId) {
       this._uiManager.a11yAlert(AnnotationEditor._l10nAlert.highlight);
     }
   }
+
+  // #3240 added by ngx-extended-pdf-viewer
+  /** @inheritdoc */
+  get addedEventValue() {
+    return {
+      color: this.color,
+      thickness: this.#thickness,
+      isFreeHighlight: this.#isFreeHighlight,
+      text: this.#text,
+    };
+  }
+  // #3240 end of modification by ngx-extended-pdf-viewer
 
   /** @inheritdoc */
   get telemetryInitialData() {
@@ -1002,6 +1008,14 @@ class HighlightEditor extends AnnotationEditor {
         rotation,
         id,
         deleted: false,
+        // #3237 modified by ngx-extended-pdf-viewer
+        // This branch builds a fresh object instead of spreading `data`, so two
+        // fields the base class reads were silently dropped for highlights:
+        // `isCopy` (without it the restored comment is missing from the next
+        // getSerializedAnnotations()) and the stable `customId` of #3225.
+        isCopy: data.isCopy,
+        customId: data.customId,
+        // #3237 end of modification by ngx-extended-pdf-viewer
         // #3113 modified by ngx-extended-pdf-viewer
         // Extract comment data from popup annotation for deserialization
         popupRef: popupRef || !!(popup && popup.contents && !popup.deleted) || null,

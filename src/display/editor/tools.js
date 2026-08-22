@@ -901,6 +901,15 @@ class AnnotationEditorUIManager {
 
   #mode = AnnotationEditorType.NONE;
 
+  // #3240 added by ngx-extended-pdf-viewer
+  // True while addSerializedEditor() restores annotations programmatically.
+  // Editors that announce themselves in their constructor (the highlight
+  // editor does) skip that dispatch, so a restore emits exactly one "added"
+  // event per annotation - sent from addSerializedEditor() once the editor is
+  // really part of the document.
+  #isRestoringAnnotations = false;
+  // #3240 end of modification by ngx-extended-pdf-viewer
+
   #selectedEditors = new Set();
 
   #selectedTextNode = null;
@@ -1911,7 +1920,19 @@ class AnnotationEditorUIManager {
   }
 
   // #1783 end of modification by ngx-extended-pdf-viewer (extract a method)
-  async addSerializedEditor(data, activateEditorIfNecessary = false, doNotMove = false, ignorePageNumber = true) {
+  async addSerializedEditor(
+    data,
+    activateEditorIfNecessary = false,
+    doNotMove = false,
+    ignorePageNumber = true,
+    // #3240 modified by ngx-extended-pdf-viewer
+    // Pasting selects what was pasted - that's what the user expects. Restoring
+    // annotations programmatically must not, because selecting an editor asks
+    // the toolbar to switch to that editor's mode, and the application was left
+    // in e.g. highlight mode after restoring a highlight.
+    selectNewEditors = true
+    // #3240 end of modification by ngx-extended-pdf-viewer
+  ) {
     if (!data) {
       return;
     }
@@ -1934,10 +1955,17 @@ class AnnotationEditorUIManager {
     // #1783 modified by ngx-extended-pdf-viewer
     const previousMode = this.#mode;
     if (activateEditorIfNecessary && previousMode === AnnotationEditorType.NONE) {
-      this.updateMode(AnnotationEditorType.FREETEXT);
+      // #3240 updateMode() is asynchronous. Without awaiting it, restoring
+      // several annotations in a row interleaved the mode switches and left the
+      // viewer in whatever mode the last one happened to set.
+      await this.updateMode(AnnotationEditorType.FREETEXT);
     }
     // #1783 end of modification by ngx-extended-pdf-viewer
     this.unselectAll();
+
+    // #3240 added by ngx-extended-pdf-viewer
+    this.#isRestoringAnnotations = true;
+    // #3240 end of modification by ngx-extended-pdf-viewer
 
     try {
       const newEditors = [];
@@ -1966,7 +1994,12 @@ class AnnotationEditorUIManager {
         // #2656 end of modification by ngx-extended-pdf-viewer
         const deserializedEditor = await layer.deserialize(editor);
         if (!deserializedEditor) {
-          return;
+          // #3240 modified by ngx-extended-pdf-viewer
+          // Was a `return`, which threw away the annotations that came after
+          // the unreadable one - and skipped restoring the editor mode below.
+          warn(`addSerializedEditor: could not restore the annotation of type ${editor.annotationType}. Skipping it.`);
+          continue;
+          // #3240 end of modification by ngx-extended-pdf-viewer
         }
         deserializedEditor.doNotMove = doNotMove;
         newEditors.push(deserializedEditor);
@@ -1976,7 +2009,11 @@ class AnnotationEditorUIManager {
         for (const editor of newEditors) {
           this.#addEditorToLayer(editor);
         }
-        this.#selectEditors(newEditors);
+        // #3240 modified by ngx-extended-pdf-viewer
+        if (selectNewEditors) {
+          this.#selectEditors(newEditors);
+        }
+        // #3240 end of modification by ngx-extended-pdf-viewer
       };
       const undo = () => {
         for (const editor of newEditors) {
@@ -1984,12 +2021,26 @@ class AnnotationEditorUIManager {
         }
       };
       this.addCommands({ cmd, undo, mustExec: true });
+
+      // #3240 added by ngx-extended-pdf-viewer
+      // One "added" event per restored annotation, whatever its type. Until now
+      // only the highlight editor announced itself, so restoring a highlight, a
+      // free text and an ink annotation produced one "added" event and one
+      // bogus "moved" event.
+      for (const editor of newEditors) {
+        editor._dispatchAddedEvent();
+      }
+      // #3240 end of modification by ngx-extended-pdf-viewer
     } catch (ex) {
       warn(`paste: "${ex.message}".`);
+    } finally {
+      // #3240 added by ngx-extended-pdf-viewer
+      this.#isRestoringAnnotations = false;
+      // #3240 end of modification by ngx-extended-pdf-viewer
     }
     // #1783 modified by ngx-extended-pdf-viewer
     if (activateEditorIfNecessary && previousMode !== this.#mode) {
-      this.updateMode(previousMode);
+      await this.updateMode(previousMode);
     }
     // #1783 end of modification by ngx-extended-pdf-viewer
   }
@@ -2194,6 +2245,18 @@ class AnnotationEditorUIManager {
   getLayer(pageIndex) {
     return this.#allLayers.get(pageIndex);
   }
+
+  // #3240 added by ngx-extended-pdf-viewer
+  /**
+   * True while annotations are being restored programmatically, i.e. from
+   * within addSerializedEditor(). Used by editors that dispatch their own
+   * "added" event, so a restore doesn't announce the same annotation twice.
+   * @type {boolean}
+   */
+  get isRestoringAnnotations() {
+    return this.#isRestoringAnnotations;
+  }
+  // #3240 end of modification by ngx-extended-pdf-viewer
 
   get currentPageIndex() {
     return this.#currentPageIndex;
