@@ -264,38 +264,9 @@ class DrawingEditor extends AnnotationEditor {
         options.toSVGProperties()
       );
 
-      // #2256 modified by ngx-extended-pdf-viewer
-      // #3076 modified by ngx-extended-pdf-viewer - added id field
-      if (name === "stroke") {
-        this.eventBus?.dispatch("annotation-editor-event", {
-          source: this,
-          type: "colorChanged",
-          page: this.pageIndex + 1,
-          editorType: this.constructor.name,
-          value,
-          id: this.uid,
-        });
-      } else if (name === "stroke-width") {
-        this.eventBus?.dispatch("annotation-editor-event", {
-          source: this,
-          type: "thicknessChanged",
-          page: this.pageIndex + 1,
-          editorType: this.constructor.name,
-          value,
-          id: this.uid,
-        });
-      } else if (name === "stroke-opacity") {
-        this.eventBus?.dispatch("annotation-editor-event", {
-          source: this,
-          type: "opacityChanged",
-          page: this.pageIndex + 1,
-          editorType: this.constructor.name,
-          value,
-          id: this.uid,
-        });
-      }
-      // #3076 end of modification by ngx-extended-pdf-viewer
-      // #2256 end of modification by ngx-extended-pdf-viewer
+      // #2256 / #3076 modified by ngx-extended-pdf-viewer
+      this._dispatchDrawPropertyEvent(name, value);
+      // #2256 / #3076 end of modification by ngx-extended-pdf-viewer
       if (type === this.colorType) {
         this.onUpdatedColor();
       } else if (type === this.opacityType) {
@@ -851,11 +822,7 @@ class DrawingEditor extends AnnotationEditor {
     );
     parent.toggleDrawing();
     // #3136 modified by ngx-extended-pdf-viewer
-    this.eventBus?.dispatch("annotation-editor-event", {
-      source: this,
-      type: "drawingStarted",
-      editorType: this.name,
-    });
+    this._dispatchDrawingEvent("drawingStarted");
     // #3136 end of modification by ngx-extended-pdf-viewer
     uiManager._editorUndoBar?.hide();
 
@@ -959,11 +926,7 @@ class DrawingEditor extends AnnotationEditor {
 
     parent.toggleDrawing(true);
     // #3136 modified by ngx-extended-pdf-viewer
-    this.eventBus?.dispatch("annotation-editor-event", {
-      source: this,
-      type: "drawingStopped",
-      editorType: this.name,
-    });
+    this._dispatchDrawingEvent("drawingStopped");
     // #3136 end of modification by ngx-extended-pdf-viewer
     this._cleanup(false);
 
@@ -974,18 +937,9 @@ class DrawingEditor extends AnnotationEditor {
       );
     }
 
-    // #2256 modified by ngx-extended-pdf-viewerAdd commentMore actions
-    // #3076 modified by ngx-extended-pdf-viewer - added id field
-    this.eventBus?.dispatch("annotation-editor-event", {
-      source: this,
-      type: "bezierPathChanged",
-      page: this._currentParent ? this._currentParent.pageIndex + 1 : NaN,
-      editorType: this.name,
-      id: this.uid,
-      // value: editor.getOutlines(),
-      // previousValue: currentPath,
-    });
-    // #2256 end of modification by ngx-extended-pdf-viewer
+    // #2256 / #3076 modified by ngx-extended-pdf-viewer
+    this._dispatchBezierPathChangedEvent();
+    // #2256 / #3076 end of modification by ngx-extended-pdf-viewer
 
     if (this.supportMultipleDrawings) {
       const draw = DrawingEditor.#currentDraw;
@@ -1121,6 +1075,49 @@ class DrawingEditor extends AnnotationEditor {
   static canCreateNewEmptyEditor() {
     return false;
   }
+
+  // #2256 / #3076 / #3136 added by ngx-extended-pdf-viewer
+  // The bodies of the events this editor reports live down here, so that the
+  // call sites up in Mozilla's methods stay one line long. Keep the payloads
+  // exactly as they are - they are a public API of ngx-extended-pdf-viewer.
+
+  /**
+   * Report a change of the stroke colour, its width or its opacity.
+   * @param {string} name - the SVG property that changed
+   * @param {*} value - its new value
+   */
+  _dispatchDrawPropertyEvent(name, value) {
+    const type = {
+      stroke: "colorChanged",
+      "stroke-width": "thicknessChanged",
+      "stroke-opacity": "opacityChanged",
+    }[name];
+    if (type) {
+      this._dispatchEditorEvent(type, { value });
+    }
+  }
+
+  /**
+   * Report that drawing started or stopped. These two carry neither a page nor
+   * an id, and their `editorType` is the editor's name rather than its class.
+   * @param {string} type - "drawingStarted" or "drawingStopped"
+   */
+  _dispatchDrawingEvent(type) {
+    this._dispatchEditorEvent(type, {
+      page: undefined,
+      id: undefined,
+      editorType: this.name,
+    });
+  }
+
+  /** Report that the drawn path changed. */
+  _dispatchBezierPathChangedEvent() {
+    this._dispatchEditorEvent("bezierPathChanged", {
+      page: this._currentParent ? this._currentParent.pageIndex + 1 : NaN,
+      editorType: this.name,
+    });
+  }
+  // #2256 / #3076 / #3136 end of modification by ngx-extended-pdf-viewer
 }
 
 export { DrawingEditor, DrawingOptions };

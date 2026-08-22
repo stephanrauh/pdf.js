@@ -641,6 +641,40 @@ class AnnotationEditor {
     // #2256 end of modification by ngx-extended-pdf-viewer
   }
 
+  // #2256 modified by ngx-extended-pdf-viewer
+  /**
+   * Tell the application that something about this annotation changed.
+   *
+   * This lives in the base class on purpose: the call sites sit inside methods
+   * Mozilla owns, and a one-line call survives an upstream merge far better
+   * than a dozen lines of object literal wedged into their code.
+   *
+   * `extra` adds to the payload and can override any of the default fields.
+   * Setting a field to `undefined` drops it, which some events rely on - not
+   * every event carries a page or an id, and some report `this.name` rather
+   * than the class name as their `editorType`.
+   *
+   * @param {string} type - the event type, e.g. "colorChanged"
+   * @param {Object} [extra] - fields to add to or override in the payload
+   */
+  _dispatchEditorEvent(type, extra = null) {
+    const payload = {
+      source: this,
+      type,
+      page: this.pageIndex + 1,
+      id: this.uid,
+      editorType: this.constructor.name,
+      ...extra,
+    };
+    for (const key of Object.keys(payload)) {
+      if (payload[key] === undefined) {
+        delete payload[key];
+      }
+    }
+    this.eventBus?.dispatch("annotation-editor-event", payload);
+  }
+  // #2256 end of modification by ngx-extended-pdf-viewer
+
   // #3240 added by ngx-extended-pdf-viewer
   /**
    * The editor-specific payload of the "added" event. Override it to describe
@@ -657,14 +691,7 @@ class AnnotationEditor {
    * gives you one "added" event per annotation.
    */
   _dispatchAddedEvent() {
-    this.eventBus?.dispatch("annotation-editor-event", {
-      source: this,
-      type: "added",
-      page: this.pageIndex + 1,
-      id: this.uid,
-      editorType: this.constructor.name,
-      value: this.addedEventValue,
-    });
+    this._dispatchEditorEvent("added", { value: this.addedEventValue });
   }
   // #3240 end of modification by ngx-extended-pdf-viewer
 
