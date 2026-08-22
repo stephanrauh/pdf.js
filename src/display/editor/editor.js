@@ -526,7 +526,14 @@ class AnnotationEditor {
       this.width * parentWidth,
       this.height * parentHeight
     );
-    this._onTranslated();
+    // #3240 modified by ngx-extended-pdf-viewer
+    // `doNotMove` means setAt() above kept the annotation where it was, so
+    // there's nothing to report. Restoring an annotation used to send a "moved"
+    // event with x and y undefined.
+    if (!this.doNotMove) {
+      this._onTranslated();
+    }
+    // #3240 end of modification by ngx-extended-pdf-viewer
   }
 
   #translate([width, height], x, y) {
@@ -633,6 +640,33 @@ class AnnotationEditor {
     });
     // #2256 end of modification by ngx-extended-pdf-viewer
   }
+
+  // #3240 added by ngx-extended-pdf-viewer
+  /**
+   * The editor-specific payload of the "added" event. Override it to describe
+   * the annotation that has just been added.
+   * @returns {Object}
+   */
+  get addedEventValue() {
+    return {};
+  }
+
+  /**
+   * Tell the application that this annotation is now part of the document.
+   * Every editor type sends this event, so restoring a batch of annotations
+   * gives you one "added" event per annotation.
+   */
+  _dispatchAddedEvent() {
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "added",
+      page: this.pageIndex + 1,
+      id: this.uid,
+      editorType: this.constructor.name,
+      value: this.addedEventValue,
+    });
+  }
+  // #3240 end of modification by ngx-extended-pdf-viewer
 
   get _hasBeenMoved() {
     return (

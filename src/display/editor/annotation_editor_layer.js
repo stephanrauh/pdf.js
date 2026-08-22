@@ -622,7 +622,13 @@ class AnnotationEditorLayer {
 
     // The editor will be correctly moved into the DOM (see fixAndSetPosition).
     editor.fixAndSetPosition();
-    editor.onceAdded(/* focus = */ !this.#isEnabling);
+    // #3240 modified by ngx-extended-pdf-viewer
+    // An annotation the application restored must not steal the focus:
+    // focusing an editor selects it (see AnnotationEditor.focusin), and
+    // selecting it asks the toolbar to switch to that editor's mode - which is
+    // how adding a highlight programmatically opened the highlight editor.
+    editor.onceAdded(/* focus = */ !this.#isEnabling && !this.#uiManager.isRestoringAnnotations);
+    // #3240 end of modification by ngx-extended-pdf-viewer
     this.#uiManager.addToAnnotationStorage(editor);
     editor._reportTelemetry(editor.telemetryInitialData);
   }
