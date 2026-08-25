@@ -754,6 +754,14 @@ class DrawingEditor extends AnnotationEditor {
     const { width: parentWidth, height: parentHeight } =
       target.getBoundingClientRect();
 
+    // #3260 modified by ngx-extended-pdf-viewer
+    // A stroke that never reached `pointerup` still has its window listeners
+    // installed. Overwriting the controller below would orphan them: nothing
+    // references it any more, so `_cleanup()` can never abort it, and the
+    // listeners outlive the drawing session. The `pointerdown` one then runs
+    // once `#currentDraw` is already null. Abort it here instead.
+    DrawingEditor.#currentDrawingAC?.abort();
+    // #3260 end of modification by ngx-extended-pdf-viewer
     const ac = (DrawingEditor.#currentDrawingAC = new AbortController());
     const signal = parent.combinedSignal(ac);
 
@@ -788,6 +796,15 @@ class DrawingEditor extends AnnotationEditor {
 
         // For example, the user is using a second finger.
         currentPointers.initializeAndAddPointerId(e.pointerId);
+
+        // #3260 modified by ngx-extended-pdf-viewer
+        // Same guard as `_drawMove()`: this listener belongs to a drawing
+        // session, but it can survive one - the session may end without the
+        // controller being aborted. There is no stroke left to cancel then.
+        if (!DrawingEditor.#currentDraw) {
+          return;
+        }
+        // #3260 end of modification by ngx-extended-pdf-viewer
 
         // The first finger created a first point and a second finger just
         // started, so we stop the drawing and remove this only point.
@@ -1100,19 +1117,28 @@ class DrawingEditor extends AnnotationEditor {
   /**
    * Report that drawing started or stopped. These two carry neither a page nor
    * an id, and their `editorType` is the editor's name rather than its class.
+   *
+   * `static`, because a drawing session is: `startDrawing()` and `_endDraw()`
+   * run on the class - there is no editor instance until the stroke is
+   * committed. That also rules out `_dispatchEditorEvent()`, which needs an
+   * instance for its `page` and `id`; the event goes straight to the event bus
+   * `AnnotationEditorLayer` puts on the editor class instead.
+   *
    * @param {string} type - "drawingStarted" or "drawingStopped"
    */
-  _dispatchDrawingEvent(type) {
-    this._dispatchEditorEvent(type, {
-      page: undefined,
-      id: undefined,
+  static _dispatchDrawingEvent(type) {
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type,
       editorType: this.name,
     });
   }
 
-  /** Report that the drawn path changed. */
-  _dispatchBezierPathChangedEvent() {
-    this._dispatchEditorEvent("bezierPathChanged", {
+  /** Report that the drawn path changed. `static` for the reason above. */
+  static _dispatchBezierPathChangedEvent() {
+    this.eventBus?.dispatch("annotation-editor-event", {
+      source: this,
+      type: "bezierPathChanged",
       page: this._currentParent ? this._currentParent.pageIndex + 1 : NaN,
       editorType: this.name,
     });
