@@ -3677,6 +3677,22 @@ class PDFViewer {
     let hasLegacyFormat = false;
     data?.forEach(annotation => {
       annotation.isCopy = true;
+      // #3236 added by ngx-extended-pdf-viewer
+      // Ink drawings take their geometry from `paths`, so their rect is
+      // recomputed on restore and may be anything. Every other type is
+      // positioned by its rect, and a missing or malformed one used to become
+      // NaN coordinates without a word - the annotation was simply nowhere.
+      if (annotation.annotationType !== 15) {
+        const { rect } = annotation;
+        if (!Array.isArray(rect) || rect.length !== 4 || rect.some(c => !Number.isFinite(c))) {
+          NgxConsole.warn(
+            `addEditorAnnotation(): an annotation of type ${annotation.annotationType} needs a rect of four numbers ([left, bottom, right, top]), but it is ${JSON.stringify(rect)}. ` +
+              "The annotation is likely to end up in the wrong place, or not to show up at all. " +
+              "(Ink drawings are the exception: they are positioned by their paths, and their rect is ignored.)"
+          );
+        }
+      }
+      // #3236 end of modification by ngx-extended-pdf-viewer
       // Fix ink editor annotations with legacy format
       if (annotation.annotationType === 15 && annotation.paths) {
         if (annotation.paths.lines) {
