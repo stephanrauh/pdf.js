@@ -3686,9 +3686,9 @@ class PDFViewer {
         const { rect } = annotation;
         if (!Array.isArray(rect) || rect.length !== 4 || rect.some(c => !Number.isFinite(c))) {
           NgxConsole.warn(
-            `addEditorAnnotation(): an annotation of type ${annotation.annotationType} needs a rect of four numbers ([left, bottom, right, top]), but it is ${JSON.stringify(rect)}. ` +
-              "The annotation is likely to end up in the wrong place, or not to show up at all. " +
-              "(Ink drawings are the exception: they are positioned by their paths, and their rect is ignored.)"
+            `addEditorAnnotation(): the annotation of type ${annotation.annotationType} on page ${(annotation.pageIndex ?? 0) + 1} has no usable rect - it is ${JSON.stringify(rect)}, but it needs four numbers ([left, bottom, right, top]). ` +
+              "Expect it in the wrong place, or nowhere at all. " +
+              "(Drawings don't need a rect - they sit where their points are - but every other annotation does.)"
           );
         }
       }
