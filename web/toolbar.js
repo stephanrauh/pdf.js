@@ -100,18 +100,6 @@ class Toolbar {
       { element: options.movePageUp, eventName: "movePageUp" },
       { element: options.movePageDown, eventName: "movePageDown" },
       // #2943 end of modification by ngx-extended-pdf-viewer
-      {
-        element: options.editorEraserButton,
-        eventName: "switchannotationeditormode",
-        eventDetails: {
-          get mode() {
-            const { classList } = options.editorEraserButton;
-            return classList.contains("toggled")
-              ? AnnotationEditorType.NONE
-              : AnnotationEditorType.ERASER;
-          },
-        },
-      },
       // #2900 modified by ngx-extended-pdf-viewer - deactivate the buttons
       // because they're handled by TypeScript
       /*
@@ -200,6 +188,38 @@ class Toolbar {
       */
       // #3069 end of modification by ngx-extended-pdf-viewer
     ];
+
+    // modified by ngx-extended-pdf-viewer - the editor buttons deactivated
+    // above (#2900/#3069) rely on Angular to handle their clicks; in the
+    // standalone viewer there is no Angular, so bind them here. The flag
+    // guard keeps the double-handler problem from coming back in ngx.
+    if (globalThis.STANDALONE_VIEWER) {
+      for (const [element, type] of [
+        [options.editorCommentButton, AnnotationEditorType.POPUP],
+        [options.editorEraserButton, AnnotationEditorType.ERASER],
+        [options.editorFreeTextButton, AnnotationEditorType.FREETEXT],
+        [options.editorHighlightButton, AnnotationEditorType.HIGHLIGHT],
+        [options.editorInkButton, AnnotationEditorType.INK],
+        [options.editorStampButton, AnnotationEditorType.STAMP],
+        [options.editorSignatureButton, AnnotationEditorType.SIGNATURE],
+      ]) {
+        if (!element) {
+          continue;
+        }
+        buttons.push({
+          element,
+          eventName: "switchannotationeditormode",
+          eventDetails: {
+            get mode() {
+              return element.classList.contains("toggled")
+                ? AnnotationEditorType.NONE
+                : type;
+            },
+          },
+        });
+      }
+    }
+    // end of modification by ngx-extended-pdf-viewer
 
     // Bind the event listeners for click and various other actions.
     this.#bindListeners(buttons);
