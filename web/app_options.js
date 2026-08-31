@@ -467,6 +467,14 @@ const defaultOptions = new Map([
       kind: OptionKind.VIEWER,
     },
   ],
+  [
+    "enableEraser",
+    {
+      /** @type {boolean} */
+      value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
+      kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+    },
+  ],
   ...(typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")
     ? [
         [

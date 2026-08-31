@@ -32,6 +32,7 @@ import {
 } from "../../shared/util.js";
 import { setLayerDimensions, stopEvent } from "../display_utils.js";
 import { AnnotationEditor } from "./editor.js";
+import { EraserEditor } from "./eraser.js";
 import { FreeTextEditor } from "./freetext.js";
 import { HighlightEditor } from "./highlight.js";
 import { InkEditor } from "./ink.js";
@@ -109,6 +110,7 @@ class AnnotationEditorLayer {
 
   static #editorTypes = new Map(
     [
+      EraserEditor,
       FreeTextEditor,
       InkEditor,
       StampEditor,
@@ -189,6 +191,15 @@ class AnnotationEditorLayer {
         this.toggleAnnotationLayerPointerEvents(true);
         this.disableClick();
         return;
+      case AnnotationEditorType.ERASER:
+        this.toggleAnnotationLayerPointerEvents(false);
+        this.disableTextSelection();
+        this.togglePointerEvents(true);
+        this.enableClick();
+        this.addNewEditor({
+          /* eraser */
+        });
+        break;
       case AnnotationEditorType.INK:
         this.disableTextSelection();
         this.togglePointerEvents(true);

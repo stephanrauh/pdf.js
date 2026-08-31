@@ -152,6 +152,18 @@ class Toolbar {
         },
       },
       {
+        element: options.editorEraserButton,
+        eventName: "switchannotationeditormode",
+        eventDetails: {
+          get mode() {
+            const { classList } = options.editorEraserButton;
+            return classList.contains("toggled")
+              ? AnnotationEditorType.NONE
+              : AnnotationEditorType.ERASER;
+          },
+        },
+      },
+      {
         element: options.editorStampButton,
         eventName: "switchannotationeditormode",
         eventDetails: {
@@ -427,6 +439,8 @@ class Toolbar {
     const {
       editorCommentButton,
       editorCommentParamsToolbar,
+      editorEraserButton,
+      editorEraserParamsToolbar,
       editorFreeTextButton,
       editorFreeTextParamsToolbar,
       editorHighlightButton,
@@ -459,6 +473,13 @@ class Toolbar {
       mode === AnnotationEditorType.INK,
       editorInkParamsToolbar
     );
+    if (editorEraserButton) {
+      toggleExpandedBtn(
+        editorEraserButton,
+        mode === AnnotationEditorType.ERASER,
+        editorEraserParamsToolbar
+      );
+    }
     toggleExpandedBtn(
       editorStampButton,
       mode === AnnotationEditorType.STAMP,
@@ -483,6 +504,9 @@ class Toolbar {
     }
     if (editorInkButton) {
       editorInkButton.disabled = disableEditorsValue;
+    }
+    if (editorEraserButton) {
+      editorEraserButton.disabled = disableEditorsValue;
     }
     if (editorStampButton) {
       editorStampButton.disabled = disableEditorsValue;

@@ -82,6 +82,7 @@
   --toolbarButton-editorFreeText-icon: url(images/toolbarButton-editorFreeText.svg);
   --toolbarButton-editorHighlight-icon: url(images/toolbarButton-editorHighlight.svg);
   --toolbarButton-editorInk-icon: url(images/toolbarButton-editorInk.svg);
+  --toolbarButton-editorEraser-icon: url(images/toolbarButton-editorEraser.svg);
   --toolbarButton-editorStamp-icon: url(images/toolbarButton-editorStamp.svg);
   --toolbarButton-editorSignature-icon: url(images/toolbarButton-editorSignature.svg);
   --toolbarButton-signaturePropertiesVerified-icon: url(images/toolbarButton-signaturePropertiesVerified.svg);
@@ -508,6 +509,10 @@ body {
 
 #editorInkButton::before {
   mask-image: var(--toolbarButton-editorInk-icon);
+}
+
+#editorEraserButton::before {
+  mask-image: var(--toolbarButton-editorEraser-icon);
 }
 
 #editorStampButton::before {
