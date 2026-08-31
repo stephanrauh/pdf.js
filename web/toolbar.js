@@ -100,6 +100,18 @@ class Toolbar {
       { element: options.movePageUp, eventName: "movePageUp" },
       { element: options.movePageDown, eventName: "movePageDown" },
       // #2943 end of modification by ngx-extended-pdf-viewer
+      {
+        element: options.editorEraserButton,
+        eventName: "switchannotationeditormode",
+        eventDetails: {
+          get mode() {
+            const { classList } = options.editorEraserButton;
+            return classList.contains("toggled")
+              ? AnnotationEditorType.NONE
+              : AnnotationEditorType.ERASER;
+          },
+        },
+      },
       // #2900 modified by ngx-extended-pdf-viewer - deactivate the buttons
       // because they're handled by TypeScript
       /*
@@ -148,18 +160,6 @@ class Toolbar {
             return classList.contains("toggled")
               ? AnnotationEditorType.NONE
               : AnnotationEditorType.INK;
-          },
-        },
-      },
-      {
-        element: options.editorEraserButton,
-        eventName: "switchannotationeditormode",
-        eventDetails: {
-          get mode() {
-            const { classList } = options.editorEraserButton;
-            return classList.contains("toggled")
-              ? AnnotationEditorType.NONE
-              : AnnotationEditorType.ERASER;
           },
         },
       },

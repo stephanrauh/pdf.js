@@ -97,7 +97,7 @@ function getViewerConfiguration() {
       ),
       editorInkButton: document.getElementById("primaryEditorInk") ?? document.getElementById("editorInkButton"),  // modified by ngx-extended-pdf-viewer
       editorInkParamsToolbar: document.getElementById("editorInkParamsToolbar"),
-      editorEraserButton: document.getElementById("primaryEditorEraser") ?? document.getElementById("editorEraserButton"),  // modified by ngx-extended-pdf-viewer
+      editorEraserButton: document.getElementById("editorEraserButton"),
       editorEraserParamsToolbar: document.getElementById(
         "editorEraserParamsToolbar"
       ),
