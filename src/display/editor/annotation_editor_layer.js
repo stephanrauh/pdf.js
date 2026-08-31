@@ -183,6 +183,7 @@ class AnnotationEditorLayer {
    */
   updateMode(mode = this.#uiManager.getMode()) {
     this.#cleanup();
+    this.#toogleEditorPointerEvents(true);
     switch (mode) {
       case AnnotationEditorType.NONE:
         this.div.classList.toggle("nonEditing", true);
@@ -192,7 +193,7 @@ class AnnotationEditorLayer {
         this.disableClick();
         return;
       case AnnotationEditorType.ERASER:
-        this.toggleAnnotationLayerPointerEvents(false);
+        this.#toogleEditorPointerEvents(false);
         this.disableTextSelection();
         this.togglePointerEvents(true);
         this.enableClick();
@@ -273,6 +274,20 @@ class AnnotationEditorLayer {
     return this.#editors.size !== 0
       ? this.#editors.values()
       : this.#uiManager.getEditors(this.pageIndex);
+  }
+
+  #toogleEditorPointerEvents(enabled = false) {
+    const value = enabled ? "" : "none";
+    for (const editor of this.#editors.values()) {
+      editor.div.style.pointerEvents = value;
+      // for highlight editors, we must also set pointer-events
+      // of the clipped child.
+      for (const child of editor.div.children) {
+        if (child.className === "internal") {
+          child.style.pointerEvents = value;
+        }
+      }
+    }
   }
 
   /**

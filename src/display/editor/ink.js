@@ -455,8 +455,20 @@ class InkEditor extends DrawingEditor {
     };
 
     if (this.#points.length === 0) {
+      // The whole drawing has been erased: the editor is removed, so the
+      // generic undo above (which redraws through this.parent) cannot work.
+      // Re-attaching the editor is enough: #drawOutlines was never
+      // overwritten in this branch, hence rebuild() restores the previous
+      // drawing.
+      const parent = this.parent;
+      this.#points = null;
       this.remove();
-      return { cmd: () => this.remove(), undo };
+      return {
+        cmd: () => this.remove(),
+        undo: () => {
+          parent.addOrRebuild(this);
+        },
+      };
     }
 
     const newOutlines = this.#deserializePoints();
@@ -500,12 +512,37 @@ class InkEditor extends DrawingEditor {
   }
 
   #pagePointToLayer(px, py) {
-    const { viewport } = this.parent;
-    const [vx, vy] = viewport.convertToViewportPoint(px, py);
-    // The layer can be CSS-scaled (e.g. while zooming), and the eraser's
-    // coordinates come from getBoundingClientRect, so scale to match.
-    const { width, height } = this.parent.div.getBoundingClientRect();
-    return [(vx / viewport.width) * width, (vy / viewport.height) * height];
+    const [pageX, pageY] = this.pageTranslation;
+    const [pageW, pageH] = this.pageDimensions;
+    const { width: layerW, height: layerH } =
+      this.parent.div.getBoundingClientRect();
+
+    const nx = (px - pageX) / pageW;
+    const ny = (py - pageY) / pageH;
+
+    let rx, ry;
+    switch ((this.rotation || 0) % 360) {
+      case 90:
+        rx = ny;
+        ry = 1 - nx;
+        break;
+      case 180:
+        rx = 1 - nx;
+        ry = 1 - ny;
+        break;
+      case 270:
+        rx = 1 - ny;
+        ry = nx;
+        break;
+      default:
+        rx = nx;
+        ry = ny;
+        break;
+    }
+
+    const lx = rx * layerW;
+    const ly = (1 - ry) * layerH;
+    return [lx, ly];
   }
 }
 

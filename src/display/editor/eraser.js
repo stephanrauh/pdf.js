@@ -184,6 +184,15 @@ class EraserEditor extends AnnotationEditor {
     return true;
   }
 
+  /**
+   * @inheritdoc
+   * The eraser spans the whole page and must never be selected or dragged:
+   * selecting it renders an edit toolbar on top of it which then swallows
+   * the next pointerdown, preventing any further erase session. Erasing is
+   * handled by the dedicated pointerdown listener (see enableEditing).
+   */
+  pointerdown(_event) {}
+
   #startEraseSession(event) {
     if (event.button && event.button !== 0) {
       return;
