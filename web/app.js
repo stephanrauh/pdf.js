@@ -2798,6 +2798,10 @@ appConfig: null,
     eventBus.on("lastpage", () => (this.page = this.pagesCount), opts);
     eventBus.on("nextpage", () => pdfViewer.nextPage(), opts);
     eventBus.on("previouspage", () => pdfViewer.previousPage(), opts);
+    // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+    eventBus.on("undo", () => pdfViewer.undo(), opts);
+    eventBus.on("redo", () => pdfViewer.redo(), opts);
+    // end of modification by ngx-extended-pdf-viewer
     eventBus.on("zoomin", this.zoomIn.bind(this), opts);
     eventBus.on("zoomout", this.zoomOut.bind(this), opts);
     eventBus.on("zoomreset", this.zoomReset.bind(this), opts);
