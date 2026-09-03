@@ -97,6 +97,10 @@ function getViewerConfiguration() {
       ),
       editorInkButton: document.getElementById("primaryEditorInk") ?? document.getElementById("editorInkButton"),  // modified by ngx-extended-pdf-viewer
       editorInkParamsToolbar: document.getElementById("editorInkParamsToolbar"),
+      editorEraserButton: document.getElementById("editorEraserButton"),
+      editorEraserParamsToolbar: document.getElementById(
+        "editorEraserParamsToolbar"
+      ),
       editorStampButton: document.getElementById("primaryEditorStamp") ?? document.getElementById("editorStampButton"),  // modified by ngx-extended-pdf-viewer
       presentationModeButton: document.getElementById("presentationMode"), // #1807 modified by ngx-extended-pdf-viewer
       editorStampParamsToolbar: document.getElementById(
@@ -384,6 +388,7 @@ function getViewerConfiguration() {
       editorInkColor: document.getElementById("editorInkColor"),
       editorInkThickness: document.getElementById("editorInkThickness"),
       editorInkOpacity: document.getElementById("editorInkOpacity"),
+      editorEraserThickness: document.getElementById("editorEraserThickness"),
       editorStampAddImage: document.getElementById("editorStampAddImage"),
       editorSignatureAddSignature: document.getElementById(
         "editorSignatureAddSignature"

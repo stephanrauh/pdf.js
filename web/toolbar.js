@@ -189,6 +189,38 @@ class Toolbar {
       // #3069 end of modification by ngx-extended-pdf-viewer
     ];
 
+    // modified by ngx-extended-pdf-viewer - the editor buttons deactivated
+    // above (#2900/#3069) rely on Angular to handle their clicks; in the
+    // standalone viewer there is no Angular, so bind them here. The flag
+    // guard keeps the double-handler problem from coming back in ngx.
+    if (globalThis.STANDALONE_VIEWER) {
+      for (const [element, type] of [
+        [options.editorCommentButton, AnnotationEditorType.POPUP],
+        [options.editorEraserButton, AnnotationEditorType.ERASER],
+        [options.editorFreeTextButton, AnnotationEditorType.FREETEXT],
+        [options.editorHighlightButton, AnnotationEditorType.HIGHLIGHT],
+        [options.editorInkButton, AnnotationEditorType.INK],
+        [options.editorStampButton, AnnotationEditorType.STAMP],
+        [options.editorSignatureButton, AnnotationEditorType.SIGNATURE],
+      ]) {
+        if (!element) {
+          continue;
+        }
+        buttons.push({
+          element,
+          eventName: "switchannotationeditormode",
+          eventDetails: {
+            get mode() {
+              return element.classList.contains("toggled")
+                ? AnnotationEditorType.NONE
+                : type;
+            },
+          },
+        });
+      }
+    }
+    // end of modification by ngx-extended-pdf-viewer
+
     // Bind the event listeners for click and various other actions.
     this.#bindListeners(buttons);
 
@@ -427,6 +459,8 @@ class Toolbar {
     const {
       editorCommentButton,
       editorCommentParamsToolbar,
+      editorEraserButton,
+      editorEraserParamsToolbar,
       editorFreeTextButton,
       editorFreeTextParamsToolbar,
       editorHighlightButton,
@@ -459,6 +493,13 @@ class Toolbar {
       mode === AnnotationEditorType.INK,
       editorInkParamsToolbar
     );
+    if (editorEraserButton) {
+      toggleExpandedBtn(
+        editorEraserButton,
+        mode === AnnotationEditorType.ERASER,
+        editorEraserParamsToolbar
+      );
+    }
     toggleExpandedBtn(
       editorStampButton,
       mode === AnnotationEditorType.STAMP,
@@ -483,6 +524,9 @@ class Toolbar {
     }
     if (editorInkButton) {
       editorInkButton.disabled = disableEditorsValue;
+    }
+    if (editorEraserButton) {
+      editorEraserButton.disabled = disableEditorsValue;
     }
     if (editorStampButton) {
       editorStampButton.disabled = disableEditorsValue;

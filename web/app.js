@@ -781,6 +781,9 @@ appConfig: null,
         if (editorSignatureButton && AppOptions.get("enableSignatureEditor")) {
           editorSignatureButton.parentElement.hidden = false;
         }
+        if (!AppOptions.get("enableEraser")) {
+          appConfig.toolbar?.editorEraserButton?.parentElement.remove();
+        }
         // #2943 modified by ngx-extended-pdf-viewer - handle page reordering buttons
         const movePageUpButton = document.getElementById("movePageUp");
         const movePageDownButton = document.getElementById("movePageDown");
