@@ -96,6 +96,10 @@
   --toolbarButton-zoomIn-icon: url(images/toolbarButton-zoomIn.svg);
   --toolbarButton-presentationMode-icon: url(images/toolbarButton-presentationMode.svg);
   --toolbarButton-print-icon: url(images/toolbarButton-print.svg);
+  /* modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons */
+  --toolbarButton-undo-icon: url(images/toolbarButton-undo.svg);
+  --toolbarButton-redo-icon: url(images/toolbarButton-redo.svg);
+  /* end of modification by ngx-extended-pdf-viewer */
   /*#if GENERIC*/
   --toolbarButton-openFile-icon: url(images/toolbarButton-openFile.svg);
   /*#endif*/
@@ -521,6 +525,16 @@ body {
 #printButton::before {
   mask-image: var(--toolbarButton-print-icon);
 }
+
+/* modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons */
+#undoButton::before {
+  mask-image: var(--toolbarButton-undo-icon);
+}
+
+#redoButton::before {
+  mask-image: var(--toolbarButton-redo-icon);
+}
+/* end of modification by ngx-extended-pdf-viewer */
 
 #downloadButton::before {
   mask-image: var(--toolbarButton-download-icon);

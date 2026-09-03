@@ -50,6 +50,12 @@ import { internalOpt } from "./internal_evt.js";
  * @property {HTMLButtonElement} movePageUp - Button to move a page up inside the document.
  * @property {HTMLButtonElement} movePageDown - Button to move a page down inside the document.
  * #2943 end of modification by ngx-extended-pdf-viewer
+ * modified by ngx-extended-pdf-viewer
+ * @property {HTMLButtonElement} [undo] - Button to undo the last annotation
+ *   editing command.
+ * @property {HTMLButtonElement} [redo] - Button to redo the last undone
+ *   annotation editing command.
+ * end of modification by ngx-extended-pdf-viewer
  */
 
 class Toolbar {
@@ -100,6 +106,10 @@ class Toolbar {
       { element: options.movePageUp, eventName: "movePageUp" },
       { element: options.movePageDown, eventName: "movePageDown" },
       // #2943 end of modification by ngx-extended-pdf-viewer
+      // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+      { element: options.undo, eventName: "undo" },
+      { element: options.redo, eventName: "redo" },
+      // end of modification by ngx-extended-pdf-viewer
       // #2900 modified by ngx-extended-pdf-viewer - deactivate the buttons
       // because they're handled by TypeScript
       /*
@@ -189,6 +199,35 @@ class Toolbar {
       // #3069 end of modification by ngx-extended-pdf-viewer
     ];
 
+    // modified by ngx-extended-pdf-viewer - the editor buttons deactivated
+    // above (#2900/#3069) rely on Angular to handle their clicks; in the
+    // standalone viewer there is no Angular, so bind them here. The flag
+    // guard keeps the double-handler problem from coming back in ngx.
+    if (globalThis.STANDALONE_VIEWER) {
+      for (const [element, type] of [
+        [options.editorCommentButton, AnnotationEditorType.POPUP],
+        [options.editorFreeTextButton, AnnotationEditorType.FREETEXT],
+        [options.editorHighlightButton, AnnotationEditorType.HIGHLIGHT],
+        [options.editorInkButton, AnnotationEditorType.INK],
+        [options.editorStampButton, AnnotationEditorType.STAMP],
+        [options.editorSignatureButton, AnnotationEditorType.SIGNATURE],
+      ]) {
+        if (!element) {
+          continue;
+        }
+        buttons.push({
+          element,
+          eventName: "switchannotationeditormode",
+          eventDetails: {
+            get mode() {
+              return element.classList.contains("toggled") ? AnnotationEditorType.NONE : type;
+            },
+          },
+        });
+      }
+    }
+    // end of modification by ngx-extended-pdf-viewer
+
     // Bind the event listeners for click and various other actions.
     this.#bindListeners(buttons);
 
@@ -264,6 +303,11 @@ class Toolbar {
 
     // Reset the Editor buttons too, since they're document specific.
     this.#editorModeChanged({ mode: AnnotationEditorType.DISABLE });
+    // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+    this.#editingStatesChanged({
+      details: { hasSomethingToUndo: false, hasSomethingToRedo: false },
+    });
+    // end of modification by ngx-extended-pdf-viewer
   }
 
   #bindListeners(buttons) {
@@ -350,6 +394,9 @@ class Toolbar {
       this.#editorModeChanged.bind(this),
       internalOpt
     );
+    // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+    eventBus.on("editingstateschanged", this.#editingStatesChanged.bind(this), internalOpt);
+    // end of modification by ngx-extended-pdf-viewer
     eventBus.on(
       "showannotationeditorui",
       ({ mode }) => {
@@ -492,6 +539,25 @@ class Toolbar {
     }
     // end of modification by ngx-extended-pdf-viewer
   }
+
+  // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+  /**
+   * Enable/disable the undo and redo buttons depending on whether the
+   * annotation editor has something to undo/redo.
+   *
+   * The `editingstateschanged` event carries the merged editor states, hence
+   * both `hasSomethingToUndo` and `hasSomethingToRedo` are always present.
+   */
+  #editingStatesChanged({ details }) {
+    const { undo, redo } = this.#opts;
+    if (undo && "hasSomethingToUndo" in details) {
+      undo.disabled = !details.hasSomethingToUndo;
+    }
+    if (redo && "hasSomethingToRedo" in details) {
+      redo.disabled = !details.hasSomethingToRedo;
+    }
+  }
+  // end of modification by ngx-extended-pdf-viewer
 
   #updateUIState(resetNumPages = false) {
     const { pageNumber, pagesCount, pageScaleValue, pageScale } = this;

@@ -80,6 +80,10 @@ function getViewerConfiguration() {
       zoomIn: document.getElementById("primaryZoomIn") ?? document.getElementById("zoomInButton"), // modified by ngx-extended-pdf-viewer
       zoomOut: document.getElementById("primaryZoomOut") ?? document.getElementById("zoomOutButton"), // modified by ngx-extended-pdf-viewer
       print: document.getElementById("printButton"),
+      // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+      undo: document.getElementById("undoButton"),
+      redo: document.getElementById("redoButton"),
+      // end of modification by ngx-extended-pdf-viewer
       editorCommentButton: document.getElementById("editorCommentButton"),
       editorCommentParamsToolbar: document.getElementById(
         "editorCommentParamsToolbar"
