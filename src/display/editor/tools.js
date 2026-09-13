@@ -1835,6 +1835,12 @@ class AnnotationEditorUIManager {
   }
 
   dragOver(event) {
+    // #3267 modified by ngx-extended-pdf-viewer: the listener is registered on
+    // `document` as soon as the manager exists, but the editor types are only
+    // known once the first editor layer has been created.
+    if (!this.#editorTypes) {
+      return;
+    }
     for (const { type } of event.dataTransfer.items) {
       for (const editorType of this.#editorTypes) {
         if (editorType.isHandlingMimeForPasting(type)) {
@@ -1851,6 +1857,9 @@ class AnnotationEditorUIManager {
    * @param {DragEvent} event
    */
   drop(event) {
+    if (!this.#editorTypes) {
+      return; // #3267 modified by ngx-extended-pdf-viewer
+    }
     for (const item of event.dataTransfer.items) {
       for (const editorType of this.#editorTypes) {
         if (editorType.isHandlingMimeForPasting(item.type)) {
@@ -1906,6 +1915,9 @@ class AnnotationEditorUIManager {
   async paste(event) {
     event.preventDefault();
     const { clipboardData } = event;
+    if (!this.#editorTypes) {
+      return; // #3267 modified by ngx-extended-pdf-viewer
+    }
     for (const item of clipboardData.items) {
       for (const editorType of this.#editorTypes) {
         if (editorType.isHandlingMimeForPasting(item.type)) {
