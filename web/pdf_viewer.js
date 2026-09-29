@@ -3590,34 +3590,6 @@ class PDFViewer {
     updater();
   }
 
-  // modified by ngx-extended-pdf-viewer - expose undo/redo on the viewer so
-  // that a toolbar button (or the `undo`/`redo` event bus events) can trigger
-  // them without a keyboard.
-  /**
-   * Undo the last annotation editing command.
-   */
-  undo() {
-    // This method is reachable through the global `undo` event bus event, so
-    // it must be a safe no-op when the editor isn't enabled.
-    if (!this.#annotationEditorUIManager || !this.pdfDocument) {
-      return;
-    }
-    this.#annotationEditorUIManager.undo();
-  }
-
-  /**
-   * Redo the last undone annotation editing command.
-   */
-  redo() {
-    // This method is reachable through the global `redo` event bus event, so
-    // it must be a safe no-op when the editor isn't enabled.
-    if (!this.#annotationEditorUIManager || !this.pdfDocument) {
-      return;
-    }
-    this.#annotationEditorUIManager.redo();
-  }
-  // end of modification by ngx-extended-pdf-viewer
-
   refresh(noUpdate = false, updateArgs = Object.create(null)) {
     if (!this.pdfDocument) {
       return;

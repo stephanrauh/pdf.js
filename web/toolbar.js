@@ -50,12 +50,12 @@ import { internalOpt } from "./internal_evt.js";
  * @property {HTMLButtonElement} movePageUp - Button to move a page up inside the document.
  * @property {HTMLButtonElement} movePageDown - Button to move a page down inside the document.
  * #2943 end of modification by ngx-extended-pdf-viewer
- * modified by ngx-extended-pdf-viewer
+ * stephanrauh/pdf.js#15 modified by ngx-extended-pdf-viewer
  * @property {HTMLButtonElement} [undo] - Button to undo the last annotation
  *   editing command.
  * @property {HTMLButtonElement} [redo] - Button to redo the last undone
  *   annotation editing command.
- * end of modification by ngx-extended-pdf-viewer
+ * stephanrauh/pdf.js#15 end of modification by ngx-extended-pdf-viewer
  */
 
 class Toolbar {
@@ -106,10 +106,21 @@ class Toolbar {
       { element: options.movePageUp, eventName: "movePageUp" },
       { element: options.movePageDown, eventName: "movePageDown" },
       // #2943 end of modification by ngx-extended-pdf-viewer
-      // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
-      { element: options.undo, eventName: "undo" },
-      { element: options.redo, eventName: "redo" },
-      // end of modification by ngx-extended-pdf-viewer
+      // stephanrauh/pdf.js#15 modified by ngx-extended-pdf-viewer - undo/redo
+      // toolbar buttons. "editingaction" is pdf.js's own route to the
+      // annotation editor's undo/redo (AnnotationEditorUIManager
+      // .onEditingAction); it does nothing when the editor isn't enabled.
+      {
+        element: options.undo,
+        eventName: "editingaction",
+        eventDetails: { name: "undo" },
+      },
+      {
+        element: options.redo,
+        eventName: "editingaction",
+        eventDetails: { name: "redo" },
+      },
+      // stephanrauh/pdf.js#15 end of modification by ngx-extended-pdf-viewer
       // #2900 modified by ngx-extended-pdf-viewer - deactivate the buttons
       // because they're handled by TypeScript
       /*
@@ -199,11 +210,12 @@ class Toolbar {
       // #3069 end of modification by ngx-extended-pdf-viewer
     ];
 
-    // modified by ngx-extended-pdf-viewer - the editor buttons deactivated
+    // stephanrauh/pdf.js#15 modified by ngx-extended-pdf-viewer - the editor buttons deactivated
     // above (#2900/#3069) rely on Angular to handle their clicks; in the
-    // standalone viewer there is no Angular, so bind them here. The flag
-    // guard keeps the double-handler problem from coming back in ngx.
-    if (globalThis.STANDALONE_VIEWER) {
+    // standalone viewer there is no Angular, so bind them here. Only the
+    // standalone viewer sets options.bindEditorButtons (see webViewerLoad in
+    // viewer.js), which keeps the double-handler problem from coming back.
+    if (options.bindEditorButtons) {
       for (const [element, type] of [
         [options.editorCommentButton, AnnotationEditorType.POPUP],
         [options.editorFreeTextButton, AnnotationEditorType.FREETEXT],
@@ -226,7 +238,7 @@ class Toolbar {
         });
       }
     }
-    // end of modification by ngx-extended-pdf-viewer
+    // stephanrauh/pdf.js#15 end of modification by ngx-extended-pdf-viewer
 
     // Bind the event listeners for click and various other actions.
     this.#bindListeners(buttons);
@@ -303,11 +315,11 @@ class Toolbar {
 
     // Reset the Editor buttons too, since they're document specific.
     this.#editorModeChanged({ mode: AnnotationEditorType.DISABLE });
-    // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+    // stephanrauh/pdf.js#15 modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
     this.#editingStatesChanged({
       details: { hasSomethingToUndo: false, hasSomethingToRedo: false },
     });
-    // end of modification by ngx-extended-pdf-viewer
+    // stephanrauh/pdf.js#15 end of modification by ngx-extended-pdf-viewer
   }
 
   #bindListeners(buttons) {
@@ -394,9 +406,9 @@ class Toolbar {
       this.#editorModeChanged.bind(this),
       internalOpt
     );
-    // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+    // stephanrauh/pdf.js#15 modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
     eventBus.on("editingstateschanged", this.#editingStatesChanged.bind(this), internalOpt);
-    // end of modification by ngx-extended-pdf-viewer
+    // stephanrauh/pdf.js#15 end of modification by ngx-extended-pdf-viewer
     eventBus.on(
       "showannotationeditorui",
       ({ mode }) => {
@@ -540,24 +552,28 @@ class Toolbar {
     // end of modification by ngx-extended-pdf-viewer
   }
 
-  // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+  // stephanrauh/pdf.js#15 modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
   /**
    * Enable/disable the undo and redo buttons depending on whether the
    * annotation editor has something to undo/redo.
    *
    * The `editingstateschanged` event carries the merged editor states, hence
-   * both `hasSomethingToUndo` and `hasSomethingToRedo` are always present.
+   * `isEditing`, `hasSomethingToUndo` and `hasSomethingToRedo` are all present
+   * once the editor has reported them. Outside an editing mode the buttons are
+   * disabled, like Ctrl+Z/Ctrl+Y (the editor only listens to them while
+   * editing): undoing there would change a layer the user can't see edited.
    */
   #editingStatesChanged({ details }) {
     const { undo, redo } = this.#opts;
+    const isEditing = details.isEditing ?? false;
     if (undo && "hasSomethingToUndo" in details) {
-      undo.disabled = !details.hasSomethingToUndo;
+      undo.disabled = !(isEditing && details.hasSomethingToUndo);
     }
     if (redo && "hasSomethingToRedo" in details) {
-      redo.disabled = !details.hasSomethingToRedo;
+      redo.disabled = !(isEditing && details.hasSomethingToRedo);
     }
   }
-  // end of modification by ngx-extended-pdf-viewer
+  // stephanrauh/pdf.js#15 end of modification by ngx-extended-pdf-viewer
 
   #updateUIState(resetNumPages = false) {
     const { pageNumber, pagesCount, pageScaleValue, pageScale } = this;

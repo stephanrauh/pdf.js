@@ -80,10 +80,12 @@ function getViewerConfiguration() {
       zoomIn: document.getElementById("primaryZoomIn") ?? document.getElementById("zoomInButton"), // modified by ngx-extended-pdf-viewer
       zoomOut: document.getElementById("primaryZoomOut") ?? document.getElementById("zoomOutButton"), // modified by ngx-extended-pdf-viewer
       print: document.getElementById("printButton"),
-      // modified by ngx-extended-pdf-viewer - undo/redo toolbar buttons
+      // stephanrauh/pdf.js#15 modified by ngx-extended-pdf-viewer - undo/redo
+      // toolbar buttons of the standalone viewer. ngx-extended-pdf-viewer
+      // renders its own buttons (with other ids) and drives them in Angular.
       undo: document.getElementById("undoButton"),
       redo: document.getElementById("redoButton"),
-      // end of modification by ngx-extended-pdf-viewer
+      // stephanrauh/pdf.js#15 end of modification by ngx-extended-pdf-viewer
       editorCommentButton: document.getElementById("editorCommentButton"),
       editorCommentParamsToolbar: document.getElementById(
         "editorCommentParamsToolbar"
@@ -423,8 +425,14 @@ function getViewerConfiguration() {
   };
 }
 
-function webViewerLoad(cspPolicyService) { // #2362 modified by ngx-extended-pdf-viewer
+function webViewerLoad(cspPolicyService, { bindEditorButtons = false } = {}) { // #2362 and stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer
   const config = getViewerConfiguration();
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer: only the
+  // standalone viewer binds the editor toolbar buttons itself (in ngx, Angular
+  // handles their clicks - see #2900/#3069). Passed as configuration instead of
+  // read from a global, so the Toolbar depends only on the options it is given.
+  config.toolbar.bindEditorButtons = bindEditorButtons;
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC")) {
     // Give custom implementations of the default viewer a simpler way to
@@ -456,13 +464,18 @@ document.blockUnblockOnload?.(true);
 
 //  modified by ngx-extended-pdf-viewer
 if (globalThis.STANDALONE_VIEWER) {
+  // stephanrauh/pdf.js#14 - wrapped so that the DOMContentLoaded event isn't
+  // passed in as the cspPolicyService (printing would then call addTrustedCSS
+  // on an Event).
+  const loadStandaloneViewer = () =>
+    webViewerLoad(undefined, { bindEditorButtons: true });
   if (
     document.readyState === "interactive" ||
     document.readyState === "complete"
   ) {
-    webViewerLoad();
+    loadStandaloneViewer();
   } else {
-    document.addEventListener("DOMContentLoaded", webViewerLoad, true);
+    document.addEventListener("DOMContentLoaded", loadStandaloneViewer, true);
   }
 }
 
