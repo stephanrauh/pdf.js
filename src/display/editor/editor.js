@@ -99,7 +99,7 @@ class AnnotationEditor {
 
   _editToolbar = null;
 
-  _erasable = false;
+  _erasable = false; // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
 
   _initialOptions = Object.create(null);
 
@@ -233,9 +233,11 @@ class AnnotationEditor {
     return Object.getPrototypeOf(this).constructor._editorType;
   }
 
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
   get erasable() {
     return this._erasable;
   }
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   static get isDrawer() {
     return false;
@@ -564,6 +566,7 @@ class AnnotationEditor {
     this.#translate(this.parentDimensions, x, y);
   }
 
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
   /**
    * Start an erase session: snapshot the editor geometry once so that the
    * hit tests done on every pointer move stay cheap.
@@ -604,6 +607,7 @@ class AnnotationEditor {
   endErase() {
     unreachable("Not implemented");
   }
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   /**
    * Translate the editor position within its page and adjust the scroll

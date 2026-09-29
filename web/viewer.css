@@ -582,6 +582,7 @@ body {
   mask-image: var(--toolbarButton-editorInk-icon);
 }
 
+/* stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser */
 #editorEraserButton::before {
   mask-image: var(--toolbarButton-editorEraser-icon);
 }

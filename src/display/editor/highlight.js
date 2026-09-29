@@ -25,6 +25,13 @@ import {
   FreeHighlightOutliner,
   HighlightOutline,
 } from "./drawers/highlight.js";
+// stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+import {
+  getPathsBBox,
+  makeLayerTransform,
+  sweepCircleOverPaths,
+} from "./eraser_utils.js";
+// stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 import {
   HighlightAnnotationElement,
   InkAnnotationElement,
@@ -33,11 +40,6 @@ import { AnnotationEditor } from "./editor.js";
 import { ColorPicker } from "./color_picker.js";
 import { KeyboardManager } from "./tools.js";
 import { stopEvent } from "../display_utils.js";
-import {
-  getPathsBBox,
-  makeLayerTransform,
-  sweepCircleOverPaths,
-} from "./eraser_utils.js";
 
 class HighlightDrawingOptions extends DrawingOptions {
   constructor(properties = null) {
@@ -78,6 +80,7 @@ class HighlightEditor extends DrawingEditor {
 
   #text = "";
 
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
   #eraseSession = null;
 
   // True for a piece of a free highlight split by the eraser.
@@ -86,6 +89,7 @@ class HighlightEditor extends DrawingEditor {
   // Suppress the focus (hence mode switch) when the eraser restores this
   // editor through undo/redo.
   #suppressFocusOnce = false;
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   static _DEFAULT_OPACITY = 1;
 
@@ -123,7 +127,7 @@ class HighlightEditor extends DrawingEditor {
     this.#text = params.text || "";
     this._isDraggable = false;
     this.defaultL10nId = "pdfjs-editor-highlight-editor";
-    this.#isErasePiece = !!params.isErasePiece;
+    this.#isErasePiece = !!params.isErasePiece; // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
     this.rotate();
     // #2256 / 2556 modified by ngx-extended-pdf-viewer
     // #3076 modified by ngx-extended-pdf-viewer - added id field
@@ -374,6 +378,7 @@ class HighlightEditor extends DrawingEditor {
 
   /** @inheritdoc */
   onceAdded(focus) {
+    // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
     if (this.#isErasePiece) {
       // The eraser step owns the undo of the pieces it creates, and a new
       // piece must not steal the focus (that would leave the eraser mode).
@@ -385,6 +390,7 @@ class HighlightEditor extends DrawingEditor {
       this.#suppressFocusOnce = false;
       focus = false;
     }
+    // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
     if (!this.annotationElementId) {
       this.parent.addUndoableEditor(this);
     }
@@ -401,6 +407,7 @@ class HighlightEditor extends DrawingEditor {
     super.remove();
   }
 
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
   /** @inheritdoc */
   get erasable() {
     // Only drawings can be erased: a free (drawn) highlight is, a text
@@ -544,10 +551,6 @@ class HighlightEditor extends DrawingEditor {
   }
 
   /**
-   * Rebuild one FreeHighlightOutline per remaining piece of the erase session,
-   * in the current view frame. Pieces too short to form a stroke are dropped.
-   */
-  /**
    * Build one (unfinalized) FreeHighlightOutliner per remaining piece of the
    * erase session, in the current-view layer frame - the same recipe a live
    * highlight drawing uses (see createDrawerInstance). Pieces too short to form
@@ -609,6 +612,7 @@ class HighlightEditor extends DrawingEditor {
     parent.add(piece);
     return piece;
   }
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   /** @inheritdoc */
   render() {

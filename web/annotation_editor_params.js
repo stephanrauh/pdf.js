@@ -56,7 +56,7 @@ class AnnotationEditorParams {
     editorInkColor,
     editorInkThickness,
     editorInkOpacity,
-    editorEraserThickness,
+    editorEraserThickness, // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
     editorStampAddImage,
     editorFreeHighlightThickness,
     editorHighlightShowAll,
@@ -141,9 +141,11 @@ class AnnotationEditorParams {
     editorInkThickness.addEventListener("input", function () {
       dispatchEvent("INK_THICKNESS", this.valueAsNumber);
     });
+    // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
     editorEraserThickness?.addEventListener("input", function () {
       dispatchEvent("ERASER_THICKNESS", this.valueAsNumber);
     });
+    // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
     editorStampAddImage.addEventListener("click", () => {
       eventBus.dispatch("reporttelemetry", {
         source: this,
@@ -186,7 +188,7 @@ class AnnotationEditorParams {
             case AnnotationEditorParamsType.INK_OPACITY:
               updateInkOpacity(value);
               break;
-            case AnnotationEditorParamsType.ERASER_THICKNESS:
+            case AnnotationEditorParamsType.ERASER_THICKNESS: // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
               if (editorEraserThickness) {
                 editorEraserThickness.value = value;
               }

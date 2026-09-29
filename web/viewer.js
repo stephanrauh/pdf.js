@@ -97,10 +97,8 @@ function getViewerConfiguration() {
       ),
       editorInkButton: document.getElementById("primaryEditorInk") ?? document.getElementById("editorInkButton"),  // modified by ngx-extended-pdf-viewer
       editorInkParamsToolbar: document.getElementById("editorInkParamsToolbar"),
-      editorEraserButton: document.getElementById("editorEraserButton"),
-      editorEraserParamsToolbar: document.getElementById(
-        "editorEraserParamsToolbar"
-      ),
+      editorEraserButton: document.getElementById("primaryEditorEraser") ?? document.getElementById("editorEraserButton"), // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+      editorEraserParamsToolbar: document.getElementById("editorEraserParamsToolbar"), // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
       editorStampButton: document.getElementById("primaryEditorStamp") ?? document.getElementById("editorStampButton"),  // modified by ngx-extended-pdf-viewer
       presentationModeButton: document.getElementById("presentationMode"), // #1807 modified by ngx-extended-pdf-viewer
       editorStampParamsToolbar: document.getElementById(
@@ -388,7 +386,7 @@ function getViewerConfiguration() {
       editorInkColor: document.getElementById("editorInkColor"),
       editorInkThickness: document.getElementById("editorInkThickness"),
       editorInkOpacity: document.getElementById("editorInkOpacity"),
-      editorEraserThickness: document.getElementById("editorEraserThickness"),
+      editorEraserThickness: document.getElementById("editorEraserThickness"), // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
       editorStampAddImage: document.getElementById("editorStampAddImage"),
       editorSignatureAddSignature: document.getElementById(
         "editorSignatureAddSignature"
@@ -424,8 +422,14 @@ function getViewerConfiguration() {
   };
 }
 
-function webViewerLoad(cspPolicyService) { // #2362 modified by ngx-extended-pdf-viewer
+function webViewerLoad(cspPolicyService, { bindEditorButtons = false } = {}) { // #2362 and stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer
   const config = getViewerConfiguration();
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer: only the
+  // standalone viewer binds the editor toolbar buttons itself (in ngx, Angular
+  // handles their clicks - see #2900/#3069). Passed as configuration instead of
+  // read from a global, so the Toolbar depends only on the options it is given.
+  config.toolbar.bindEditorButtons = bindEditorButtons;
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC")) {
     // Give custom implementations of the default viewer a simpler way to
@@ -457,13 +461,18 @@ document.blockUnblockOnload?.(true);
 
 //  modified by ngx-extended-pdf-viewer
 if (globalThis.STANDALONE_VIEWER) {
+  // stephanrauh/pdf.js#14 - wrapped so that the DOMContentLoaded event isn't
+  // passed in as the cspPolicyService (printing would then call addTrustedCSS
+  // on an Event).
+  const loadStandaloneViewer = () =>
+    webViewerLoad(undefined, { bindEditorButtons: true });
   if (
     document.readyState === "interactive" ||
     document.readyState === "complete"
   ) {
-    webViewerLoad();
+    loadStandaloneViewer();
   } else {
-    document.addEventListener("DOMContentLoaded", webViewerLoad, true);
+    document.addEventListener("DOMContentLoaded", loadStandaloneViewer, true);
   }
 }
 

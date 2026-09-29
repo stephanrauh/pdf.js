@@ -640,20 +640,6 @@ class FreeDrawOutline extends Outline {
     return this.#bbox;
   }
 
-  /**
-   * @returns {Float32Array} The points this outline was built from, as
-   *   fractions of the layer box (the coordinate system of `box`).
-   */
-  getLayerPoints() {
-    const [x, y, width, height] = this.#bbox;
-    const points = new Float32Array(this.#points.length);
-    for (let i = 0, ii = points.length; i < ii; i += 2) {
-      points[i] = this.#points[i] * width + x;
-      points[i + 1] = this.#points[i + 1] * height + y;
-    }
-    return points;
-  }
-
   newOutliner(x, y, box, scaleFactor, thickness, isLTR, innerMargin = 0) {
     return new FreeDrawOutliner(
       x,

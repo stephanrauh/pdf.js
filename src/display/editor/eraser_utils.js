@@ -13,6 +13,10 @@
  * limitations under the License.
  */
 
+// stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer: the eraser's
+// geometry, from the fork's rework of mozilla/pdf.js#20227. The whole file is
+// ngx-specific.
+
 /**
  * Geometry helpers shared by the editors that can be erased (see
  * EraserEditor). The eraser is a circle swept along the pointer path; the

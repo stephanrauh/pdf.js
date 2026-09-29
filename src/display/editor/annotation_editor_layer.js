@@ -32,7 +32,7 @@ import {
 } from "../../shared/util.js";
 import { setLayerDimensions, stopEvent } from "../display_utils.js";
 import { AnnotationEditor } from "./editor.js";
-import { EraserEditor } from "./eraser.js";
+import { EraserEditor } from "./eraser.js"; // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
 import { FreeTextEditor } from "./freetext.js";
 import { HighlightEditor } from "./highlight.js";
 import { InkEditor } from "./ink.js";
@@ -84,6 +84,8 @@ class AnnotationEditorLayer {
 
   #editorFocusTimeoutId = null;
 
+  #editorPointerEventsDisabled = false; // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+
   #editors = new Map();
 
   #hadPointerDown = false;
@@ -110,7 +112,7 @@ class AnnotationEditorLayer {
 
   static #editorTypes = new Map(
     [
-      EraserEditor,
+      EraserEditor, // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
       FreeTextEditor,
       InkEditor,
       StampEditor,
@@ -183,7 +185,12 @@ class AnnotationEditorLayer {
    */
   updateMode(mode = this.#uiManager.getMode()) {
     this.#cleanup();
-    this.#toogleEditorPointerEvents(true);
+    // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser: give the editors their
+    // pointer events back when leaving eraser mode
+    if (this.#editorPointerEventsDisabled) {
+      this.#toggleEditorPointerEvents(true);
+    }
+    // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
     switch (mode) {
       case AnnotationEditorType.NONE:
         this.div.classList.toggle("nonEditing", true);
@@ -192,8 +199,9 @@ class AnnotationEditorLayer {
         this.toggleAnnotationLayerPointerEvents(true);
         this.disableClick();
         return;
+      // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
       case AnnotationEditorType.ERASER:
-        this.#toogleEditorPointerEvents(false);
+        this.#toggleEditorPointerEvents(false);
         this.disableTextSelection();
         this.togglePointerEvents(true);
         this.enableClick();
@@ -201,6 +209,7 @@ class AnnotationEditorLayer {
           /* eraser */
         });
         break;
+      // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
       case AnnotationEditorType.INK:
         this.disableTextSelection();
         this.togglePointerEvents(true);
@@ -276,7 +285,12 @@ class AnnotationEditorLayer {
       : this.#uiManager.getEditors(this.pageIndex);
   }
 
-  #toogleEditorPointerEvents(enabled = false) {
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
+  // In eraser mode, the editors must not catch the pointer events (the eraser
+  // spanning the page gets them). The flag makes sure the inline style is only
+  // written when entering and leaving eraser mode, not on every mode change.
+  #toggleEditorPointerEvents(enabled = false) {
+    this.#editorPointerEventsDisabled = !enabled;
     const value = enabled ? "" : "none";
     for (const editor of this.#editors.values()) {
       editor.div.style.pointerEvents = value;
@@ -289,6 +303,7 @@ class AnnotationEditorLayer {
       }
     }
   }
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   /**
    * Enable pointer events on the main div in order to enable
@@ -1126,6 +1141,18 @@ class AnnotationEditorLayer {
         editor.rotate(rotation);
       }
     }
+    // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser: #cleanup() above has
+    // removed it (an eraser is always "empty"), so zooming or rotating would
+    // silently leave eraser mode without a working eraser on this page.
+    if (
+      this.#uiManager.getMode() === AnnotationEditorType.ERASER &&
+      !this.div.hidden
+    ) {
+      this.addNewEditor({
+        /* eraser */
+      });
+    }
+    // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
   }
 
   /**

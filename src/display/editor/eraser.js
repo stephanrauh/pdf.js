@@ -1,3 +1,22 @@
+/* Copyright 2025 Mozilla Foundation
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *     http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+// stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer: the eraser editor,
+// ported from the (unmerged) upstream PR mozilla/pdf.js#20227. The whole file
+// is ngx-specific.
+
 import {
   AnnotationEditorParamsType,
   AnnotationEditorType,
@@ -63,30 +82,14 @@ class EraserEditor extends AnnotationEditor {
     }
   }
 
-  /** @inheritdoc */
-  updateParams(type, value) {
-    switch (type) {
-      case AnnotationEditorParamsType.ERASER_THICKNESS:
-        this.updateThickness(value);
-        break;
-    }
-  }
-
+  // The eraser is never selected, so the UI manager always routes a thickness
+  // change to updateDefaultParams (above); there is no per-instance
+  // updateParams/propertiesToUpdate and no undoable thickness command.
   static get defaultPropertiesToUpdate() {
     return [
       [
         AnnotationEditorParamsType.ERASER_THICKNESS,
         EraserEditor._defaultThickness,
-      ],
-    ];
-  }
-
-  /** @inheritdoc */
-  get propertiesToUpdate() {
-    return [
-      [
-        AnnotationEditorParamsType.ERASER_THICKNESS,
-        EraserEditor._thickness || EraserEditor._defaultThickness,
       ],
     ];
   }
@@ -171,25 +174,6 @@ class EraserEditor extends AnnotationEditor {
     this.#abortCursor();
 
     super.remove();
-  }
-
-  updateThickness(thickness) {
-    const setThickness = th => {
-      EraserEditor._thickness = th;
-      this.#updateCursor();
-    };
-
-    const savedThickness = EraserEditor._thickness;
-
-    this.addCommands({
-      cmd: setThickness.bind(this, thickness),
-      undo: setThickness.bind(this, savedThickness),
-      post: this._uiManager.updateUI.bind(this._uiManager, this),
-      mustExec: true,
-      type: AnnotationEditorParamsType.ERASER_THICKNESS,
-      overwriteIfSameType: true,
-      keepUndo: true,
-    });
   }
 
   isEmpty() {
@@ -427,6 +411,11 @@ class EraserEditor extends AnnotationEditor {
   }
 
   #abortEraseSession() {
+    // The pointer state belongs to the UI manager and is shared by every
+    // page's eraser (and by the drawing editors): only reset it when this
+    // eraser actually owned a session, otherwise removing or disabling an
+    // idle eraser on another page would break the running stroke.
+    const ownedSession = this.#eraserAC !== null;
     this.#eraserAC?.abort();
     this.#eraserAC = null;
 
@@ -439,9 +428,11 @@ class EraserEditor extends AnnotationEditor {
     this.#layerRect = null;
     this.#sessionEditors = [];
 
-    const currentPointers = this._uiManager.currentPointers;
-    currentPointers.clearPointerIds();
-    currentPointers.clearTimeStamp();
+    if (ownedSession) {
+      const currentPointers = this._uiManager.currentPointers;
+      currentPointers.clearPointerIds();
+      currentPointers.clearTimeStamp();
+    }
     this.#isErasing = false;
   }
 

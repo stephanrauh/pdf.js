@@ -176,6 +176,9 @@
   box-sizing: border-box;
 }
 
+/* stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227).
+   ngx-extended-pdf-viewer doesn't ship this file: keep the library's SCSS
+   theme in sync when changing these rules. */
 .annotationEditorLayer.eraserEditing {
   cursor: none;
 }
@@ -202,6 +205,7 @@
      pointer doesn't trigger a layout; no transition, it would only lag. */
   will-change: transform;
 }
+/* stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer */
 
 .annotationEditorLayer
   :is(.freeTextEditor, .inkEditor, .stampEditor, .signatureEditor) {
