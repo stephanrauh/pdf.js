@@ -541,6 +541,13 @@ class DrawingEditor extends AnnotationEditor {
 
     this.#addToDrawLayer();
     this.#updateBbox(this._drawOutlines.box);
+    // stephanrauh/ngx-extended-pdf-viewer#3280 modified by ngx-extended-pdf-viewer
+    // Undo removed the drawing; #addToDrawLayer recreated it from the
+    // unrotated default properties, while the focus outline already follows
+    // the page rotation. Reapply the rotation so that the drawing doesn't end
+    // up rotated against its outline after rotate page + undo + redo.
+    this.rotate();
+    // stephanrauh/ngx-extended-pdf-viewer#3280 end of modification by ngx-extended-pdf-viewer
 
     if (!this.isAttachedToDOM) {
       // At some point this editor was removed and we're rebuilding it,
