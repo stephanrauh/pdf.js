@@ -639,6 +639,31 @@ See https://github.com/adobe-type-tools/cmap-resources
                       </div>
                     </div>
                   </div>
+                  <!-- stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227) -->
+                  <div id="editorEraser" class="toolbarButtonWithContainer" hidden="true">
+                    <button
+                      id="editorEraserButton"
+                      class="toolbarButton"
+                      type="button"
+                      disabled="disabled"
+                      aria-expanded="false"
+                      aria-haspopup="true"
+                      aria-controls="editorEraserParamsToolbar"
+                      tabindex="0"
+                      data-l10n-id="pdfjs-editor-eraser-button"
+                    >
+                      <span data-l10n-id="pdfjs-editor-eraser-button-label"></span>
+                    </button>
+                    <div class="editorParamsToolbar hidden doorHangerRight" id="editorEraserParamsToolbar">
+                      <div class="editorParamsToolbarContainer">
+                        <div class="editorParamsSetter">
+                          <label for="editorEraserThickness" class="editorParamsLabel" data-l10n-id="pdfjs-editor-ink-thickness-input"></label>
+                          <input type="range" id="editorEraserThickness" class="editorParamsSlider" value="20" min="20" max="100" step="1" tabindex="0" />
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                  <!-- stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer -->
                   <div id="editorStamp" class="toolbarButtonWithContainer">
                     <button
                       id="editorStampButton"

@@ -467,6 +467,18 @@ const defaultOptions = new Map([
       kind: OptionKind.VIEWER,
     },
   ],
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227).
+  // Only shows the standalone viewer's button; ngx-extended-pdf-viewer shows
+  // or hides its own eraser button in the Angular template.
+  [
+    "enableEraser",
+    {
+      /** @type {boolean} */
+      value: typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING"),
+      kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+    },
+  ],
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
   ...(typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")
     ? [
         [

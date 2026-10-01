@@ -785,6 +785,15 @@ appConfig: null,
         if (editorSignatureButton && AppOptions.get("enableSignatureEditor")) {
           editorSignatureButton.parentElement.hidden = false;
         }
+        // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser. Same pattern as the
+        // signature button above: viewer.html ships the container hidden and
+        // it is only ever un-hidden here. Never remove() the parent element -
+        // in ngx-extended-pdf-viewer the button lives in an Angular template.
+        const editorEraserButton = appConfig.toolbar?.editorEraserButton;
+        if (editorEraserButton && AppOptions.get("enableEraser")) {
+          editorEraserButton.parentElement.hidden = false;
+        }
+        // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
         // #2943 modified by ngx-extended-pdf-viewer - handle page reordering buttons
         const movePageUpButton = document.getElementById("movePageUp");
         const movePageDownButton = document.getElementById("movePageDown");

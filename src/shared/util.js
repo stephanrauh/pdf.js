@@ -86,6 +86,13 @@ const AnnotationEditorType = {
   POPUP: 16,
   SIGNATURE: 101,
   COMMENT: 102,
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227).
+  // Editor types below 100 double as AnnotationType values (e.g. comment mode
+  // passes them to getAnnotationsByType), and 20 is AnnotationType.WIDGET.
+  // The eraser creates no annotation, so it lives in the 10x range like
+  // SIGNATURE and COMMENT.
+  ERASER: 103,
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 };
 
 const AnnotationEditorParamsType = {
@@ -98,11 +105,13 @@ const AnnotationEditorParamsType = {
   INK_THICKNESS: 22,
   INK_OPACITY: 23,
   INK_COLOR_AND_OPACITY: 24,
+  ERASER_THICKNESS: 25, // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
   HIGHLIGHT_COLOR: 31,
   HIGHLIGHT_THICKNESS: 32,
   HIGHLIGHT_FREE: 33,
   HIGHLIGHT_SHOW_ALL: 34,
   DRAW_STEP: 41,
+  ERASER_STEP: 42, // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
 };
 
 // Permission flags from Table 22, Section 7.6.3.2 of the PDF specification.

@@ -189,6 +189,39 @@ class Toolbar {
       // #3069 end of modification by ngx-extended-pdf-viewer
     ];
 
+    // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the editor buttons deactivated
+    // above (#2900/#3069) rely on Angular to handle their clicks; in the
+    // standalone viewer there is no Angular, so bind them here. Only the
+    // standalone viewer sets options.bindEditorButtons (see webViewerLoad in
+    // viewer.js), which keeps the double-handler problem from coming back.
+    if (options.bindEditorButtons) {
+      for (const [element, type] of [
+        [options.editorCommentButton, AnnotationEditorType.POPUP],
+        [options.editorEraserButton, AnnotationEditorType.ERASER],
+        [options.editorFreeTextButton, AnnotationEditorType.FREETEXT],
+        [options.editorHighlightButton, AnnotationEditorType.HIGHLIGHT],
+        [options.editorInkButton, AnnotationEditorType.INK],
+        [options.editorStampButton, AnnotationEditorType.STAMP],
+        [options.editorSignatureButton, AnnotationEditorType.SIGNATURE],
+      ]) {
+        if (!element) {
+          continue;
+        }
+        buttons.push({
+          element,
+          eventName: "switchannotationeditormode",
+          eventDetails: {
+            get mode() {
+              return element.classList.contains("toggled")
+                ? AnnotationEditorType.NONE
+                : type;
+            },
+          },
+        });
+      }
+    }
+    // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
+
     // Bind the event listeners for click and various other actions.
     this.#bindListeners(buttons);
 
@@ -427,6 +460,8 @@ class Toolbar {
     const {
       editorCommentButton,
       editorCommentParamsToolbar,
+      editorEraserButton, // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+      editorEraserParamsToolbar, // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
       editorFreeTextButton,
       editorFreeTextParamsToolbar,
       editorHighlightButton,
@@ -459,6 +494,15 @@ class Toolbar {
       mode === AnnotationEditorType.INK,
       editorInkParamsToolbar
     );
+    // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+    if (editorEraserButton) {
+      toggleExpandedBtn(
+        editorEraserButton,
+        mode === AnnotationEditorType.ERASER,
+        editorEraserParamsToolbar
+      );
+    }
+    // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
     toggleExpandedBtn(
       editorStampButton,
       mode === AnnotationEditorType.STAMP,
@@ -484,6 +528,11 @@ class Toolbar {
     if (editorInkButton) {
       editorInkButton.disabled = disableEditorsValue;
     }
+    // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+    if (editorEraserButton) {
+      editorEraserButton.disabled = disableEditorsValue;
+    }
+    // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
     if (editorStampButton) {
       editorStampButton.disabled = disableEditorsValue;
     }

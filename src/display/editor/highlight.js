@@ -25,6 +25,13 @@ import {
   FreeHighlightOutliner,
   HighlightOutline,
 } from "./drawers/highlight.js";
+// stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+import {
+  getPathsBBox,
+  makeLayerTransform,
+  sweepCircleOverPaths,
+} from "./eraser_utils.js";
+// stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 import {
   HighlightAnnotationElement,
   InkAnnotationElement,
@@ -73,6 +80,17 @@ class HighlightEditor extends DrawingEditor {
 
   #text = "";
 
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
+  #eraseSession = null;
+
+  // True for a piece of a free highlight split by the eraser.
+  #isErasePiece = false;
+
+  // Suppress the focus (hence mode switch) when the eraser restores this
+  // editor through undo/redo.
+  #suppressFocusOnce = false;
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
+
   static _DEFAULT_OPACITY = 1;
 
   static _DEFAULT_THICKNESS = 12;
@@ -109,6 +127,7 @@ class HighlightEditor extends DrawingEditor {
     this.#text = params.text || "";
     this._isDraggable = false;
     this.defaultL10nId = "pdfjs-editor-highlight-editor";
+    this.#isErasePiece = !!params.isErasePiece; // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
     this.rotate();
     // #2256 / 2556 modified by ngx-extended-pdf-viewer
     // #3076 modified by ngx-extended-pdf-viewer - added id field
@@ -359,6 +378,19 @@ class HighlightEditor extends DrawingEditor {
 
   /** @inheritdoc */
   onceAdded(focus) {
+    // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+    if (this.#isErasePiece) {
+      // The eraser step owns the undo of the pieces it creates, and a new
+      // piece must not steal the focus (that would leave the eraser mode).
+      return;
+    }
+    if (this.#suppressFocusOnce) {
+      // Restored by the eraser through undo/redo: keep the current mode by
+      // not focusing (focusing would select the highlight and switch mode).
+      this.#suppressFocusOnce = false;
+      focus = false;
+    }
+    // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
     if (!this.annotationElementId) {
       this.parent.addUndoableEditor(this);
     }
@@ -374,6 +406,213 @@ class HighlightEditor extends DrawingEditor {
     });
     super.remove();
   }
+
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
+  /** @inheritdoc */
+  get erasable() {
+    // Only drawings can be erased: a free (drawn) highlight is, a text
+    // (selection) highlight isn't.
+    return !!this._drawOutlines?.isFree;
+  }
+
+  /** @inheritdoc */
+  startErase(layerRect) {
+    if (!this._drawOutlines?.isFree) {
+      return null;
+    }
+    // The serialized points are in PDF page coordinates (one continuous
+    // stroke for a free highlight); map them to layer pixels in the current
+    // view frame, exactly like the ink editor does.
+    const rect = this.getRect(0, 0);
+    // The free-highlight outline stores points in the canonical (unrotated)
+    // page frame; the view rotation is applied by the draw layer. Serialize
+    // canonically and fold the view rotation into the page<->layer transform.
+    const viewRotation = this.parent.viewport.rotation;
+    const { points } = this._drawOutlines.serialize(rect, 0);
+    const transform = makeLayerTransform(
+      viewRotation,
+      layerRect,
+      this.pageTranslation,
+      this.pageDimensions
+    );
+    const paths = [];
+    for (const path of points) {
+      const len = path.length;
+      if (len < 2) {
+        continue;
+      }
+      const layerPath = new Float32Array(len);
+      for (let i = 0; i < len; i += 2) {
+        const [x, y] = transform.toLayer(path[i], path[i + 1]);
+        layerPath[i] = x;
+        layerPath[i + 1] = y;
+      }
+      paths.push(layerPath);
+    }
+    if (paths.length === 0) {
+      return null;
+    }
+
+    // The eraser must react as soon as it touches the visible highlight.
+    const strokeRadius =
+      (this._drawingOptions.thickness / 2) * this.parentScale;
+    this.#eraseSession = {
+      paths,
+      layerW: layerRect.width,
+      layerH: layerRect.height,
+      strokeRadius,
+      modified: false,
+      dirty: false,
+    };
+    return getPathsBBox(paths, strokeRadius);
+  }
+
+  /** @inheritdoc */
+  erase(x, y, radius, prevX = x, prevY = y) {
+    const session = this.#eraseSession;
+    if (!session) {
+      return;
+    }
+    const { paths, modified } = sweepCircleOverPaths(
+      session.paths,
+      x,
+      y,
+      radius + session.strokeRadius,
+      prevX,
+      prevY
+    );
+    if (modified) {
+      session.paths = paths;
+      session.modified = true;
+      session.dirty = true;
+    }
+  }
+
+  /** @inheritdoc */
+  renderErase() {
+    const session = this.#eraseSession;
+    if (!session?.dirty || !this.parent) {
+      return;
+    }
+    session.dirty = false;
+    // Preview: paint the remaining pieces the way a live drawing does - the
+    // (unfinalized) outliner emits coordinates over the whole layer, so the box
+    // is the full layer and the view rotation is already baked into the points
+    // (hence data-main-rotation 0). Finalizing to a tight box waits for commit.
+    const d = this.#buildEraseOutliners(session)
+      .map(outliner => outliner.toSVGPath())
+      .join(" ");
+    this.parent.drawLayer.updateProperties(this._drawId, {
+      bbox: [0, 0, 1, 1],
+      root: { "data-main-rotation": 0 },
+      path: { d },
+    });
+  }
+
+  /** @inheritdoc */
+  endErase() {
+    const session = this.#eraseSession;
+    this.#eraseSession = null;
+    if (!session?.modified) {
+      return {};
+    }
+
+    // A free highlight is a single continuous stroke, so a cut yields several
+    // disjoint pieces. Rebuild each as a fresh highlight editor and drop the
+    // original; undo restores the original and removes the pieces.
+    const parent = this.parent;
+    const outlines = this.#buildEraseOutliners(session).map(outliner =>
+      this.#finalizeEraseOutline(outliner)
+    );
+    let pieces = null;
+
+    const cmd = () => {
+      this.remove();
+      if (pieces) {
+        for (const piece of pieces) {
+          this._uiManager.rebuild(piece);
+        }
+      } else {
+        pieces = outlines.map(outline => this.#spawnPiece(parent, outline));
+      }
+    };
+    const undo = () => {
+      if (pieces) {
+        for (const piece of pieces) {
+          piece.remove();
+        }
+      }
+      this.#suppressFocusOnce = true;
+      parent.addOrRebuild(this);
+    };
+    cmd();
+
+    return { cmd, undo };
+  }
+
+  /**
+   * Build one (unfinalized) FreeHighlightOutliner per remaining piece of the
+   * erase session, in the current-view layer frame - the same recipe a live
+   * highlight drawing uses (see createDrawerInstance). Pieces too short to form
+   * a stroke are dropped.
+   * @returns {Array<FreeHighlightOutliner>}
+   */
+  #buildEraseOutliners({ paths, layerW, layerH }) {
+    const box = [0, 0, layerW, layerH];
+    const halfThickness = this._drawingOptions.thickness / 2;
+    const isLTR = this._uiManager.direction === "ltr";
+    const scale = this.parentScale;
+    const outliners = [];
+    for (const path of paths) {
+      if (path.length < 4) {
+        continue;
+      }
+      const outliner = new FreeHighlightOutliner(
+        path[0],
+        path[1],
+        box,
+        scale,
+        halfThickness,
+        isLTR,
+        /* innerMargin = */ 0.001
+      );
+      for (let i = 2, ii = path.length; i < ii; i += 2) {
+        outliner.add(path[i], path[i + 1]);
+      }
+      if (!outliner.isEmpty()) {
+        outliners.push(outliner);
+      }
+    }
+    return outliners;
+  }
+
+  /** Finalize an erase outliner into a highlight outline (with focus). */
+  #finalizeEraseOutline(outliner) {
+    const outline = outliner.getOutlines();
+    outline.buildFocusOutline(this._drawingOptions.thickness);
+    return outline;
+  }
+
+  /**
+   * Create a new free highlight editor for a piece split off by the eraser.
+   */
+  #spawnPiece(parent, drawOutlines) {
+    const piece = new HighlightEditor({
+      parent,
+      id: this._uiManager.getId(),
+      uiManager: this._uiManager,
+      eventBus: this.eventBus,
+      x: 0,
+      y: 0,
+      isCentered: false,
+      drawOutlines,
+      drawingOptions: this._drawingOptions.clone(),
+      isErasePiece: true,
+    });
+    parent.add(piece);
+    return piece;
+  }
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   /** @inheritdoc */
   render() {

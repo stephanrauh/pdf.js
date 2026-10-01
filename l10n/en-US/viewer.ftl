@@ -303,6 +303,9 @@ pdfjs-editor-ink-button =
 pdfjs-editor-color-picker-ink-input =
     .title = Change drawing color
 pdfjs-editor-ink-button-label = Draw
+pdfjs-editor-eraser-button =
+    .title = Erase
+pdfjs-editor-eraser-button-label = Erase
 pdfjs-editor-stamp-button =
     .title = Add or edit images
 pdfjs-editor-stamp-button-label = Add or edit images
@@ -333,6 +336,8 @@ pdfjs-editor-highlight-editor =
 # “Drawing” is a noun, the string is used on the editor for drawings.
 pdfjs-editor-ink-editor =
     .aria-label = Drawing editor
+pdfjs-editor-eraser-editor =
+    .aria-label = Eraser
 
 # Used when a signature editor is selected/hovered.
 # Variables:

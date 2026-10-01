@@ -46,6 +46,7 @@
   );
   --editorFreeText-editing-cursor: text;
   --editorInk-editing-cursor: url(images/cursor-editorInk.svg) 0 16, pointer;
+  --editorEraser-thickness: 20px;
   --editorHighlight-editing-cursor:
     url(images/cursor-editorTextHighlight.svg) 24 24, text;
   --editorFreeHighlight-editing-cursor:
@@ -174,6 +175,37 @@
 .annotationEditorLayer .draw {
   box-sizing: border-box;
 }
+
+/* stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227).
+   ngx-extended-pdf-viewer doesn't ship this file: keep the library's SCSS
+   theme in sync when changing these rules. */
+.annotationEditorLayer.eraserEditing {
+  cursor: none;
+}
+
+.annotationEditorLayer.eraserEditing .editToolbar {
+  display: none;
+}
+
+.eraserCursor {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: none;
+  /* The border must be part of the size for the circle to match the erased
+     area. */
+  box-sizing: border-box;
+  width: var(--editorEraser-thickness);
+  height: var(--editorEraser-thickness);
+  background-color: transparent;
+  border: 1px solid black;
+  border-radius: 50%;
+  pointer-events: none;
+  /* Positioned with a transform (see EraserEditor) so that following the
+     pointer doesn't trigger a layout; no transition, it would only lag. */
+  will-change: transform;
+}
+/* stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer */
 
 .annotationEditorLayer
   :is(.freeTextEditor, .inkEditor, .stampEditor, .signatureEditor) {

@@ -20,6 +20,13 @@ import {
   Util,
 } from "../../shared/util.js";
 import { DrawingEditor, DrawingOptions } from "./draw.js";
+// stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+import {
+  getPathsBBox,
+  makeLayerTransform,
+  sweepCircleOverPaths,
+} from "./eraser_utils.js";
+// stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 import { InkDrawOutline, InkDrawOutliner } from "./drawers/inkdraw.js";
 import { AnnotationEditor } from "./editor.js";
 import { BasicColorPicker } from "./color_picker.js";
@@ -60,6 +67,16 @@ class InkDrawingOptions extends DrawingOptions {
  * Basic draw editor in order to generate an Ink annotation.
  */
 class InkEditor extends DrawingEditor {
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
+  #eraseSession = null;
+
+  // An existing ink annotation (annotationElementId set) is only saved when
+  // #hasElementChanged says so, and that compares color, thickness etc. but
+  // not the points: a partial erase must flag the element as changed, or the
+  // saved PDF keeps the original stroke.
+  #hasBeenErased = false;
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
+
   static _type = "ink";
 
   static _editorType = AnnotationEditorType.INK;
@@ -68,6 +85,7 @@ class InkEditor extends DrawingEditor {
 
   constructor(params) {
     super({ ...params, name: "inkEditor" });
+    this._erasable = true; // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
     this._willKeepAspectRatio = true;
     this.defaultL10nId = "pdfjs-editor-ink-editor";
   }
@@ -349,6 +367,7 @@ class InkEditor extends DrawingEditor {
   #hasElementChanged(serialized) {
     const { color, thickness, opacity, pageIndex } = this._initialData;
     return (
+      this.#hasBeenErased || // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
       this.hasEditedComment ||
       this._hasBeenMoved ||
       this._hasBeenResized ||
@@ -375,6 +394,176 @@ class InkEditor extends DrawingEditor {
 
     return null;
   }
+
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
+  /** @inheritdoc */
+  startErase(layerRect) {
+    const { points } = this.serializeDraw(/* isForCopying = */ false);
+    const transform = this.#getLayerTransform(layerRect);
+    const paths = [];
+    for (const path of points) {
+      const len = path.length;
+      if (len < 2) {
+        continue;
+      }
+      const layerPath = new Float32Array(len);
+      for (let i = 0; i < len; i += 2) {
+        const [x, y] = transform.toLayer(path[i], path[i + 1]);
+        layerPath[i] = x;
+        layerPath[i + 1] = y;
+      }
+      paths.push(layerPath);
+    }
+    if (paths.length === 0) {
+      return null;
+    }
+
+    // The eraser must react as soon as it touches the visible stroke, not only
+    // when it reaches the centerline.
+    const strokeRadius =
+      (this._drawingOptions["stroke-width"] * this.parentScale) / 2;
+    this.#eraseSession = {
+      paths,
+      transform,
+      strokeRadius,
+      modified: false,
+      dirty: false,
+    };
+    return getPathsBBox(paths, strokeRadius);
+  }
+
+  /** @inheritdoc */
+  erase(x, y, radius, prevX = x, prevY = y) {
+    const session = this.#eraseSession;
+    if (!session) {
+      return;
+    }
+    const { paths, modified } = sweepCircleOverPaths(
+      session.paths,
+      x,
+      y,
+      radius + session.strokeRadius,
+      prevX,
+      prevY
+    );
+    if (modified) {
+      session.paths = paths;
+      session.modified = true;
+      session.dirty = true;
+    }
+  }
+
+  /** @inheritdoc */
+  renderErase() {
+    const session = this.#eraseSession;
+    if (!session?.dirty || !this.parent) {
+      return;
+    }
+    session.dirty = false;
+    this.parent.drawLayer.updateProperties(this._drawId, {
+      path: {
+        d:
+          session.paths.length === 0
+            ? ""
+            : this.#buildOutline(session).toSVGPath(),
+      },
+    });
+  }
+
+  /** @inheritdoc */
+  endErase() {
+    const session = this.#eraseSession;
+    this.#eraseSession = null;
+    if (!session?.modified) {
+      return {};
+    }
+
+    const oldOutline = this._drawOutlines;
+    const drawingOptions = this._drawingOptions;
+    const wasErased = this.#hasBeenErased;
+    const undo = () => {
+      this.#hasBeenErased = wasErased;
+      this._addOutlines({
+        drawOutlines: oldOutline,
+        drawId: this._drawId,
+        drawingOptions,
+      });
+    };
+
+    if (session.paths.length === 0) {
+      // The whole drawing has been erased: the editor is removed, so the
+      // generic undo above (which redraws through this.parent) cannot work.
+      // Re-attaching the editor is enough: #drawOutlines was never
+      // overwritten in this branch, hence rebuild() restores the previous
+      // drawing.
+      const parent = this.parent;
+      this.remove();
+      return {
+        cmd: () => this.remove(),
+        undo: () => {
+          parent.addOrRebuild(this);
+        },
+      };
+    }
+
+    const newOutlines = this.#buildOutline(session);
+    const cmd = () => {
+      this.#hasBeenErased = true;
+      this._addOutlines({
+        drawOutlines: newOutlines,
+        drawId: this._drawId,
+        drawingOptions,
+      });
+    };
+    cmd();
+
+    return { cmd, undo };
+  }
+
+  #buildOutline({ paths, transform }) {
+    const {
+      viewport: {
+        rawDims: { pageWidth, pageHeight, pageX, pageY },
+      },
+    } = this.parent;
+
+    const points = paths.map(path => {
+      const pagePath = new Float32Array(path.length);
+      for (let i = 0, ii = path.length; i < ii; i += 2) {
+        const [x, y] = transform.toPage(path[i], path[i + 1]);
+        pagePath[i] = x;
+        pagePath[i + 1] = y;
+      }
+      return pagePath;
+    });
+
+    return InkEditor.deserializeDraw(
+      pageX,
+      pageY,
+      pageWidth,
+      pageHeight,
+      InkEditor._INNER_MARGIN,
+      {
+        paths: { points },
+        rotation: this.rotation,
+        thickness: this._drawingOptions["stroke-width"],
+      }
+    );
+  }
+
+  #getLayerTransform(layerRect) {
+    // serializeDraw() returns canonical page coordinates whatever the
+    // drawing's own rotation, so the page->layer mapping depends on the
+    // current view rotation - not on this.rotation, which is the rotation
+    // the drawing was created in (they differ once the user rotates).
+    return makeLayerTransform(
+      this.parent.viewport.rotation,
+      layerRect,
+      this.pageTranslation,
+      this.pageDimensions
+    );
+  }
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 }
 
 export { InkDrawingOptions, InkEditor };

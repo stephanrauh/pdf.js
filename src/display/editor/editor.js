@@ -99,6 +99,8 @@ class AnnotationEditor {
 
   _editToolbar = null;
 
+  _erasable = false; // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
+
   _initialOptions = Object.create(null);
 
   _initialData = null;
@@ -230,6 +232,12 @@ class AnnotationEditor {
   get mode() {
     return Object.getPrototypeOf(this).constructor._editorType;
   }
+
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
+  get erasable() {
+    return this._erasable;
+  }
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   static get isDrawer() {
     return false;
@@ -557,6 +565,49 @@ class AnnotationEditor {
     // done by the user.
     this.#translate(this.parentDimensions, x, y);
   }
+
+  // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser (mozilla/pdf.js#20227)
+  /**
+   * Start an erase session: snapshot the editor geometry once so that the
+   * hit tests done on every pointer move stay cheap.
+   * @param {DOMRect} layerRect - Bounding rect of the annotation editor layer.
+   * @returns {Array<number>|null} The editor bbox in layer pixels
+   *   ([left, top, right, bottom]), or null when nothing can be erased.
+   */
+  startErase(layerRect) {
+    unreachable("Not implemented");
+  }
+
+  /**
+   * Erase everything swept by the eraser circle moving from (prevX, prevY)
+   * to (x, y). All values are in layer pixels.
+   * @param {number} x
+   * @param {number} y
+   * @param {number} radius
+   * @param {number} [prevX]
+   * @param {number} [prevY]
+   */
+  erase(x, y, radius, prevX = x, prevY = y) {
+    unreachable("Not implemented");
+  }
+
+  /**
+   * Update the rendering after one or more erase calls.
+   * Called at most once per animation frame.
+   */
+  renderErase() {
+    unreachable("Not implemented");
+  }
+
+  /**
+   * Call once the erasing session is done.
+   * @returns {{cmd?: Function, undo?: Function}} The commands to (re)do and
+   *   undo the erasing, or an empty object when nothing was erased.
+   */
+  endErase() {
+    unreachable("Not implemented");
+  }
+  // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
 
   /**
    * Translate the editor position within its page and adjust the scroll
