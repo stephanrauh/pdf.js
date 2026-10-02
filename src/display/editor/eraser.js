@@ -126,6 +126,7 @@ class EraserEditor extends AnnotationEditor {
     this.#abortCursor();
 
     if (this.div) {
+      this.#coverLayer();
       this.div.style.pointerEvents = "auto";
       this.div.style.zIndex = "1000";
 
@@ -451,6 +452,27 @@ class EraserEditor extends AnnotationEditor {
     }
   }
 
+  /**
+   * The eraser must cover its whole layer, in the layer's own frame. As an
+   * editor it would otherwise be counter-rotated on a rotated page
+   * (data-editor-rotation) and capped by the max-width/max-height setDims
+   * derives from the page ratio: on a /Rotate 90 or 270 page it ended up a
+   * square shifted along the page, out of reach of part of the page.
+   */
+  #coverLayer() {
+    this.div.removeAttribute("data-editor-rotation");
+    for (const [name, value] of [
+      ["left", "0"],
+      ["top", "0"],
+      ["width", "100%"],
+      ["height", "100%"],
+      ["max-width", "none"],
+      ["max-height", "none"],
+    ]) {
+      this.div.style.setProperty(name, value, "important");
+    }
+  }
+
   #updateCursor() {
     // The thickness slider only updates the static default (the eraser is
     // never selected), so the cursor size is checked on every move: this
@@ -484,8 +506,25 @@ class EraserEditor extends AnnotationEditor {
     this.#updateCursor();
     const rect = this.#layerRect ?? this.parent.div.getBoundingClientRect();
     const radius = EraserEditor._thickness / 2;
-    const x = event.clientX - rect.left - radius;
-    const y = event.clientY - rect.top - radius;
+    // The cursor lives in the layer, which is rotated with the page: turn the
+    // offset measured on screen into the layer's own frame.
+    const sx = event.clientX - rect.left;
+    const sy = event.clientY - rect.top;
+    let u = sx,
+      v = sy;
+    switch (this.parentRotation) {
+      case 90:
+        [u, v] = [sy, rect.width - sx];
+        break;
+      case 180:
+        [u, v] = [rect.width - sx, rect.height - sy];
+        break;
+      case 270:
+        [u, v] = [rect.height - sy, sx];
+        break;
+    }
+    const x = u - radius;
+    const y = v - radius;
 
     // A transform doesn't trigger a layout, unlike left/top.
     this.#cursor.style.transform = `translate(${x}px, ${y}px)`;
