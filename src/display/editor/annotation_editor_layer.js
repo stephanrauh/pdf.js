@@ -293,13 +293,17 @@ class AnnotationEditorLayer {
     this.#editorPointerEventsDisabled = !enabled;
     const value = enabled ? "" : "none";
     for (const editor of this.#editors.values()) {
-      editor.div.style.pointerEvents = value;
-      // for highlight editors, we must also set pointer-events
-      // of the clipped child.
-      for (const child of editor.div.children) {
-        if (child.className === "internal") {
-          child.style.pointerEvents = value;
-        }
+      this.#setEditorPointerEvents(editor, value);
+    }
+  }
+
+  #setEditorPointerEvents(editor, value) {
+    editor.div.style.pointerEvents = value;
+    // for highlight editors, we must also set pointer-events
+    // of the clipped child.
+    for (const child of editor.div.children) {
+      if (child.className === "internal") {
+        child.style.pointerEvents = value;
       }
     }
   }
@@ -643,6 +647,14 @@ class AnnotationEditorLayer {
       const div = editor.render();
       this.div.append(div);
       editor.isAttachedToDOM = true;
+    }
+
+    // An editor added in eraser mode (a page rendered after the eraser was
+    // chosen, annotations restored by the application) must not catch the
+    // pointer either: it was selected instead of being erased. The eraser
+    // itself is the one that must.
+    if (this.#editorPointerEventsDisabled && editor.editorType !== "eraser") {
+      this.#setEditorPointerEvents(editor, "none");
     }
 
     // The editor will be correctly moved into the DOM (see fixAndSetPosition).
