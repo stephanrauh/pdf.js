@@ -391,9 +391,13 @@ class HighlightEditor extends DrawingEditor {
       focus = false;
     }
     // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
-    if (!this.annotationElementId) {
+    // modified by ngx-extended-pdf-viewer - restored annotations
+    // addSerializedEditor() records one undo step for everything it restores;
+    // a second one here made every other undo of a restored drawing a no-op.
+    if (!this.annotationElementId && !this._uiManager.isRestoringAnnotations) {
       this.parent.addUndoableEditor(this);
     }
+    // end of modification by ngx-extended-pdf-viewer
     if (focus) {
       this.div.focus();
     }
