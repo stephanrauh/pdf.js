@@ -125,7 +125,9 @@ class EraserEditor extends AnnotationEditor {
 
     this.#abortCursor();
 
-    if (this.div) {
+    // An eraser whose layer was left (another mode, another document) can be
+    // re-enabled by a later mode switch: it has no parent to listen on.
+    if (this.div && this.parent) {
       this.#coverLayer();
       this.div.style.pointerEvents = "auto";
       this.div.style.zIndex = "1000";

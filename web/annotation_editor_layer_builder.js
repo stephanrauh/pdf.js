@@ -154,11 +154,13 @@ class AnnotationEditorLayerBuilder {
     if (!this.div) {
       return;
     }
-    this.annotationEditorLayer.destroy();
+    this.annotationEditorLayer?.destroy();
   }
 
   hide() {
-    if (!this.div) {
+    // The div exists before the layer: a mode switch while the page renders
+    // reaches a builder without one.
+    if (!this.div || !this.annotationEditorLayer) {
       return;
     }
     this.annotationEditorLayer.pause(/* on */ true);
@@ -166,7 +168,7 @@ class AnnotationEditorLayerBuilder {
   }
 
   show() {
-    if (!this.div || this.annotationEditorLayer.isInvisible) {
+    if (!this.div || !this.annotationEditorLayer || this.annotationEditorLayer.isInvisible) {
       return;
     }
     this.div.hidden = false;
