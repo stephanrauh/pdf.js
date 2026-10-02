@@ -1496,6 +1496,21 @@ class AnnotationEditorUIManager {
     this.#currentDrawingSession?.onScaleChanging();
   }
 
+  // stephanrauh/ngx-extended-pdf-viewer#3290 modified by ngx-extended-pdf-viewer
+  /**
+   * Called before the pages are rotated (onRotationChanging comes after).
+   * @param {number} pagesRotation
+   */
+  onRotationWillChange(pagesRotation) {
+    // Unlike zooming, a drawing session can't follow a rotation, so finish it
+    // while the pages still have the old rotation.
+    this.#currentDrawingSession?.commitOrRemove();
+    // Rotating the pages can change the scale (e.g. with "page-fit"), and the
+    // drawings rescaled then position themselves with this rotation.
+    this.viewParameters.rotation = pagesRotation;
+  }
+  // stephanrauh/ngx-extended-pdf-viewer#3290 end of modification by ngx-extended-pdf-viewer
+
   onRotationChanging({ pagesRotation }) {
     this.commitOrRemove();
     this.viewParameters.rotation = pagesRotation;

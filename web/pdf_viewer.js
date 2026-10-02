@@ -1018,6 +1018,11 @@ class PDFViewer {
       return; // The rotation didn't change.
     }
     this.clearSelection();
+    // stephanrauh/ngx-extended-pdf-viewer#3290 modified by ngx-extended-pdf-viewer
+    // The editors must know the new rotation before the pages are refreshed:
+    // the refresh can change the scale, which repositions the drawings.
+    this.#annotationEditorUIManager?.onRotationWillChange(rotation);
+    // stephanrauh/ngx-extended-pdf-viewer#3290 end of modification by ngx-extended-pdf-viewer
     this._pagesRotation = rotation;
 
     const pageNumber = this._currentPageNumber;
