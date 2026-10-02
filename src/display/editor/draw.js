@@ -508,9 +508,13 @@ class DrawingEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   onceAdded(focus) {
-    if (!this.annotationElementId) {
+    // modified by ngx-extended-pdf-viewer - restored annotations
+    // addSerializedEditor() records one undo step for everything it restores;
+    // a second one here made every other undo of a restored drawing a no-op.
+    if (!this.annotationElementId && !this._uiManager.isRestoringAnnotations) {
       this.parent.addUndoableEditor(this);
     }
+    // end of modification by ngx-extended-pdf-viewer
     this._isDraggable = true;
     if (this.#mustBeCommitted) {
       this.#mustBeCommitted = false;
