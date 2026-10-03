@@ -109,10 +109,12 @@ const ENV_TARGETS = [
 // cannot parse.
 //
 //   upper bound - ngx-extended-pdf-viewer decides at runtime which bundle to load
-//   (op-chaining-support.js / pdf-script-loader.service.ts). The deciding check is
-//   iterator helpers, because the modern bundle calls them and carries no core-js
-//   polyfills: everything below Chrome/Edge 122, Firefox 131 and Safari/iOS 18.4
-//   lands here, so the legacy build must compile for all of it.
+//   (op-chaining-support.js / pdf-script-loader.service.ts). The modern bundle
+//   carries no core-js polyfills, so the probe checks every recent built-in it
+//   calls (Promise.try, Map.prototype.getOrInsertComputed, Math.sumPrecise,
+//   Uint8Array.prototype.toHex, ...). Any browser missing one lands here, so
+//   the legacy build must compile for all of it. When pdf.js starts using a
+//   newer built-in, add it to the probe (#3273).
 //
 //   lower bound - the oldest browsers we promise to support. Mobile devices stay in
 //   use long after their last OS update, and the loader forces iOS <= 13 into this

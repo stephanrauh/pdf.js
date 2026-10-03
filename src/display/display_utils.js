@@ -453,6 +453,20 @@ function getCurrentTransformInverse(ctx) {
   return [a, b, c, d, e, f];
 }
 
+// #3273 modified by ngx-extended-pdf-viewer
+// CSS round() arrived in Chrome 125, but the legacy build also serves older
+// browsers. They drop the whole width/height declaration, so the page collapses
+// to zero height and never renders. Fall back to calc() there, at the cost of
+// the rounding to whole device pixels.
+let cssRoundSupported;
+function isCSSRoundSupported() {
+  if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("SKIP_BABEL")) {
+    return true; // the modern build only runs on browsers that have round()
+  }
+  return (cssRoundSupported ??= globalThis.CSS?.supports?.("width", "round(down, 1px, 1px)") ?? false);
+}
+// #3273 end of modification by ngx-extended-pdf-viewer
+
 /**
  * @param {HTMLDivElement} div
  * @param {PageViewport} viewport
@@ -469,8 +483,14 @@ function setLayerDimensions(
     const { pageWidth, pageHeight } = viewport.rawDims;
     const { style } = div;
 
-    const widthStr = `round(down, var(--total-scale-factor) * ${pageWidth}px, var(--scale-round-x))`,
-      heightStr = `round(down, var(--total-scale-factor) * ${pageHeight}px, var(--scale-round-y))`;
+    // #3273 modified by ngx-extended-pdf-viewer
+    const widthStr = isCSSRoundSupported()
+        ? `round(down, var(--total-scale-factor) * ${pageWidth}px, var(--scale-round-x))`
+        : `calc(var(--total-scale-factor) * ${pageWidth}px)`,
+      heightStr = isCSSRoundSupported()
+        ? `round(down, var(--total-scale-factor) * ${pageHeight}px, var(--scale-round-y))`
+        : `calc(var(--total-scale-factor) * ${pageHeight}px)`;
+    // #3273 end of modification by ngx-extended-pdf-viewer
 
     if (!mustFlip || viewport.rotation % 180 === 0) {
       style.width = widthStr;
