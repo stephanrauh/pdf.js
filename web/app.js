@@ -3591,6 +3591,12 @@ function onPageChanging({ pageNumber, pageLabel }) {
 function onWheel(evt) {
   // #1302 modified by ngx-extended-pdf-viewer
   const element = document.getElementById("viewerContainer");
+  // #3274 The listener on window can outlive the viewer's DOM: when the host
+  // application removes the viewer, the wheel events arriving before
+  // unbindWindowEvents() runs find no #viewerContainer.
+  if (!element) {
+    return;
+  }
   const hover = element.parentNode.querySelector(":hover");
   if (hover !== element) {
     return;
