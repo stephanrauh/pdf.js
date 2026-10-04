@@ -759,6 +759,12 @@ class PDFViewer {
                 showCover: true,
                 size: "fixed",
                 enableFlipByDrag: this._enableFlipByDrag,
+                // modified by ngx-extended-pdf-viewer: the book is built
+                // asynchronously, so a page chosen before that ([page] on
+                // load, or a page number typed right away) has already been
+                // set - open the book there instead of on the cover.
+                startPage: Math.max(0, this._currentPageNumber - 1),
+                // end of modification by ngx-extended-pdf-viewer
               },
               this.cspPolicyService
             ); // #2362 modified by ngx-extended-pdf-viewer
