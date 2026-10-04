@@ -1343,7 +1343,7 @@ class Font {
           this.toUnicode.forEach(function (charCode, unicodeCharCode) {
             const cid = map[charCode];
             if (cidToGidMap[cid] === undefined) {
-              map[+charCode] = unicodeCharCode;
+              map[charCode] = unicodeCharCode;
             }
           });
         }
@@ -1351,7 +1351,7 @@ class Font {
 
       if (!(this.toUnicode instanceof IdentityToUnicodeMap)) {
         this.toUnicode.forEach(function (charCode, unicodeCharCode) {
-          map[+charCode] = unicodeCharCode;
+          map[charCode] = unicodeCharCode;
         });
       }
       this.toFontChar = map;
@@ -1386,7 +1386,7 @@ class Font {
         !(this.toUnicode instanceof IdentityToUnicodeMap)
       ) {
         this.toUnicode.forEach(function (charCode, unicodeCharCode) {
-          map[+charCode] = unicodeCharCode;
+          map[charCode] = unicodeCharCode;
         });
       }
       this.toFontChar = map;
@@ -1402,7 +1402,7 @@ class Font {
             unicodeCharCode = unicode;
           }
         }
-        map[+charCode] = unicodeCharCode;
+        map[charCode] = unicodeCharCode;
       });
 
       // Attempt to improve the glyph mapping for (some) composite fonts that
@@ -2267,7 +2267,7 @@ class Font {
         locaEntries,
         numGlyphs
       );
-      const missingGlyphs = Object.create(null);
+      const missingGlyphs = new Set();
       let writeOffset = 0;
       itemEncode(locaData, 0, writeOffset);
       for (i = 0, j = itemSize; i < numGlyphs; i++, j += itemSize) {
@@ -2283,7 +2283,7 @@ class Font {
             );
         const newLength = glyphProfile.length;
         if (newLength === 0) {
-          missingGlyphs[i] = true;
+          missingGlyphs.add(i);
         }
         if (glyphProfile.sizeOfInstructions > maxSizeOfInstructions) {
           maxSizeOfInstructions = glyphProfile.sizeOfInstructions;
@@ -2963,7 +2963,7 @@ class Font {
 
     sanitizeHead(tables.head, numGlyphs, isTrueType ? tables.loca.length : 0);
 
-    let missingGlyphs = Object.create(null);
+    let missingGlyphs = new Set();
     if (isTrueType) {
       const glyphsInfo = sanitizeGlyphLocations(
         tables.loca,
@@ -3032,7 +3032,7 @@ class Font {
 
     // Helper function to try to skip mapping of empty glyphs.
     function hasGlyph(glyphId) {
-      return !missingGlyphs[glyphId];
+      return !missingGlyphs.has(glyphId);
     }
 
     if (properties.composite) {
@@ -3313,7 +3313,7 @@ class Font {
       newCharCodeToGlyphId = newMapping.charCodeToGlyphId;
       toUnicodeExtraMap = newMapping.toUnicodeExtraMap;
     }
-    const numGlyphs = font.numGlyphs;
+    const { numGlyphs, seacs } = font;
 
     function getCharCodes(charCodeToGlyphId, glyphId) {
       let charCodes = null;
@@ -3336,14 +3336,11 @@ class Font {
       return newMapping.nextAvailableFontCharCode++;
     }
 
-    const seacs = font.seacs;
-    if (newMapping && SEAC_ANALYSIS_ENABLED && seacs?.length) {
+    if (newMapping && SEAC_ANALYSIS_ENABLED && seacs?.size) {
       const matrix = properties.fontMatrix || FONT_IDENTITY_MATRIX;
       const charset = font.getCharset();
-      const seacMap = Object.create(null);
-      for (let glyphId in seacs) {
-        glyphId |= 0;
-        const seac = seacs[glyphId];
+      const seacMap = new Map();
+      for (const [glyphId, seac] of seacs) {
         const baseGlyphName = StandardEncoding[seac[2]];
         const accentGlyphName = StandardEncoding[seac[3]];
         const baseGlyphId = charset.indexOf(baseGlyphName);
@@ -3374,11 +3371,11 @@ class Font {
             charCodeToGlyphId,
             accentGlyphId
           );
-          seacMap[charCode] = {
+          seacMap.set(charCode, {
             baseFontCharCode,
             accentFontCharCode,
             accentOffset,
-          };
+          });
         }
       }
       properties.seacMap = seacMap;
@@ -3596,7 +3593,9 @@ class Font {
           // Ensure that other relevant glyph properties are also updated
           // (fixes issue18059.pdf).
           width ||= this._spaceWidth;
-          unicode = String.fromCharCode(fontCharCode);
+          if (!this.toUnicode.has(charcode)) {
+            unicode = String.fromCharCode(fontCharCode);
+          }
         }
       }
       fontCharCode = mapSpecialUnicodeValues(fontCharCode);
@@ -3608,9 +3607,9 @@ class Font {
     }
 
     let accent = null;
-    if (this.seacMap?.[charcode]) {
+    const seac = this.seacMap?.get(charcode);
+    if (seac) {
       isInFont = true;
-      const seac = this.seacMap[charcode];
       fontCharCode = seac.baseFontCharCode;
       accent = {
         fontChar: String.fromCodePoint(seac.accentFontCharCode),

@@ -178,22 +178,13 @@ class RadialAxialShading extends BaseShading {
     });
     this.bbox = lookupNormalRect(dict.getArray("BBox"), null);
 
-    let t0 = 0.0,
-      t1 = 1.0;
     const domainArr = dict.getArray("Domain");
-    if (isNumberArray(domainArr, 2)) {
-      [t0, t1] = domainArr;
-    }
+    const [t0, t1] = isNumberArray(domainArr, 2) ? domainArr : [0.0, 1.0];
 
-    let extendStart = false,
-      extendEnd = false;
     const extendArr = dict.getArray("Extend");
-    if (isBooleanArray(extendArr, 2)) {
-      [extendStart, extendEnd] = extendArr;
-    }
-
-    this.extendStart = extendStart;
-    this.extendEnd = extendEnd;
+    const [extendStart, extendEnd] = isBooleanArray(extendArr, 2)
+      ? extendArr
+      : [false, false];
 
     const fnObj = dict.getRaw("Function");
     const fn = pdfFunctionFactory.create(fnObj, /* parseArray = */ true);
@@ -321,8 +312,6 @@ class RadialAxialShading extends BaseShading {
       colorStops.at(-1)[0] -= BaseShading.SMALL_NUMBER;
       colorStops.push([1, background]);
     }
-
-    this.colorStops = colorStops;
   }
 
   getIR() {

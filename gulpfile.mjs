@@ -28,13 +28,13 @@ import { exec, execSync, spawn, spawnSync } from "child_process";
 import { finished, pipeline as runPipeline } from "stream/promises";
 import autoprefixer from "autoprefixer";
 import { buildPrefsSchema } from "./external/chromium/prefs.mjs";
+import { colorize } from "./external/color_utils.mjs";
 import crypto from "crypto";
 import fs from "fs";
 import gulp from "gulp";
 import hljs from "highlight.js";
 import istanbulCoverage from "istanbul-lib-coverage";
 import istanbulReportGenerator from "istanbul-reports";
-import { kleur } from "./external/color_utils.mjs";
 import layouts from "@metalsmith/layouts";
 import libReport from "istanbul-lib-report";
 import markdown from "@metalsmith/markdown";
@@ -572,9 +572,9 @@ function getErrorMessages(error) {
 }
 
 function reportBuildFailure(error) {
-  console.error(kleur.red(`\n### ${error?.message || "Build failed"}`));
+  console.error(colorize("red", `\n### ${error?.message || "Build failed"}`));
   for (const message of getErrorMessages(error)) {
-    console.error(kleur.red(message));
+    console.error(colorize("red", message));
   }
 }
 
@@ -2104,7 +2104,7 @@ function syncMozcentral() {
     console.log(`  deleted: ${filePath}`);
   }
   for (const filePath of stats.updated) {
-    console.log(kleur.green(`  updated: ${filePath}`));
+    console.log(colorize("green", `  updated: ${filePath}`));
   }
   console.log(
     `\n${stats.updated.length} file(s) updated, ` +

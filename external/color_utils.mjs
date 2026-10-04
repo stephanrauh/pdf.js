@@ -13,13 +13,24 @@
  * limitations under the License.
  */
 
-import kleur from "kleur";
+import { styleText } from "util";
 
-// Kleur has one global switch, so use stdout for automatic TTY detection.
-kleur.enabled =
+// NO_COLOR overrides TTY detection, FORCE_COLOR, and GitHub Actions.
+const COLORS_ENABLED =
   !process.env.NO_COLOR &&
   (!!process.stdout.isTTY ||
     !!process.env.FORCE_COLOR ||
     process.env.GITHUB_ACTIONS === "true");
 
-export { kleur };
+/**
+ * @param {string | string[]} format - One or more `util.styleText` formats.
+ * @param {string} text
+ * @returns {string}
+ */
+function colorize(format, text) {
+  return COLORS_ENABLED
+    ? styleText(format, text, { validateStream: false })
+    : text;
+}
+
+export { colorize };

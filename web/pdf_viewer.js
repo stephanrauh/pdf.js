@@ -1280,7 +1280,7 @@ class PDFViewer {
   }
 
   /**
-   * @param {PDFDocumentProxy} pdfDocument
+   * @param {PDFDocumentProxy|null} pdfDocument
    */
   setDocument(pdfDocument) {
     if (this.pdfDocument) {
@@ -1296,7 +1296,9 @@ class PDFViewer {
       this.#annotationEditorUIManager?.destroy();
       this.#annotationEditorUIManager = null;
 
-      this.#annotationEditorMode = AnnotationEditorType.NONE;
+      if (this.#annotationEditorMode !== AnnotationEditorType.DISABLE) {
+        this.#annotationEditorMode = AnnotationEditorType.NONE;
+      }
       this.#printingAllowed = true;
     }
 
