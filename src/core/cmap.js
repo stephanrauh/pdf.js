@@ -196,10 +196,13 @@ const BUILT_IN_CMAPS = [
 
 // Heuristic to avoid hanging the worker-thread for CMap data with ridiculously
 // large ranges, such as e.g. 0xFFFFFFFF (fixes issue11922_reduced.pdf).
+// Apply the entry limit across all ranges, including overlapping ones.
 const MAX_MAP_RANGE = 2 ** 24 - 1; // = 0xFFFFFF
 
 // CMap, not to be confused with TrueType's cmap.
 class CMap {
+  #mappedEntries = 0;
+
   constructor(builtInCMap = false) {
     // Codespace ranges are stored as follows:
     // [[1BytePairs], [2BytePairs], [3BytePairs], [4BytePairs]]
@@ -222,19 +225,25 @@ class CMap {
     this.numCodespaceRanges++;
   }
 
-  mapCidRange(low, high, dstLow) {
-    if (high - low > MAX_MAP_RANGE) {
-      throw new Error("mapCidRange - ignoring data above MAX_MAP_RANGE.");
+  #consumeBudget(count, name) {
+    if (count <= 0) {
+      return;
     }
+    if (this.#mappedEntries + count > MAX_MAP_RANGE) {
+      throw new Error(`${name} - ignoring data above MAX_MAP_RANGE.`);
+    }
+    this.#mappedEntries += count;
+  }
+
+  mapCidRange(low, high, dstLow) {
+    this.#consumeBudget(high - low + 1, "mapCidRange");
     while (low <= high) {
       this._map[low++] = dstLow++;
     }
   }
 
   mapBfRange(low, high, dstLow) {
-    if (high - low > MAX_MAP_RANGE) {
-      throw new Error("mapBfRange - ignoring data above MAX_MAP_RANGE.");
-    }
+    this.#consumeBudget(high - low + 1, "mapBfRange");
     const lastByte = dstLow.length - 1;
     while (low <= high) {
       this._map[low++] = dstLow;
@@ -253,10 +262,8 @@ class CMap {
   }
 
   mapBfRangeToArray(low, high, array) {
-    if (high - low > MAX_MAP_RANGE) {
-      throw new Error("mapBfRangeToArray - ignoring data above MAX_MAP_RANGE.");
-    }
     const ii = array.length;
+    this.#consumeBudget(Math.min(high - low + 1, ii), "mapBfRangeToArray");
     let i = 0;
     while (low <= high && i < ii) {
       this._map[low] = array[i++];
@@ -421,8 +428,7 @@ class IdentityCMap extends CMap {
   }
 
   getMap() {
-    // Sometimes identity maps must be instantiated, but it's rare.
-    return Array.from({ length: 0x10000 }, (_, i) => i);
+    unreachable("should not call getMap");
   }
 
   get length() {
@@ -637,10 +643,7 @@ async function parseCMap(cMap, lexer, fetchBuiltInCMap, useCMap) {
     // specified.
     useCMap = embeddedUseCMap;
   }
-  if (useCMap) {
-    return extendCMap(cMap, fetchBuiltInCMap, useCMap);
-  }
-  return cMap;
+  return useCMap ? extendCMap(cMap, fetchBuiltInCMap, useCMap) : cMap;
 }
 
 async function extendCMap(cMap, fetchBuiltInCMap, useCMap) {
@@ -708,10 +711,9 @@ class CMapFactory {
         useCMap
       );
 
-      if (parsedCMap.isIdentityCMap) {
-        return createBuiltInCMap(parsedCMap.name, fetchBuiltInCMap);
-      }
-      return parsedCMap;
+      return parsedCMap.isIdentityCMap
+        ? createBuiltInCMap(parsedCMap.name, fetchBuiltInCMap)
+        : parsedCMap;
     }
     throw new Error("Encoding required.");
   }

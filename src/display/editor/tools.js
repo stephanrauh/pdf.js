@@ -386,10 +386,7 @@ class ImageManager {
 
   getSvgUrl(id) {
     const data = this.#cache.get(id);
-    if (!data?.isSvg) {
-      return null;
-    }
-    return data.svgUrl;
+    return !data?.isSvg ? null : data.svgUrl;
   }
 
   deleteId(id) {
@@ -687,10 +684,7 @@ class KeyboardManager {
     // Codes like NumpadEnter are intentionally skipped — their event.key
     // already matches the corresponding non-numpad key.
     const match = /^(?:Key([A-Z])|(?:Digit|Numpad)(\d))$/.exec(code);
-    if (!match) {
-      return null;
-    }
-    return match[1]?.toLowerCase() ?? match[2];
+    return !match ? null : (match[1]?.toLowerCase() ?? match[2]);
   }
 
   /**
@@ -804,10 +798,7 @@ class ColorManager {
    */
   getHexCode(name) {
     const rgb = this._colors.get(name);
-    if (!rgb) {
-      return name;
-    }
-    return Util.makeHexColor(...rgb);
+    return !rgb ? name : Util.makeHexColor(...rgb);
   }
 }
 

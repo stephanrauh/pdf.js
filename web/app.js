@@ -571,24 +571,76 @@ appConfig: null,
       !AppOptions.get("featuresNotificationDismissed")
     ) {
       const { featuresNotification } = appConfig;
-      customElements.whenDefined("moz-message-bar").then(() => {
+      let barResizeObserver = null,
+        dismissed = false;
+      const hideBar = () => {
+        dismissed = true;
+        barResizeObserver?.disconnect();
+        barResizeObserver = null;
+        docStyle.setProperty("--pfn-bar-height", "0px");
+        featuresNotification.hidden = true;
+      };
+      // Handle dismissal while the notification is loading.
+      eventBus.on(
+        "featuresnotificationdismissed",
+        ({ value }) => {
+          if (value) {
+            hideBar();
+          }
+        },
+        { signal: abortSignal, ...internalOpt }
+      );
+
+      const showFeaturesNotification = async () => {
         if (AppOptions.get("featuresNotificationDismissed")) {
           return;
         }
+        // Register the resources before the widget connects its l10n root.
+        document.l10n.addResourceIds([
+          "branding/brand.ftl",
+          "toolkit/global/mozMessageBar.ftl",
+          "toolkit/about/pdfFeaturesNotification.ftl",
+        ]);
+        await __raw_import__(
+          "chrome://global/content/elements/moz-message-bar.mjs"
+        );
+        // Set the l10n ids after registering their resources to avoid an
+        // initial translation error.
+        const message = featuresNotification.querySelector("[slot='message']");
+        featuresNotification.setAttribute(
+          "data-l10n-id",
+          "pdf-features-notification"
+        );
+        message.setAttribute(
+          "data-l10n-id",
+          "pdf-features-notification-message"
+        );
+        await document.l10n.translateElements([featuresNotification, message]);
+        if (dismissed || AppOptions.get("featuresNotificationDismissed")) {
+          return;
+        }
 
-        featuresNotification.addEventListener(
-          "click",
-          event => {
-            if (!event.target.closest("a")) {
-              return;
-            }
-            event.preventDefault();
+        // The link has no href on purpose: about:pdf cannot be loaded from
+        // content, so the parent process opens it when asked (bug 2071624).
+        const openFeatures = event => {
+          if (event.target.closest("a")) {
             externalServices.openAboutPdfFeatures();
+          }
+        };
+        featuresNotification.addEventListener("click", openFeatures, {
+          signal: abortSignal,
+        });
+        featuresNotification.addEventListener(
+          "keydown",
+          event => {
+            if (event.key === "Enter") {
+              openFeatures(event);
+            }
           },
           { signal: abortSignal }
         );
 
-        const barResizeObserver = new ResizeObserver(entries => {
+        barResizeObserver = new ResizeObserver(entries => {
           const box = entries[0]?.borderBoxSize?.[0];
           const height = box
             ? box.blockSize
@@ -597,11 +649,6 @@ appConfig: null,
         });
         barResizeObserver.observe(featuresNotification);
 
-        const hideBar = () => {
-          barResizeObserver.disconnect();
-          docStyle.setProperty("--pfn-bar-height", "0px");
-          featuresNotification.hidden = true;
-        };
         featuresNotification.addEventListener(
           "message-bar:user-dismissed",
           () => {
@@ -614,17 +661,18 @@ appConfig: null,
           },
           { once: true }
         );
-        eventBus.on(
-          "featuresnotificationdismissed",
-          ({ value }) => {
-            if (value) {
-              hideBar();
-            }
-          },
-          { signal: abortSignal, ...internalOpt }
-        );
         featuresNotification.hidden = false;
-      });
+      };
+      // Load the notification after the first page renders (bug 2072145).
+      eventBus.on(
+        "pagerendered",
+        () => {
+          showFeaturesNotification().catch(ex => {
+            console.error(`Cannot show the features notification: "${ex}".`);
+          });
+        },
+        { once: true, signal: abortSignal, ...internalOpt }
+      );
     }
 
     let signatureManager = null;
@@ -1998,7 +2046,8 @@ appConfig: null,
           let zoom = AppOptions.get("defaultZoomValue");
           if (!zoom || zoom === '') {
             try {
-              zoom = await this.store.get('zoom');
+              // ViewHistory.get() was removed upstream (PR 21914) - use getMultiple()
+              ({ zoom } = await this.store.getMultiple({ zoom: undefined }));
               if (typeof zoom === 'string') {
                 zoom = zoom?.replace("%", "");
               }
@@ -3147,10 +3196,7 @@ appConfig: null,
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
       return;
     }
-    if (!this.downloadManager) {
-      return;
-    }
-    if (!this.pdfDocument) {
+    if (!this.downloadManager || !this.pdfDocument) {
       return;
     }
     const modifiedPdfBytes = await this.pdfDocument.extractPages(

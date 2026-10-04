@@ -1176,10 +1176,9 @@ class CFFStrings {
     if (index >= 0 && index <= NUM_STANDARD_CFF_STRINGS - 1) {
       return CFFStandardStrings[index];
     }
-    if (index - NUM_STANDARD_CFF_STRINGS <= this.strings.length) {
-      return this.strings[index - NUM_STANDARD_CFF_STRINGS];
-    }
-    return CFFStandardStrings[0];
+    return index - NUM_STANDARD_CFF_STRINGS <= this.strings.length
+      ? this.strings[index - NUM_STANDARD_CFF_STRINGS]
+      : CFFStandardStrings[0];
   }
 
   getSID(str) {
@@ -1188,10 +1187,7 @@ class CFFStrings {
       return index;
     }
     index = this.strings.indexOf(str);
-    if (index !== -1) {
-      return index + NUM_STANDARD_CFF_STRINGS;
-    }
-    return -1;
+    return index !== -1 ? index + NUM_STANDARD_CFF_STRINGS : -1;
   }
 
   add(value) {
@@ -1228,6 +1224,8 @@ class CFFIndex {
 }
 
 class CFFDict {
+  values = new Map();
+
   constructor(tables, strings) {
     this.keyToNameMap = tables.keyToNameMap;
     this.nameToKeyMap = tables.nameToKeyMap;
@@ -1236,12 +1234,11 @@ class CFFDict {
     this.opcodes = tables.opcodes;
     this.order = tables.order;
     this.strings = strings;
-    this.values = Object.create(null);
   }
 
   // value should always be an array
   setByKey(key, value) {
-    if (!(key in this.keyToNameMap)) {
+    if (!this.keyToNameMap.has(key)) {
       return false;
     }
     // ignore empty values
@@ -1255,59 +1252,59 @@ class CFFDict {
         return true;
       }
     }
-    const type = this.types[key];
+    const type = this.types.get(key);
     // remove the array wrapping these types of values
     if (type === "num" || type === "sid" || type === "offset") {
       value = value[0];
     }
-    this.values[key] = value;
+    this.values.set(key, value);
     return true;
   }
 
   setByName(name, value) {
-    if (!(name in this.nameToKeyMap)) {
+    if (!this.nameToKeyMap.has(name)) {
       throw new FormatError(`Invalid dictionary name "${name}"`);
     }
-    this.values[this.nameToKeyMap[name]] = value;
+    const key = this.nameToKeyMap.get(name);
+    this.values.set(key, value);
   }
 
   hasName(name) {
-    return this.nameToKeyMap[name] in this.values;
+    const key = this.nameToKeyMap.get(name);
+    return this.values.has(key);
   }
 
   getByName(name) {
-    if (!(name in this.nameToKeyMap)) {
+    if (!this.nameToKeyMap.has(name)) {
       throw new FormatError(`Invalid dictionary name ${name}"`);
     }
-    const key = this.nameToKeyMap[name];
-    if (!(key in this.values)) {
-      return this.defaults[key];
-    }
-    return this.values[key];
+    const key = this.nameToKeyMap.get(name);
+    return this.values.has(key) ? this.values.get(key) : this.defaults.get(key);
   }
 
   removeByName(name) {
-    delete this.values[this.nameToKeyMap[name]];
+    const key = this.nameToKeyMap.get(name);
+    this.values.delete(key);
   }
 
   static createTables(layout) {
     const tables = {
-      keyToNameMap: {},
-      nameToKeyMap: {},
-      defaults: {},
-      types: {},
-      opcodes: {},
+      keyToNameMap: new Map(),
+      nameToKeyMap: new Map(),
+      defaults: new Map(),
+      types: new Map(),
+      opcodes: new Map(),
       order: [],
     };
     for (const entry of layout) {
       const key = Array.isArray(entry[0])
         ? (entry[0][0] << 8) + entry[0][1]
         : entry[0];
-      tables.keyToNameMap[key] = entry[1];
-      tables.nameToKeyMap[entry[1]] = key;
-      tables.types[key] = entry[2];
-      tables.defaults[key] = entry[3];
-      tables.opcodes[key] = Array.isArray(entry[0]) ? entry[0] : [entry[0]];
+      tables.keyToNameMap.set(key, entry[1]);
+      tables.nameToKeyMap.set(entry[1], key);
+      tables.types.set(key, entry[2]);
+      tables.defaults.set(key, entry[3]);
+      tables.opcodes.set(key, Array.isArray(entry[0]) ? entry[0] : [entry[0]]);
       tables.order.push(key);
     }
     return tables;
@@ -1360,9 +1357,10 @@ class CFFTopDict extends CFFDict {
     return shadow(this, "tables", this.createTables(CFFTopDictLayout));
   }
 
+  privateDict = null;
+
   constructor(strings) {
     super(CFFTopDict.tables, strings);
-    this.privateDict = null;
   }
 }
 
@@ -1392,9 +1390,10 @@ class CFFPrivateDict extends CFFDict {
     return shadow(this, "tables", this.createTables(CFFPrivateDictLayout));
   }
 
+  subrsIndex = null;
+
   constructor(strings) {
     super(CFFPrivateDict.tables, strings);
-    this.subrsIndex = null;
   }
 }
 
@@ -1606,10 +1605,9 @@ class CFFCompiler {
   }
 
   encodeNumber(value) {
-    if (Number.isInteger(value)) {
-      return this.encodeInteger(value);
-    }
-    return this.encodeFloat(value);
+    return Number.isInteger(value)
+      ? this.encodeInteger(value)
+      : this.encodeFloat(value);
   }
 
   static get EncodeFloatRegExp() {
@@ -1786,11 +1784,11 @@ class CFFCompiler {
     const out = [];
     // The dictionary keys must be in a certain order.
     for (const key of dict.order) {
-      if (!(key in dict.values)) {
+      if (!dict.values.has(key)) {
         continue;
       }
-      let values = dict.values[key];
-      let types = dict.types[key];
+      let values = dict.values.get(key);
+      let types = dict.types.get(key);
       if (!Array.isArray(types)) {
         types = [types];
       }
@@ -1815,7 +1813,7 @@ class CFFCompiler {
             // For offsets we just insert a 32bit integer so we don't have to
             // deal with figuring out the length of the offset when it gets
             // replaced later on by the compiler.
-            const name = dict.keyToNameMap[key];
+            const name = dict.keyToNameMap.get(key);
             // Some offsets have the offset and the length, so just record the
             // position of the first one.
             if (!offsetTracker.isTracking(name)) {
@@ -1834,7 +1832,7 @@ class CFFCompiler {
             throw new FormatError(`Unknown data type of ${type}`);
         }
       }
-      out.push(...dict.opcodes[key]);
+      out.push(...dict.opcodes.get(key));
     }
     return out;
   }

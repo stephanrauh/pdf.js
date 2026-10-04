@@ -86,11 +86,7 @@ function flushHTML(node) {
     }
   }
 
-  if (html.children.length === 0) {
-    return null;
-  }
-
-  return html;
+  return html.children.length === 0 ? null : html;
 }
 
 function addHTML(node, html, bbox) {
@@ -264,11 +260,11 @@ function getTransformedBBox(node) {
  * in case of lr-tb or changing content area...).
  */
 function checkDimensions(node, space) {
-  if (node[$getTemplateRoot]()[$extra].firstUnsplittable === null) {
-    return true;
-  }
-
-  if (node.w === 0 || node.h === 0) {
+  if (
+    node[$getTemplateRoot]()[$extra].firstUnsplittable === null ||
+    node.w === 0 ||
+    node.h === 0
+  ) {
     return true;
   }
 
@@ -277,6 +273,7 @@ function checkDimensions(node, space) {
   const attempt = parent[$extra]?.attempt || 0;
 
   const [, y, w, h] = getTransformedBBox(node);
+  /* eslint-disable unicorn/prefer-ternary */
   switch (parent.layout) {
     case "lr-tb":
     case "rl-tb":
@@ -358,11 +355,11 @@ function checkDimensions(node, space) {
 
       return space.height > ERROR;
     case "position":
-      if (node[$getTemplateRoot]()[$extra].noLayoutFailure) {
-        return true;
-      }
-
-      if (node.h === "" || Math.round(h + y - space.height) <= ERROR) {
+      if (
+        node[$getTemplateRoot]()[$extra].noLayoutFailure ||
+        node.h === "" ||
+        Math.round(h + y - space.height) <= ERROR
+      ) {
         return true;
       }
 
@@ -382,6 +379,7 @@ function checkDimensions(node, space) {
       // No layout, so accept everything.
       return true;
   }
+  /* eslint-enable unicorn/prefer-ternary */
 }
 
 export { addHTML, checkDimensions, flushHTML, getAvailableSpace };

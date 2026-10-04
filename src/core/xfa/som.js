@@ -55,10 +55,7 @@ const somCache = new WeakMap();
 
 function parseIndex(index) {
   index = index.trim();
-  if (index === "*") {
-    return Infinity;
-  }
-  return parseInt(index, 10) || 0;
+  return index === "*" ? Infinity : parseInt(index, 10) || 0;
 }
 
 // For now expressions containing .[...] or .(...) are not
@@ -243,20 +240,12 @@ function searchNode(
       : nodes.flat();
   }
 
-  if (root.length === 0) {
-    return null;
-  }
-
-  return root;
+  return root.length === 0 ? null : root;
 }
 
 function createDataNode(root, container, expr) {
   const parsed = parseExpression(expr);
-  if (!parsed) {
-    return null;
-  }
-
-  if (parsed.some(x => x.operator === operators.dotDot)) {
+  if (!parsed || parsed.some(x => x.operator === operators.dotDot)) {
     return null;
   }
 

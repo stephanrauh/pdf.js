@@ -38,10 +38,7 @@ class BaseLocalCache {
       unreachable("Should not call `getByName` method.");
     }
     const ref = this._nameRefMap.get(name);
-    if (ref) {
-      return this.getByRef(ref);
-    }
-    return this._imageMap.get(name) || null;
+    return ref ? this.getByRef(ref) : this._imageMap.get(name) || null;
   }
 
   getByRef(ref) {
@@ -218,13 +215,10 @@ class GlobalImageCache {
   }
 
   get #cacheLimitReached() {
-    if (this._imageCache.size < GlobalImageCache.MIN_IMAGES_TO_CACHE) {
-      return false;
-    }
-    if (this.#byteSize < GlobalImageCache.MAX_BYTE_SIZE) {
-      return false;
-    }
-    return true;
+    return (
+      this._imageCache.size >= GlobalImageCache.MIN_IMAGES_TO_CACHE &&
+      this.#byteSize >= GlobalImageCache.MAX_BYTE_SIZE
+    );
   }
 
   shouldCache(ref, pageIndex) {
@@ -264,10 +258,10 @@ class GlobalImageCache {
 
   getData(ref, pageIndex) {
     const pageIndexSet = this._refCache.get(ref);
-    if (!pageIndexSet) {
-      return null;
-    }
-    if (pageIndexSet.size < GlobalImageCache.NUM_PAGES_THRESHOLD) {
+    if (
+      !pageIndexSet ||
+      pageIndexSet.size < GlobalImageCache.NUM_PAGES_THRESHOLD
+    ) {
       return null;
     }
     const imageData = this._imageCache.get(ref);

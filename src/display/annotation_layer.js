@@ -230,10 +230,7 @@ class AnnotationElement {
   get commentData() {
     const { data } = this;
     const editor = this.annotationStorage?.getEditor(data.id);
-    if (editor) {
-      return editor.getData();
-    }
-    return data;
+    return editor ? editor.getData() : data;
   }
 
   get hasCommentButton() {
@@ -274,10 +271,7 @@ class AnnotationElement {
         return [maxX, maxY];
       }
     }
-    if (rect) {
-      return [rect[2], rect[3]];
-    }
-    return null;
+    return rect ? [rect[2], rect[3]] : null;
   }
 
   _normalizePoint(point) {
@@ -810,10 +804,7 @@ class AnnotationElement {
       const fieldObj = this._fieldObjects.get(name) || [];
 
       for (const { page, id, exportValues } of fieldObj) {
-        if (page === -1) {
-          continue;
-        }
-        if (id === skipId) {
+        if (page === -1 || id === skipId) {
           continue;
         }
         const exportValue =
@@ -833,10 +824,7 @@ class AnnotationElement {
     for (const domElement of document.getElementsByName(name)) {
       const { exportValue } = domElement;
       const id = domElement.getAttribute("data-element-id");
-      if (id === skipId) {
-        continue;
-      }
-      if (!GetElementsByNameSet.has(domElement)) {
+      if (id === skipId || !GetElementsByNameSet.has(domElement)) {
         continue;
       }
       fields.push({ id, exportValue, domElement });
@@ -2859,10 +2847,9 @@ class PopupElement {
 
   get commentButtonColor() {
     const { color, opacity } = this.#firstElement.commentData;
-    if (!color) {
-      return null;
-    }
-    return this.#parent._commentManager.makeCommentColor(color, opacity);
+    return !color
+      ? null
+      : this.#parent._commentManager.makeCommentColor(color, opacity);
   }
 
   focusCommentButton() {
@@ -4007,9 +3994,14 @@ class MediaAnnotationElement extends AnnotationElement {
     }
 
     const { signal } = this.#abortController;
-    const url = URL.createObjectURL(new Blob([content], { type: contentType }));
+    const blob = new Blob([content], { type: contentType });
+    // Blob clears types containing characters outside U+0020-U+007E.
+    if (!/^(?:video|audio)\//.test(blob.type)) {
+      return;
+    }
+    const url = URL.createObjectURL(blob);
     this.#contentUrl = url;
-    const isAudio = contentType.startsWith("audio/");
+    const isAudio = blob.type.startsWith("audio/");
     const media = document.createElement(isAudio ? "audio" : "video");
     this.#media = media;
     media.className = "mediaContent";

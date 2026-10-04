@@ -862,10 +862,9 @@ class Annotation {
       if (noPrint === undefined) {
         return undefined;
       }
-      if (noPrint) {
-        return flags & ~AnnotationFlag.PRINT;
-      }
-      return (flags & ~AnnotationFlag.HIDDEN) | AnnotationFlag.PRINT;
+      return noPrint
+        ? flags & ~AnnotationFlag.PRINT
+        : (flags & ~AnnotationFlag.HIDDEN) | AnnotationFlag.PRINT;
     }
 
     if (noView) {
@@ -923,10 +922,9 @@ class Annotation {
    */
   mustBeViewed(annotationStorage, _renderForms) {
     const noView = annotationStorage?.get(this.data.id)?.noView;
-    if (noView !== undefined) {
-      return !noView;
-    }
-    return this.viewable && !this._hasFlag(this.flags, AnnotationFlag.HIDDEN);
+    return noView !== undefined
+      ? !noView
+      : this.viewable && !this._hasFlag(this.flags, AnnotationFlag.HIDDEN);
   }
 
   /**
@@ -939,10 +937,7 @@ class Annotation {
    */
   mustBePrinted(annotationStorage) {
     const noPrint = annotationStorage?.get(this.data.id)?.noPrint;
-    if (noPrint !== undefined) {
-      return !noPrint;
-    }
-    return this.printable;
+    return noPrint !== undefined ? !noPrint : this.printable;
   }
 
   mustBeViewedWhenEditing(isEditing, modifiedIds = null) {
@@ -953,26 +948,21 @@ class Annotation {
    * @type {boolean}
    */
   get viewable() {
-    if (this.data.quadPoints === null) {
-      return false;
-    }
-    if (this.flags === 0) {
-      return true;
-    }
-    return this._isViewable(this.flags);
+    return (
+      this.data.quadPoints !== null &&
+      (this.flags === 0 || this._isViewable(this.flags))
+    );
   }
 
   /**
    * @type {boolean}
    */
   get printable() {
-    if (this.data.quadPoints === null) {
-      return false;
-    }
-    if (this.flags === 0) {
-      return false;
-    }
-    return this._isPrintable(this.flags);
+    return (
+      this.data.quadPoints !== null &&
+      this.flags !== 0 &&
+      this._isPrintable(this.flags)
+    );
   }
 
   /**
@@ -3692,10 +3682,9 @@ class ButtonWidgetAnnotation extends WidgetAnnotation {
     }
 
     const index = parseInt(state, 10);
-    if (Number.isInteger(index) && String(index) === state) {
-      return this._getExportValueForOptIndex(index, optInfo.opt, xref) || state;
-    }
-    return state;
+    return Number.isInteger(index) && String(index) === state
+      ? this._getExportValueForOptIndex(index, optInfo.opt, xref) || state
+      : state;
   }
 
   _processCheckBox(params) {
@@ -5535,8 +5524,13 @@ class FileAttachmentAnnotation extends MarkupAnnotation {
  * `data.richMedia`, so the display layer can render them with one element.
  */
 class MediaAnnotation extends Annotation {
-  // The MIME types we can build a `<video>`/`<audio>` element for.
-  static #MEDIA_MIME_TYPE_RE = /^(?:video|audio)\//;
+  // Match audio/video names using the RFC 6838 restricted-name syntax.
+  static #MEDIA_MIME_TYPE_RE =
+    /^(?:video|audio)\/[a-z0-9][\w!#$&^.+-]{0,126}$/i;
+
+  // A MediaClip `/CT` string may also contain MIME parameters.
+  static #MEDIA_CONTENT_TYPE_RE =
+    /^(?:video|audio)\/[a-z0-9][\w!#$&^.+-]{0,126}(?: *; *[a-z0-9][\w!#$&^.+-]{0,126} *= *(?:[-!#$%&'*+.^\x60{|}~\w]+|"(?:[\x20\x21\x23-\x5b\x5d-\x7e]|\\[\x20-\x7e])*"))* *$/i;
 
   constructor(params) {
     super(params);
@@ -5593,12 +5587,21 @@ class MediaAnnotation extends Annotation {
    * @param {Dict} assetDict
    * @param {string} filename
    * @param {string | null} [contentType]
+   * @param {boolean} [contentTypeIsName]
    * @returns {string | null}
    */
-  static _getContentType(assetDict, filename, contentType = null) {
+  static _getContentType(
+    assetDict,
+    filename,
+    contentType = null,
+    contentTypeIsName = false
+  ) {
     if (
       typeof contentType === "string" &&
-      MediaAnnotation.#MEDIA_MIME_TYPE_RE.test(contentType)
+      (contentTypeIsName
+        ? MediaAnnotation.#MEDIA_MIME_TYPE_RE
+        : MediaAnnotation.#MEDIA_CONTENT_TYPE_RE
+      ).test(contentType)
     ) {
       return contentType;
     }
@@ -5849,6 +5852,7 @@ class ScreenAnnotation extends MediaAnnotation {
     const contentTypeHint = clip.get("CT");
     let explicitType =
       typeof contentTypeHint === "string" ? contentTypeHint : null;
+    let explicitTypeIsName = false;
 
     let assetDict, filename;
     if (data instanceof BaseStream) {
@@ -5864,6 +5868,7 @@ class ScreenAnnotation extends MediaAnnotation {
         const subtype = data.dict.get("Subtype");
         if (subtype instanceof Name) {
           explicitType = subtype.name;
+          explicitTypeIsName = true;
         }
       }
     } else if (data instanceof Dict) {
@@ -5880,7 +5885,8 @@ class ScreenAnnotation extends MediaAnnotation {
     const contentType = MediaAnnotation._getContentType(
       assetDict,
       filename,
-      explicitType
+      explicitType,
+      explicitTypeIsName
     );
     if (!contentType) {
       return null;

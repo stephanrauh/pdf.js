@@ -92,11 +92,7 @@ class AnnotationEditorLayerBuilder {
    * @returns {Promise<void>}
    */
   async render({ viewport, intent = "display" }) {
-    if (intent !== "display") {
-      return;
-    }
-
-    if (this._cancelled) {
+    if (intent !== "display" || this._cancelled) {
       return;
     }
 

@@ -81,10 +81,9 @@ class ExternalServices extends BaseExternalServices {
   }
 
   createSignatureVerifier() {
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-      return new FakeSignatureVerifier();
-    }
-    return null;
+    return typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")
+      ? new FakeSignatureVerifier()
+      : null;
   }
 }
 

@@ -75,11 +75,7 @@ class AForm {
     }
 
     const numbers = str.match(/(\d+)/g);
-    if (numbers.length === 0) {
-      return null;
-    }
-
-    return numbers;
+    return numbers.length === 0 ? null : numbers;
   }
 
   AFMakeNumber(str) {
@@ -92,11 +88,7 @@ class AForm {
 
     str = str.trim().replace(",", ".");
     const number = parseFloat(str);
-    if (isNaN(number) || !isFinite(number)) {
-      return null;
-    }
-
-    return number;
+    return isNaN(number) || !isFinite(number) ? null : number;
   }
 
   AFMakeArrayFromList(string) {
@@ -204,10 +196,7 @@ class AForm {
   }
 
   AFPercent_Format(nDec, sepStyle, percentPrepend = false) {
-    if (typeof nDec !== "number") {
-      return;
-    }
-    if (typeof sepStyle !== "number") {
+    if (typeof nDec !== "number" || typeof sepStyle !== "number") {
       return;
     }
     if (nDec < 0) {
