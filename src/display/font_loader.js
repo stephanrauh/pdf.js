@@ -546,10 +546,6 @@ class FontFaceObject {
     return this.#fontData.ascent;
   }
 
-  get defaultWidth() {
-    return this.#fontData.defaultWidth;
-  }
-
   get descent() {
     return this.#fontData.descent;
   }
@@ -592,10 +588,6 @@ class FontFaceObject {
 
   get systemFontInfo() {
     return this.#fontData.systemFontInfo;
-  }
-
-  get defaultVMetrics() {
-    return this.#fontData.defaultVMetrics;
   }
 }
 

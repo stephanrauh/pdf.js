@@ -516,7 +516,7 @@ class WorkerMessageHandler {
         const annotationPromises = [];
         let task = null;
         try {
-          for (let i = 0, ii = numPages; i < ii; i++) {
+          for (let i = 0; i < numPages; i++) {
             if (pageIndexesToSkip?.has(i)) {
               continue;
             }
@@ -879,25 +879,25 @@ class WorkerMessageHandler {
           if (structTreeRoot === null) {
             // No structTreeRoot exists, so we need to create one.
             promises.push(
-              Promise.all(newAnnotationPromises).then(async () => {
-                await StructTreeRoot.createStructureTree({
+              Promise.all(newAnnotationPromises).then(() =>
+                StructTreeRoot.createStructureTree({
                   newAnnotationsByPage,
                   xref,
                   catalogRef,
                   pdfManager,
                   changes,
-                });
-              })
+                })
+              )
             );
           } else if (structTreeRoot) {
             promises.push(
-              Promise.all(newAnnotationPromises).then(async () => {
-                await structTreeRoot.updateStructureTree({
+              Promise.all(newAnnotationPromises).then(() =>
+                structTreeRoot.updateStructureTree({
                   newAnnotationsByPage,
                   pdfManager,
                   changes,
-                });
-              })
+                })
+              )
             );
           }
         }
@@ -1006,7 +1006,15 @@ class WorkerMessageHandler {
     handler.on(
       "GetOperatorList",
       function (
-        { pageId, pageIndex, intent, cacheKey, annotationStorage, modifiedIds },
+        {
+          pageId,
+          pageIndex,
+          pageProxyId,
+          intent,
+          cacheKey,
+          annotationStorage,
+          modifiedIds,
+        },
         sink
       ) {
         pdfManager.getPage(pageId).then(function (page) {
@@ -1023,6 +1031,7 @@ class WorkerMessageHandler {
               annotationStorage,
               modifiedIds,
               pageIndex,
+              pageProxyId,
             })
             .then(
               () => {

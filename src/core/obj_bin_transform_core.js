@@ -22,78 +22,69 @@ import {
   SYSTEM_FONT_INFO,
 } from "../shared/obj_bin_transform_utils.js";
 
-function compileCssFontInfo(info) {
+function encodeStrings(strings, obj) {
   const { encoder } = InfoUtils;
-  const encodedStrings = {};
+  const encodedStrings = new Map();
   let stringsLength = 0;
-  for (const prop of CSS_FONT_INFO.strings) {
-    const encoded = encoder.encode(info[prop]);
-    encodedStrings[prop] = encoded;
-    stringsLength += 4 + encoded.length;
+  for (const prop of strings) {
+    const encoded = encoder.encode(obj[prop]),
+      len = encoded.length;
+    encodedStrings.set(encoded, len);
+    stringsLength += 4 + len;
   }
+  return { encodedStrings, stringsLength };
+}
+
+function writeStrings(encodedStrings, data, view, offset = 0) {
+  for (const [encoded, len] of encodedStrings) {
+    view.setUint32(offset, len);
+    data.set(encoded, offset + 4);
+    offset += 4 + len;
+  }
+  return offset;
+}
+
+function compileCssFontInfo(info) {
+  const { encodedStrings, stringsLength } = encodeStrings(
+    CSS_FONT_INFO.strings,
+    info
+  );
 
   const buffer = new ArrayBuffer(stringsLength);
   const data = new Uint8Array(buffer);
   const view = new DataView(buffer);
-  let offset = 0;
 
-  for (const prop of CSS_FONT_INFO.strings) {
-    const encoded = encodedStrings[prop];
-    const length = encoded.length;
-    view.setUint32(offset, length);
-    data.set(encoded, offset + 4);
-    offset += 4 + length;
-  }
+  const offset = writeStrings(encodedStrings, data, view);
   assert(offset === buffer.byteLength, "compileCssFontInfo: Buffer overflow");
   return buffer;
 }
 
 function compileSystemFontInfo(info) {
-  const { encoder } = InfoUtils;
-  const encodedStrings = {};
-  let stringsLength = 0;
-  for (const prop of SYSTEM_FONT_INFO.strings) {
-    const encoded = encoder.encode(info[prop]);
-    encodedStrings[prop] = encoded;
-    stringsLength += 4 + encoded.length;
-  }
-  stringsLength += 4;
-  let encodedStyleStyle,
-    encodedStyleWeight,
-    lengthEstimate = 1 + stringsLength;
+  const { encodedStrings, stringsLength } = encodeStrings(
+    SYSTEM_FONT_INFO.strings,
+    info
+  );
+
+  let encodedStyleStrings,
+    styleStringsLength = 0;
   if (info.style) {
-    encodedStyleStyle = encoder.encode(info.style.style);
-    encodedStyleWeight = encoder.encode(info.style.weight);
-    lengthEstimate +=
-      4 + encodedStyleStyle.length + 4 + encodedStyleWeight.length;
+    ({
+      encodedStrings: encodedStyleStrings,
+      stringsLength: styleStringsLength,
+    } = encodeStrings(["style", "weight"], info.style));
   }
+  const lengthEstimate = 4 + stringsLength + styleStringsLength;
 
   const buffer = new ArrayBuffer(lengthEstimate);
   const data = new Uint8Array(buffer);
   const view = new DataView(buffer);
   let offset = 0;
 
-  view.setUint8(offset++, info.guessFallback ? 1 : 0);
-  view.setUint32(offset, 0);
-  offset += 4;
-  stringsLength = 0;
-  for (const prop of SYSTEM_FONT_INFO.strings) {
-    const encoded = encodedStrings[prop];
-    const length = encoded.length;
-    stringsLength += 4 + length;
-    view.setUint32(offset, length);
-    data.set(encoded, offset + 4);
-    offset += 4 + length;
-  }
-  view.setUint32(offset - stringsLength - 4, stringsLength);
+  view.setUint32(offset, stringsLength);
+  offset = writeStrings(encodedStrings, data, view, offset + 4);
 
-  if (info.style) {
-    view.setUint32(offset, encodedStyleStyle.length);
-    data.set(encodedStyleStyle, offset + 4);
-    offset += 4 + encodedStyleStyle.length;
-    view.setUint32(offset, encodedStyleWeight.length);
-    data.set(encodedStyleWeight, offset + 4);
-    offset += 4 + encodedStyleWeight.length;
+  if (encodedStyleStrings) {
+    offset = writeStrings(encodedStyleStrings, data, view, offset);
   }
   assert(offset <= buffer.byteLength, "compileSystemFontInfo: Buffer overflow");
   return buffer.transferToFixedLength(offset);
@@ -112,6 +103,21 @@ function compileFontInfo(font) {
       offset += increment * arrLen; // TODO: optimize this padding away
     }
   }
+  function writeBuffer(buf, name) {
+    if (!buf) {
+      view.setUint32(offset, 0);
+      offset += 4;
+      return;
+    }
+    const length = buf.byteLength;
+    view.setUint32(offset, length);
+    assert(
+      offset + 4 + length <= buffer.byteLength,
+      `compileFontInfo: Buffer overflow at ${name}`
+    );
+    data.set(new Uint8Array(buf), offset + 4);
+    offset += 4 + length;
+  }
 
   const systemFontInfoBuffer = font.systemFontInfo
     ? compileSystemFontInfo(font.systemFontInfo)
@@ -120,13 +126,10 @@ function compileFontInfo(font) {
     ? compileCssFontInfo(font.cssFontInfo)
     : null;
 
-  const { encoder } = InfoUtils;
-  const encodedStrings = {};
-  let stringsLength = 0;
-  for (const prop of FONT_INFO.strings) {
-    encodedStrings[prop] = encoder.encode(font[prop]);
-    stringsLength += 4 + encodedStrings[prop].length;
-  }
+  const { encodedStrings, stringsLength } = encodeStrings(
+    FONT_INFO.strings,
+    font
+  );
 
   const lengthEstimate =
     FONT_INFO.OFFSET_STRINGS +
@@ -191,62 +194,15 @@ function compileFontInfo(font) {
     /* increment = */ 8
   );
   assert(
-    offset === FONT_INFO.OFFSET_DEFAULT_VMETRICS,
+    offset === FONT_INFO.OFFSET_STRINGS,
     "compileFontInfo: FontMatrix properties offset mismatch"
   );
 
-  writeArray(
-    /* arr = */ font.defaultVMetrics,
-    /* arrLen = */ 3,
-    /* writerName = */ "setInt16",
-    /* increment = */ 2
-  );
-  assert(
-    offset === FONT_INFO.OFFSET_STRINGS,
-    "compileFontInfo: DefaultVMetrics properties offset mismatch"
-  );
+  view.setUint32(offset, stringsLength);
+  offset = writeStrings(encodedStrings, data, view, offset + 4);
 
-  view.setUint32(FONT_INFO.OFFSET_STRINGS, 0);
-  offset += 4;
-  for (const prop of FONT_INFO.strings) {
-    const encoded = encodedStrings[prop];
-    const length = encoded.length;
-    view.setUint32(offset, length);
-    data.set(encoded, offset + 4);
-    offset += 4 + length;
-  }
-  view.setUint32(
-    FONT_INFO.OFFSET_STRINGS,
-    offset - FONT_INFO.OFFSET_STRINGS - 4
-  );
-
-  if (!systemFontInfoBuffer) {
-    view.setUint32(offset, 0);
-    offset += 4;
-  } else {
-    const length = systemFontInfoBuffer.byteLength;
-    view.setUint32(offset, length);
-    assert(
-      offset + 4 + length <= buffer.byteLength,
-      "compileFontInfo: Buffer overflow at systemFontInfo"
-    );
-    data.set(new Uint8Array(systemFontInfoBuffer), offset + 4);
-    offset += 4 + length;
-  }
-
-  if (!cssFontInfoBuffer) {
-    view.setUint32(offset, 0);
-    offset += 4;
-  } else {
-    const length = cssFontInfoBuffer.byteLength;
-    view.setUint32(offset, length);
-    assert(
-      offset + 4 + length <= buffer.byteLength,
-      "compileFontInfo: Buffer overflow at cssFontInfo"
-    );
-    data.set(new Uint8Array(cssFontInfoBuffer), offset + 4);
-    offset += 4 + length;
-  }
+  writeBuffer(systemFontInfoBuffer, "systemFontInfo");
+  writeBuffer(cssFontInfoBuffer, "cssFontInfo");
 
   if (font.data === undefined) {
     view.setUint32(offset, 0);

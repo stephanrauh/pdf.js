@@ -227,6 +227,7 @@ class PartialEvaluator {
     xref,
     handler,
     pageIndex,
+    pageProxyId = null,
     idFactory,
     fontCache,
     builtInCMapCache,
@@ -239,6 +240,7 @@ class PartialEvaluator {
     this.xref = xref;
     this.handler = handler;
     this.pageIndex = pageIndex;
+    this.pageProxyId = pageProxyId;
     this.idFactory = idFactory;
     this.fontCache = fontCache;
     this.builtInCMapCache = builtInCMapCache;
@@ -605,7 +607,7 @@ class PartialEvaluator {
     }
     return this.handler.send(
       "obj",
-      [objId, this.pageIndex, "Image", imgData],
+      [objId, this.pageProxyId, "Image", imgData],
       transfers
     );
   }
@@ -1584,7 +1586,7 @@ class PartialEvaluator {
       const buffer = compilePatternInfo(patternIR);
       this.handler.send("commonobj", [id, "Pattern", buffer], [buffer]);
     } else {
-      this.handler.send("obj", [id, this.pageIndex, "Pattern", patternIR]);
+      this.handler.send("obj", [id, this.pageProxyId, "Pattern", patternIR]);
     }
     return id;
   }
@@ -3007,10 +3009,7 @@ class PartialEvaluator {
         }
         let charSpacing = baseCharSpacing + (i + 1 === ii ? extraSpacing : 0);
 
-        let glyphWidth = glyph.width;
-        if (font.vertical) {
-          glyphWidth = glyph.vmetric ? glyph.vmetric[0] : -glyphWidth;
-        }
+        const glyphWidth = font.vertical ? glyph.vmetric[0] : glyph.width;
         let scaledDim = glyphWidth * scale;
 
         if (originalCharCode === 0x20) {
@@ -3845,7 +3844,7 @@ class PartialEvaluator {
   _simpleFontToUnicode(properties, forceGlyphs = false) {
     assert(!properties.composite, "Must be a simple font.");
 
-    const toUnicode = [];
+    const toUnicode = new Map();
     const encoding = properties.defaultEncoding.slice();
     const baseEncodingName = properties.baseEncodingName;
     // Merge in the differences.
@@ -3868,7 +3867,7 @@ class PartialEvaluator {
       //    Bibliography) to obtain the corresponding Unicode value.
       let unicode = glyphsUnicodeMap[glyphName];
       if (unicode !== undefined) {
-        toUnicode[charcode] = String.fromCharCode(unicode);
+        toUnicode.set(+charcode, String.fromCharCode(unicode));
         continue;
       }
       // (undocumented) c) Few heuristics to recognize unknown glyphs
@@ -3922,7 +3921,7 @@ class PartialEvaluator {
             case "f_h":
             case "f_t":
             case "T_h":
-              toUnicode[charcode] = glyphName.replaceAll("_", "");
+              toUnicode.set(+charcode, glyphName.replaceAll("_", ""));
               continue;
           }
           break;
@@ -3934,13 +3933,14 @@ class PartialEvaluator {
         if (baseEncodingName && code === +charcode) {
           const baseEncoding = getEncoding(baseEncodingName);
           if (baseEncoding && (glyphName = baseEncoding[charcode])) {
-            toUnicode[charcode] = String.fromCharCode(
-              glyphsUnicodeMap[glyphName]
+            toUnicode.set(
+              +charcode,
+              String.fromCharCode(glyphsUnicodeMap[glyphName])
             );
             continue;
           }
         }
-        toUnicode[charcode] = String.fromCodePoint(code);
+        toUnicode.set(+charcode, String.fromCodePoint(code));
       }
     }
     return toUnicode;
@@ -3953,7 +3953,7 @@ class PartialEvaluator {
    *   {ToUnicodeMap|IdentityToUnicodeMap} object.
    */
   async buildToUnicode(properties) {
-    properties.hasIncludedToUnicodeMap = properties.toUnicode?.length > 0;
+    properties.hasIncludedToUnicodeMap = !!properties.toUnicode?.size;
 
     // Section 9.10.2 Mapping Character Codes to Unicode Values
     if (properties.hasIncludedToUnicodeMap) {
@@ -3979,17 +3979,19 @@ class PartialEvaluator {
     // listed in Table 118 (except Identity–H and Identity–V) or whose
     // descendant CIDFont uses the Adobe-GB1, Adobe-CNS1, Adobe-Japan1, or
     // Adobe-Korea1 character collection:
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+      assert(properties.composite, "Must be a composite font.");
+    }
     if (
-      properties.composite &&
-      ((properties.cMap.builtInCMap &&
+      (properties.cMap.builtInCMap &&
         !(properties.cMap instanceof IdentityCMap)) ||
-        // The font is supposed to have a CIDSystemInfo dictionary, but some
-        // PDFs don't include it (fixes issue 17689), hence the `?'.
-        (properties.cidSystemInfo?.registry === "Adobe" &&
-          (properties.cidSystemInfo.ordering === "GB1" ||
-            properties.cidSystemInfo.ordering === "CNS1" ||
-            properties.cidSystemInfo.ordering === "Japan1" ||
-            properties.cidSystemInfo.ordering === "Korea1")))
+      // The font is supposed to have a CIDSystemInfo dictionary, but some
+      // PDFs don't include it (fixes issue 17689), hence the `?'.
+      (properties.cidSystemInfo?.registry === "Adobe" &&
+        (properties.cidSystemInfo.ordering === "GB1" ||
+          properties.cidSystemInfo.ordering === "CNS1" ||
+          properties.cidSystemInfo.ordering === "Japan1" ||
+          properties.cidSystemInfo.ordering === "Korea1"))
     ) {
       // Then:
       // a) Map the character code to a character identifier (CID) according
@@ -4009,7 +4011,7 @@ class PartialEvaluator {
         fetchBuiltInCMap: this._fetchBuiltInCMapBound,
         useCMap: null,
       });
-      const toUnicode = [],
+      const toUnicode = new Map(),
         buf = [];
       properties.cMap.forEach((charcode, cid) => {
         if (cid > 0xffff) {
@@ -4024,7 +4026,7 @@ class PartialEvaluator {
           for (let i = 0, ii = ucs2.length; i < ii; i += 2) {
             buf.push((ucs2.charCodeAt(i) << 8) + ucs2.charCodeAt(i + 1));
           }
-          toUnicode[charcode] = String.fromCharCode(...buf);
+          toUnicode.set(charcode, String.fromCharCode(...buf));
         }
       });
       return new ToUnicodeMap(toUnicode);
@@ -4060,14 +4062,12 @@ class PartialEvaluator {
         if (cmap instanceof IdentityCMap) {
           return new IdentityToUnicodeMap(0, 0xffff);
         }
-        const map = new Array(cmap.length);
+        const map = new Map();
         // Convert UTF-16BE
-        // NOTE: cmap can be a sparse array, so use forEach instead of
-        // `for(;;)` to iterate over all keys.
         cmap.forEach((charCode, token) => {
           // Some cmaps contain *only* CID characters (fixes issue9367.pdf).
           if (typeof token === "number") {
-            map[charCode] = String.fromCodePoint(token);
+            map.set(charCode, String.fromCodePoint(token));
             return;
           }
           // Add back omitted leading zeros on odd length tokens
@@ -4087,7 +4087,7 @@ class PartialEvaluator {
             const w2 = (token.charCodeAt(k) << 8) | token.charCodeAt(k + 1);
             str.push(((w1 & 0x3ff) << 10) + (w2 & 0x3ff) + 0x10000);
           }
-          map[charCode] = String.fromCodePoint(...str);
+          map.set(charCode, String.fromCodePoint(...str));
         });
         return new ToUnicodeMap(map);
       } catch (reason) {
@@ -4108,16 +4108,16 @@ class PartialEvaluator {
     // Extract the encoding from the CIDToGIDMap
 
     // Set encoding 0 to later verify the font has an encoding
-    const result = [];
+    const map = new Map();
     for (let j = 0, jj = glyphsData.length; j < jj; j++) {
       const glyphID = (glyphsData[j++] << 8) | glyphsData[j];
       const code = j >> 1;
       if (glyphID === 0 && !toUnicode.has(code)) {
         continue;
       }
-      result[code] = glyphID;
+      map.set(code, glyphID);
     }
-    return result;
+    return map;
   }
 
   extractWidths(dict, descriptor, properties) {

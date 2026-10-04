@@ -22,6 +22,15 @@ import {
   SYSTEM_FONT_INFO,
 } from "../shared/obj_bin_transform_utils.js";
 
+function readString(buffer, view, index, offset = 0) {
+  const { decoder } = InfoUtils;
+  for (let i = 0; i < index; i++) {
+    offset += view.getUint32(offset) + 4;
+  }
+  const length = view.getUint32(offset);
+  return decoder.decode(new Uint8Array(buffer, offset + 4, length));
+}
+
 class CssFontInfo {
   #buffer;
 
@@ -34,13 +43,7 @@ class CssFontInfo {
 
   #readString(index) {
     assert(index < CSS_FONT_INFO.strings.length, "Invalid string index");
-    const { decoder } = InfoUtils;
-    let offset = 0;
-    for (let i = 0; i < index; i++) {
-      offset += this.#view.getUint32(offset) + 4;
-    }
-    const length = this.#view.getUint32(offset);
-    return decoder.decode(new Uint8Array(this.#buffer, offset + 4, length));
+    return readString(this.#buffer, this.#view, index);
   }
 
   get fontFamily() {
@@ -66,19 +69,9 @@ class SystemFontInfo {
     this.#view = new DataView(buffer);
   }
 
-  get guessFallback() {
-    return this.#view.getUint8(0) !== 0;
-  }
-
   #readString(index) {
     assert(index < SYSTEM_FONT_INFO.strings.length, "Invalid string index");
-    const { decoder } = InfoUtils;
-    let offset = 5;
-    for (let i = 0; i < index; i++) {
-      offset += this.#view.getUint32(offset) + 4;
-    }
-    const length = this.#view.getUint32(offset);
-    return decoder.decode(new Uint8Array(this.#buffer, offset + 4, length));
+    return readString(this.#buffer, this.#view, index, /* offset = */ 4);
   }
 
   get css() {
@@ -98,18 +91,10 @@ class SystemFontInfo {
   }
 
   get style() {
-    const { decoder } = InfoUtils;
-    let offset = 1;
+    let offset = 0;
     offset += 4 + this.#view.getUint32(offset);
-    const styleLength = this.#view.getUint32(offset);
-    const style = decoder.decode(
-      new Uint8Array(this.#buffer, offset + 4, styleLength)
-    );
-    offset += 4 + styleLength;
-    const weightLength = this.#view.getUint32(offset);
-    const weight = decoder.decode(
-      new Uint8Array(this.#buffer, offset + 4, weightLength)
-    );
+    const style = readString(this.#buffer, this.#view, /* index = */ 0, offset),
+      weight = readString(this.#buffer, this.#view, /* index = */ 1, offset);
     return { style, weight };
   }
 }
@@ -184,12 +169,8 @@ class FontInfo {
     return this.#readNumber(0);
   }
 
-  get defaultWidth() {
-    return this.#readNumber(1);
-  }
-
   get descent() {
-    return this.#readNumber(2);
+    return this.#readNumber(1);
   }
 
   #readArray(offset, arrLen, lookupName, increment) {
@@ -225,24 +206,14 @@ class FontInfo {
     );
   }
 
-  get defaultVMetrics() {
-    return this.#readArray(
-      /* offset = */ FONT_INFO.OFFSET_DEFAULT_VMETRICS,
-      /* arrLen = */ 3,
-      /* lookup = */ "getInt16",
-      /* increment = */ 2
-    );
-  }
-
   #readString(index) {
     assert(index < FONT_INFO.strings.length, "Invalid string index");
-    const { decoder } = InfoUtils;
-    let offset = FONT_INFO.OFFSET_STRINGS + 4;
-    for (let i = 0; i < index; i++) {
-      offset += this.#view.getUint32(offset) + 4;
-    }
-    const length = this.#view.getUint32(offset);
-    return decoder.decode(new Uint8Array(this.#buffer, offset + 4, length));
+    return readString(
+      this.#buffer,
+      this.#view,
+      index,
+      /* offset = */ FONT_INFO.OFFSET_STRINGS + 4
+    );
   }
 
   get fallbackName() {
@@ -377,8 +348,8 @@ class PatternInfo {
         "axial",
         bbox,
         stops,
-        Array.from(coords.slice(0, 2)),
-        Array.from(coords.slice(2, 4)),
+        [coords[0], coords[1]],
+        [coords[2], coords[3]],
         null,
         null,
       ];

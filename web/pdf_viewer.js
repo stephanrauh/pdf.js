@@ -3341,7 +3341,7 @@ class PDFViewer {
               }
             }
           } else {
-            for (let i = currentIndex + 1, ii = numPages; i < ii; i++) {
+            for (let i = currentIndex + 1; i < numPages; i++) {
               const currentId = yArray[i],
                 expectedId = yArray[i - 1] + 1;
               if (currentId > expectedId) {

@@ -37,7 +37,7 @@ class FONT_INFO {
     "vertical",
   ];
 
-  static numbers = ["ascent", "defaultWidth", "descent"];
+  static numbers = ["ascent", "descent"];
 
   static strings = ["fallbackName", "loadedName", "mimetype", "name"];
 
@@ -47,9 +47,7 @@ class FONT_INFO {
 
   static OFFSET_FONT_MATRIX = this.OFFSET_BBOX + 1 + 2 * 4;
 
-  static OFFSET_DEFAULT_VMETRICS = this.OFFSET_FONT_MATRIX + 1 + 8 * 6;
-
-  static OFFSET_STRINGS = this.OFFSET_DEFAULT_VMETRICS + 1 + 2 * 3;
+  static OFFSET_STRINGS = this.OFFSET_FONT_MATRIX + 1 + 8 * 6;
 }
 
 class PATTERN_INFO {
