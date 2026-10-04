@@ -37,7 +37,7 @@ const LinkTarget = {
 };
 
 /**
- * @typedef {Object} PDFLinkServiceOptions
+ * @typedef {object} PDFLinkServiceOptions
  * @property {EventBus} eventBus - The application event bus.
  * @property {number} [externalLinkTarget] - Specifies the `target` attribute
  *   for external links. Must use one of the values from {LinkTarget}.
@@ -137,7 +137,6 @@ class PDFLinkService {
 
   /**
    * This method will, when available, also update the browser history.
-   *
    * @param {string|Array} dest - The named, or explicit, PDF destination.
    */
   async goToDestination(dest) {
@@ -225,7 +224,6 @@ class PDFLinkService {
 
   /**
    * This method will, when available, also update the browser history.
-   *
    * @param {number|string} val - The page number, or page label.
    */
   goToPage(val) {
@@ -287,7 +285,7 @@ class PDFLinkService {
    * @param {number} pageNumber - The page number to scroll to.
    * @param {number} x - The x-coordinate to scroll to in page coordinates.
    * @param {number} y - The y-coordinate to scroll to in page coordinates.
-   * @param {Object} [options]
+   * @param {object} [options]
    */
   goToXY(pageNumber, x, y, options = {}) {
     this.pdfViewer.scrollPageIntoView({
@@ -568,7 +566,7 @@ class PDFLinkService {
   }
 
   /**
-   * @param {Object} action
+   * @param {object} action
    */
   async executeSetOCGState(action) {
     if (!this.pdfDocument) {

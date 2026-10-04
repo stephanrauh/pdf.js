@@ -425,7 +425,7 @@ class Page {
       promises.push(
         annotation
           .save(partialEvaluator, task, annotationStorage, changes)
-          .catch(function (reason) {
+          .catch(reason => {
             warn(
               "save - ignoring annotation data during " +
                 `"${task.name}" task: "${reason}".`
@@ -610,7 +610,7 @@ class Page {
       intent & RenderingIntentFlag.ANNOTATIONS_DISABLE
     ) {
       pageOpList.flush(/* lastChunk = */ true);
-      return { length: pageOpList.totalLength };
+      return;
     }
     const renderForms = !!(intent & RenderingIntentFlag.ANNOTATIONS_FORMS),
       isEditing = !!(intent & RenderingIntentFlag.IS_EDITING),
@@ -632,7 +632,7 @@ class Page {
         opListPromises.push(
           annotation
             .getOperatorList(partialEvaluator, task, intent, annotationStorage)
-            .catch(function (reason) {
+            .catch(reason => {
               warn(
                 "getOperatorList - ignoring annotation data during " +
                   `"${task.name}" task: "${reason}".`
@@ -661,7 +661,6 @@ class Page {
       /* lastChunk = */ true,
       /* separateAnnots = */ { form, canvas }
     );
-    return { length: pageOpList.totalLength };
   }
 
   async extractTextContent({
@@ -767,7 +766,7 @@ class Page {
               Infinity,
               Infinity,
             ])
-            .catch(function (reason) {
+            .catch(reason => {
               warn(
                 `getAnnotationsData - ignoring textContent during "${task.name}" task: "${reason}".`
               );
@@ -832,7 +831,7 @@ class Page {
               orphanFields,
               /* collectByType */ null,
               this.ref
-            ).catch(function (reason) {
+            ).catch(reason => {
               warn(`_parsedAnnotations: "${reason}".`);
               return null;
             })
@@ -931,7 +930,7 @@ class Page {
             }
             return annotation.data;
           })
-          .catch(function (reason) {
+          .catch(reason => {
             warn(`collectAnnotationsByType: "${reason}".`);
             return null;
           })
@@ -1920,7 +1919,7 @@ class PDFDocument {
         /* pageRef */ null
       )
         .then(annotation => annotation?.getFieldObject())
-        .catch(function (reason) {
+        .catch(reason => {
           warn(`#collectFieldObjects: "${reason}".`);
           return null;
         })

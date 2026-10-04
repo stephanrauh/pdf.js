@@ -37,7 +37,7 @@ let initialDragY = 0;
 // #2943 end of modification by ngx-extended-pdf-viewer
 
 /**
- * @typedef {Object} PDFThumbnailViewOptions
+ * @typedef {object} PDFThumbnailViewOptions
  * @property {HTMLDivElement} container - The viewer element.
  * @property {EventBus} eventBus - The application event bus.
  * @property {number} id - The thumbnail's unique ID (normally its number).
@@ -53,7 +53,7 @@ let initialDragY = 0;
  * @property {number} [maxCanvasDim] - The maximum supported canvas dimension,
  *   in either width or height. Use `-1` for no limit.
  *   The default value is 32767.
- * @property {Object} [pageColors] - Overwrites background and foreground colors
+ * @property {object} [pageColors] - Overwrites background and foreground colors
  *   with user defined ones in order to improve readability in high contrast
  *   mode.
  */

@@ -77,10 +77,9 @@ const XY = new Float32Array(2);
  * only state modifiers that we cannot copy over when we switch contexts.
  *
  * To remove mirroring call `ctx._removeMirroring()`.
- *
- * @param {Object} ctx - The 2d canvas context that will duplicate its calls on
+ * @param {object} ctx - The 2d canvas context that will duplicate its calls on
  *   the destCtx.
- * @param {Object} destCtx - The 2d canvas context that will receive the
+ * @param {object} destCtx - The 2d canvas context that will receive the
  *   forwarded calls.
  */
 function mirrorContextOperations(ctx, destCtx) {
@@ -598,7 +597,6 @@ class CanvasGraphics {
     this.pageColors = pageColors;
 
     this._cachedScaleForStroking = [-1, 0];
-    this._cachedGetSinglePixelWidth = null;
     this._cachedBitmapsMap = new Map();
 
     this.dependencyTracker = dependencyTracker ?? null;
@@ -700,7 +698,7 @@ class CanvasGraphics {
         }
       }
 
-      if (!operationsFilter || operationsFilter(i)) {
+      if (!operationsFilter || operationsFilter(i, operatorList)) {
         fnId = fnArray[i];
         // TODO: There is a `undefined` coming from somewhere.
         fnArgs = argsArray[i] ?? null;
@@ -1652,7 +1650,6 @@ class CanvasGraphics {
    * not) rather than against the running group result. We render onto a temp
    * canvas; path/clip/transform ops are mirrored back to the group canvas so
    * its state stays in sync for the next element.
-   *
    * @returns {boolean} true if a knockout element was started.
    */
   #beginKnockoutElement(alpha = 1) {
@@ -1707,7 +1704,6 @@ class CanvasGraphics {
    * coverage when alpha_s < 1), destination-out the group canvas over that
    * mask, restore the initial backdrop into the cleared footprint
    * (non-isolated only), then paint the element on top.
-   *
    * @param {boolean} started - the value returned by `#beginKnockoutElement`.
    */
   #endKnockoutElement(started) {
@@ -2051,7 +2047,6 @@ class CanvasGraphics {
     this.pendingClip = null;
 
     this._cachedScaleForStroking[0] = -1;
-    this._cachedGetSinglePixelWidth = null;
   }
 
   transform(opIdx, a, b, c, d, e, f) {
@@ -2059,7 +2054,6 @@ class CanvasGraphics {
     this.ctx.transform(a, b, c, d, e, f);
 
     this._cachedScaleForStroking[0] = -1;
-    this._cachedGetSinglePixelWidth = null;
   }
 
   // Path
@@ -2933,7 +2927,6 @@ class CanvasGraphics {
       return;
     }
     this._cachedScaleForStroking[0] = -1;
-    this._cachedGetSinglePixelWidth = null;
 
     ctx.save();
     if (current.textMatrix) {
@@ -4228,20 +4221,15 @@ class CanvasGraphics {
   }
 
   getSinglePixelWidth() {
-    if (!this._cachedGetSinglePixelWidth) {
-      const m = getCurrentTransform(this.ctx);
-      if (m[1] === 0 && m[2] === 0) {
-        // Fast path
-        this._cachedGetSinglePixelWidth =
-          1 / Math.min(Math.abs(m[0]), Math.abs(m[3]));
-      } else {
-        const absDet = Math.abs(m[0] * m[3] - m[2] * m[1]);
-        const normX = Math.hypot(m[0], m[2]);
-        const normY = Math.hypot(m[1], m[3]);
-        this._cachedGetSinglePixelWidth = Math.max(normX, normY) / absDet;
-      }
+    const m = getCurrentTransform(this.ctx);
+    if (m[1] === 0 && m[2] === 0) {
+      // Fast path
+      return 1 / Math.min(Math.abs(m[0]), Math.abs(m[3]));
     }
-    return this._cachedGetSinglePixelWidth;
+    const absDet = Math.abs(m[0] * m[3] - m[2] * m[1]);
+    const normX = Math.hypot(m[0], m[2]);
+    const normY = Math.hypot(m[1], m[3]);
+    return Math.max(normX, normY) / absDet;
   }
 
   getScaleForStroking() {

@@ -24,7 +24,6 @@ import { stringToBytes } from "../shared/util.js";
 
 /**
  * Extract file name from the Content-Disposition HTTP response header.
- *
  * @param {string} contentDisposition
  * @returns {string} Filename, if found in the Content-Disposition header.
  */
@@ -201,10 +200,11 @@ function getFilenameFromContentDispositionHeader(contentDisposition) {
       function (matches, charset, encoding, text) {
         if (encoding === "q" || encoding === "Q") {
           // RFC 2047 section 4.2.
-          text = text.replaceAll("_", " ");
-          text = text.replaceAll(/=([0-9a-f]{2})/gi, function (match, hex) {
-            return String.fromCharCode(parseInt(hex, 16));
-          });
+          text = text
+            .replaceAll("_", " ")
+            .replaceAll(/=([0-9a-f]{2})/gi, (_, hex) =>
+              String.fromCharCode(parseInt(hex, 16))
+            );
           return textdecode(charset, text);
         } // else encoding is b or B - base64 (RFC 2047 section 4.1)
         try {

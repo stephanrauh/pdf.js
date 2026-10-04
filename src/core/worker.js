@@ -16,12 +16,9 @@
 import {
   AbortException,
   assert,
-  getVerbosityLevel,
-  info,
   isNodeJS,
   PasswordException,
   setVerbosityLevel,
-  VerbosityLevel,
   warn,
 } from "../shared/util.js";
 import {
@@ -141,7 +138,6 @@ class WorkerMessageHandler {
     let terminated = false;
     let cancelXHRs = null;
     const WorkerTasks = new Set();
-    const verbosity = getVerbosityLevel();
 
     const { docId, apiVersion } = docParams;
     const workerVersion =
@@ -968,10 +964,6 @@ class WorkerMessageHandler {
           const task = new WorkerTask(`GetOperatorList: page ${pageIndex}`);
           startWorkerTask(task);
 
-          // NOTE: Keep this condition in sync with the `info` helper function.
-          const start = verbosity >= VerbosityLevel.INFOS ? Date.now() : 0;
-
-          // Pre compile the pdf page and fetch the fonts/images.
           page
             .getOperatorList({
               handler,
@@ -984,12 +976,7 @@ class WorkerMessageHandler {
               pageIndex,
             })
             .then(
-              opListInfo => {
-                if (start) {
-                  info(
-                    `${task.name}; time=${Date.now() - start}ms, len=${opListInfo.length}`
-                  );
-                }
+              () => {
                 sink.close();
               },
               reason => {
@@ -1016,9 +1003,6 @@ class WorkerMessageHandler {
           const task = new WorkerTask("GetTextContent: page " + pageIndex);
           startWorkerTask(task);
 
-          // NOTE: Keep this condition in sync with the `info` helper function.
-          const start = verbosity >= VerbosityLevel.INFOS ? Date.now() : 0;
-
           page
             .extractTextContent({
               handler,
@@ -1029,9 +1013,6 @@ class WorkerMessageHandler {
             })
             .then(
               () => {
-                if (start) {
-                  info(`${task.name}; time=${Date.now() - start}ms`);
-                }
                 sink.close();
               },
               reason => {

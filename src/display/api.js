@@ -104,15 +104,14 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  */
 
 /**
- * @typedef {Object} RefProxy
+ * @typedef {object} RefProxy
  * @property {number} num
  * @property {number} gen
  */
 
 /**
  * Document initialization / loading parameters object.
- *
- * @typedef {Object} DocumentInitParameters
+ * @typedef {object} DocumentInitParameters
  * @property {string | URL} [url] - The URL of the PDF.
  * @property {TypedArray | ArrayBuffer | Array<number> | string} [data] -
  *   Binary PDF data.
@@ -122,7 +121,7 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  *   NOTE: If TypedArrays are used they will generally be transferred to the
  *   worker-thread. This will help reduce main-thread memory usage, however
  *   it will take ownership of the TypedArrays.
- * @property {Object} [httpHeaders] - Basic authentication headers.
+ * @property {object} [httpHeaders] - Basic authentication headers.
  * @property {boolean} [withCredentials] - Indicates whether or not
  *   cross-site Access-Control requests should be made using credentials such
  *   as cookies or authorization headers. The default is `false`.
@@ -208,18 +207,18 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  *   disabling of pre-fetching to work correctly.
  * @property {boolean} [pdfBug] - Enables special hooks for debugging PDF.js
  *   (see `web/debugger.js`). The default value is `false`.
- * @property {Object} [CanvasFactory] - The factory that will be used when
+ * @property {object} [CanvasFactory] - The factory that will be used when
  *    creating canvases. The default value is {DOMCanvasFactory}.
- * @property {Object} [FilterFactory] - The factory that will be used to
+ * @property {object} [FilterFactory] - The factory that will be used to
  *    create SVG filters when rendering some images on the main canvas.
  *    The default value is {DOMFilterFactory}.
- * @property {Object} [BinaryDataFactory] - The factory that will be used when
+ * @property {object} [BinaryDataFactory] - The factory that will be used when
  *   falling back to reading built-in CMap files, standard font files,
  *   and wasm files in the main-thread.
  *   The default value is {DOMBinaryDataFactory}.
  * @property {boolean} [enableHWA] - Enables hardware acceleration for
  *   rendering. The default value is `false`.
- * @property {Object} [pagesMapper] - The pages mapper that will be used to map
+ * @property {object} [pagesMapper] - The pages mapper that will be used to map
  *   page ids and page numbers. It's used when the page order is changed or some
  *   pages are removed, cloned, etc.
  */
@@ -230,7 +229,6 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  * NOTE: If a URL is used to fetch the PDF data a standard Fetch API call (or
  * XHR as fallback) is used, which means it must follow same origin rules,
  * e.g. no cross-domain requests without CORS.
- *
  * @param {DocumentInitParameters} src - Parameter object.
  * @returns {PDFDocumentLoadingTask}
  */
@@ -499,7 +497,7 @@ function getDocument(src = {}) {
 }
 
 /**
- * @typedef {Object} OnProgressParameters
+ * @typedef {object} OnProgressParameters
  * @property {number} loaded - Currently loaded number of bytes.
  * @property {number} total - Total number of bytes in the PDF file.
  * @property {number} percent - Currently loaded percentage, as an integer value
@@ -553,7 +551,7 @@ class PDFDocumentLoadingTask {
    * Callback to request a password if a wrong or no password was provided.
    * The callback receives two parameters: a function that should be called
    * with the new password, and a reason (see {@link PasswordResponses}).
-   * @type {function}
+   * @type {Function}
    */
   onPassword = null;
 
@@ -561,7 +559,7 @@ class PDFDocumentLoadingTask {
    * Callback to be able to monitor the loading progress of the PDF file
    * (necessary to implement e.g. a loading bar).
    * The callback receives an {@link OnProgressParameters} argument.
-   * @type {function}
+   * @type {Function}
    */
   onProgress = null;
 
@@ -741,14 +739,14 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @type {Object} The canvas factory instance.
+   * @type {object} The canvas factory instance.
    */
   get canvasFactory() {
     return this._transport.canvasFactory;
   }
 
   /**
-   * @type {Object} The filter factory instance.
+   * @type {object} The filter factory instance.
    */
   get filterFactory() {
     return this._transport.filterFactory;
@@ -780,8 +778,7 @@ class PDFDocumentProxy {
 
   /**
    * NOTE: This is (mostly) intended to support printing of XFA forms.
-   *
-   * @type {Object | null} An object representing a HTML tree structure
+   * @type {object | null} An object representing a HTML tree structure
    *   to render the XFA, or `null` when no XFA form exists.
    */
   get allXfaHtml() {
@@ -891,7 +888,7 @@ class PDFDocumentProxy {
   /**
    * @param {Set<number>} types - The annotation types to retrieve.
    * @param {Set<number>} pageIndexesToSkip
-   * @returns {Promise<Array<Object>>} A promise that is resolved with a list of
+   * @returns {Promise<Array<object>>} A promise that is resolved with a list of
    *   annotations data.
    */
   getAnnotationsByType(types, pageIndexesToSkip) {
@@ -910,7 +907,7 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @typedef {Object} OutlineNode
+   * @typedef {object} OutlineNode
    * @property {string} title
    * @property {boolean} bold
    * @property {boolean} italic
@@ -933,7 +930,7 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @typedef {Object} GetOptionalContentConfigParameters
+   * @typedef {object} GetOptionalContentConfigParameters
    * @property {string} [intent] - Determines the optional content groups that
    *   are visible by default; valid values are:
    *    - 'display' (viewable groups).
@@ -965,7 +962,7 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @returns {Promise<{ info: Object, metadata: Metadata }>} A promise that is
+   * @returns {Promise<{info: object, metadata: Metadata}>} A promise that is
    *   resolved with an {Object} that has `info` and `metadata` properties.
    *   `info` is an {Object} filled with anything available in the information
    *   dictionary and similarly `metadata` is a {Metadata} object with
@@ -976,7 +973,7 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @typedef {Object} MarkInfo
+   * @typedef {object} MarkInfo
    * Properties correspond to Table 321 of the PDF 32000-1:2008 spec.
    * @property {boolean} Marked
    * @property {boolean} UserProperties
@@ -1012,7 +1009,7 @@ class PDFDocumentProxy {
   // #2943 end of modification by ngx-extended-pdf-viewer
 
   /**
-   * @typedef {Object} PageInfo
+   * @typedef {object} PageInfo
    * @property {null|Uint8Array} [document]
    * @property {ImageBitmap} [image] Image to insert as a synthetic page.
    * @property {Array<Array<number>|number>} [includePages]
@@ -1069,7 +1066,6 @@ class PDFDocumentProxy {
    *
    * NOTE: Do not, under any circumstances, call this method when rendering is
    * currently ongoing since that may lead to rendering errors.
-   *
    * @param {boolean} [keepLoadedFonts] - Let fonts remain attached to the DOM.
    *   NOTE: This will increase persistent memory usage, hence don't use this
    *   option unless absolutely necessary. The default value is `false`.
@@ -1103,7 +1099,7 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @returns {Promise<Map<string, Array<Object>> | null>} A promise that is
+   * @returns {Promise<Map<string, Array<object>> | null>} A promise that is
    *   resolved with a {Map} containing /AcroForm field data for the JS sandbox,
    *   or `null` when no field data is present in the PDF file.
    */
@@ -1112,7 +1108,7 @@ class PDFDocumentProxy {
   }
 
   /**
-   * @returns {Promise<Array<Object> | null>} A promise that is resolved
+   * @returns {Promise<Array<object> | null>} A promise that is resolved
    *   with an {Array} of digital signature metadata (signerName, reason,
    *   signingTime, byteRange, subFilter, …), or `null` when the document
    *   has no signatures. The PKCS#7 blob and signed-data byte spans
@@ -1154,8 +1150,7 @@ class PDFDocumentProxy {
 
 /**
  * Page getViewport parameters.
- *
- * @typedef {Object} GetViewportParameters
+ * @typedef {object} GetViewportParameters
  * @property {number} scale - The desired scale of the viewport.
  * @property {number} [rotation] - The desired rotation, in degrees, of
  *   the viewport. If omitted it defaults to the page rotation.
@@ -1169,8 +1164,7 @@ class PDFDocumentProxy {
 
 /**
  * Page getTextContent parameters.
- *
- * @typedef {Object} getTextContentParameters
+ * @typedef {object} getTextContentParameters
  * @property {boolean} [includeMarkedContent] - When true include marked
  *   content items in the items array of TextContent. The default is `false`.
  * @property {boolean} [disableNormalization] - When true the text is *not*
@@ -1179,20 +1173,18 @@ class PDFDocumentProxy {
 
 /**
  * Page text content.
- *
- * @typedef {Object} TextContent
+ * @typedef {object} TextContent
  * @property {Array<TextItem | TextMarkedContent>} items - Array of
  *   {@link TextItem} and {@link TextMarkedContent} objects. TextMarkedContent
  *   items are included when includeMarkedContent is true.
- * @property {Object<string, TextStyle>} styles - {@link TextStyle} objects,
+ * @property {Record<string, TextStyle>} styles - {@link TextStyle} objects,
  *   indexed by font name.
  * @property {string | null} lang - The document /Lang attribute.
  */
 
 /**
  * Page text content part.
- *
- * @typedef {Object} TextItem
+ * @typedef {object} TextItem
  * @property {string} str - Text content.
  * @property {string} dir - Text direction: 'ttb', 'ltr' or 'rtl'.
  * @property {Array<any>} transform - Transformation matrix.
@@ -1205,8 +1197,7 @@ class PDFDocumentProxy {
 
 /**
  * Page text marked content part.
- *
- * @typedef {Object} TextMarkedContent
+ * @typedef {object} TextMarkedContent
  * @property {string} type - Either 'beginMarkedContent',
  *   'beginMarkedContentProps', or 'endMarkedContent'.
  * @property {string} id - The marked content identifier. Only used for type
@@ -1215,8 +1206,7 @@ class PDFDocumentProxy {
 
 /**
  * Text style.
- *
- * @typedef {Object} TextStyle
+ * @typedef {object} TextStyle
  * @property {number} ascent - Font ascent.
  * @property {number} descent - Font descent.
  * @property {boolean} vertical - Whether or not the text is in vertical mode.
@@ -1225,8 +1215,7 @@ class PDFDocumentProxy {
 
 /**
  * Page annotation parameters.
- *
- * @typedef {Object} GetAnnotationsParameters
+ * @typedef {object} GetAnnotationsParameters
  * @property {string} [intent] - Determines the annotations that are fetched,
  *   can be 'display' (viewable annotations), 'print' (printable annotations),
  *   or 'any' (all annotations). The default value is 'display'.
@@ -1234,8 +1223,7 @@ class PDFDocumentProxy {
 
 /**
  * Page render parameters.
- *
- * @typedef {Object} RenderParameters
+ * @typedef {object} RenderParameters
  * @property {HTMLCanvasElement|null} canvas - A DOM Canvas object. The default
  *   value is the canvas associated with the `canvasContext` parameter if no
  *   value is provided explicitly.
@@ -1271,7 +1259,7 @@ class PDFDocumentProxy {
  *
  *   NOTE: This option may be partially, or completely, ignored when the
  *   `pageColors`-option is used.
- * @property {Object} [pageColors] - Overwrites background and foreground colors
+ * @property {object} [pageColors] - Overwrites background and foreground colors
  *   with user defined ones in order to improve readability in high contrast
  *   mode.
  * @property {Promise<OptionalContentConfig>} [optionalContentConfigPromise] -
@@ -1293,13 +1281,13 @@ class PDFDocumentProxy {
 /**
  * @callback OperationsFilter
  * @param {number} index - The index of the operation.
+ * @param {PDFOperatorList} operatorList - The page operator list.
  * @returns {boolean} If false, the operation is ignored.
  */
 
 /**
  * Page getOperatorList parameters.
- *
- * @typedef {Object} GetOperatorListParameters
+ * @typedef {object} GetOperatorListParameters
  * @property {string} [intent] - Rendering intent, can be 'display', 'print',
  *   or 'any'. The default value is 'display'.
  * @property {number} [annotationMode] Controls which annotations are included
@@ -1320,8 +1308,7 @@ class PDFDocumentProxy {
 
 /**
  * Structure tree node. The root node will have a role "Root".
- *
- * @typedef {Object} StructTreeNode
+ * @typedef {object} StructTreeNode
  * @property {Array<StructTreeNode | StructTreeContent>} children - Array of
  *   {@link StructTreeNode} and {@link StructTreeContent} objects.
  * @property {string} role - element's role, already mapped if a role map exists
@@ -1342,8 +1329,7 @@ class PDFDocumentProxy {
 
 /**
  * Structure tree content.
- *
- * @typedef {Object} StructTreeContent
+ * @typedef {object} StructTreeContent
  * @property {string} type - either "content" for page and stream structure
  *   elements or "object" for object references.
  * @property {string} id - unique id that will map to the text layer.
@@ -1351,8 +1337,7 @@ class PDFDocumentProxy {
 
 /**
  * PDF page operator list.
- *
- * @typedef {Object} PDFOperatorList
+ * @typedef {object} PDFOperatorList
  * @property {Array<number>} fnArray - Array containing the operator functions.
  * @property {Array<any>} argsArray - Array containing the arguments of the
  *   functions.
@@ -1483,7 +1468,7 @@ class PDFPageProxy {
   }
 
   /**
-   * @type {Object} The filter factory instance.
+   * @type {object} The filter factory instance.
    */
   get filterFactory() {
     return this._transport.filterFactory;
@@ -1497,7 +1482,7 @@ class PDFPageProxy {
   }
 
   /**
-   * @returns {Promise<Object | null>} A promise that is resolved with
+   * @returns {Promise<object | null>} A promise that is resolved with
    *   an {Object} with a fake DOM object (a tree structure where elements
    *   are {Object} with a name, attributes (class, style, ...), value and
    *   children, very similar to a HTML DOM tree), or `null` if no XFA exists.
@@ -1508,7 +1493,6 @@ class PDFPageProxy {
 
   /**
    * Begins the process of rendering a page to the desired context.
-   *
    * @param {RenderParameters} params - Page render parameters.
    * @returns {RenderTask} An object that contains a promise that is
    *   resolved when the page finishes rendering.
@@ -1763,7 +1747,6 @@ class PDFPageProxy {
   /**
    * NOTE: All occurrences of whitespace will be replaced by
    * standard spaces (0x20).
-   *
    * @param {getTextContentParameters} params - getTextContent parameters.
    * @returns {ReadableStream} Stream for reading text content chunks.
    */
@@ -1793,7 +1776,6 @@ class PDFPageProxy {
   /**
    * NOTE: All occurrences of whitespace will be replaced by
    * standard spaces (0x20).
-   *
    * @param {getTextContentParameters} params - getTextContent parameters.
    * @returns {Promise<TextContent>} A promise that is resolved with a
    *   {@link TextContent} object that represents the page's text content.
@@ -1880,7 +1862,6 @@ class PDFPageProxy {
 
   /**
    * Cleans up resources allocated by the page.
-   *
    * @param {boolean} [resetStats] - Reset page stats, if enabled.
    *   The default value is `false`.
    * @returns {boolean} Indicates if clean-up was successfully run.
@@ -2103,7 +2084,7 @@ class PDFPageProxy {
 }
 
 /**
- * @typedef {Object} PDFWorkerParameters
+ * @typedef {object} PDFWorkerParameters
  * @property {string} [name] - The name of the worker.
  * @property {Worker} [port] - The `workerPort` object.
  * @property {number} [verbosity] - Controls the logging level;
@@ -2115,7 +2096,6 @@ class PDFPageProxy {
  * documents. Message handlers are used to pass information from the main
  * thread to the worker thread and vice versa. If the creation of a web
  * worker is not possible, a "fake" worker will be used instead.
- *
  * @param {PDFWorkerParameters} params - The worker initialization parameters.
  */
 class PDFWorker {
@@ -3318,7 +3298,7 @@ class RenderTask {
    * Callback for incremental rendering -- a function that will be called
    * each time the rendering is paused.  To continue rendering call the
    * function that is the first argument to the callback.
-   * @type {function}
+   * @type {Function}
    */
   onContinue = null;
 
@@ -3326,8 +3306,7 @@ class RenderTask {
    * A function that will be synchronously called when the rendering tasks
    * finishes with an error (either because of an actual error, or because the
    * rendering is cancelled).
-   *
-   * @type {function}
+   * @type {Function}
    * @param {Error} error
    */
   onError = null;
@@ -3355,7 +3334,6 @@ class RenderTask {
    * Cancels the rendering task. If the task is currently rendering it will
    * not be cancelled until graphics pauses with a timeout. The promise that
    * this object extends will be rejected when cancelled.
-   *
    * @param {number} [extraDelay]
    */
   cancel(extraDelay = 0) {
@@ -3442,7 +3420,7 @@ class InternalRenderTask {
   }
 
   get completed() {
-    return this.capability.promise.catch(function () {
+    return this.capability.promise.catch(() => {
       // Ignoring errors, since we only want to know when rendering is
       // no longer pending.
     });

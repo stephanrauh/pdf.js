@@ -40,8 +40,8 @@ import { SignatureEditor } from "./signature.js";
 import { StampEditor } from "./stamp.js";
 
 /**
- * @typedef {Object} AnnotationEditorLayerOptions
- * @property {Object} mode
+ * @typedef {object} AnnotationEditorLayerOptions
+ * @property {object} mode
  * @property {HTMLDivElement} div
  * @property {StructTreeLayerBuilder} structTreeLayer
  * @property {AnnotationEditorUIManager} uiManager
@@ -56,7 +56,7 @@ import { StampEditor } from "./stamp.js";
  */
 
 /**
- * @typedef {Object} RenderEditorLayerOptions
+ * @typedef {object} RenderEditorLayerOptions
  * @property {PageViewport} viewport
  */
 
@@ -173,7 +173,7 @@ class AnnotationEditorLayer {
 
   /**
    * Update the toolbar if it's required to reflect the tool currently used.
-   * @param {Object} options
+   * @param {object} options
    */
   updateToolbar(options) {
     this.#uiManager.updateToolbar(options);
@@ -257,7 +257,7 @@ class AnnotationEditorLayer {
 
   /**
    * Add some commands into the CommandManager (undo/redo stuff).
-   * @param {Object} params
+   * @param {object} params
    */
   addCommands(params) {
     this.#uiManager.addCommands(params);
@@ -741,7 +741,7 @@ class AnnotationEditorLayer {
 
   /**
    * Create a new editor
-   * @param {Object} params
+   * @param {object} params
    * @returns {AnnotationEditor}
    */
   #createNewEditor(params) {
@@ -755,8 +755,8 @@ class AnnotationEditorLayer {
 
   /**
    * Paste some content into a new editor.
-   * @param {Object} options
-   * @param {Object} params
+   * @param {object} options
+   * @param {object} params
    */
   async pasteEditor(options, params) {
     this.updateToolbar(options);
@@ -780,7 +780,7 @@ class AnnotationEditorLayer {
 
   /**
    * Create a new editor
-   * @param {Object} data
+   * @param {object} data
    * @returns {Promise<AnnotationEditor | null>}
    */
   async deserialize(data) {
@@ -795,7 +795,7 @@ class AnnotationEditorLayer {
    * Create and add a new editor.
    * @param {PointerEvent} event
    * @param {boolean} isCentered
-   * @param [Object] data
+   * @param {object} [data]
    * @returns {AnnotationEditor}
    */
   createAndAddNewEditor(event, isCentered, data = {}) {
@@ -1032,11 +1032,10 @@ class AnnotationEditorLayer {
   }
 
   /**
-   *
    * @param {AnnotationEditor} editor
    * @param {number} x
    * @param {number} y
-   * @returns
+   * @returns {boolean}
    */
   findNewParent(editor, x, y) {
     const layer = this.#uiManager.findParent(x, y);
@@ -1157,7 +1156,7 @@ class AnnotationEditorLayer {
 
   /**
    * Get page dimensions.
-   * @returns {Object} dimensions.
+   * @returns {object} dimensions.
    */
   get pageDimensions() {
     const { pageWidth, pageHeight } = this.viewport.rawDims;

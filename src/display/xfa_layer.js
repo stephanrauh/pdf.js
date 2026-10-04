@@ -23,10 +23,10 @@ import { PageViewport } from "./page_viewport.js";
 import { XfaText } from "./xfa_text.js";
 
 /**
- * @typedef {Object} XfaLayerParameters
+ * @typedef {object} XfaLayerParameters
  * @property {PageViewport} viewport
  * @property {HTMLDivElement} div
- * @property {Object} xfaHtml
+ * @property {object} xfaHtml
  * @property {AnnotationStorage} [annotationStorage]
  * @property {PDFLinkService} linkService
  * @property {string} [intent] - (default value is 'display').
@@ -340,7 +340,6 @@ class XfaLayer {
 
   /**
    * Render the XFA layer.
-   *
    * @param {XfaLayerParameters} parameters
    */
   static render(parameters) {
@@ -472,7 +471,6 @@ class XfaLayer {
 
   /**
    * Update the XFA layer.
-   *
    * @param {XfaLayerParameters} parameters
    */
   static update(parameters) {

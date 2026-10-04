@@ -93,7 +93,7 @@ function isValidAnnotationEditorMode(mode) {
 }
 
 /**
- * @typedef {Object} PDFViewerOptions
+ * @typedef {object} PDFViewerOptions
  * @property {HTMLDivElement} container - The container for the viewer element.
  * @property {HTMLDivElement} [viewer] - The viewer element.
  * @property {EventBus} eventBus - The application event bus.
@@ -151,7 +151,7 @@ function isValidAnnotationEditorMode(mode) {
  * @property {L10n} [l10n] - Localization service.
  * @property {boolean} [enablePermissions] - Enables PDF document permissions,
  *   when they exist. The default value is `false`.
- * @property {Object} [pageColors] - Overwrites background and foreground colors
+ * @property {object} [pageColors] - Overwrites background and foreground colors
  *   with user defined ones in order to improve readability in high contrast
  *   mode.
  * @property {boolean} [supportsPinchToZoom] - Enable zooming on pinch gesture.
@@ -983,7 +983,8 @@ class PDFViewer {
   }
 
   /**
-   * @param val - The scale of the pages (in percent or predefined value).
+   * @param {string} val - The scale of the pages (in percent or predefined
+   *   value).
    */
   set currentScaleValue(val) {
     if (!this.pdfDocument) {
@@ -1103,7 +1104,7 @@ class PDFViewer {
 
   /**
    * Currently only *some* permissions are supported.
-   * @returns {Object}
+   * @returns {object}
    */
   #initializePermissions(permissions) {
     const params = {
@@ -2363,7 +2364,7 @@ class PDFViewer {
   }
 
   /**
-   * @typedef {Object} ScrollPageIntoViewParameters
+   * @typedef {object} ScrollPageIntoViewParameters
    * @property {number} pageNumber - The page number.
    * @property {Array} [destArray] - The original PDF destination array, in the
    *   format: <page-ref> </XYZ|/FitXXX> <args..>
@@ -3432,7 +3433,7 @@ class PDFViewer {
   }
 
   /**
-   * @typedef {Object} ChangeScaleOptions
+   * @typedef {object} ChangeScaleOptions
    * @property {number} [drawingDelay]
    * @property {number} [scaleFactor]
    * @property {number} [steps]
@@ -3567,7 +3568,7 @@ class PDFViewer {
   }
 
   /**
-   * @typedef {Object} AnnotationEditorModeOptions
+   * @typedef {object} AnnotationEditorModeOptions
    * @property {number} mode - The editor mode (none, FreeText, ink, ...).
    * @property {string|null} [editId] - ID of the existing annotation to edit.
    * @property {boolean} [isFromKeyboard] - True if the mode change is due to a

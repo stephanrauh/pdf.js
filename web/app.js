@@ -571,7 +571,7 @@ appConfig: null,
       !AppOptions.get("featuresNotificationDismissed")
     ) {
       const { featuresNotification } = appConfig;
-      customElements.whenDefined("pdf-features-notification").then(() => {
+      customElements.whenDefined("moz-message-bar").then(() => {
         if (AppOptions.get("featuresNotificationDismissed")) {
           return;
         }
@@ -579,7 +579,7 @@ appConfig: null,
         featuresNotification.addEventListener(
           "click",
           event => {
-            if (!event.target.closest(".cta")) {
+            if (!event.target.closest("a")) {
               return;
             }
             event.preventDefault();
@@ -603,8 +603,12 @@ appConfig: null,
           featuresNotification.hidden = true;
         };
         featuresNotification.addEventListener(
-          "pdf-features-notification:dismissed",
+          "message-bar:user-dismissed",
           () => {
+            // Move focus before the bar removes itself.
+            if (featuresNotification.matches(":focus-within")) {
+              container.focus();
+            }
             hideBar();
             this.preferences.set("featuresNotificationDismissed", true);
           },
@@ -619,7 +623,7 @@ appConfig: null,
           },
           { signal: abortSignal, ...internalOpt }
         );
-        featuresNotification.show();
+        featuresNotification.hidden = false;
       });
     }
 
@@ -1481,7 +1485,7 @@ appConfig: null,
 
   /**
    * Opens a new PDF document.
-   * @param {Object} args - Accepts any/all of the properties from
+   * @param {object} args - Accepts any/all of the properties from
    *   {@link DocumentInitParameters}, and also a `originalUrl` string.
    * @returns {Promise} - Promise that is resolved when the document is opened.
    */
@@ -1819,7 +1823,7 @@ appConfig: null,
   /**
    * Report the error; used for errors affecting e.g. only a single page.
    * @param {string} key - The localization key for the error.
-   * @param {Object} [moreInfo] - Further information about the error that is
+   * @param {object} [moreInfo] - Further information about the error that is
    *                              more technical. Should have a 'message' and
    *                              optionally a 'stack' property.
    * @returns {string} A (localized) error message that is human readable.
