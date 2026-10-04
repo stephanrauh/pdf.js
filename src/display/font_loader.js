@@ -25,6 +25,8 @@ import { makePathFromDrawOPS } from "./display_utils.js";
 import { serializeFontFamily } from "../shared/css_utils.js";
 
 class FontLoader {
+  #nativeFontFaces = new Set();
+
   #systemFonts = new Set();
 
   #styleSheet = null;
@@ -35,34 +37,44 @@ class FontLoader {
   }) {
     this._document = ownerDocument;
 
-    this.nativeFontFaces = new Set();
     this.styleElement =
       typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")
         ? styleElement
         : null;
 
-    if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
+    if (
+      typeof PDFJSDev === "undefined" ||
+      !PDFJSDev.test("MOZCENTRAL || WORKER_THREAD")
+    ) {
       this.loadingRequests = [];
       this.loadTestFontId = 0;
     }
   }
 
   addNativeFontFace(nativeFontFace) {
-    this.nativeFontFaces.add(nativeFontFace);
+    this.#nativeFontFaces.add(nativeFontFace);
     this._document.fonts.add(nativeFontFace);
   }
 
   removeNativeFontFace(nativeFontFace) {
-    this.nativeFontFaces.delete(nativeFontFace);
+    this.#nativeFontFaces.delete(nativeFontFace);
     this._document.fonts.delete(nativeFontFace);
   }
 
   insertRule(rule) {
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("WORKER_THREAD")) {
+      throw new Error("Not implemented: insertRule");
+    }
+
     const styleSheet = this.#getStyleSheet();
     styleSheet.insertRule(rule, styleSheet.cssRules.length);
   }
 
   #getStyleSheet() {
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("WORKER_THREAD")) {
+      throw new Error("Not implemented: #getStyleSheet");
+    }
+
     if (this.#styleSheet) {
       return this.#styleSheet;
     }
@@ -93,12 +105,15 @@ class FontLoader {
   }
 
   clear() {
-    for (const nativeFontFace of this.nativeFontFaces) {
+    for (const nativeFontFace of this.#nativeFontFaces) {
       this._document.fonts.delete(nativeFontFace);
     }
-    this.nativeFontFaces.clear();
+    this.#nativeFontFaces.clear();
     this.#systemFonts.clear();
 
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("WORKER_THREAD")) {
+      return;
+    }
     if (this.#styleSheet) {
       const { adoptedStyleSheets } = this._document;
       if (adoptedStyleSheets?.includes(this.#styleSheet)) {
@@ -108,12 +123,8 @@ class FontLoader {
       }
       this.#styleSheet = null;
     }
-
-    if (this.styleElement) {
-      // Note: ChildNode.remove doesn't throw if the parentNode is undefined.
-      this.styleElement.remove();
-      this.styleElement = null;
-    }
+    this.styleElement?.remove();
+    this.styleElement = null;
   }
 
   async loadSystemFont({
@@ -182,6 +193,9 @@ class FontLoader {
     }
 
     // !this.isFontLoadingAPISupported
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("WORKER_THREAD")) {
+      throw new Error("Not implemented: sync font loading");
+    }
     const rule = font.createFontFaceRule();
     if (rule) {
       this.insertRule(rule);
@@ -201,15 +215,13 @@ class FontLoader {
   }
 
   get isFontLoadingAPISupported() {
-    const hasFonts = !!this._document?.fonts;
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-      return shadow(
-        this,
-        "isFontLoadingAPISupported",
-        hasFonts && !this.styleElement
-      );
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) &&
+      this.styleElement
+    ) {
+      return shadow(this, "isFontLoadingAPISupported", false);
     }
-    return shadow(this, "isFontLoadingAPISupported", hasFonts);
+    return shadow(this, "isFontLoadingAPISupported", !!this._document?.fonts);
   }
 
   get isSyncFontLoadingSupported() {
@@ -228,7 +240,10 @@ class FontLoader {
   }
 
   _queueLoadingCallback(callback) {
-    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
+    if (
+      typeof PDFJSDev !== "undefined" &&
+      PDFJSDev.test("MOZCENTRAL || WORKER_THREAD")
+    ) {
       throw new Error("Not implemented: _queueLoadingCallback");
     }
 
@@ -253,14 +268,17 @@ class FontLoader {
     return request;
   }
 
-  get _loadTestFont() {
-    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-      throw new Error("Not implemented: _loadTestFont");
+  _prepareFontLoadEvent(font, request) {
+    if (
+      typeof PDFJSDev !== "undefined" &&
+      PDFJSDev.test("MOZCENTRAL || WORKER_THREAD")
+    ) {
+      throw new Error("Not implemented: _prepareFontLoadEvent");
     }
 
     // This is a CFF font with 1 glyph for '.' that fills its entire width
     // and height.
-    const testFont = atob(
+    this._loadTestFont ??= atob(
       "T1RUTwALAIAAAwAwQ0ZGIDHtZg4AAAOYAAAAgUZGVE1lkzZwAAAEHAAAABxHREVGABQA" +
         "FQAABDgAAAAeT1MvMlYNYwkAAAEgAAAAYGNtYXABDQLUAAACNAAAAUJoZWFk/xVFDQAA" +
         "ALwAAAA2aGhlYQdkA+oAAAD0AAAAJGhtdHgD6AAAAAAEWAAAAAZtYXhwAAJQAAAAARgA" +
@@ -284,13 +302,6 @@ class FontLoader {
         "Dov6fAH6fAT+fPp8+nwHDosMCvm1Cvm1DAz6fBQAAAAAAAABAAAAAMmJbzEAAAAAzgTj" +
         "FQAAAADOBOQpAAEAAAAAAAAADAAUAAQAAAABAAAAAgABAAAAAAAAAAAD6AAAAAAAAA=="
     );
-    return shadow(this, "_loadTestFont", testFont);
-  }
-
-  _prepareFontLoadEvent(font, request) {
-    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-      throw new Error("Not implemented: _prepareFontLoadEvent");
-    }
 
     /** Hack begin */
     // There's currently no event when a font has finished downloading so the
@@ -399,7 +410,7 @@ class FontLoader {
 }
 
 class FontFaceObject {
-  compiledGlyphs = Object.create(null);
+  #compiledPaths = new Map();
 
   #fontData;
 
@@ -451,6 +462,10 @@ class FontFaceObject {
   }
 
   createFontFaceRule() {
+    if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("WORKER_THREAD")) {
+      throw new Error("Not implemented: createFontFaceRule");
+    }
+
     if (!this.data || this.disableFontFace) {
       return null;
     }
@@ -475,24 +490,26 @@ class FontFaceObject {
   }
 
   getPathGenerator(objs, character) {
-    if (this.compiledGlyphs[character] !== undefined) {
-      return this.compiledGlyphs[character];
+    let path = this.#compiledPaths.get(character);
+    if (path) {
+      return path;
     }
 
-    const objId = this.loadedName + "_path_" + character;
+    const objId = `${this.loadedName}_path_${character}`;
     let cmds;
     try {
       cmds = objs.get(objId);
     } catch (ex) {
       warn(`getPathGenerator - ignoring character: "${ex}".`);
     }
-    const path = makePathFromDrawOPS(cmds?.path);
+    path = makePathFromDrawOPS(cmds?.path);
 
     if (!this.fontExtraProperties) {
-      // Remove the raw path-string, since we don't need it anymore.
+      // Remove the raw path-data, since we don't need it anymore.
       objs.delete(objId);
     }
-    return (this.compiledGlyphs[character] = path);
+    this.#compiledPaths.set(character, path);
+    return path;
   }
 
   get black() {

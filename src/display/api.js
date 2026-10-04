@@ -999,12 +999,19 @@ class PDFDocumentProxy {
 
   // #2943 modified by ngx-extended-pdf-viewer
   /**
+   * @param {function(Array<object>): Promise<Uint8Array | null>} [printToPDF] -
+   *   Firefox-only platform appearance renderer. It receives ordered
+   *   `{ data }` entries and returns a PDF with one page per entry, or `null`.
+   *   Each page must place its appearance in
+   *   `[0, 0, data.width, data.height]`, with dimensions in points.
+   * @param {Array<number>} [pageOrder] - 1-based page numbers in the order
+   *   the pages are written to the saved document (#2943).
    * @returns {Promise<Uint8Array<ArrayBuffer>>} A promise that is
    *   resolved with a {Uint8Array<ArrayBuffer>} containing the
    *   full data of the saved document.
    */
-  saveDocument(pageOrder = null) {
-    return this._transport.saveDocument(pageOrder);
+  saveDocument(printToPDF = null, pageOrder = null) {
+    return this._transport.saveDocument(printToPDF, pageOrder);
   }
   // #2943 end of modification by ngx-extended-pdf-viewer
 
@@ -2457,6 +2464,8 @@ class WorkerTransport {
 
   #passwordCapability = null;
 
+  #printToPDF = null;
+
   constructor(
     messageHandler,
     loadingTask,
@@ -2962,6 +2971,13 @@ class WorkerTransport {
         return this.binaryDataFactory.fetch(data);
       });
     }
+
+    if (
+      typeof PDFJSDev === "undefined" ||
+      PDFJSDev.test("TESTING || MOZCENTRAL")
+    ) {
+      messageHandler.on("PrintToPDF", data => this.#printToPDF?.(data) ?? null);
+    }
   }
 
   getData() {
@@ -2969,7 +2985,7 @@ class WorkerTransport {
   }
 
   // #2943 modified by ngx-extended-pdf-viewer
-  saveDocument(pageOrder = null) {
+  saveDocument(printToPDF = null, pageOrder = null) {
     if (this.annotationStorage.size <= 0) {
       warn(
         "saveDocument called while `annotationStorage` is empty, " +
@@ -2977,6 +2993,12 @@ class WorkerTransport {
       );
     }
     const { map, transfer } = this.annotationStorage.serializable;
+    if (
+      typeof PDFJSDev === "undefined" ||
+      PDFJSDev.test("TESTING || MOZCENTRAL")
+    ) {
+      this.#printToPDF = printToPDF;
+    }
 
     return this.messageHandler
       .sendWithPromise(
@@ -2985,12 +3007,14 @@ class WorkerTransport {
           isPureXfa: !!this._htmlForXfa,
           numPages: this._numPages,
           annotationStorage: map,
+          supportsPrintToPDF: this.#printToPDF !== null,
           filename: this.#fullReader?.filename ?? null,
           pageOrder: pageOrder
         },
         transfer
       )
       .finally(() => {
+        this.#printToPDF = null;
         this.annotationStorage.resetModified();
       });
   }

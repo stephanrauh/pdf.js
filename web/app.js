@@ -627,19 +627,28 @@ appConfig: null,
       });
     }
 
-    const signatureManager =
-      AppOptions.get("enableSignatureEditor") && appConfig.addSignatureDialog
-        ? new SignatureManager(
-            appConfig.addSignatureDialog,
-            appConfig.editSignatureDialog,
-            appConfig.annotationEditorParams?.editorSignatureAddSignature ||
-              null,
-            overlayManager,
-            l10n,
-            externalServices.createSignatureStorage(eventBus, abortSignal),
-            eventBus
-          )
-        : null;
+    let signatureManager = null;
+    if (AppOptions.get("enableSignatureEditor")) {
+      if (
+        typeof PDFJSDev === "undefined"
+          ? window.isGECKOVIEW
+          : PDFJSDev.test("GECKOVIEW")
+      ) {
+        if (annotationEditorMode !== AnnotationEditorType.DISABLE) {
+          signatureManager = new SignatureManager(eventBus, abortSignal);
+        }
+      } else if (appConfig.addSignatureDialog) {
+        signatureManager = new SignatureManager(
+          appConfig.addSignatureDialog,
+          appConfig.editSignatureDialog,
+          appConfig.annotationEditorParams?.editorSignatureAddSignature || null,
+          overlayManager,
+          l10n,
+          externalServices.createSignatureStorage(eventBus, abortSignal),
+          eventBus
+        );
+      }
+    }
 
     const commentManager =
       AppOptions.get("enableComment") && appConfig.editCommentDialog
@@ -1641,7 +1650,10 @@ appConfig: null,
     await this.pdfScriptingManager.dispatchWillSave();
 
     try {
-      const data = await this.pdfDocument.saveDocument(pageOrder);
+      const data = await this.pdfDocument.saveDocument(
+        this.externalServices.printToPDF,
+        pageOrder
+      );
       this.downloadManager.download(data, this._downloadUrl, this._docFilename);
     } catch (reason) {
       // When the PDF document isn't ready, fallback to a "regular" download.
@@ -3384,7 +3396,7 @@ function onSidebarViewChanged({ view }) {
 
   if (this.isInitialViewSet) {
     // Only update the storage when the document has been loaded *and* rendered.
-    this.store?.set("sidebarView", view).catch(() => {
+    this.store?.setMultiple({ sidebarView: view }).catch(() => {
       // Unable to write to storage.
     });
   }
@@ -3425,7 +3437,7 @@ function onUpdateViewarea({ location }) {
 function onViewerModesChanged(name, evt) {
   if (this.isInitialViewSet && !this.pdfViewer.isInPresentationMode) {
     // Only update the storage when the document has been loaded *and* rendered.
-    this.store?.set(name, evt.mode).catch(() => {
+    this.store?.setMultiple({ [name]: evt.mode }).catch(() => {
       // Unable to write to storage.
     });
   }
