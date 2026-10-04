@@ -80,14 +80,12 @@ const PRIVATE_USE_AREAS = [
 const PDF_GLYPH_SPACE_UNITS = 1000;
 
 const EXPORT_DATA_PROPERTIES = [
-  "ascent",
   "bbox",
   "black",
   "bold",
   // "charProcOperatorList" is handled separately, since it's not compiled.
   "cssFontInfo",
   "data",
-  "descent",
   "disableFontFace",
   "fallbackName",
   "fontExtraProperties",
@@ -96,23 +94,24 @@ const EXPORT_DATA_PROPERTIES = [
   "isType3Font",
   "italic",
   "loadedName",
-  "mimetype",
   "missingFile",
-  "name",
   "remeasure",
   "systemFontInfo",
   "vertical",
 ];
 
 const EXPORT_DATA_EXTRA_PROPERTIES = [
+  "ascent",
   "composite",
   "defaultEncoding",
   "defaultVMetrics",
   "defaultWidth",
+  "descent",
   "differences",
   "isMonospace",
   "isSerifFont",
   "isSymbolicFont",
+  "name",
   "seacMap",
   "subtype",
   "toFontChar",
@@ -1050,7 +1049,6 @@ class Font {
   constructor(name, file, properties, evaluatorOptions) {
     this.name = name;
     this.psName = null;
-    this.mimetype = null;
     this.disableFontFace = evaluatorOptions.disableFontFace;
     this.fontExtraProperties = evaluatorOptions.fontExtraProperties;
 
@@ -1165,8 +1163,6 @@ class Font {
         /* falls through */
         case "Type1":
         case "CIDFontType0":
-          this.mimetype = "font/opentype";
-
           const cff =
             subtype === "Type1C" || subtype === "CIDFontType0C"
               ? new CFFFont(file, properties)
@@ -1181,8 +1177,6 @@ class Font {
         case "OpenType":
         case "TrueType":
         case "CIDFontType2":
-          this.mimetype = "font/opentype";
-
           // Repair the TrueType file. It is can be damaged in the point of
           // view of the sanitizer
           data = this.checkAndRepair(name, file, properties);
@@ -3038,12 +3032,7 @@ class Font {
         if (cid > 0xffff) {
           throw new FormatError("Max size of CID is 65,535");
         }
-        let glyphId = -1;
-        if (isCidToGidMapEmpty) {
-          glyphId = cid;
-        } else if (cidToGidMap.has(cid)) {
-          glyphId = cidToGidMap.get(cid);
-        }
+        const glyphId = isCidToGidMapEmpty ? cid : (cidToGidMap.get(cid) ?? -1);
 
         if (glyphId >= 0 && glyphId < numGlyphs && hasGlyph(glyphId)) {
           charCodeToGlyphId.set(charCode, glyphId);
@@ -3561,7 +3550,12 @@ class Font {
     if (typeof width !== "number") {
       width = this.defaultWidth;
     }
-    const vmetric = this.vmetrics?.[widthCode] || this.defaultVMetrics;
+    let vmetric = this.vmetrics?.[widthCode];
+    if (!vmetric && this.defaultVMetrics) {
+      // Without a W2 entry, vx is half the glyph width (PDF 32000-1, 9.7.4.3).
+      const [w1y, , vy] = this.defaultVMetrics;
+      vmetric = [w1y, width * 0.5, vy];
+    }
 
     let unicode = this.toUnicode.get(charcode) || charcode;
     if (typeof unicode === "number") {

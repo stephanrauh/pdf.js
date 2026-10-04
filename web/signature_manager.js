@@ -231,7 +231,7 @@ class SignatureManager {
     );
 
     this.#initTabButtons(typeButton, drawButton, imageButton, panels);
-    imagePicker.accept = SupportedImageMimeTypes.join(",");
+    imagePicker.accept = SupportedImageMimeTypes.keys().join(",");
 
     eventBus.on(
       "storedsignatureschanged",
@@ -572,7 +572,7 @@ class SignatureManager {
       "change",
       async () => {
         const file = this.#imagePicker.files?.[0];
-        if (!file || !SupportedImageMimeTypes.includes(file.type)) {
+        if (!file || !SupportedImageMimeTypes.has(file.type)) {
           this.#showError("Upload");
           this.#dialog.classList.toggle("waiting", false);
           return;
@@ -593,7 +593,7 @@ class SignatureManager {
       e => {
         const { dataTransfer } = e;
         for (const { type } of dataTransfer.items) {
-          if (!SupportedImageMimeTypes.includes(type)) {
+          if (!SupportedImageMimeTypes.has(type)) {
             continue;
           }
           dataTransfer.dropEffect =
@@ -615,7 +615,7 @@ class SignatureManager {
           return;
         }
         for (const file of files) {
-          if (SupportedImageMimeTypes.includes(file.type)) {
+          if (SupportedImageMimeTypes.has(file.type)) {
             this.#extractSignature(file);
             break;
           }

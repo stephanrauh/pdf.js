@@ -2836,7 +2836,7 @@ class WorkerTransport {
             break;
           }
 
-          const fontData = new FontInfo(exportedData);
+          const fontData = new FontInfo(exportedData.buffer);
           const inspectFont =
             this._params.pdfBug && globalThis.FontInspector?.enabled
               ? (font, url) => globalThis.FontInspector.fontAdded(font, url)

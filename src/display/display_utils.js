@@ -586,7 +586,7 @@ class OutputScale {
 
 // See https://developer.mozilla.org/en-US/docs/Web/Media/Formats/Image_types
 // to know which types are supported by the browser.
-const SupportedImageMimeTypes = [
+const SupportedImageMimeTypes = new Set([
   "image/apng",
   "image/avif",
   "image/bmp",
@@ -596,7 +596,7 @@ const SupportedImageMimeTypes = [
   "image/svg+xml",
   "image/webp",
   "image/x-icon",
-];
+]);
 
 class ColorScheme {
   static get isDarkMode() {

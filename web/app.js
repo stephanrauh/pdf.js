@@ -577,7 +577,12 @@ appConfig: null,
         dismissed = true;
         barResizeObserver?.disconnect();
         barResizeObserver = null;
-        docStyle.setProperty("--pfn-bar-height", "0px");
+        // #3253 modified by ngx-extended-pdf-viewer
+        getDocStyle(appConfig.appContainer).setProperty(
+          "--pfn-bar-height",
+          "0px"
+        );
+        // #3253 end of modification by ngx-extended-pdf-viewer
         featuresNotification.hidden = true;
       };
       // Handle dismissal while the notification is loading.
@@ -645,7 +650,12 @@ appConfig: null,
           const height = box
             ? box.blockSize
             : (entries[0]?.contentRect.height ?? 0);
-          docStyle.setProperty("--pfn-bar-height", `${Math.ceil(height)}px`);
+          // #3253 modified by ngx-extended-pdf-viewer
+          getDocStyle(appConfig.appContainer).setProperty(
+            "--pfn-bar-height",
+            `${Math.ceil(height)}px`
+          );
+          // #3253 end of modification by ngx-extended-pdf-viewer
         });
         barResizeObserver.observe(featuresNotification);
 
