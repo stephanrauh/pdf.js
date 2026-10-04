@@ -168,7 +168,12 @@ function getViewerConfiguration() {
       imageAltTextSettingsSeparator: document.getElementById(
         "imageAltTextSettingsSeparator"
       ),
-      documentPropertiesButton: document.getElementById("documentProperties"),
+      // modified by ngx-extended-pdf-viewer: #documentProperties is the button
+      // in ngx's toolbar, and the ngx button already opens the dialog from
+      // both the toolbar and the secondary menu. Binding pdf.js's listener to
+      // it as well opened the dialog twice ("The overlay is already active.").
+      documentPropertiesButton: null,
+      // end of modification by ngx-extended-pdf-viewer
     },
     viewsManager: {
       outerContainer: document.getElementById("outerContainer"),
