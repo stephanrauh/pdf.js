@@ -16,6 +16,7 @@
 import {
   AbortException,
   assert,
+  info, // #171 modified by ngx-extended-pdf-viewer: still used by the "showUnverifiedSignatures" handler
   isNodeJS,
   PasswordException,
   setVerbosityLevel,
