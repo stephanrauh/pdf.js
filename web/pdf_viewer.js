@@ -765,6 +765,7 @@ class PDFViewer {
                 // set - open the book there instead of on the cover.
                 startPage: Math.max(0, this._currentPageNumber - 1),
                 // end of modification by ngx-extended-pdf-viewer
+                rtl: this.#isBookRightToLeft(), // #3155 modified by ngx-extended-pdf-viewer
               },
               this.cspPolicyService
             ); // #2362 modified by ngx-extended-pdf-viewer
@@ -783,6 +784,26 @@ class PDFViewer {
     }
   }
   /** #495 end of modification by ngx-extended-pdf-viewer */
+
+  // #3155 modified by ngx-extended-pdf-viewer
+  /**
+   * The reading direction of the book: ngx-extended-pdf-viewer marks the
+   * viewer with "readingDirection-rtl" or "readingDirection-ltr"; without
+   * either class ("auto"), the text direction of the UI language decides.
+   */
+  #isBookRightToLeft() {
+    const { classList } = this.viewer;
+    return (
+      classList.contains("readingDirection-rtl") ||
+      (!classList.contains("readingDirection-ltr") && getComputedStyle(this.viewer).direction === "rtl")
+    );
+  }
+
+  /** Call this after changing the reading direction while the book is open. */
+  updateBookReadingDirection() {
+    this.pageFlip?.setRtl(this.#isBookRightToLeft());
+  }
+  // #3155 end of modification by ngx-extended-pdf-viewer
 
   /**
    * @returns {boolean} Whether the pageNumber is valid (within bounds).

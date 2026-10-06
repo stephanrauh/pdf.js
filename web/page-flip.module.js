@@ -1934,6 +1934,7 @@ class UI {
         };
         this.parentElement = inBlock;
         inBlock.classList.add('stf__parent');
+        inBlock.classList.toggle('--rtl', !!setting.rtl); // #3155 modified by ngx-extended-pdf-viewer
         // #2362 modified by ngx-extended-pdf-viewer
         // Add first wrapper
         const wrapperHtml = this.cspPolicyService.createTrustedHTML('<div class="stf__wrapper"></div>');
@@ -2034,6 +2035,14 @@ class UI {
      */
     getMousePos(x, y) {
         const rect = this.distElement.getBoundingClientRect();
+        // #3155 modified by ngx-extended-pdf-viewer
+        if (this.app.getSettings().rtl) {
+            return {
+                x: rect.right - x,
+                y: y - rect.top,
+            };
+        }
+        // #3155 end of modification by ngx-extended-pdf-viewer
         return {
             x: x - rect.left,
             y: y - rect.top,
@@ -2498,6 +2507,11 @@ class Settings {
             showPageCorners: true,
             disableFlipByClick: false,
             enableFlipByDrag: true,
+            // #3155 modified by ngx-extended-pdf-viewer
+            // Right-to-left books: the book is mirrored with CSS (see the
+            // "--rtl" class), so the mouse coordinates are mirrored, too.
+            rtl: false,
+            // #3155 end of modification by ngx-extended-pdf-viewer
         };
     }
     /**
@@ -2577,6 +2591,18 @@ class PageFlip extends EventObject {
         this.render.update();
         this.pages.show();
     }
+
+    // #3155 modified by ngx-extended-pdf-viewer
+    /**
+     * Switch between left-to-right and right-to-left books.
+     *
+     * @param {boolean} rtl
+     */
+    setRtl(rtl) {
+        this.setting.rtl = rtl;
+        this.block.classList.toggle('--rtl', rtl);
+    }
+    // #3155 end of modification by ngx-extended-pdf-viewer
 
     /**
      * Load pages from HTML elements on the HTML mode
