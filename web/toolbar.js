@@ -61,6 +61,8 @@ import { internalOpt } from "./internal_evt.js";
 class Toolbar {
   #colorPicker = null;
 
+  #pageNumberBeingEdited = false; // modified by ngx-extended-pdf-viewer
+
   #opts;
 
     // #2459 modified by ngx-extended-pdf-viewer
@@ -363,7 +365,15 @@ class Toolbar {
     pageNumber.addEventListener("click", function () {
       this.select();
     });
+    // modified by ngx-extended-pdf-viewer: while the user types a page number,
+    // #updateUIState() must not overwrite it - right after loading, it runs
+    // often, and a number typed in that phase used to be lost.
+    pageNumber.addEventListener("input", () => {
+      this.#pageNumberBeingEdited = true;
+    });
+    // end of modification by ngx-extended-pdf-viewer
     pageNumber.addEventListener("change", function () {
+      self.#pageNumberBeingEdited = false; // modified by ngx-extended-pdf-viewer
       eventBus.dispatch("pagenumberchanged", {
         source: self,
         value: this.value,
@@ -616,13 +626,17 @@ class Toolbar {
     }
 
     if (this.hasPageLabels) {
-      opts.pageNumber.value = this.pageLabel;
+      if (!this.#pageNumberBeingEdited) {
+        // modified by ngx-extended-pdf-viewer
+        opts.pageNumber.value = this.pageLabel;
+      }
 
       opts.numPages.setAttribute(
         "data-l10n-args",
         JSON.stringify({ pageNumber, pagesCount })
       );
-    } else {
+    } else if (!this.#pageNumberBeingEdited) {
+      // modified by ngx-extended-pdf-viewer
       opts.pageNumber.value = pageNumber;
     }
 

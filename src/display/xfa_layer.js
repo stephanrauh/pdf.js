@@ -152,7 +152,8 @@ class XfaLayer {
     // #1737 modified by ngx-extended-pdf-viewer
     const angularData = window.getFormValueFromAngular(html);
     if (angularData.value) {
-      storage.setValue(id, angularData);
+      // a list with several choices: pdf.js only stores one value
+      storage.setValue(id, Array.isArray(angularData.value) ? { value: angularData.value[0] ?? null } : angularData);
     }
     const initialValue = storage.getValue(id, { value: null });
     const storedData = angularData.value ? angularData : initialValue;
@@ -223,14 +224,18 @@ class XfaLayer {
         break;
       case "select":
         if (storedData.value !== null) {
-          html.setAttribute("value", storedData.value);
+          // #1737 modified by ngx-extended-pdf-viewer: [formData] passes an
+          // array for a list with several choices
+          const selectedValues = Array.isArray(storedData.value) ? storedData.value : [storedData.value];
+          html.setAttribute("value", selectedValues[0] ?? "");
           for (const option of element.children) {
-            if (option.attributes.value === storedData.value) {
+            if (selectedValues.includes(option.attributes.value)) {
               option.attributes.selected = true;
             } else if (Object.hasOwn(option.attributes, "selected")) {
               delete option.attributes.selected;
             }
           }
+          // #1737 end of modification by ngx-extended-pdf-viewer
         }
         html.addEventListener("input", event => {
           const options = event.target.options;
@@ -239,7 +244,9 @@ class XfaLayer {
               ? ""
               : options[options.selectedIndex].value;
           // #1737 modified by ngx-extended-pdf-viewer
-          window.updateAngularFormValue(html, { value });
+          // a list with several choices reports all of them
+          const angularValue = event.target.multiple ? Array.from(event.target.selectedOptions, option => option.value) : value;
+          window.updateAngularFormValue(html, { value: angularValue });
           // #1737 end of modification by ngx-extended-pdf-viewer
           storage.setValue(id, { value });
         });
