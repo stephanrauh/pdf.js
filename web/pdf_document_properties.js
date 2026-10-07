@@ -83,6 +83,13 @@ class PDFDocumentProperties {
     closeButton.addEventListener("click", this.close.bind(this));
 
     this.overlayManager.register(this.dialog);
+    // #1773 modified by ngx-extended-pdf-viewer
+    // Report every way of closing the dialog - the Close button, but also the
+    // Escape key, which closes the <dialog> without calling close().
+    this.dialog.addEventListener("close", () => {
+      this.eventBus.dispatch("propertiesdialogclose", this);
+    });
+    // #1773 end of modification by ngx-extended-pdf-viewer
 
     eventBus.on(
       "pagechanging",
@@ -188,7 +195,8 @@ class PDFDocumentProperties {
    */
   async close() {
     this.overlayManager.close(this.dialog, true); // #2377 modified by ngx-extended-pdf-viewer
-    this.eventBus.dispatch("propertiesdialogclose", this); // #1773 modified by ngx-extended-pdf-vieweer
+    // #1773 modified by ngx-extended-pdf-viewer: the dialog's "close"
+    // listener dispatches "propertiesdialogclose"
   }
 
   /**

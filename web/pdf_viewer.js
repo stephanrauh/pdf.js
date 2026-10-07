@@ -432,6 +432,7 @@ class PDFViewer {
 
     // #3140 modified by ngx-extended-pdf-viewer
     this._enableFlipByDrag = true;
+    this._showPageCorners = true;
     // #3140 end of modification by ngx-extended-pdf-viewer
 
     this.defaultRenderingQueue = !options.renderingQueue;
@@ -759,6 +760,7 @@ class PDFViewer {
                 showCover: true,
                 size: "fixed",
                 enableFlipByDrag: this._enableFlipByDrag,
+                showPageCorners: this._showPageCorners, // #3140 modified by ngx-extended-pdf-viewer
                 // modified by ngx-extended-pdf-viewer: the book is built
                 // asynchronously, so a page chosen before that ([page] on
                 // load, or a page number typed right away) has already been
@@ -2222,7 +2224,10 @@ class PDFViewer {
             dest;
           if (
             loc &&
-            !(this.isInPresentationMode || this.isChangingPresentationMode)
+            !(this.isInPresentationMode || this.isChangingPresentationMode) &&
+            // In book mode, the book knows the current page, not the scroll
+            // position (which says "page 1" while the book is being built).
+            this.pageViewMode !== "book"
           ) {
             page = loc.pageNumber;
             dest = [null, { name: "XYZ" }, loc.left, loc.top, null];
@@ -2688,10 +2693,13 @@ class PDFViewer {
     // which triggers Angular's pagechanging handler to navigate back.
     const navigationSettling = this.pageViewMode === "infinite-scroll" &&
       Date.now() - this.#lastNavigationTime < 500;
-    if (this.scrollMode !== ScrollMode.PAGE && !noScroll && !navigationSettling) { // #2275 modified by ngx-extended-pdf-viewer
-      this._setCurrentPageNumber(
-        stillFullyVisible ? this._currentPageNumber : visiblePages[0].id
-      );
+    // In book mode, the book sets the page (see its "flip" listener), not the
+    // scroll position: while the book is being built, the "visible" page is
+    // always page 1, which used to undo a [page] set on load.
+    const isBook = this.pageViewMode === "book";
+    // #2275 modified by ngx-extended-pdf-viewer
+    if (this.scrollMode !== ScrollMode.PAGE && !noScroll && !navigationSettling && !isBook) {
+      this._setCurrentPageNumber(stillFullyVisible ? this._currentPageNumber : visiblePages[0].id);
     }
     // #3069 end of modification by ngx-extended-pdf-viewer
 
@@ -2756,6 +2764,21 @@ class PDFViewer {
 
   get enableFlipByDrag() {
     return this._enableFlipByDrag;
+  }
+
+  /**
+   * The folded corner a page shows when the mouse comes near it. Kept here
+   * because the book is built later.
+   */
+  get showPageCorners() {
+    return this._showPageCorners;
+  }
+
+  set showPageCorners(value) {
+    this._showPageCorners = value;
+    if (this.pageFlip) {
+      this.pageFlip.setting.showPageCorners = value;
+    }
   }
   // #3140 end of modification by ngx-extended-pdf-viewer
 
