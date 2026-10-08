@@ -172,7 +172,10 @@ function getViewerConfiguration() {
       // in ngx's toolbar, and the ngx button already opens the dialog from
       // both the toolbar and the secondary menu. Binding pdf.js's listener to
       // it as well opened the dialog twice ("The overlay is already active.").
-      documentPropertiesButton: null,
+      // The standalone viewer has no Angular handler, so bind its button here.
+      documentPropertiesButton: globalThis.STANDALONE_VIEWER
+        ? document.getElementById("documentProperties")
+        : null,
       // end of modification by ngx-extended-pdf-viewer
     },
     viewsManager: {

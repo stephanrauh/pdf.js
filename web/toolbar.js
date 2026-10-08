@@ -303,6 +303,7 @@ class Toolbar {
 
   reset() {
     this.#colorPicker = null;
+    this.#pageNumberBeingEdited = false; // modified by ngx-extended-pdf-viewer
     this.pageNumber = 0;
     this.pageLabel = null;
     this.hasPageLabels = false;
@@ -370,6 +371,15 @@ class Toolbar {
     // often, and a number typed in that phase used to be lost.
     pageNumber.addEventListener("input", () => {
       this.#pageNumberBeingEdited = true;
+    });
+    // Editing back to the original value fires "input" but no "change", so
+    // "blur" has to end the edit, too - otherwise the flag sticks forever and
+    // the field stops following navigation.
+    pageNumber.addEventListener("blur", () => {
+      if (this.#pageNumberBeingEdited) {
+        this.#pageNumberBeingEdited = false;
+        this.#updateUIState(false);
+      }
     });
     // end of modification by ngx-extended-pdf-viewer
     pageNumber.addEventListener("change", function () {
