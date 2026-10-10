@@ -31,6 +31,8 @@ class GrabToPan {
 
   #scrollAC = null;
 
+  #hasPanned = false; // #3294 modified by ngx-extended-pdf-viewer
+
   /**
    * Construct a GrabToPan instance for a given HTML element.
    * @param {GrabToPanOptions} options
@@ -122,6 +124,7 @@ class GrabToPan {
     }
     /* end of modification */
 
+    this.#hasPanned = false; // #3294 modified by ngx-extended-pdf-viewer
     this.#mouseDownAC = new AbortController();
     const boundEndPan = this.#endPan.bind(this),
       mouseOpts = { capture: true, signal: this.#mouseDownAC.signal };
@@ -160,6 +163,11 @@ class GrabToPan {
     }
     const xDiff = event.clientX - this.clientXStart;
     const yDiff = event.clientY - this.clientYStart;
+    // #3294 modified by ngx-extended-pdf-viewer
+    if (Math.hypot(xDiff, yDiff) > 5) {
+      this.#hasPanned = true;
+    }
+    // #3294 end of modification by ngx-extended-pdf-viewer
     this.element.scrollTo({
       top: this.scrollTopStart - yDiff,
       left: this.scrollLeftStart - xDiff,
@@ -178,6 +186,22 @@ class GrabToPan {
     this.#scrollAC = null;
     // Note: ChildNode.remove doesn't throw if the parentNode is undefined.
     this.overlay.remove();
+
+    // #3294 modified by ngx-extended-pdf-viewer
+    // A pan isn't a click: swallow the click the browser fires after the
+    // mouseup, or panning a book would turn its page. The click follows the
+    // mouseup in the same task, so the listener is gone before the next one.
+    if (this.#hasPanned) {
+      this.#hasPanned = false;
+      const clickAC = new AbortController();
+      window.addEventListener("click", evt => stopEvent(evt), {
+        capture: true,
+        once: true,
+        signal: clickAC.signal,
+      });
+      setTimeout(() => clickAC.abort(), 0);
+    }
+    // #3294 end of modification by ngx-extended-pdf-viewer
   }
 }
 

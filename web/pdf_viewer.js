@@ -773,7 +773,7 @@ class PDFViewer {
               this.cspPolicyService
             ); // #2362 modified by ngx-extended-pdf-viewer
             // #3140 end of modification by ngx-extended-pdf-viewer
-            this.#fitBookIntoContainer(2 * page1.clientWidth);
+            this.#fitBookIntoContainer(page1.clientWidth);
             this.pageFlip.loadFromHTML(this.container.querySelectorAll(".page"));
             // triggered by page turning
             this.pageFlip.on("flip", e => {
@@ -2731,10 +2731,9 @@ class PDFViewer {
             const height = page.height;
             const block = page.div.parentElement;
 
-            const borderWith = this.removePageBorders ? 1 : 40;
-            block.style.width = `${2 * width + borderWith}px`;
+            block.style.width = `${this.#bookWidth(width)}px`;
             block.style.height = `${height}px`;
-            this.#fitBookIntoContainer(2 * width + borderWith);
+            this.#fitBookIntoContainer(width);
             this.pageFlip.render.setting.width = width;
             this.pageFlip.render.setting.height = height;
             this.pageFlip.render.update();
@@ -2768,14 +2767,27 @@ class PDFViewer {
   }
 
   // modified by ngx-extended-pdf-viewer
+  /** The width of an open book: two pages and the gap around them. */
+  #bookWidth(pageWidth) {
+    const borderWidth = this.removePageBorders ? 1 : 40;
+    return 2 * pageWidth + borderWidth;
+  }
+
   /**
    * Gives the book the width of two pages, as far as the screen allows. A
    * narrower book makes page-flip show a single page; a book wider than the
    * screen is centered, cutting off both sides evenly.
    */
-  #fitBookIntoContainer(bookWidth) {
+  #fitBookIntoContainer(pageWidth) {
+    const bookWidth = this.#bookWidth(pageWidth);
     const visibleWidth = Math.min(bookWidth, this.#availableWidth);
+    // The container's transition is meant for the sidebar: the book itself
+    // takes its new width at once instead of sliding into place.
+    const { transition } = this.container.style;
+    this.container.style.transition = "none";
     this.container.style.width = `${visibleWidth}px`;
+    this.container.getBoundingClientRect(); // applies the width before the transition comes back
+    this.container.style.transition = transition;
     this.viewer.style.minWidth = `${bookWidth}px`;
     this.viewer.style.maxWidth = `${bookWidth}px`;
     this.container.scrollLeft = (bookWidth - visibleWidth) / 2;
