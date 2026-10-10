@@ -1815,6 +1815,7 @@ class UI {
         };
         // #3140 modified by ngx-extended-pdf-viewer
         this.onMouseDown = (e) => {
+            this._pressSeen = true; // #3294 modified by ngx-extended-pdf-viewer
             if (this.checkTarget(e.target)) {
                 if (!this.app.getSettings().enableFlipByDrag) {
                     // Record position for click-to-flip detection (handled in onMouseUp).
@@ -1857,6 +1858,11 @@ class UI {
         // #3140 end of modification by ngx-extended-pdf-viewer
         // #3140 modified by ngx-extended-pdf-viewer
         this.onMouseUp = (e) => {
+            // #3294 modified by ngx-extended-pdf-viewer: the click that
+            // follows is handled here if we saw its mousedown (see onClick)
+            this._clickHandledByPress = !!this._pressSeen;
+            this._pressSeen = false;
+            // #3294 end of modification by ngx-extended-pdf-viewer
             if (this._clickStartPos) {
                 // Click-to-flip: if mouse hasn't moved significantly, treat as a click
                 const dx = e.clientX - this._clickStartClientX;
@@ -1874,6 +1880,22 @@ class UI {
             this.app.userStop(pos);
         };
         // #3140 modified by ngx-extended-pdf-viewer
+        // #3294 modified by ngx-extended-pdf-viewer
+        // The hand tool takes the mousedown away from us, so a click never
+        // reaches the handlers above. Turn the page on the click event
+        // instead. (After a pan, the hand tool swallows the click, so
+        // panning doesn't turn the page.)
+        this.onClick = (e) => {
+            const handledByPress = this._clickHandledByPress;
+            this._clickHandledByPress = false;
+            if (handledByPress || e.button !== 0 || !this.checkTarget(e.target)) {
+                return;
+            }
+            const pos = this.getMousePos(e.clientX, e.clientY);
+            this.app.startUserTouch(pos);
+            this.app.userStop(pos);
+        };
+        // #3294 end of modification by ngx-extended-pdf-viewer
         this.onMouseMove = (e) => {
             if (!this.app.getSettings().enableFlipByDrag) {
                 return; // suppress corner fold and drag animations
@@ -2008,6 +2030,7 @@ class UI {
     removeHandlers() {
         window.removeEventListener('resize', this.onResize);
         this.distElement.removeEventListener('mousedown', this.onMouseDown);
+        this.distElement.removeEventListener('click', this.onClick); // #3294 modified by ngx-extended-pdf-viewer
         this.distElement.removeEventListener('touchstart', this.onTouchStart);
         window.removeEventListener('mousemove', this.onMouseMove);
         window.removeEventListener('touchmove', this.onTouchMove);
@@ -2019,6 +2042,7 @@ class UI {
         if (!this.app.getSettings().useMouseEvents)
             return;
         this.distElement.addEventListener('mousedown', this.onMouseDown);
+        this.distElement.addEventListener('click', this.onClick); // #3294 modified by ngx-extended-pdf-viewer
         this.distElement.addEventListener('touchstart', this.onTouchStart);
         window.addEventListener('mousemove', this.onMouseMove);
         window.addEventListener('touchmove', this.onTouchMove, {
