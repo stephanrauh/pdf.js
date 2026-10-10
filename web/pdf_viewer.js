@@ -254,6 +254,8 @@ class PDFViewer {
 
   #enableHighlightFloatingButton = false;
 
+  #isBookZoomedIn = false; // #3294 modified by ngx-extended-pdf-viewer
+
   #enablePermissions = false;
 
   #enableUpdatedAddImage = false;
@@ -747,7 +749,6 @@ class PDFViewer {
             const page1 = this._pages[0].div;
             const htmlParentElement = page1.parentElement;
             const viewer = htmlParentElement.parentElement;
-            viewer.style.width = 2 * page1.clientWidth + "px";
             viewer.style.overflow = "hidden";
             viewer.style.marginLeft = "auto";
             viewer.style.marginRight = "auto";
@@ -772,6 +773,7 @@ class PDFViewer {
               this.cspPolicyService
             ); // #2362 modified by ngx-extended-pdf-viewer
             // #3140 end of modification by ngx-extended-pdf-viewer
+            this.#fitBookIntoContainer(2 * page1.clientWidth);
             this.pageFlip.loadFromHTML(this.container.querySelectorAll(".page"));
             // triggered by page turning
             this.pageFlip.on("flip", e => {
@@ -2329,7 +2331,7 @@ class PDFViewer {
         [hPadding, vPadding] = [vPadding, hPadding]; // Swap the padding values.
       }
       let pageWidthScale =
-        (((this.container.clientWidth - hPadding) / currentPage.width) *
+        (((this.#availableWidth - hPadding) / currentPage.width) * // #3294 modified by ngx-extended-pdf-viewer
           currentPage.scale) /
         this.#pageWidthScaleFactor;
       if (this.pageViewMode === "book") {
@@ -2732,6 +2734,7 @@ class PDFViewer {
             const borderWith = this.removePageBorders ? 1 : 40;
             block.style.width = `${2 * width + borderWith}px`;
             block.style.height = `${height}px`;
+            this.#fitBookIntoContainer(2 * width + borderWith);
             this.pageFlip.render.setting.width = width;
             this.pageFlip.render.setting.height = height;
             this.pageFlip.render.update();
@@ -2739,20 +2742,54 @@ class PDFViewer {
           // #3140 modified by ngx-extended-pdf-viewer
           // When zoomed in beyond the page-fit scale, disable drag-to-flip
           // so the user can pan the zoomed content instead.
+          let hPadding = SCROLLBAR_PADDING,
+            vPadding = VERTICAL_PADDING;
+          if (this.removePageBorders) {
+            hPadding = vPadding = 0;
+          }
+          const pageWidthScale = (((this.#availableWidth - hPadding) / page.width) * page.scale) / 2;
+          const pageHeightScale = ((this.container.clientHeight - vPadding) / page.height) * page.scale;
+          const pageFitScale = Math.min(pageWidthScale, pageHeightScale);
+          const isZoomedIn = evt.scale > pageFitScale + 0.01;
           if (this._enableFlipByDrag) {
-            let hPadding = SCROLLBAR_PADDING, vPadding = VERTICAL_PADDING;
-            if (this.removePageBorders) { hPadding = vPadding = 0; }
-            const pageWidthScale = ((this.container.clientWidth - hPadding) / page.width) * page.scale / 2;
-            const pageHeightScale = ((this.container.clientHeight - vPadding) / page.height) * page.scale;
-            const pageFitScale = Math.min(pageWidthScale, pageHeightScale);
-            const isZoomedIn = evt.scale > pageFitScale + 0.01;
             this.pageFlip.setting.enableFlipByDrag = !isZoomedIn;
           }
           // #3140 end of modification by ngx-extended-pdf-viewer
+          // #3294 modified by ngx-extended-pdf-viewer: tell the UI, so it can
+          // show that a drag now pans the page (by activating the hand tool)
+          if (this.#isBookZoomedIn !== isZoomedIn) {
+            this.#isBookZoomedIn = isZoomedIn;
+            this.eventBus.dispatch("bookzoomchanged", { source: this, zoomedIn: isZoomedIn });
+          }
+          // #3294 end of modification by ngx-extended-pdf-viewer
         }
       }
     }
   }
+
+  // modified by ngx-extended-pdf-viewer
+  /**
+   * Gives the book the width of two pages, as far as the screen allows. A
+   * narrower book makes page-flip show a single page; a book wider than the
+   * screen is centered, cutting off both sides evenly.
+   */
+  #fitBookIntoContainer(bookWidth) {
+    const visibleWidth = Math.min(bookWidth, this.#availableWidth);
+    this.container.style.width = `${visibleWidth}px`;
+    this.viewer.style.minWidth = `${bookWidth}px`;
+    this.viewer.style.maxWidth = `${bookWidth}px`;
+    this.container.scrollLeft = (bookWidth - visibleWidth) / 2;
+  }
+
+  /**
+   * The width the pages may use. In book mode, the container is only as wide
+   * as the book, so the space around it is measured instead.
+   */
+  get #availableWidth() {
+    const isBook = this.pageViewMode === "book" && this.container.parentElement;
+    return isBook ? this.container.parentElement.clientWidth : this.container.clientWidth;
+  }
+  // end of modification by ngx-extended-pdf-viewer
 
   // #3140 modified by ngx-extended-pdf-viewer
   set enableFlipByDrag(value) {
@@ -3875,6 +3912,7 @@ class PDFViewer {
       this.pageFlip.destroy();
       this.pageFlip = null;
     }
+    this.#isBookZoomedIn = false; // #3294 modified by ngx-extended-pdf-viewer
   }
 
   stopRendering() {
