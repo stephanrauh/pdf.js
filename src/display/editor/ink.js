@@ -488,6 +488,7 @@ class InkEditor extends DrawingEditor {
         drawId: this._drawId,
         drawingOptions,
       });
+      this.rotate();
     };
 
     if (session.paths.length === 0) {
@@ -514,6 +515,11 @@ class InkEditor extends DrawingEditor {
         drawId: this._drawId,
         drawingOptions,
       });
+      // _addOutlines draws from the unrotated default properties: turn the
+      // drawing by the difference between its page and its own rotation
+      // again, as deserialize() does (an annotation saved with rotation 0 on
+      // a /Rotate 270 page was redrawn turned by 90 degrees after a cut).
+      this.rotate();
     };
     cmd();
 
