@@ -383,6 +383,7 @@ function getDocument(src = {}) {
       verbosity,
       enableHWA,
       enableWebGPU,
+      cspPolicyService: src.cspPolicyService, // #2362 modified by ngx-extended-pdf-viewer
     });
     // Document loading does not wait for renderer startup.
     rendererWorker.promise.catch(reason => {

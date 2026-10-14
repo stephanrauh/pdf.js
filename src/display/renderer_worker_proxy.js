@@ -256,6 +256,8 @@ class WorkerRenderTask {
 class RendererWorker {
   #capability = Promise.withResolvers();
 
+  #cspPolicyService = null; // #2362 modified by ngx-extended-pdf-viewer
+
   #enableHWA;
 
   #enableWebGPU;
@@ -287,10 +289,12 @@ class RendererWorker {
     verbosity = getVerbosityLevel(),
     enableHWA = false,
     enableWebGPU = false,
+    cspPolicyService = null, // #2362 modified by ngx-extended-pdf-viewer
   } = {}) {
     this.verbosity = verbosity;
     this.#enableHWA = enableHWA;
     this.#enableWebGPU = enableWebGPU;
+    this.#cspPolicyService = cspPolicyService; // #2362 modified by ngx-extended-pdf-viewer
     this.#initialize();
 
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
@@ -363,9 +367,14 @@ class RendererWorker {
 
   #initialize() {
     try {
-      const worker = new Worker(getWorkerSrc(GlobalWorkerOptions.rendererSrc), {
-        type: "module",
-      });
+      // #2362 modified by ngx-extended-pdf-viewer
+      // Same Trusted Types handling as the PDF worker in api.js.
+      const rendererSrc = getWorkerSrc(GlobalWorkerOptions.rendererSrc);
+      const worker = new Worker(
+        this.#cspPolicyService?.generateTrustedURL(rendererSrc) ?? rendererSrc,
+        { type: "module" }
+      );
+      // #2362 end of modification by ngx-extended-pdf-viewer
       const messageHandler = new MessageHandler("main", "renderer", worker);
       const terminateEarly = reason => {
         this.#terminateEarly = null;
