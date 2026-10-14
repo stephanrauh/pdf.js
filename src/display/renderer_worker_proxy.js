@@ -22,7 +22,7 @@ import { OutputScale } from "./display_utils.js";
 import { setAnnotationCanvasName } from "./canvas.js";
 
 function closeFrame({ bitmap, annotationBitmaps }) {
-  bitmap.close();
+  bitmap?.close();
   if (annotationBitmaps) {
     for (const [, , annotationBitmap] of annotationBitmaps) {
       annotationBitmap.close();
@@ -89,12 +89,16 @@ class WorkerRenderTask {
    * @returns {Promise<boolean>} False to use main-thread rendering.
    */
   async initialize(transparency, optionalContentConfig) {
-    const handler = this.#rendererWorker.messageHandler;
-    if (!handler) {
+    try {
+      await this.#rendererWorker.promise;
+    } catch {
+      return false;
+    }
+    if (!this.#rendererWorker.messageHandler || this.#cancelled) {
       return false;
     }
     try {
-      await handler.sendWithPromise("InitializeGraphics", {
+      await this.#rendererWorker.sendWithPromise("InitializeGraphics", {
         ...this.#initParams,
         width: this.#canvas.width,
         height: this.#canvas.height,
@@ -102,10 +106,12 @@ class WorkerRenderTask {
         optionalContentConfig: optionalContentConfig.serializable,
       });
     } catch (ex) {
-      warn(
-        `Failed to initialize graphics in renderer worker: ${ex.message}. ` +
-          "Falling back to main-thread rendering."
-      );
+      if (!this.#cancelled) {
+        warn(
+          `Failed to initialize graphics in renderer worker: ${ex.message}. ` +
+            "Falling back to main-thread rendering."
+        );
+      }
       return false;
     }
     if (!this.#cancelled) {
@@ -150,13 +156,20 @@ class WorkerRenderTask {
       }
       this.#filteredLength = end;
     }
-    const response = await handler.sendWithPromise("ExecuteOperatorList", {
-      renderTaskId: this.#id,
-      operatorListIdx,
-      operatorListLength: end,
-      operationsFilterMask,
-      lastChunk,
-    });
+    const response = await this.#rendererWorker
+      .sendWithPromise("ExecuteOperatorList", {
+        renderTaskId: this.#id,
+        operatorListIdx,
+        operatorListLength: end,
+        operationsFilterMask,
+        lastChunk,
+      })
+      .catch(reason => {
+        if (!this.#cancelled) {
+          throw reason;
+        }
+        return { operatorListIdx, aborted: true };
+      });
 
     if (response.aborted && !this.#cancelled) {
       throw new Error("Render task was aborted in the renderer worker.");
@@ -184,8 +197,10 @@ class WorkerRenderTask {
 
   drawFrame(frame) {
     try {
-      const ctx = this.#canvasFactory.getNoAlphaContext(this.#canvas);
-      ctx.drawImage(frame.bitmap, 0, 0);
+      if (frame.bitmap) {
+        const ctx = this.#canvasFactory.getNoAlphaContext(this.#canvas);
+        ctx.drawImage(frame.bitmap, 0, 0);
+      }
 
       if (frame.annotationBitmaps) {
         this.#drawAnnotationCanvases(frame.annotationBitmaps);
@@ -251,11 +266,20 @@ class RendererWorker {
 
   #operatorLists = new WeakMap();
 
+  // Messages queued during startup.
+  #pendingMessages = [];
+
+  #pendingRequests = new Set();
+
   #renderTaskId = 0;
 
   #renderTasks = new Map();
 
+  #terminateEarly = null;
+
   #webWorker = null;
+
+  #workerAC = null;
 
   destroyed = false;
 
@@ -293,7 +317,7 @@ class RendererWorker {
   }
 
   /**
-   * Resolves after the worker handshake.
+   * Resolves when ready; rejects on failed or aborted startup.
    * @type {Promise<void>}
    */
   get promise() {
@@ -324,6 +348,17 @@ class RendererWorker {
       enableHWA: this.#enableHWA,
       enableWebGPU: this.#enableWebGPU,
     });
+
+    const pendingMessages = this.#pendingMessages;
+    this.#pendingMessages = null;
+    for (const send of pendingMessages) {
+      send();
+    }
+  }
+
+  #reject(reason) {
+    this.#pendingMessages = null;
+    this.#capability.reject(reason);
   }
 
   #initialize() {
@@ -333,34 +368,45 @@ class RendererWorker {
       });
       const messageHandler = new MessageHandler("main", "renderer", worker);
       const terminateEarly = reason => {
+        this.#terminateEarly = null;
         ac.abort();
         messageHandler.destroy();
         worker.terminate();
 
-        this.#capability.reject(
+        this.#reject(
           new Error(
             `Renderer worker failed to initialize: "${reason?.message ?? reason}".`
           )
         );
       };
+      this.#terminateEarly = terminateEarly;
 
       const ac = new AbortController();
+      const onError = (event, reason) => {
+        if (!this.#webWorker) {
+          terminateEarly(reason);
+          return;
+        }
+        // An error may leave pending requests without replies.
+        event.preventDefault();
+        warn(
+          `Renderer worker failed: "${reason}". ` +
+            "Falling back to main-thread rendering."
+        );
+        this.destroy();
+      };
       worker.addEventListener(
         "error",
-        event => {
-          if (!this.#webWorker) {
-            terminateEarly(event.error || event.message);
-          }
-        },
+        event => onError(event, event.error?.message ?? event.message),
+        { signal: ac.signal }
+      );
+      worker.addEventListener(
+        "messageerror",
+        event => onError(event, "Cannot deserialize a message."),
         { signal: ac.signal }
       );
 
       messageHandler.on("ready", data => {
-        ac.abort();
-        if (this.destroyed) {
-          terminateEarly("Worker was destroyed.");
-          return;
-        }
         if (!(data?.testObj instanceof Uint8Array)) {
           terminateEarly("TypedArray transfer test failed.");
           return;
@@ -375,42 +421,88 @@ class RendererWorker {
           );
           return;
         }
+        this.#terminateEarly = null;
         this.#messageHandler = messageHandler;
         this.#webWorker = worker;
+        this.#workerAC = ac;
 
         this.#resolve();
       });
     } catch (reason) {
-      this.#capability.reject(reason);
+      this.#reject(reason);
     }
   }
 
   destroy() {
     this.destroyed = true;
+    this.#terminateEarly?.("Worker was destroyed.");
+
+    this.#workerAC?.abort();
+    this.#workerAC = null;
 
     this.#webWorker?.terminate();
     this.#webWorker = null;
 
     this.#messageHandler?.destroy();
     this.#messageHandler = null;
+
+    for (const reject of this.#pendingRequests) {
+      reject(new Error("Renderer worker was destroyed."));
+    }
+    this.#pendingRequests.clear();
   }
 
-  #sendObj(action, data, id, pageProxyId) {
+  /**
+   * Send a request that rejects on worker destruction.
+   * @returns {Promise<any>}
+   */
+  sendWithPromise(action, data) {
     const handler = this.#messageHandler;
     if (!handler) {
+      return Promise.reject(new Error("Renderer worker was destroyed."));
+    }
+    const { promise, resolve, reject } = Promise.withResolvers();
+    this.#pendingRequests.add(reject);
+    handler.sendWithPromise(action, data).then(resolve, reject);
+    return promise.finally(() => {
+      this.#pendingRequests.delete(reject);
+    });
+  }
+
+  #send(action, data) {
+    if (this.#pendingMessages) {
+      this.#pendingMessages.push(() => this.#send(action, data));
       return;
     }
+    this.#messageHandler?.send(action, data);
+  }
+
+  #sendObj(action, data, id, pageProxyId, isFont = false) {
     try {
-      handler.send(action, data);
+      if (this.#pendingMessages) {
+        // Copy fonts before main-thread font loading clears their data.
+        const queuedData = isFont ? structuredClone(data) : data;
+        this.#pendingMessages.push(() =>
+          this.#sendObj(action, queuedData, id, pageProxyId)
+        );
+        return;
+      }
+      this.#messageHandler?.send(action, data);
     } catch (reason) {
       warn(`RendererWorker - failed to send "${action}": ${reason}`);
       // Reject unsent object dependencies.
-      handler.send("objFailed", { id, pageProxyId, reason: reason.message });
+      this.#send("objFailed", { id, pageProxyId, reason: reason.message });
     }
   }
 
   sendCommonObj(id, type, data) {
-    this.#sendObj("commonobj", [id, type, data], id, /* pageProxyId = */ null);
+    this.#sendObj(
+      "commonobj",
+      [id, type, data],
+      id,
+      /* pageProxyId = */ null,
+      /* isFont = */ type === "Font"
+    );
   }
 
   sendObj(id, pageProxyId, type, data) {
@@ -418,11 +510,11 @@ class RendererWorker {
   }
 
   cleanup(keepLoadedFonts) {
-    this.#messageHandler?.send("Cleanup", { keepLoadedFonts });
+    this.#send("Cleanup", { keepLoadedFonts });
   }
 
   cleanupPage(pageProxyId) {
-    this.#messageHandler?.send("cleanupPage", { pageProxyId });
+    this.#send("cleanupPage", { pageProxyId });
   }
 
   /**
@@ -443,7 +535,7 @@ class RendererWorker {
     // Keep supplied contexts and the stepper on the main thread.
     // Can't clone CanvasGradient/CanvasPattern; pageColors uses DOM filters.
     if (
-      !this.#messageHandler ||
+      (!this.#messageHandler && !this.#pendingMessages) || // Failed or destroyed.
       canvasContext ||
       (background && typeof background !== "string") ||
       pageColors ||

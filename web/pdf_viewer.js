@@ -1344,7 +1344,9 @@ class PDFViewer {
       intent: "display",
     });
     const permissionsPromise = this.#enablePermissions
-      ? pdfDocument.getPermissions()
+      ? pdfDocument.getPermissions().catch(reason => {
+          console.error("getPermissions", reason);
+        })
       : Promise.resolve();
 
     const { eventBus, pageColors, viewer } = this;
