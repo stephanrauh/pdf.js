@@ -908,8 +908,17 @@ class StampEditor extends AnnotationEditor {
       if (changes.isSameAltText) {
         delete serialized.accessibilityData;
       } else {
-        serialized.accessibilityData.structParent =
-          this._initialData.structParent ?? -1;
+        const structParent = this._initialData.structParent ?? -1;
+        if (serialized.accessibilityData) {
+          serialized.accessibilityData.structParent = structParent;
+        } else if (structParent >= 0) {
+          // Clear the existing tag's alt text.
+          serialized.accessibilityData = {
+            type: "Figure",
+            alt: "",
+            structParent,
+          };
+        }
       }
       // #3076 modified by ngx-extended-pdf-viewer
       // Use uid instead of annotationElementId to provide unique IDs for both

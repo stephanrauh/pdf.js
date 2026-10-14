@@ -67,6 +67,7 @@
     color-mix(in srgb, currentColor 17%, transparent)
   );
   --toggled-btn-color: light-dark(rgb(0 0 0), rgb(255 255 255));
+  --toggled-btn-text-color: var(--toggled-btn-color);
   --toggled-btn-bg-color: rgb(0 0 0 / 0.3);
   --toggled-hover-active-btn-color: rgb(0 0 0 / 0.4);
   --toggled-hover-btn-outline: none;
@@ -176,12 +177,13 @@
     --toolbar-bg-color: var(--toolbar-background-color);
     --toolbar-border-color: var(--border-color-deemphasized);
     --toggled-btn-color: var(--toolbarbutton-icon-fill);
+    --toggled-btn-text-color: var(--text-color);
     --toggled-btn-bg-color: var(--toolbarbutton-background-color-active);
     --toggled-hover-active-btn-color: var(
       --toolbarbutton-background-color-active
     );
     --dropdown-btn-bg-color: var(--button-background-color);
-    --dropdown-btn-border: 1px solid var(--button-border-color);
+    --dropdown-btn-border: 1px solid var(--border-color-interactive);
     --separator-color: var(--border-color-deemphasized);
     --field-color: var(--text-color);
     --field-bg-color: var(--background-color-box);
@@ -220,6 +222,7 @@ body:dir(rtl),
     --toolbar-border-bottom: 1px solid var(--toolbar-border-color);
     --toolbar-box-shadow: none;
     --toggled-btn-color: HighlightText;
+    --toggled-btn-text-color: HighlightText;
     --toggled-btn-bg-color: LinkText;
     --doorhanger-hover-color: ButtonFace;
     --doorhanger-border-color-whcm: 1px solid ButtonText;
@@ -706,12 +709,12 @@ body {
   display: inline;
 
   &:has(> input:checked) {
-    color: var(--toggled-btn-color);
+    color: var(--toggled-btn-text-color);
     background-color: var(--toggled-btn-bg-color);
   }
 
   &:is(:hover, :has(> input:focus-visible)) {
-    color: var(--toggled-btn-color);
+    color: var(--toggled-btn-text-color);
     background-color: var(--button-hover-color);
   }
 
@@ -999,7 +1002,7 @@ dialog :link {
 
   &.toggled {
     background-color: var(--toggled-btn-bg-color);
-    color: var(--toggled-btn-color);
+    color: var(--toggled-btn-text-color);
 
     &::before {
       background-color: var(--toggled-btn-color);
@@ -1630,7 +1633,7 @@ dialog :link {
 
     &:is(:hover, :focus-visible) {
       background-color: var(--button-hover-color);
-      color: var(--toggled-btn-color);
+      color: var(--toggled-btn-text-color);
     }
   }
 
@@ -1660,7 +1663,6 @@ dialog :link {
   /*#if MOZCENTRAL*/
   @media -moz-pref("pdfjs.enableNova") and -moz-pref("browser.nova.enabled") {
     overflow: hidden;
-    border: var(--button-border);
     border-radius: var(--button-border-radius);
     background-color: var(--button-background-color);
     color: var(--button-text-color);

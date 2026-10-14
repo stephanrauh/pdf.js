@@ -512,7 +512,8 @@ class DrawingEditor extends AnnotationEditor {
 
   /** @inheritdoc */
   onceAdded(focus) {
-    if (!this.annotationElementId) {
+    // Don't record creation until the editor has a drawing.
+    if (!this.annotationElementId && this._drawId !== null) {
       this.parent.addUndoableEditor(this);
     }
     this._isDraggable = true;

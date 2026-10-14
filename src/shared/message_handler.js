@@ -21,7 +21,6 @@ import {
   PasswordException,
   ResponseException,
   UnknownErrorException,
-  unreachable,
 } from "./util.js";
 
 const CallbackKind = {
@@ -54,10 +53,9 @@ function wrapReason(ex) {
     return ex;
   }
 
-  if (!(ex instanceof Error || (typeof ex === "object" && ex !== null))) {
-    unreachable(
-      'wrapReason: Expected "reason" to be a (possibly cloned) Error.'
-    );
+  if (typeof ex !== "object" || ex === null) {
+    // SpiderMonkey can throw "out of memory".
+    return new UnknownErrorException(String(ex), String(ex));
   }
   switch (ex.name) {
     case "AbortException":
@@ -361,7 +359,6 @@ class MessageHandler {
       },
 
       error(reason) {
-        assert(reason instanceof Error, "error must have a valid reason");
         if (this.isCancelled) {
           return;
         }

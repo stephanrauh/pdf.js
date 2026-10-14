@@ -184,6 +184,7 @@ appConfig: null,
   baseUrl: "",
   mlManager: null,
   _downloadUrl: "",
+  _isMergedDocument: false,
   _eventBusAC: null,
   _windowAC: null,
   _globalAbortController: new AbortController(),
@@ -1527,6 +1528,7 @@ appConfig: null,
     this.url = "";
     this.baseUrl = "";
     this._downloadUrl = "";
+    this._isMergedDocument = false;
     this.documentInfo = null;
     this.metadata = null;
     this._contentDispositionFilename = null;
@@ -1693,7 +1695,12 @@ appConfig: null,
     } catch {
       // When the PDF document isn't ready, simply download using the URL.
     }
-    this.downloadManager.download(data, this._downloadUrl, this._docFilename);
+    this.downloadManager.download(
+      data,
+      this._downloadUrl,
+      this._docFilename,
+      /* isModified = */ this._isMergedDocument
+    );
   },
 
   // #2943 modified by ngx-extended-pdf-viewer
@@ -1716,7 +1723,12 @@ appConfig: null,
         this.externalServices.printToPDF,
         pageOrder
       );
-      this.downloadManager.download(data, this._downloadUrl, this._docFilename);
+      this.downloadManager.download(
+        data,
+        this._downloadUrl,
+        this._docFilename,
+        /* isModified = */ true
+      );
     } catch (reason) {
       // When the PDF document isn't ready, fallback to a "regular" download.
       NgxConsole.error(`Error when saving the document:`, reason);
@@ -3244,7 +3256,8 @@ appConfig: null,
     this.downloadManager.download(
       modifiedPdfBytes,
       this._downloadUrl,
-      this._docFilename
+      this._docFilename,
+      /* isModified = */ true
     );
   },
 
@@ -3264,10 +3277,14 @@ appConfig: null,
     }
     this._mergedDocumentNeedsSaving = true;
 
-    this.open({
+    // Keep the original download URL when reopening the merged PDF.
+    const downloadUrl = this._downloadUrl;
+    await this.open({
       data: modifiedPdfBytes,
       filename: this._docFilename,
     });
+    this._downloadUrl = downloadUrl;
+    this._isMergedDocument = true;
   },
 
   _accumulateTicks(ticks, prop) {

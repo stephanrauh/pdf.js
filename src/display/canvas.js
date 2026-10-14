@@ -563,6 +563,9 @@ class CanvasGraphics {
   // creating a new DOMMatrix object each time we need it.
   static #SCALE_MATRIX = null;
 
+  // Keep uncloneable Path2D caches off operator lists sent to the renderer.
+  static #pathCaches = new WeakMap();
+
   // Knockout group support fields.
   #knockoutGroupLevel = 0;
 
@@ -740,11 +743,11 @@ class CanvasGraphics {
   ) {
     const argsArray = operatorList.argsArray;
     const fnArray = operatorList.fnArray;
-    // Cache materialized Path2D objects on the operator list itself rather
-    // than by mutating `argsArray[i][0]`, so that the arguments stay
-    // structured-cloneable.
+    // Reuse the renderer worker's cache across render tasks.
     const prevPathCache = this._pathCache;
-    this._pathCache = operatorList.pathCache ||= new Map();
+    this._pathCache =
+      operatorList.pathCache ??
+      CanvasGraphics.#pathCaches.getOrInsertComputed(operatorList, makeMap);
     try {
       let i = executionStartIdx || 0;
       const argsArrayLen = argsArray.length;
@@ -3056,46 +3059,48 @@ class CanvasGraphics {
       ? new CanvasNestedDependencyTracker(dependencyTracker, opIdx)
       : null;
 
-    for (i = 0; i < glyphsLength; ++i) {
-      glyph = glyphs[i];
-      if (typeof glyph === "number") {
-        spacingLength = (spacingDir * glyph * fontSize) / 1000;
-        this.ctx.translate(spacingLength, 0);
-        current.x += spacingLength * textHScale;
-        continue;
-      }
-
-      const spacing = (glyph.isSpace ? wordSpacing : 0) + charSpacing;
-      const operatorList = font.charProcOperatorList.get(glyph.operatorListId);
-      if (!operatorList) {
-        warn(`Type3 character "${glyph.operatorListId}" is not available.`);
-      } else if (this.contentVisible) {
-        this.save();
-        // A d0 (setCharWidth) glyph is colored (see Table 113 in pdf 1.7 specs)
-        // unlike a d1 glyph painted as a stencil mask with the current fill
-        // color. The constant alphas (ca/CA) are the opacity of that current
-        // color, so they must not attenuate a d0 glyph.
-        if (operatorList.fnArray[0] === OPS.setCharWidth) {
-          current.fillAlpha = current.strokeAlpha = 1;
-          ctx.globalAlpha = 1;
+    try {
+      for (i = 0; i < glyphsLength; ++i) {
+        glyph = glyphs[i];
+        if (typeof glyph === "number") {
+          spacingLength = (spacingDir * glyph * fontSize) / 1000;
+          this.ctx.translate(spacingLength, 0);
+          current.x += spacingLength * textHScale;
+          continue;
         }
-        ctx.scale(fontSize, fontSize);
-        ctx.transform(...fontMatrix);
-        this.executeOperatorList(operatorList);
-        this.restore();
+
+        const spacing = (glyph.isSpace ? wordSpacing : 0) + charSpacing;
+        const operatorList = font.charProcOperatorList.get(
+          glyph.operatorListId
+        );
+        if (!operatorList) {
+          warn(`Type3 character "${glyph.operatorListId}" is not available.`);
+        } else if (this.contentVisible) {
+          this.save();
+          // Reset inherited alpha for colored (d0) glyphs (issue 21430).
+          if (operatorList.fnArray[0] === OPS.setCharWidth) {
+            current.fillAlpha = current.strokeAlpha = 1;
+            ctx.globalAlpha = 1;
+          }
+          ctx.scale(fontSize, fontSize);
+          ctx.transform(...fontMatrix);
+          this.executeOperatorList(operatorList);
+          this.restore();
+        }
+
+        const p = [glyph.width, 0];
+        Util.applyTransform(p, fontMatrix);
+        width = p[0] * fontSize + spacing;
+
+        ctx.translate(width, 0);
+        current.x += width * textHScale;
       }
-
-      const p = [glyph.width, 0];
-      Util.applyTransform(p, fontMatrix);
-      width = p[0] * fontSize + spacing;
-
-      ctx.translate(width, 0);
-      current.x += width * textHScale;
+    } finally {
+      if (dependencyTracker) {
+        this.dependencyTracker = dependencyTracker;
+      }
     }
     ctx.restore();
-    if (dependencyTracker) {
-      this.dependencyTracker = dependencyTracker;
-    }
   }
 
   // Type3 fonts

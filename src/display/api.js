@@ -1614,7 +1614,7 @@ class PDFPageProxy {
         if (recordedBBoxes) {
           internalRenderTask.stepper?.setOperatorBBoxes(
             recordedBBoxes,
-            internalRenderTask.gfx.dependencyTracker.takeDebugMetadata()
+            internalRenderTask.debugMetadata
           );
 
           if (recordOperations) {
@@ -3330,6 +3330,10 @@ class RenderTask {
  * @ignore
  */
 class InternalRenderTask {
+  #dependencyTracker = null;
+
+  #imagesTracker = null;
+
   #rAF = null;
 
   #rendererTask = null;
@@ -3409,13 +3413,17 @@ class InternalRenderTask {
   get imageCoordinates() {
     return this.#rendererTask
       ? this.#rendererTask.imageCoordinates
-      : this.gfx?.imagesTracker?.take();
+      : this.#imagesTracker?.take();
   }
 
   get recordedBBoxes() {
     return this.#rendererTask
       ? this.#rendererTask.recordedBBoxes
-      : this.gfx?.dependencyTracker?.take();
+      : this.#dependencyTracker?.take();
+  }
+
+  get debugMetadata() {
+    return this.#dependencyTracker?.takeDebugMetadata() ?? null;
   }
 
   async initializeGraphics({ transparency = false, optionalContentConfig }) {
@@ -3476,6 +3484,9 @@ class InternalRenderTask {
           recordDebugMetadata: recordForDebugger,
         }
       );
+      // Only root trackers support take().
+      this.#dependencyTracker = dependencyTracker;
+      this.#imagesTracker = imagesTracker;
 
       this.gfx = new CanvasGraphics(
         canvasContext,
@@ -3526,7 +3537,7 @@ class InternalRenderTask {
       this.graphicsReadyCallback ||= this._continueBound;
       return;
     }
-    this.gfx?.dependencyTracker?.growOperationsCount(
+    this.#dependencyTracker?.growOperationsCount(
       this.operatorList.fnArray.length
     );
     this.stepper?.updateOperatorList(this.operatorList);
