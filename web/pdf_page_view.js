@@ -1080,6 +1080,7 @@ class PDFPageView extends BasePDFPageView {
       background: backgroundColor || null,
       recordOperations,
       recordImages,
+      partialFrames: true,
     };
   }
 

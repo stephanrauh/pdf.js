@@ -913,6 +913,14 @@ const defaultOptions = new Map([
     },
   ],
   [
+    "disableWorkerRendering",
+    {
+      /** @type {boolean} */
+      value: typeof PDFJSDev !== "undefined" && !PDFJSDev.test("TESTING"),
+      kind: OptionKind.API + OptionKind.PREFERENCE,
+    },
+  ],
+  [
     "docBaseUrl",
     {
       /** @type {string} */
@@ -1067,6 +1075,20 @@ const defaultOptions = new Map([
     },
   ],
   // #2995 end of modification by ngx-extended-pdf-viewer
+  [
+    "rendererSrc",
+    {
+      /** @type {string} */
+      value:
+        // eslint-disable-next-line no-nested-ternary
+        typeof PDFJSDev === "undefined"
+          ? "../src/pdf.renderer.js"
+          : PDFJSDev.test("MOZCENTRAL")
+            ? "resource://pdf.js/build/pdf.renderer.mjs"
+            : "../build/pdf.renderer.mjs",
+      kind: OptionKind.WORKER,
+    },
+  ],
   [
     "workerPort",
     {
