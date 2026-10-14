@@ -13,28 +13,30 @@
  * limitations under the License.
  */
 
-import {
-  CanvasBBoxTracker,
-  CanvasDependencyTracker,
-  CanvasImagesTracker,
-} from "./canvas_dependency_tracker.js";
 import { CanvasGraphics, getAnnotationCanvasName } from "./canvas.js";
 import { isNodeJS, setVerbosityLevel } from "../shared/util.js";
+import { createCanvasTrackers } from "./canvas_dependency_tracker.js";
 import { FontLoader } from "./font_loader.js";
 import { initGPU } from "./webgpu.js";
 import { MessageHandler } from "../shared/message_handler.js";
 import { ObjectHandler } from "./object_handler.js";
-import { OffscreenCanvasFactory } from "./canvas_factory.js";
+import { OffscreenCanvasFactory } from "./offscreen_canvas_factory.js";
 import { OptionalContentConfig } from "./optional_content_config.js";
 import { PDFObjects } from "./pdf_objects.js";
-import { WorkerFilterFactory } from "./filter_factory.js";
+import { WorkerFilterFactory } from "./worker_filter_factory.js";
 
 const PARTIAL_FRAME_TIME = 500; // ms
 
 class RendererMessageHandler {
-  static #cleanedPages = new Set();
+  static #canvasFactory;
 
   static #commonObjs = new PDFObjects();
+
+  static #enableHWA = false;
+
+  static #enableWebGPU = false;
+
+  static #filterFactory;
 
   static #fontLoader = new FontLoader({
     ownerDocument: globalThis,
@@ -131,7 +133,6 @@ class RendererMessageHandler {
   }
 
   static #cleanupPage(pageProxyId) {
-    this.#cleanedPages.add(pageProxyId);
     this.#objsMap.get(pageProxyId)?.clear();
     this.#objsMap.delete(pageProxyId);
     for (const [renderTaskId, renderTaskState] of this.#renderTaskStates) {
@@ -234,14 +235,9 @@ class RendererMessageHandler {
         : objectHandler.resolveCommonObject(id, type, exportedData)
     );
 
+    // The main thread drops objects for cleaned pages. This channel preserves
+    // message order.
     handler.on("obj", ([id, pageProxyId, type, imageData]) => {
-      // The page may have been cleaned up before this message was processed;
-      // drop the data and release any `ImageBitmap` instead of resurrecting
-      // an empty object bag for a dead page.
-      if (this.#cleanedPages.has(pageProxyId)) {
-        imageData?.bitmap?.close();
-        return;
-      }
       objectHandler.resolveObject(id, pageProxyId, type, imageData);
     });
 
@@ -251,9 +247,6 @@ class RendererMessageHandler {
         this.#commonObjs.reject(id, error);
         return;
       }
-      if (this.#cleanedPages.has(pageProxyId)) {
-        return;
-      }
       this.#getPageObjs(pageProxyId).reject(id, error);
     });
   }
@@ -261,6 +254,13 @@ class RendererMessageHandler {
   static #setup(handler) {
     handler.on("configure", data => {
       setVerbosityLevel(data.verbosity);
+
+      this.#enableHWA = data.enableHWA;
+      this.#enableWebGPU = data.enableWebGPU;
+
+      if (this.#enableWebGPU) {
+        initGPU(); // Start early, so it overlaps with page loading.
+      }
     });
 
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
@@ -275,10 +275,6 @@ class RendererMessageHandler {
       this.#cleanupPage(pageProxyId);
     });
 
-    handler.on("restorePage", ({ pageProxyId }) => {
-      this.#cleanedPages.delete(pageProxyId);
-    });
-
     // Mirrors the document-level cleanup the main thread performs in
     // `WorkerTransport.startCleanup`; without this the worker's copies of
     // `commonObjs`/`fontLoader` would outlive their main-thread counterparts.
@@ -287,6 +283,7 @@ class RendererMessageHandler {
       if (!keepLoadedFonts) {
         this.#fontLoader.clear();
       }
+      this.#filterFactory?.destroy(/* keepHCM = */ true);
     });
 
     handler.on("CleanupRenderTask", ({ renderTaskId }) => {
@@ -299,8 +296,6 @@ class RendererMessageHandler {
         height,
         pageProxyId,
         renderTaskId,
-        enableHWA = false,
-        enableWebGPU = false,
         hasAnnotationCanvasMap = false,
         transform,
         viewport,
@@ -333,7 +328,7 @@ class RendererMessageHandler {
       this.#renderTaskStates.set(renderTaskId, renderTaskState);
 
       try {
-        if (enableWebGPU) {
+        if (this.#enableWebGPU) {
           await initGPU();
           if (renderTaskState.aborted) {
             return;
@@ -346,26 +341,18 @@ class RendererMessageHandler {
 
         const ctx = canvas.getContext("2d", {
           alpha: false,
-          willReadFrequently: !enableHWA,
+          willReadFrequently: !this.#enableHWA,
         });
-        const canvasFactory = new OffscreenCanvasFactory({ enableHWA });
-        const filterFactory = new WorkerFilterFactory();
+        const canvasFactory = (this.#canvasFactory ??=
+          new OffscreenCanvasFactory({ enableHWA: this.#enableHWA }));
+        const filterFactory = (this.#filterFactory ??=
+          new WorkerFilterFactory());
         const annotationCanvases = hasAnnotationCanvasMap ? new Map() : null;
-        let bboxTracker = null;
-        let dependencyTracker = null;
-        let imagesTracker = null;
-        if (recordOperations || recordImages) {
-          bboxTracker = new CanvasBBoxTracker(canvas, 0);
-        }
-        if (recordOperations) {
-          dependencyTracker = new CanvasDependencyTracker(
-            bboxTracker,
-            /* recordDebugMetadata = */ false
-          );
-        }
-        if (recordImages) {
-          imagesTracker = new CanvasImagesTracker(canvas);
-        }
+        const { dependencyTracker, imagesTracker } = createCanvasTrackers(
+          canvas,
+          /* operationsCount = */ 0,
+          { recordOperations, recordImages }
+        );
 
         // `pageColors` requires DOM-based SVG filters, so pages that need it
         // never render in the worker.
@@ -378,7 +365,7 @@ class RendererMessageHandler {
           { optionalContentConfig },
           annotationCanvases,
           /* pageColors = */ null,
-          dependencyTracker ?? bboxTracker,
+          dependencyTracker,
           imagesTracker
         );
 
@@ -460,9 +447,13 @@ class RendererMessageHandler {
     const handler = new MessageHandler("renderer", "main", port);
     this.#setup(handler);
 
+    const workerVersion =
+      typeof PDFJSDev !== "undefined" && !PDFJSDev.test("TESTING")
+        ? PDFJSDev.eval("BUNDLE_VERSION")
+        : null;
     const testObj = new Uint8Array();
     // Ensure that we can use `postMessage` transfers.
-    handler.send("ready", testObj, [testObj.buffer]);
+    handler.send("ready", { testObj, workerVersion }, [testObj.buffer]);
   }
 }
 

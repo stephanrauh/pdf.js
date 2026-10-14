@@ -21,7 +21,7 @@ import {
   AnnotationEditorParamsType,
   AnnotationEditorType,
 } from "../../shared/util.js";
-import { noContextMenu, stopEvent } from "../display_utils.js";
+import { noContextMenu, stopEvent } from "../dom_utils.js";
 import { AnnotationEditor } from "./editor.js";
 
 class EraserEditor extends AnnotationEditor {

@@ -30,7 +30,7 @@ import {
   AnnotationEditorType,
   FeatureTest,
 } from "../../shared/util.js";
-import { setLayerDimensions, stopEvent } from "../display_utils.js";
+import { setLayerDimensions, stopEvent } from "../dom_utils.js";
 import { AnnotationEditor } from "./editor.js";
 import { EraserEditor } from "./eraser.js"; // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer - the eraser
 import { FreeTextEditor } from "./freetext.js";

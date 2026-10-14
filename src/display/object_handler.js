@@ -29,7 +29,7 @@ class ObjectHandler {
     commonObjs,
     fontLoader,
     pageCache,
-    pdfBug = null,
+    pdfBug = false,
     shouldCreatePageObjs = false,
   }) {
     this.messageHandler = messageHandler;
@@ -41,6 +41,34 @@ class ObjectHandler {
   }
 
   resolveCommonObject(id, type, exportedData) {
+    if (
+      (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
+      type === "CopyLocalImage"
+    ) {
+      const { imageRef } = exportedData;
+      assert(imageRef, "The imageRef must be defined.");
+
+      for (const pageOrObjs of this.pageCache.values()) {
+        const objs = pageOrObjs.objs || pageOrObjs;
+
+        for (const [, data] of objs) {
+          if (data?.ref !== imageRef) {
+            continue;
+          }
+          if (!data.dataLen) {
+            return null;
+          }
+          const copy = structuredClone(data);
+          if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
+            copy.reusedDecodedImage = true;
+          }
+          this.commonObjs.resolve(id, copy);
+          return data.dataLen;
+        }
+      }
+      return null;
+    }
+
     switch (type) {
       case "Font":
         if ("error" in exportedData) {
@@ -52,7 +80,10 @@ class ObjectHandler {
 
         const fontData = new FontInfo(exportedData.buffer);
         const inspectFont =
-          this.pdfBug && globalThis.FontInspector?.enabled
+          (typeof PDFJSDev === "undefined" ||
+            !PDFJSDev.test("WORKER_THREAD")) &&
+          this.pdfBug &&
+          globalThis.FontInspector?.enabled
             ? (font, url) => globalThis.FontInspector.fontAdded(font, url)
             : null;
         const font = new FontFaceObject(
@@ -83,29 +114,6 @@ class ObjectHandler {
             this.commonObjs.resolve(id, font);
           });
         break;
-      case "CopyLocalImage":
-        const { imageRef } = exportedData;
-        assert(imageRef, "The imageRef must be defined.");
-
-        for (const pageOrObjs of this.pageCache.values()) {
-          const objs = pageOrObjs.objs || pageOrObjs;
-
-          for (const [, data] of objs) {
-            if (data?.ref !== imageRef) {
-              continue;
-            }
-            if (!data.dataLen) {
-              return null;
-            }
-            const copy = structuredClone(data);
-            if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
-              copy.CopyLocalImage = true;
-            }
-            this.commonObjs.resolve(id, copy);
-            return data.dataLen;
-          }
-        }
-        break;
       case "FontPath":
         this.commonObjs.resolve(id, new FontPathInfo(exportedData));
         break;
@@ -122,11 +130,14 @@ class ObjectHandler {
     return null;
   }
 
+  /**
+   * @returns {boolean} Whether the object was stored.
+   */
   resolveObject(id, pageProxyId, type, exportedData) {
     let pageOrObjs = this.pageCache.get(pageProxyId);
     if (!pageOrObjs) {
       if (!this.shouldCreatePageObjs) {
-        return;
+        return false;
       }
       pageOrObjs = new PDFObjects();
       this.pageCache.set(pageProxyId, pageOrObjs);
@@ -134,19 +145,19 @@ class ObjectHandler {
 
     const objs = pageOrObjs.objs || pageOrObjs;
     if (objs.has(id)) {
-      return;
+      return false;
     }
     // Don't store data *after* cleanup has successfully run, see bug 1854145.
     if (pageOrObjs._intentStates?.size === 0) {
       exportedData?.bitmap?.close(); // Release any `ImageBitmap` data.
-      return;
+      return false;
     }
 
     switch (type) {
       case "Image":
       case "Pattern":
         objs.resolve(id, exportedData);
-        break;
+        return true;
       default:
         throw new Error(`Got unknown object type ${type}`);
     }

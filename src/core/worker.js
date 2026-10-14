@@ -137,8 +137,7 @@ class WorkerMessageHandler {
         : null;
     if (apiVersion !== workerVersion) {
       throw new Error(
-        `The API version "${apiVersion}" does not match ` +
-          `the Worker version "${workerVersion}".`
+        `The API version "${apiVersion}" does not match the Worker version "${workerVersion}".`
       );
     }
 
@@ -1119,6 +1118,12 @@ class WorkerMessageHandler {
 
     handler.on("Cleanup", function () {
       return pdfManager.cleanup(/* manuallyTriggered = */ true);
+    });
+
+    handler.on("CleanupPage", async function ({ pageProxyId }) {
+      const globalImageCache =
+        await pdfManager.ensureCatalog("globalImageCache");
+      globalImageCache.cleanupPage(pageProxyId);
     });
 
     handler.on("Terminate", async function () {
