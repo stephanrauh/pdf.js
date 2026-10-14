@@ -14,7 +14,7 @@
  */
 
 import { CanvasGraphics, getAnnotationCanvasName } from "./canvas.js";
-import { isNodeJS, setVerbosityLevel } from "../shared/util.js";
+import { isNodeJS, makeMap, setVerbosityLevel } from "../shared/util.js";
 import { createCanvasTrackers } from "./canvas_dependency_tracker.js";
 import { FontLoader } from "./font_loader.js";
 import { initGPU } from "./webgpu.js";
@@ -44,6 +44,9 @@ class RendererMessageHandler {
 
   static #objsMap = new Map();
 
+  // Shared operator lists, keyed by page and list ids.
+  static #operatorLists = new Map();
+
   static #renderTaskStates = new Map();
 
   static {
@@ -65,6 +68,16 @@ class RendererMessageHandler {
       pageProxyId,
       () => new PDFObjects()
     );
+  }
+
+  static #getOperatorList(pageProxyId, operatorListId) {
+    return this.#operatorLists
+      .getOrInsertComputed(pageProxyId, makeMap)
+      .getOrInsertComputed(operatorListId, () => ({
+        fnArray: [],
+        argsArray: [],
+        pathCache: new Map(),
+      }));
   }
 
   // Flatten the annotation canvases into `[id, canvasName, bitmap]` tuples so
@@ -135,6 +148,7 @@ class RendererMessageHandler {
   static #cleanupPage(pageProxyId) {
     this.#objsMap.get(pageProxyId)?.clear();
     this.#objsMap.delete(pageProxyId);
+    this.#operatorLists.delete(pageProxyId);
     for (const [renderTaskId, renderTaskState] of this.#renderTaskStates) {
       if (renderTaskState.pageProxyId === pageProxyId) {
         this.#cleanupRenderTask(renderTaskId);
@@ -154,24 +168,23 @@ class RendererMessageHandler {
     this.#renderTaskStates.delete(renderTaskId);
   }
 
-  static #appendOperatorList(
+  // Limit this task to its requested length; another task may have sent more.
+  static #appendFromSharedOperatorList(
     renderTaskState,
-    fnArray,
-    argsArray,
+    length,
     operationsFilterMask,
     lastChunk
   ) {
-    const { operatorList } = renderTaskState;
-    if (fnArray) {
-      for (let i = 0, ii = fnArray.length; i < ii; i++) {
-        operatorList.fnArray.push(fnArray[i]);
-        operatorList.argsArray.push(argsArray[i]);
-      }
-      if (operationsFilterMask) {
-        const mask = (renderTaskState.operationsFilterMask ||= []);
-        for (let i = 0, ii = operationsFilterMask.length; i < ii; i++) {
-          mask.push(operationsFilterMask[i]);
-        }
+    const { operatorList, sharedOperatorList } = renderTaskState;
+    const { fnArray, argsArray } = sharedOperatorList;
+    for (let i = operatorList.fnArray.length; i < length; i++) {
+      operatorList.fnArray.push(fnArray[i]);
+      operatorList.argsArray.push(argsArray[i]);
+    }
+    if (operationsFilterMask) {
+      const mask = (renderTaskState.operationsFilterMask ||= []);
+      for (let i = 0, ii = operationsFilterMask.length; i < ii; i++) {
+        mask.push(operationsFilterMask[i]);
       }
     }
     operatorList.lastChunk = lastChunk;
@@ -290,22 +303,39 @@ class RendererMessageHandler {
       this.#cleanupRenderTask(renderTaskId);
     });
 
+    handler.on(
+      "AppendOperatorList",
+      ({ pageProxyId, operatorListId, fnArray, argsArray }) => {
+        const operatorList = this.#getOperatorList(pageProxyId, operatorListId);
+        for (let i = 0, ii = fnArray.length; i < ii; i++) {
+          operatorList.fnArray.push(fnArray[i]);
+          operatorList.argsArray.push(argsArray[i]);
+        }
+      }
+    );
+
     handler.on("InitializeGraphics", async data => {
       const {
         width,
         height,
         pageProxyId,
+        operatorListId,
         renderTaskId,
         hasAnnotationCanvasMap = false,
         transform,
         viewport,
         transparency,
         background,
+        pixelRatio,
         recordOperations = false,
         recordImages = false,
         partialFrames = false,
       } = data;
       const canvas = new OffscreenCanvas(width, height);
+      const sharedOperatorList = this.#getOperatorList(
+        pageProxyId,
+        operatorListId
+      );
       const renderTaskState = {
         pageProxyId,
         renderTaskId,
@@ -313,11 +343,12 @@ class RendererMessageHandler {
         partialFrames,
         lastFrameTime: Date.now(),
         gfx: null,
+        sharedOperatorList,
         operatorList: {
           fnArray: [],
           argsArray: [],
           lastChunk: false,
-          pathCache: null,
+          pathCache: sharedOperatorList.pathCache,
         },
         operatorListIdx: 0,
         lastFrameIdx: 0,
@@ -339,10 +370,6 @@ class RendererMessageHandler {
           data.optionalContentConfig
         );
 
-        const ctx = canvas.getContext("2d", {
-          alpha: false,
-          willReadFrequently: !this.#enableHWA,
-        });
         const canvasFactory = (this.#canvasFactory ??=
           new OffscreenCanvasFactory({ enableHWA: this.#enableHWA }));
         const filterFactory = (this.#filterFactory ??=
@@ -357,12 +384,12 @@ class RendererMessageHandler {
         // `pageColors` requires DOM-based SVG filters, so pages that need it
         // never render in the worker.
         const gfx = new CanvasGraphics(
-          ctx,
+          /* ctx = */ canvasFactory.getNoAlphaContext(canvas),
           this.#commonObjs,
           objs,
           canvasFactory,
           filterFactory,
-          { optionalContentConfig },
+          { optionalContentConfig, pixelRatio },
           annotationCanvases,
           /* pageColors = */ null,
           dependencyTracker,
@@ -386,9 +413,8 @@ class RendererMessageHandler {
     handler.on("ExecuteOperatorList", async data => {
       const {
         renderTaskId,
-        fnArray,
-        argsArray,
         operatorListIdx,
+        operatorListLength,
         operationsFilterMask,
         lastChunk,
       } = data;
@@ -400,10 +426,9 @@ class RendererMessageHandler {
       }
 
       renderTaskState.operatorListIdx = operatorListIdx;
-      this.#appendOperatorList(
+      this.#appendFromSharedOperatorList(
         renderTaskState,
-        fnArray,
-        argsArray,
+        operatorListLength,
         operationsFilterMask,
         lastChunk
       );

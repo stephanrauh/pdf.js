@@ -425,7 +425,6 @@ function getDocument(src = {}) {
     ownerDocument,
     pdfBug,
     styleElement,
-    enableHWA,
     rendererWorker: null, // Set below.
     loadingParams: {
       disableAutoFetch,
@@ -1681,7 +1680,6 @@ class PDFPageProxy {
       useRequestAnimationFrame: !intentPrint,
       pdfBug: this._pdfBug,
       pageColors,
-      enableHWA: this._transport.enableHWA,
       operationsFilter,
       rendererWorker: this._transport.rendererWorker,
     });
@@ -2444,7 +2442,6 @@ class WorkerTransport {
       ownerDocument: params.ownerDocument,
       styleElement: params.styleElement,
     });
-    this.enableHWA = params.enableHWA;
     this.rendererWorker = params.rendererWorker;
     this.loadingParams = params.loadingParams;
     this._params = params;
@@ -3353,7 +3350,6 @@ class InternalRenderTask {
     useRequestAnimationFrame = false,
     pdfBug = false,
     pageColors = null,
-    enableHWA = false,
     operationsFilter = null,
     rendererWorker = null,
   }) {
@@ -3384,12 +3380,12 @@ class InternalRenderTask {
     this._nextBound = this._next.bind(this);
     this._canvas = params.canvas;
     this._canvasContext = params.canvas ? null : params.canvasContext;
-    this._enableHWA = enableHWA;
     this._operationsFilter = operationsFilter;
 
     this.#rendererTask =
       rendererWorker?.createRenderTask({
         pageProxyId,
+        operatorList,
         params,
         pageColors,
         canvasFactory,
@@ -3470,10 +3466,7 @@ class InternalRenderTask {
       // which cannot be created from the canvas itself.
       const canvasContext =
         this._canvasContext ||
-        this._canvas.getContext("2d", {
-          alpha: false,
-          willReadFrequently: !this._enableHWA,
-        });
+        this.canvasFactory.getNoAlphaContext(this._canvas);
       const { dependencyTracker, imagesTracker } = createCanvasTrackers(
         this._canvas,
         this.operatorList.fnArray.length,

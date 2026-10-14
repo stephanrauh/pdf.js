@@ -47,6 +47,10 @@ function parseDocBaseUrl(url) {
 }
 
 class BasePdfManager {
+  static #handlers = new Set();
+
+  #handler = null;
+
   constructor({
     // source,
     // disableAutoFetch,
@@ -69,12 +73,18 @@ class BasePdfManager {
     }
     this._docBaseUrl = parseDocBaseUrl(docBaseUrl);
     this._docId = docId;
+    this.#handler = handler;
     this._password = password;
     this.enableXfa = enableXfa;
     // #2995 modified by ngx-extended-pdf-viewer
     this.enableOpenActionJavaScript = !!enableOpenActionJavaScript;
     this.enableCatalogAAJavaScript = !!enableCatalogAAJavaScript;
     // #2995 end of modification by ngx-extended-pdf-viewer
+
+    // Keep track of all active `MessageHandler`s to prevent issues with
+    // Wasm-decoding of images if multiple PDFs are parsed in parallel in one
+    // worker-thread and `useWorkerFetch = false` is set (fixes issue 22131).
+    BasePdfManager.#handlers.add(handler);
 
     // Check `OffscreenCanvas` and `ImageDecoder` support once,
     // rather than repeatedly throughout the worker-thread code.
@@ -90,7 +100,11 @@ class BasePdfManager {
     JpegStream.setOptions(evaluatorOptions);
     OperatorList.setOptions(evaluatorOptions);
 
-    const options = { ...evaluatorOptions, handler };
+    const options = {
+      ...evaluatorOptions,
+      getHandler: () =>
+        this.#handler ?? BasePdfManager.#handlers.keys().next().value,
+    };
     IccColorSpace.setOptions(options);
     CmykICCBasedCS.setOptions(options);
     PDFFunctionFactory.setOptions(options);
@@ -172,7 +186,8 @@ class BasePdfManager {
   }
 
   terminate(reason) {
-    unreachable("Abstract method `terminate` called");
+    BasePdfManager.#handlers.delete(this.#handler);
+    this.#handler = null;
   }
 }
 
@@ -193,8 +208,6 @@ class LocalPdfManager extends BasePdfManager {
   requestLoadedStream(noFetch = false) {
     return this._loadedStreamPromise;
   }
-
-  terminate(reason) {}
 }
 
 class NetworkPdfManager extends BasePdfManager {
@@ -236,6 +249,7 @@ class NetworkPdfManager extends BasePdfManager {
   }
 
   terminate(reason) {
+    super.terminate(reason);
     this.streamManager.abort(reason);
   }
 }
