@@ -1018,7 +1018,13 @@ function apiPageModeToSidebarView(mode) {
 
 function toggleCheckedBtn(button, toggle, view = null) {
   button.classList.toggle("toggled", toggle);
-  button.setAttribute("aria-checked", toggle);
+  // stephanrauh/ngx-extended-pdf-viewer#3295 modified by ngx-extended-pdf-viewer
+  // the scroll and spread buttons of ngx-extended-pdf-viewer are toggle buttons, not radios
+  button.setAttribute(
+    button.hasAttribute("aria-pressed") ? "aria-pressed" : "aria-checked",
+    toggle
+  );
+  // stephanrauh/ngx-extended-pdf-viewer#3295 end of modification by ngx-extended-pdf-viewer
 
   view?.classList.toggle("hidden", !toggle);
 }
