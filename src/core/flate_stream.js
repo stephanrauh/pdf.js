@@ -23,7 +23,7 @@ import { FormatError, info } from "../shared/util.js";
 import { DecodeStream } from "./decode_stream.js";
 import { Stream } from "./stream.js";
 
-const codeLenCodeMap = new Int32Array([
+const codeLenCodeMap = new Uint8Array([
   16, 17, 18, 0, 8, 7, 9, 6, 10, 5, 11, 4, 12, 3, 13, 2, 14, 1, 15,
 ]);
 
@@ -381,9 +381,10 @@ class FlateStream extends DecodeStream {
           continue;
         }
 
-        let repeatLength = this.getBits(bitsLength) + bitsOffset;
-        while (repeatLength-- > 0) {
-          codeLengths[i++] = what;
+        const repeatLen = this.getBits(bitsLength) + bitsOffset;
+        if (repeatLen > 0) {
+          codeLengths.fill(what, i, i + repeatLen);
+          i += repeatLen;
         }
       }
 
@@ -433,8 +434,16 @@ class FlateStream extends DecodeStream {
           buffer = this.ensureBuffer(pos + len);
           limit = buffer.length;
         }
-        for (let k = 0; k < len; ++k, ++pos) {
-          buffer[pos] = buffer[pos - dist];
+        if (len < dist) {
+          // When the old and new data doesn't overlap we can use `copyWithin`,
+          // since that's faster than a manual loop.
+          const startPos = pos - dist;
+          buffer.copyWithin(pos, startPos, startPos + len);
+          pos += len;
+        } else {
+          for (let k = 0; k < len; ++k, ++pos) {
+            buffer[pos] = buffer[pos - dist];
+          }
         }
       }
     } catch (ex) {
