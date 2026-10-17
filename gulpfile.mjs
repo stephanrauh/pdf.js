@@ -850,6 +850,7 @@ function createWasmBundle({ includeQuickJS = true } = {}) {
         [
           "external/quickjs/quickjs-eval.js",
           "external/quickjs/quickjs-eval.wasm",
+          "external/quickjs/LICENSE_*",
         ],
         {
           base: "external/quickjs",
@@ -2893,6 +2894,35 @@ gulp.task(
     }
   )
 );
+
+gulp.task("benchmark", function (done) {
+  console.log("\n### Running benchmarks");
+
+  const args = [
+    "node_modules/vitest/vitest.mjs",
+    "bench",
+    "--run",
+    "--config",
+    "test/benchmarks/vitest.config.mjs",
+  ];
+  const outputJson = getArgValue("--output-json");
+  if (outputJson) {
+    args.push("--outputJson", outputJson);
+  }
+  const compare = getArgValue("--compare");
+  if (compare) {
+    args.push("--compare", compare);
+  }
+
+  const benchProcess = startNode(args, { stdio: "inherit" });
+  benchProcess.on("close", function (code) {
+    if (code !== 0) {
+      done(new Error("Benchmarks failed."));
+      return;
+    }
+    done();
+  });
+});
 
 gulp.task("lint-licenses", function (done) {
   console.log("\n### Checking license headers");

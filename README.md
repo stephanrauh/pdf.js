@@ -1,4 +1,4 @@
-# PDF.js [![CI](https://github.com/mozilla/pdf.js/actions/workflows/ci.yml/badge.svg?query=branch%3Amaster)](https://github.com/mozilla/pdf.js/actions/workflows/ci.yml?query=branch%3Amaster) [![codecov](https://codecov.io/gh/mozilla/pdf.js/branch/master/graph/badge.svg)](https://codecov.io/gh/mozilla/pdf.js) [![Reference images](https://img.shields.io/endpoint?url=https%3A%2F%2Fmozilla.github.io%2Fpdf.js.refs%2Fmakeref-badge.json)](https://github.com/mozilla/pdf.js.refs/commits/main)
+# PDF.js [![CI](https://github.com/mozilla/pdf.js/actions/workflows/ci.yml/badge.svg?query=branch%3Amaster)](https://github.com/mozilla/pdf.js/actions/workflows/ci.yml?query=branch%3Amaster) [![codecov](https://codecov.io/gh/mozilla/pdf.js/branch/master/graph/badge.svg)](https://codecov.io/gh/mozilla/pdf.js) [![Reference images](https://img.shields.io/endpoint?url=https%3A%2F%2Fmozilla.github.io%2Fpdf.js.refs%2Fmakeref-badge.json)](https://github.com/mozilla/pdf.js.refs/commits/main) [![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://app.codspeed.io/mozilla/pdf.js?utm_source=badge)
 
 > **Note on commit authorship in this fork:** A number of historical commits in this fork are authored as `Test User <test@example.com>` due to a stale local git config. All such commits were made by Stephan Rauh (the maintainer of [ngx-extended-pdf-viewer](https://github.com/stephanrauh/ngx-extended-pdf-viewer)) and the misattribution is unintentional. Future commits use the correct identity.
 
@@ -177,6 +177,19 @@ types can be told apart:
 | `unit_tests.yml` | `unittest` | `unittest` |
 | `integration_tests.yml` | `integrationtest` | `integrationtest` |
 | `coverage_browser_tests.yml` | `botbrowsertest` | `browsertest` |
+
+## Benchmarks
+
+Run the benchmarks in `test/benchmarks/` locally:
+
+    $ npx gulp benchmark
+
+To compare with `master`:
+
+    $ git checkout master
+    $ npx gulp benchmark --output-json build/bench-master.json
+    $ git checkout my-branch
+    $ npx gulp benchmark --compare build/bench-master.json
 
 ## Using PDF.js in a web application
 

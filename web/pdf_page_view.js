@@ -554,6 +554,9 @@ class PDFPageView extends BasePDFPageView {
     }
   }
 
+  /**
+   * @returns {Promise<boolean>} Indicating if textLayer rendering was aborted.
+   */
   async #renderTextLayer() {
     let error = null;
     try {
@@ -570,7 +573,7 @@ class PDFPageView extends BasePDFPageView {
       });
     } catch (ex) {
       if (ex instanceof AbortException) {
-        return;
+        return true;
       }
       NgxConsole.error("#renderTextLayer:", ex);
       error = ex;
@@ -578,6 +581,7 @@ class PDFPageView extends BasePDFPageView {
     this.#dispatchLayerRendered("textlayerrendered", error, this.textLayer);
 
     this.#renderStructTreeLayer();
+    return false;
   }
 
   /**
@@ -614,9 +618,10 @@ class PDFPageView extends BasePDFPageView {
   async #injectLinkAnnotations(textLayerPromise, annotationLayer, textLayer) {
     let error = null;
     try {
-      await textLayerPromise;
+      const textLayerAborted = await textLayerPromise;
 
       if (
+        textLayerAborted ||
         annotationLayer !== this.annotationLayer ||
         textLayer !== this.textLayer
       ) {
