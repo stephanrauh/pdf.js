@@ -1031,7 +1031,13 @@ function toggleCheckedBtn(button, toggle, view = null) {
 
 function toggleSelectedBtn(button, toggle, view = null) {
   button.classList.toggle("selected", toggle);
-  button.setAttribute("aria-selected", toggle);
+  // stephanrauh/ngx-extended-pdf-viewer#3304 modified by ngx-extended-pdf-viewer
+  // the sidebar view buttons of ngx-extended-pdf-viewer are toggle buttons, not options
+  button.setAttribute(
+    button.hasAttribute("aria-pressed") ? "aria-pressed" : "aria-selected",
+    toggle
+  );
+  // stephanrauh/ngx-extended-pdf-viewer#3304 end of modification by ngx-extended-pdf-viewer
 
   view?.classList.toggle("hidden", !toggle);
 }
