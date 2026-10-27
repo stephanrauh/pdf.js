@@ -1191,6 +1191,10 @@ appConfig: null,
       cancelable: true,
       detail: {
         source: window,
+        // #3306 modified by ngx-extended-pdf-viewer: with several viewers on
+        // one page, each viewer has to recognize its own event
+        PDFViewerApplication: this,
+        // #3306 end of modification by ngx-extended-pdf-viewer
       },
     });
 
