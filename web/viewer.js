@@ -58,7 +58,25 @@ if (!HTMLCollection.prototype[Symbol.iterator]) {
 // end of modification
 
 
-function getViewerConfiguration() {
+// #3306 modified by ngx-extended-pdf-viewer: with several viewers on one page,
+// each viewer looks up its elements inside its own root element only
+function scopedDocument(root) {
+  if (!root) {
+    return document;
+  }
+  return {
+    body: document.body,
+    getElementById: id => root.querySelector(`#${CSS.escape(id)}`),
+    getElementsByClassName: name => root.getElementsByClassName(name),
+  };
+}
+// #3306 end of modification by ngx-extended-pdf-viewer
+
+function getViewerConfiguration(root) {
+  // #3306 modified by ngx-extended-pdf-viewer: shadows the global document, so
+  // the lookups below stay identical to upstream
+  const document = scopedDocument(root);
+  // #3306 end of modification by ngx-extended-pdf-viewer
   return {
     // modified by ngx-extended-pdf-viewer
     // ngx-extended-pdf-viewer puts the viewer in a div bearing the "body" class
@@ -436,8 +454,8 @@ function getViewerConfiguration() {
   };
 }
 
-function webViewerLoad(cspPolicyService, { bindEditorButtons = false } = {}) { // #2362 and stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer
-  const config = getViewerConfiguration();
+function webViewerLoad(cspPolicyService, { bindEditorButtons = false, root } = {}) { // #2362, stephanrauh/pdf.js#14 and #3306 modified by ngx-extended-pdf-viewer
+  const config = getViewerConfiguration(root);
   // stephanrauh/pdf.js#14 modified by ngx-extended-pdf-viewer: only the
   // standalone viewer binds the editor toolbar buttons itself (in ngx, Angular
   // handles their clicks - see #2900/#3069). Passed as configuration instead of
