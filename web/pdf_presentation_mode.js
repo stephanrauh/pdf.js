@@ -231,8 +231,16 @@ class PDFPresentationMode {
   }
 
   // #426 modified by ngx-extended-pdf-viewer
+  // #3306 modified by ngx-extended-pdf-viewer: with several viewers on one
+  // page, use this viewer's elements, not the first viewer's
+  get _ngxViewerRoot() {
+    return this.container.closest("ngx-extended-pdf-viewer") ?? document;
+  }
+  // #3306 end of modification by ngx-extended-pdf-viewer
+
   _prepareFullscreenMode() {
-    const domElement = document.getElementsByClassName("zoom")[0].parentElement;
+    const viewerRoot = this._ngxViewerRoot; // #3306 modified by ngx-extended-pdf-viewer
+    const domElement = viewerRoot.getElementsByClassName("zoom")[0].parentElement;
     const parent = domElement.parentElement;
     this.ngxContainer = parent;
     for (let i = 0; i < parent.childElementCount; i++) {
@@ -249,13 +257,14 @@ class PDFPresentationMode {
         s.classList.add("hidden-by-fullscreen");
       }
     }
-    document.getElementById("sidebarContainer").classList.add("hidden-by-fullscreen");
-    document.getElementsByClassName("toolbar")[0].classList.add("hidden-by-fullscreen");
+    viewerRoot.querySelector("#sidebarContainer").classList.add("hidden-by-fullscreen");
+    viewerRoot.getElementsByClassName("toolbar")[0].classList.add("hidden-by-fullscreen");
   }
 
   _tidyUpFullscreenMode() {
     if (this.ngxContainer) {
-      const domElement = document.getElementsByClassName("zoom")[0].parentElement;
+      const viewerRoot = this._ngxViewerRoot; // #3306 modified by ngx-extended-pdf-viewer
+      const domElement = viewerRoot.getElementsByClassName("zoom")[0].parentElement;
       document.body.removeChild(domElement);
       if (this.ngxContainerIndex >= this.ngxContainer.childElementCount) {
         this.ngxContainer.append(domElement);
@@ -273,8 +282,8 @@ class PDFPresentationMode {
         }
       }
 
-      document.getElementById("sidebarContainer").classList.remove("hidden-by-fullscreen");
-      document.getElementsByClassName("toolbar")[0].classList.remove("hidden-by-fullscreen");
+      viewerRoot.querySelector("#sidebarContainer").classList.remove("hidden-by-fullscreen");
+      viewerRoot.getElementsByClassName("toolbar")[0].classList.remove("hidden-by-fullscreen");
     }
   }
   // #426 end of modification

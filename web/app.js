@@ -868,8 +868,8 @@ appConfig: null,
         }
         // stephanrauh/pdf.js#14 end of modification by ngx-extended-pdf-viewer
         // #2943 modified by ngx-extended-pdf-viewer - handle page reordering buttons
-        const movePageUpButton = document.getElementById("movePageUp");
-        const movePageDownButton = document.getElementById("movePageDown");
+        const movePageUpButton = this._getViewerElementById("movePageUp");
+        const movePageDownButton = this._getViewerElementById("movePageDown");
         if (movePageUpButton && movePageDownButton) {
           if (AppOptions.get("enablePageReordering")) {
             movePageUpButton.hidden = false;
@@ -891,7 +891,7 @@ appConfig: null,
         );
       } else {
         for (const id of ["editorModeButtons", "editorModeSeparator"]) {
-          document.getElementById(id)?.classList.add("hidden");
+          this._getViewerElementById(id)?.classList.add("hidden");
         }
       }
     }
@@ -1330,8 +1330,17 @@ appConfig: null,
   /* replaces the getter by a property,so when a new instance of            */
   /* ngx-extended-pdf-viewer is opened, it still references the old viewer. */
   /** The bug fix solves this problem.                                      */
+  // #3306 modified by ngx-extended-pdf-viewer: with several viewers on one
+  // page, ids aren't unique, so look up this viewer's elements in its own
+  // container
+  _getViewerElementById(id) {
+    const root = this.appConfig?.appContainer;
+    return root ? root.querySelector(`#${id}`) : document.getElementById(id);
+  },
+  // #3306 end of modification by ngx-extended-pdf-viewer
+
   initializeLoadingBar() {
-    const barElement = document.getElementById("loadingBar");
+    const barElement = this._getViewerElementById("loadingBar");
     const bar = barElement ? new ProgressBar(barElement) : null;
     bar?.hide();
     return shadow(this, "loadingBar", bar);
@@ -1461,7 +1470,7 @@ appConfig: null,
 
     // Avoid displaying multiple consecutive separators in the secondaryToolbar.
     if (secondaryToolbar?.presentationModeButton?.classList.contains("hidden")) {
-      document.getElementById("viewBookmarkSeparator")?.classList.add("hidden");
+      this._getViewerElementById("viewBookmarkSeparator")?.classList.add("hidden");
     }
   },
 
@@ -3065,7 +3074,7 @@ appConfig: null,
     addWindowResolutionChange();
 
     // #1830 modified by ngx-extended-pdf-viewer
-    const viewerContainer  = document.getElementById("viewerContainer");
+    const viewerContainer  = this._getViewerElementById("viewerContainer");
     viewerContainer?.addEventListener("wheel", onWheel.bind(this), {
       passive: false,
       signal,
@@ -3695,7 +3704,7 @@ function onPageChanging({ pageNumber, pageLabel }) {
     currentPage?.renderingState === RenderingStates.RUNNING
   );
   // modified by ngx-extended-pdf-viewer
-  const pageNumberInput = document.getElementById("pageNumber");
+  const pageNumberInput = this._getViewerElementById("pageNumber");
   if (pageNumberInput) {
     const pageScrollEvent = new CustomEvent("page-change");
     pageNumberInput.dispatchEvent(pageScrollEvent);
@@ -3705,7 +3714,7 @@ function onPageChanging({ pageNumber, pageLabel }) {
 
 function onWheel(evt) {
   // #1302 modified by ngx-extended-pdf-viewer
-  const element = document.getElementById("viewerContainer");
+  const element = this._getViewerElementById("viewerContainer");
   // #3274 The listener on window can outlive the viewer's DOM: when the host
   // application removes the viewer, the wheel events arriving before
   // unbindWindowEvents() runs find no #viewerContainer.
@@ -4142,12 +4151,12 @@ function onKeyDown(evt) {
         // Close editor params toolbars on Escape
         if (!handled) {
           const editorParamsToolbars = [
-            document.getElementById('editorHighlightParamsToolbar'),
-            document.getElementById('editorFreeTextParamsToolbar'),
-            document.getElementById('editorInkParamsToolbar'),
-            document.getElementById('editorStampParamsToolbar'),
-            document.getElementById('editorCommentParamsToolbar'),
-            document.getElementById('editorSignatureParamsToolbar'),
+            this._getViewerElementById('editorHighlightParamsToolbar'),
+            this._getViewerElementById('editorFreeTextParamsToolbar'),
+            this._getViewerElementById('editorInkParamsToolbar'),
+            this._getViewerElementById('editorStampParamsToolbar'),
+            this._getViewerElementById('editorCommentParamsToolbar'),
+            this._getViewerElementById('editorSignatureParamsToolbar'),
           ];
 
           const openToolbar = editorParamsToolbars.find(
