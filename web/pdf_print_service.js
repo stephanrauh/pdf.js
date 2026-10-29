@@ -394,7 +394,19 @@ class PDFPrintService {
   }
 }
 
-const print = window.print;
+// #3306 modified by ngx-extended-pdf-viewer: with several viewers on one page,
+// every viewer has its own copy of this module. The later copies are loaded
+// after ngx-extended-pdf-viewer has replaced window.print, so the browser's own
+// print() is remembered by the first copy and shared with the others.
+const print = (globalThis.ngxNativePrint ??= window.print);
+
+// The elements of the viewer that prints, not the first viewer's.
+function getPrintElement(id) {
+  return typeof viewerApp._getViewerElementById === "function"
+    ? viewerApp._getViewerElementById(id)
+    : document.getElementById(id);
+}
+// #3306 end of modification by ngx-extended-pdf-viewer
 function printPdf() {
   // #277 modified by ngx-extended-pdf-viewer
   // important: this function must be bound to an instance of PDFViewerApplication!
@@ -438,7 +450,7 @@ function printPdf() {
         .renderPages()
         .then(function () {
           // #643 modified by ngx-extended-pdf-viewer
-          const progressIndicator = document.getElementById("printServiceDialog");
+          const progressIndicator = getPrintElement("printServiceDialog"); // #3306 modified by ngx-extended-pdf-viewer
           if (progressIndicator) {
             progressIndicator.classList.add("hidden");
           }
@@ -468,6 +480,10 @@ function dispatchEvent(eventType) {
     cancelable: false,
     detail: "custom",
   });
+  // #3306 modified by ngx-extended-pdf-viewer: every viewer on the page listens
+  // to this event; only the one that prints may react
+  event.ngxPrintingApp = viewerApp;
+  // #3306 end of modification by ngx-extended-pdf-viewer
   window.dispatchEvent(event);
 }
 
@@ -482,7 +498,7 @@ function renderProgress(index, total, eventBus) { // #588 modified by ngx-extend
   if (typeof PDFJSDev === "undefined" && window.isGECKOVIEW) {
     return;
   }
-  dialog = document.getElementById("printServiceDialog"); // #1434 modified by ngx-extended-pdf-viewer
+  dialog = getPrintElement("printServiceDialog"); // #1434 and #3306 modified by ngx-extended-pdf-viewer
   const progress = Math.round((100 * index) / total);
   const progressBar = dialog.querySelector("progress");
   const progressPerc = dialog.querySelector(".relative-progress");
@@ -544,14 +560,14 @@ function ensureOverlay() {
     if (!overlayManager) {
       throw new Error("The overlay manager has not yet been initialized.");
     }
-    dialog = document.getElementById("printServiceDialog"); // #1434 modified by ngx-extended-pdf-viewer
+    dialog = getPrintElement("printServiceDialog"); // #1434 and #3306 modified by ngx-extended-pdf-viewer
 
     overlayPromise = overlayManager.register(
       dialog,
       /* canForceClose = */ true
     );
 
-    document.getElementById("printCancel").onclick = abort;
+    getPrintElement("printCancel").onclick = abort; // #3306 modified by ngx-extended-pdf-viewer
     dialog.addEventListener("close", abort);
   }
   return overlayPromise;

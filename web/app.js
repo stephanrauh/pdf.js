@@ -3128,16 +3128,25 @@ appConfig: null,
       },
       { signal }
     );
+    // #3306 modified by ngx-extended-pdf-viewer: with several viewers on one
+    // page, only the viewer that prints reacts to its print events
+    const isOwnPrintEvent = evt =>
+      !evt.ngxPrintingApp || evt.ngxPrintingApp === this;
     window.addEventListener(
       "beforeprint",
-      () => eventBus.dispatch("beforeprint", { source: window }),
+      evt =>
+        isOwnPrintEvent(evt) &&
+        eventBus.dispatch("beforeprint", { source: window }),
       { signal }
     );
     window.addEventListener(
       "afterprint",
-      () => eventBus.dispatch("afterprint", { source: window }),
+      evt =>
+        isOwnPrintEvent(evt) &&
+        eventBus.dispatch("afterprint", { source: window }),
       { signal }
     );
+    // #3306 end of modification by ngx-extended-pdf-viewer
     window.addEventListener(
       "updatefromsandbox",
       evt => {
@@ -3907,7 +3916,33 @@ function onKeyUp(evt) {
   }
 }
 
+// #3306 modified by ngx-extended-pdf-viewer: with several viewers on one page,
+// a key belongs to the viewer it's typed in. Keys typed outside every viewer go
+// to the viewer the library marks as the active one. Without a marker (a single
+// viewer, the standalone viewer), the viewer handles every key, as before.
+function isKeyForThisViewer(app, evt) {
+  const host = app.appConfig?.appContainer?.closest("ngx-extended-pdf-viewer");
+  if (!host) {
+    return true;
+  }
+  const owner =
+    evt.target instanceof Element
+      ? evt.target.closest("ngx-extended-pdf-viewer")
+      : null;
+  if (owner) {
+    return owner === host;
+  }
+  return (
+    host.hasAttribute("data-ngx-active-viewer") ||
+    !document.querySelector("ngx-extended-pdf-viewer[data-ngx-active-viewer]")
+  );
+}
+// #3306 end of modification by ngx-extended-pdf-viewer
+
 function onKeyDown(evt) {
+  if (!isKeyForThisViewer(this, evt)) {
+    return; // #3306 modified by ngx-extended-pdf-viewer
+  }
   this._isCtrlKeyDown = evt.key === "Control";
 
   if (
