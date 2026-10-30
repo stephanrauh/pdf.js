@@ -148,16 +148,18 @@ class XfaLayer {
     );
   }
 
-  static setupStorage(html, id, element, storage, intent) {
+  static setupStorage(html, id, element, storage, intent, linkService) {
     // #1737 modified by ngx-extended-pdf-viewer
-    const angularData = window.getFormValueFromAngular(html);
+    // #3306 the form hooks of this viewer (see AnnotationElement._ngxForms)
+    const ngxForms = linkService?.ngxFormSupport ?? window;
+    const angularData = ngxForms.getFormValueFromAngular(html);
     if (angularData.value) {
       // a list with several choices: pdf.js only stores one value
       storage.setValue(id, Array.isArray(angularData.value) ? { value: angularData.value[0] ?? null } : angularData);
     }
     const initialValue = storage.getValue(id, { value: null });
     const storedData = angularData.value ? angularData : initialValue;
-    window.registerXFAField(html, storedData, initialValue);
+    ngxForms.registerXFAField(html, storedData, initialValue);
     html.addEventListener("updateFromAngular", value => storage.setValue(id, { value: value.detail }));
     // #1737 end of modification by ngx-extended-pdf-viewer
     switch (element.name) {
@@ -170,7 +172,7 @@ class XfaLayer {
         }
         html.addEventListener("input", event => {
           // #1737 modified by ngx-extended-pdf-viewer
-          window.updateAngularFormValue(html, { value: event.target.value });
+          ngxForms.updateAngularFormValue(html, { value: event.target.value });
           // #1737 end of modification by ngx-extended-pdf-viewer
           storage.setValue(id, { value: event.target.value });
         });
@@ -195,7 +197,7 @@ class XfaLayer {
           }
           html.addEventListener("change", event => {
             // #1737 modified by ngx-extended-pdf-viewer
-            window.updateAngularFormValue(html, {
+            ngxForms.updateAngularFormValue(html, {
               value: event.target.checked
                 ? event.target.getAttribute("xfaOn")
                 : event.target.getAttribute("xfaOff"),
@@ -216,7 +218,7 @@ class XfaLayer {
           }
           html.addEventListener("input", event => {
             // #1737 modified by ngx-extended-pdf-viewer
-            window.updateAngularFormValue(html, { value: event.target.value });
+            ngxForms.updateAngularFormValue(html, { value: event.target.value });
             // #1737 end of modification by ngx-extended-pdf-viewer
             storage.setValue(id, { value: event.target.value });
           });
@@ -246,7 +248,7 @@ class XfaLayer {
           // #1737 modified by ngx-extended-pdf-viewer
           // a list with several choices reports all of them
           const angularValue = event.target.multiple ? Array.from(event.target.selectedOptions, option => option.value) : value;
-          window.updateAngularFormValue(html, { value: angularValue });
+          ngxForms.updateAngularFormValue(html, { value: angularValue });
           // #1737 end of modification by ngx-extended-pdf-viewer
           storage.setValue(id, { value });
         });
@@ -325,7 +327,9 @@ class XfaLayer {
 
     // Set the value after the others to be sure to overwrite any other values.
     if (storage && attributes.dataId) {
-      this.setupStorage(html, attributes.dataId, element, storage);
+      // #3306 modified by ngx-extended-pdf-viewer
+      this.setupStorage(html, attributes.dataId, element, storage, undefined, linkService);
+      // #3306 end of modification by ngx-extended-pdf-viewer
     }
   }
 

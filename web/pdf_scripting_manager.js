@@ -406,9 +406,12 @@ class PDFScriptingManager {
       if (!this.#objectIds?.has(elementId)) {
         continue;
       }
-      const element = document.querySelector(
+      // #3306 modified by ngx-extended-pdf-viewer: the ids of the PDF repeat in
+      // every viewer that shows the same document
+      const element = (this.#pdfViewer?.viewer ?? document).querySelector(
         `[data-element-id="${elementId}"]`
       );
+      // #3306 end of modification by ngx-extended-pdf-viewer
       if (element) {
         element.dispatchEvent(new CustomEvent("updatefromsandbox", { detail }));
       } else {

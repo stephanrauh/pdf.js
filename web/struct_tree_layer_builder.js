@@ -496,17 +496,25 @@ class StructTreeLayerBuilder {
     return true;
   }
 
-  updateTextLayer() {
+  // #3306 modified by ngx-extended-pdf-viewer
+  // The ids of the structure tree repeat in every viewer that shows the same
+  // document, so they are looked up in this page.
+  updateTextLayer(pageDiv = null) {
+    const getElementById = id =>
+      pageDiv
+        ? pageDiv.querySelector(`[id="${CSS.escape(id)}"]`)
+        : document.getElementById(id);
+    // #3306 end of modification by ngx-extended-pdf-viewer
     if (this.#elementsToAddToTextLayer) {
       for (const [id, img] of this.#elementsToAddToTextLayer) {
-        document.getElementById(id)?.append(img);
+        getElementById(id)?.append(img);
       }
       this.#elementsToAddToTextLayer.clear();
       this.#elementsToAddToTextLayer = null;
     }
     if (this.#elementsToHideInTextLayer) {
       for (const id of this.#elementsToHideInTextLayer) {
-        const elem = document.getElementById(id);
+        const elem = getElementById(id);
         if (elem) {
           elem.ariaHidden = true;
         }
@@ -524,7 +532,7 @@ class StructTreeLayerBuilder {
         const ids = this.#elementsToStealFromTextLayer[i + 1];
         let textContent = "";
         for (const id of ids) {
-          const elem = document.getElementById(id);
+          const elem = getElementById(id);
           if (elem) {
             textContent += elem.textContent.trim() || "";
             // Aria-hide the element in order to avoid duplicate reading of the

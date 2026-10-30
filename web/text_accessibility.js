@@ -95,8 +95,14 @@ class TextAccessibilityManager {
       // Some links have been made before this manager has been disabled, hence
       // we restore them.
       const textChildren = this.#textChildren;
+      // #3306 modified by ngx-extended-pdf-viewer: the ids of the PDF repeat in
+      // every viewer that shows the same document
+      const root = textChildren[0]?.closest(".pdfViewer");
       for (const [id, nodeIndex] of this.#textNodes) {
-        const element = document.getElementById(id);
+        const element = root
+          ? root.querySelector(`[id="${CSS.escape(id)}"]`)
+          : document.getElementById(id);
+        // #3306 end of modification by ngx-extended-pdf-viewer
         if (!element) {
           // If the page was *fully* reset the element no longer exists, and it
           // will be re-inserted later (i.e. when the annotationLayer renders).

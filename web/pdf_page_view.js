@@ -595,7 +595,9 @@ class PDFPageView extends BasePDFPageView {
     const treeDom = await this.structTreeLayer?.render();
     if (treeDom) {
       this.l10n.pause();
-      this.structTreeLayer?.updateTextLayer();
+      // #3306 modified by ngx-extended-pdf-viewer
+      this.structTreeLayer?.updateTextLayer(this.div);
+      // #3306 end of modification by ngx-extended-pdf-viewer
       if (this.canvas && treeDom.parentNode !== this.canvas) {
         // Pause translation when inserting the structTree in the DOM.
         this.canvas.append(treeDom);
