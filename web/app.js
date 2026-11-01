@@ -1729,12 +1729,14 @@ appConfig: null,
       return;
     }
     this._saveInProgress = true;
-    await this.pdfScriptingManager.dispatchWillSave();
+    // Keep the document that this save belongs to.
+    const { pdfDocument } = this;
 
     try {
-      const data = await this.pdfDocument.saveDocument(
+      await this.pdfScriptingManager.dispatchWillSave();
+      const data = await pdfDocument.saveDocument(
         this.externalServices.printToPDF,
-        pageOrder
+        pageOrder // #2943 modified by ngx-extended-pdf-viewer
       );
       this.downloadManager.download(
         data,
@@ -1743,12 +1745,19 @@ appConfig: null,
         /* isModified = */ true
       );
     } catch (reason) {
-      // When the PDF document isn't ready, fallback to a "regular" download.
+      // Fall back to downloading the source PDF.
       NgxConsole.error(`Error when saving the document:`, reason);
-      await this.download();
+      if (pdfDocument === this.pdfDocument) {
+        await this.download();
+      }
     } finally {
-      await this.pdfScriptingManager.dispatchDidSave();
-      this._saveInProgress = false;
+      try {
+        if (pdfDocument === this.pdfDocument) {
+          await this.pdfScriptingManager.dispatchDidSave();
+        }
+      } finally {
+        this._saveInProgress = false;
+      }
     }
 
     const editorStats = this.pdfDocument?.annotationStorage.editorStats;
@@ -1781,24 +1790,27 @@ appConfig: null,
     const { classList } = this.appConfig.appContainer;
     classList.add("wait");
 
-    // #2943 modified by ngx-extended-pdf-viewer
-    if (this.pdfThumbnailViewer?.hasStructuralChanges()) {
-      this.externalServices.reportTelemetry({
-        type: "pageOrganization",
-        data: { action: "save" },
-      });
-      await this.onSavePages({
-        data: this.pdfThumbnailViewer.getStructuralChanges(),
-      });
-    } else {
-      const hasChanges = this.pdfDocument?.annotationStorage.size > 0 || !this.pageOrder.every((value, index, array) =>
-        index === 0 || value >= array[index - 1]);
-      await (hasChanges ? this.save(this.pageOrder) : this.download());
+    try {
+      if (this.pdfThumbnailViewer?.hasStructuralChanges()) {
+        this.externalServices.reportTelemetry({
+          type: "pageOrganization",
+          data: { action: "save" },
+        });
+        await this.onSavePages({
+          data: this.pdfThumbnailViewer.getStructuralChanges(),
+        });
+      } else {
+        // #2943 modified by ngx-extended-pdf-viewer
+        const hasChanges = this.pdfDocument?.annotationStorage.size > 0 || !this.pageOrder.every((value, index, array) =>
+          index === 0 || value >= array[index - 1]);
+        await (hasChanges ? this.save(this.pageOrder) : this.download());
+        // #2943 end of modification by ngx-extended-pdf-viewer
+      }
+      delete this._mergedDocumentNeedsSaving;
+    } finally {
+      this.setTitle();
+      classList.remove("wait");
     }
-    // #2943 end of modification by ngx-extended-pdf-viewer
-    delete this._mergedDocumentNeedsSaving;
-    this.setTitle();
-    classList.remove("wait");
   },
 
   // #2943 modified by ngx-extended-pdf-viewer

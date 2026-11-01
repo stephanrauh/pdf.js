@@ -32,6 +32,8 @@ class RendererMessageHandler {
 
   static #commonObjs = new PDFObjects();
 
+  static #connection = null;
+
   static #enableHWA = false;
 
   static #enableWebGPU = false;
@@ -123,8 +125,13 @@ class RendererMessageHandler {
         ctx.drawImage(canvas, 0, 0);
         ctx.drawImage(transparentCanvas, 0, 0);
         bitmap = composite.transferToImageBitmap();
+        composite.width = composite.height = 0;
       } else {
         bitmap = await createImageBitmap(canvas);
+        if (renderTaskState.aborted) {
+          bitmap.close();
+          return;
+        }
       }
     }
     const transfers = bitmap ? [bitmap] : [];
@@ -170,7 +177,7 @@ class RendererMessageHandler {
     }
   }
 
-  static #cleanupRenderTask(renderTaskId) {
+  static #cleanupRenderTask(renderTaskId, keepCanvas = false) {
     const renderTaskState = this.#renderTaskStates.get(renderTaskId);
     if (!renderTaskState) {
       return;
@@ -179,7 +186,24 @@ class RendererMessageHandler {
     renderTaskState.continueResolve?.();
 
     renderTaskState.gfx?.endDrawing();
+    if (!keepCanvas) {
+      this.#releaseCanvases(renderTaskState);
+    }
     this.#renderTaskStates.delete(renderTaskId);
+  }
+
+  static #releaseCanvases({ canvas, gfx }) {
+    canvas.width = canvas.height = 0;
+    const map = gfx?.annotationCanvasMap;
+    if (!map) {
+      return;
+    }
+    for (const value of map.values()) {
+      for (const annotationCanvas of Array.isArray(value) ? value : [value]) {
+        annotationCanvas.width = annotationCanvas.height = 0;
+      }
+    }
+    map.clear();
   }
 
   // Limit this task to its requested length; another task may have sent more.
@@ -479,12 +503,18 @@ class RendererMessageHandler {
         imageCoordinates = renderTaskState.imagesTracker?.take() ?? null;
         const aborted = renderTaskState.aborted;
 
-        // `endDrawing` applies the final filter, so snapshot after it. The
-        // frame is sent before this reply, so the main thread has drawn the
-        // canvas by the time the render task reports completion.
-        this.#cleanupRenderTask(renderTaskId);
+        // Finish drawing, but keep canvases for the final frame.
+        this.#cleanupRenderTask(renderTaskId, /* keepCanvas = */ !aborted);
         if (!aborted) {
-          await this.#sendFrame(handler, renderTaskState, /* isFinal = */ true);
+          try {
+            await this.#sendFrame(
+              handler,
+              renderTaskState,
+              /* isFinal = */ true
+            );
+          } finally {
+            this.#releaseCanvases(renderTaskState);
+          }
         }
       } else {
         await this.#maybeSendInterimFrame(handler, renderTaskState);
@@ -501,6 +531,49 @@ class RendererMessageHandler {
     const handler = new MessageHandler("renderer", "main", port);
     this.#setup(handler);
 
+    handler.on("Connect", ({ sourceName, targetName }) => {
+      // Reset even if no "Disconnect" was received.
+      this.#disconnect();
+      const connection = new MessageHandler(sourceName, targetName, port);
+      this.#connection = connection;
+      this.#setup(connection);
+      connection.on("Disconnect", () => {
+        this.#disconnect();
+      });
+      this.#sendReady(connection);
+    });
+
+    this.#sendReady(handler);
+  }
+
+  static #disconnect() {
+    if (!this.#connection) {
+      return;
+    }
+    for (const renderTaskId of this.#renderTaskStates.keys()) {
+      this.#cleanupRenderTask(renderTaskId);
+    }
+    for (const objs of this.#objsMap.values()) {
+      objs.clear();
+    }
+    this.#objsMap.clear();
+    this.#operatorLists.clear();
+    this.#commonObjs.clear();
+    this.#fontLoader.clear();
+    // Isolate pending font loads from the next connection.
+    this.#commonObjs = new PDFObjects();
+    this.#fontLoader = new FontLoader({ ownerDocument: globalThis });
+    // Recreate the factories with the next connection's options.
+    this.#canvasFactory = null;
+    this.#filterFactory?.destroy();
+    this.#filterFactory = null;
+
+    this.#connection.send("Disconnected", null);
+    this.#connection.destroy();
+    this.#connection = null;
+  }
+
+  static #sendReady(handler) {
     const workerVersion =
       typeof PDFJSDev !== "undefined" && !PDFJSDev.test("TESTING")
         ? PDFJSDev.eval("BUNDLE_VERSION")

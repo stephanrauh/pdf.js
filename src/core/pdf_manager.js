@@ -47,9 +47,7 @@ function parseDocBaseUrl(url) {
 }
 
 class BasePdfManager {
-  static #handlers = new Set();
-
-  #handler = null;
+  static #handlers = new Map();
 
   constructor({
     // source,
@@ -73,7 +71,6 @@ class BasePdfManager {
     }
     this._docBaseUrl = parseDocBaseUrl(docBaseUrl);
     this._docId = docId;
-    this.#handler = handler;
     this._password = password;
     this.enableXfa = enableXfa;
     // #2995 modified by ngx-extended-pdf-viewer
@@ -84,7 +81,7 @@ class BasePdfManager {
     // Keep track of all active `MessageHandler`s to prevent issues with
     // Wasm-decoding of images if multiple PDFs are parsed in parallel in one
     // worker-thread and `useWorkerFetch = false` is set (fixes issue 22131).
-    BasePdfManager.#handlers.add(handler);
+    BasePdfManager.#handlers.set(this, handler);
 
     // Check `OffscreenCanvas` and `ImageDecoder` support once,
     // rather than repeatedly throughout the worker-thread code.
@@ -103,7 +100,7 @@ class BasePdfManager {
     const options = {
       ...evaluatorOptions,
       getHandler: () =>
-        this.#handler ?? BasePdfManager.#handlers.keys().next().value,
+        BasePdfManager.#handlers.values().find(h => !h.destroyed),
     };
     IccColorSpace.setOptions(options);
     CmykICCBasedCS.setOptions(options);
@@ -186,8 +183,7 @@ class BasePdfManager {
   }
 
   terminate(reason) {
-    BasePdfManager.#handlers.delete(this.#handler);
-    this.#handler = null;
+    BasePdfManager.#handlers.delete(this);
   }
 }
 

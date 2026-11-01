@@ -490,20 +490,12 @@ class TransferMapsFallback {
   constructor(maps) {
     // One map applies to R, G, and B; `null` maps are identities.
     const [mapR, mapG = mapR, mapB = mapR] = maps;
-    const { identityMap } = TransferMapsFallback;
+    const identityMap = Util.identity0to256Map.slice();
     this.#maps = [
       mapR || identityMap,
       mapG || identityMap,
       mapB || identityMap,
     ];
-  }
-
-  static get identityMap() {
-    return shadow(
-      this,
-      "identityMap",
-      Uint8Array.from({ length: 256 }, (_, i) => i)
-    );
   }
 
   /**
@@ -2164,6 +2156,28 @@ class CanvasGraphics {
     this._cachedScaleForStroking[0] = -1;
   }
 
+  /**
+   * Resets the graphics state, except the clip and the transfer maps.
+   */
+  resetGraphicsState() {
+    const { clipBox, transferMaps, transferMapsFallback } = this.current;
+    const current = (this.current = new CanvasExtraState(0, 0));
+    current.clipBox = clipBox;
+    current.transferMaps = transferMaps;
+    current.transferMapsFallback = transferMapsFallback;
+
+    const ctx = this.ctx;
+    ctx.lineWidth = 1;
+    ctx.lineCap = "butt";
+    ctx.lineJoin = "miter";
+    ctx.miterLimit = 10;
+    if (ctx.setLineDash !== undefined) {
+      ctx.setLineDash([]);
+      ctx.lineDashOffset = 0;
+    }
+    this._cachedScaleForStroking[0] = -1;
+  }
+
   transform(opIdx, a, b, c, d, e, f) {
     this.dependencyTracker?.recordIncrementalData("transform", opIdx);
     this.ctx.transform(a, b, c, d, e, f);
@@ -2313,9 +2327,12 @@ class CanvasGraphics {
       const dims = this.current.tilingPatternDims;
       const tileIdx = dims && fillColor.canSkipPatternCanvas(dims);
       if (tileIdx) {
-        // Draw the tile directly, skipping the pattern canvas.
-        fillColor.drawPattern(this, path, this.pendingEOFill, tileIdx, opIdx);
+        // Keep the fill's pending state out of the tile operators.
+        const { pendingClip, pendingEOFill } = this;
+        this.pendingClip = null;
         this.pendingEOFill = false;
+        fillColor.drawPattern(this, path, pendingEOFill, tileIdx, opIdx);
+        this.pendingClip = pendingClip;
         if (consumePath) {
           this.consumePath(opIdx, path, intersect);
         }
@@ -3035,11 +3052,11 @@ class CanvasGraphics {
     const textHScale = current.textHScale * fontDirection;
     const fontMatrix = current.fontMatrix || FONT_IDENTITY_MATRIX;
     const glyphsLength = glyphs.length;
-    const isTextInvisible =
-      current.textRenderingMode === TextRenderingMode.INVISIBLE;
+    const isTextVisible =
+      current.textRenderingMode !== TextRenderingMode.INVISIBLE;
     let i, glyph, width, spacingLength;
 
-    if (isTextInvisible || fontSize === 0) {
+    if (fontSize === 0) {
       return;
     }
     this._cachedScaleForStroking[0] = -1;
@@ -3075,22 +3092,16 @@ class CanvasGraphics {
         );
         if (!operatorList) {
           warn(`Type3 character "${glyph.operatorListId}" is not available.`);
-        } else if (this.contentVisible) {
+        } else if (this.contentVisible && isTextVisible) {
           this.save();
-          // Reset inherited alpha for colored (d0) glyphs (issue 21430).
-          if (operatorList.fnArray[0] === OPS.setCharWidth) {
-            current.fillAlpha = current.strokeAlpha = 1;
-            ctx.globalAlpha = 1;
-          }
           ctx.scale(fontSize, fontSize);
           ctx.transform(...fontMatrix);
           this.executeOperatorList(operatorList);
           this.restore();
         }
 
-        const p = [glyph.width, 0];
-        Util.applyTransform(p, fontMatrix);
-        width = p[0] * fontSize + spacing;
+        width =
+          glyph.width * fontMatrix[0] * fontSize + spacing * fontDirection;
 
         ctx.translate(width, 0);
         current.x += width * textHScale;

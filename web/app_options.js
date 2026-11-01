@@ -779,6 +779,18 @@ const defaultOptions = new Map([
       kind: OptionKind.VIEWER,
     },
   ],
+  ...(typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")
+    ? [
+        [
+          "rendererWorkerCount",
+          {
+            /** @type {number} */
+            value: 1,
+            kind: OptionKind.VIEWER + OptionKind.PREFERENCE,
+          },
+        ],
+      ]
+    : []),
   ...(typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")
     ? [
         [
@@ -1075,6 +1087,17 @@ const defaultOptions = new Map([
     },
   ],
   // #2995 end of modification by ngx-extended-pdf-viewer
+  [
+    "rendererPorts",
+    {
+      /** @type {Array<Worker>} */
+      value:
+        typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")
+          ? globalThis.pdfjsPreloadedRendererWorkers || []
+          : [],
+      kind: OptionKind.WORKER,
+    },
+  ],
   [
     "rendererSrc",
     {

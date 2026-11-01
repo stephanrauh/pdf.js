@@ -1241,7 +1241,10 @@ class PDFPageView extends BasePDFPageView {
     const resultPromise = this._drawCanvas(
       this._getRenderingContext(canvas, transform, recordBBoxes, recordImages),
       () => {
-        prevCanvas?.remove();
+        if (prevCanvas) {
+          prevCanvas.remove();
+          prevCanvas.width = prevCanvas.height = 0;
+        }
         // #3131 modified by ngx-extended-pdf-viewer
         if (this.canvas === canvasForThisDraw) {
           this._resetCanvas();

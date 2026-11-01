@@ -622,7 +622,8 @@ class WorkerMessageHandler {
         if (!Array.isArray(pageInfos)) {
           pageInfos = [pageInfos];
         }
-        let newDocumentId = 0;
+        let managers = null,
+          newDocumentId = 0;
         for (const pageInfo of pageInfos) {
           if (pageInfo.image) {
             continue;
@@ -637,6 +638,8 @@ class WorkerMessageHandler {
               password: pageInfo.password ?? null,
               evaluatorOptions: Object.assign({}, pdfManager.evaluatorOptions),
             });
+            (managers ??= []).push(manager);
+
             let recoveryMode = false;
             let isValid = true;
             while (true) {
@@ -672,15 +675,14 @@ class WorkerMessageHandler {
             }
             if (!isValid) {
               pageInfo.document = null;
-            }
-            const isPureXfa = await manager.ensureDoc("isPureXfa");
-            if (isPureXfa) {
+            } else if (await manager.ensureDoc("hasOnlyXfa")) {
               pageInfo.document = null;
               warn("extractPages does not support pure XFA documents.");
             } else {
               pageInfo.document = manager.pdfDocument;
             }
           } else {
+            pageInfo.document = null;
             warn("extractPages: invalid document.");
           }
         }
@@ -704,6 +706,9 @@ class WorkerMessageHandler {
           if (task) {
             finishWorkerTask(task);
           }
+          managers?.forEach(manager =>
+            manager.terminate(new AbortException("ExtractPages was finished."))
+          );
         }
       }
     );

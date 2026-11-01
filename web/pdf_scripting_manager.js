@@ -15,13 +15,13 @@
 
 /** @typedef {import("./event_utils").EventBus} EventBus */
 
+import { makeArr, shadow } from "pdfjs-lib";
 import { apiPageLayoutToViewerModes } from "./ui_utils.js";
 // modified by ngx-extended-pdf-viewer
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
 // end of modification by ngx-extended-pdf-viewer
 import { internalOpt } from "./internal_evt.js";
 import { RenderingStates } from "./renderable_view.js";
-import { shadow } from "pdfjs-lib";
 
 /**
  * @typedef {object} PDFScriptingManagerOptions
@@ -56,9 +56,13 @@ class PDFScriptingManager {
 
   #ready = false;
 
+  // OpenAction can print before #ready is set.
+  #sandboxCreated = false;
+
   #scripting = null;
 
-  #willPrintCapability = null;
+  // Pending requests per event name, resolved in order by "...Finished".
+  #pendingDocEvents = new Map();
 
   /**
    * @param {PDFScriptingManagerOptions} options
@@ -233,6 +237,9 @@ class PDFScriptingManager {
           actions: docActions,
         },
       });
+      if (pdfDocument === this.#pdfDocument) {
+        this.#sandboxCreated = true;
+      }
 
       eventBus.dispatch("sandboxcreated", { source: this });
     } catch (error) {
@@ -260,10 +267,7 @@ class PDFScriptingManager {
   }
 
   async dispatchWillSave() {
-    return this.#scripting?.dispatchEventInSandbox({
-      id: "doc",
-      name: "WillSave",
-    });
+    return this.#dispatchDocEventAndWait("WillSave");
   }
 
   async dispatchDidSave() {
@@ -274,23 +278,32 @@ class PDFScriptingManager {
   }
 
   async dispatchWillPrint() {
-    if (!this.#scripting) {
+    return this.#dispatchDocEventAndWait("WillPrint");
+  }
+
+  async #dispatchDocEventAndWait(name) {
+    if (!this.#scripting || !this.#sandboxCreated) {
+      // Don't wait for a reply before sandbox creation.
       return;
     }
-    await this.#willPrintCapability?.promise;
-    this.#willPrintCapability = Promise.withResolvers();
+    // Queue before dispatch to handle synchronous replies and overlaps.
+    const capability = Promise.withResolvers();
+    const pendingEvents = this.#pendingDocEvents.getOrInsertComputed(
+      name,
+      makeArr
+    );
+    pendingEvents.push(capability);
     try {
-      await this.#scripting.dispatchEventInSandbox({
-        id: "doc",
-        name: "WillPrint",
-      });
+      await this.#scripting.dispatchEventInSandbox({ id: "doc", name });
     } catch (ex) {
-      this.#willPrintCapability.resolve();
-      this.#willPrintCapability = null;
+      const index = pendingEvents.indexOf(capability);
+      if (index >= 0) {
+        pendingEvents.splice(index, 1);
+      }
       throw ex;
     }
 
-    await this.#willPrintCapability.promise;
+    await capability.promise;
   }
 
   async dispatchDidPrint() {
@@ -395,9 +408,11 @@ class PDFScriptingManager {
           }
           break;
         case "WillPrintFinished":
-          this.#willPrintCapability?.resolve();
-          this.#willPrintCapability = null;
+        case "WillSaveFinished": {
+          const name = command.slice(0, -"Finished".length);
+          this.#pendingDocEvents.get(name)?.shift()?.resolve();
           break;
+        }
       }
       return;
     }
@@ -505,6 +520,7 @@ class PDFScriptingManager {
 
   async #destroyScripting() {
     this.#objectIds = null;
+    this.#sandboxCreated = false;
 
     if (!this.#scripting) {
       this.#pdfDocument = null;
@@ -530,8 +546,12 @@ class PDFScriptingManager {
       await this.#scripting.destroySandbox();
     } catch {}
 
-    this.#willPrintCapability?.reject(new Error("Scripting destroyed."));
-    this.#willPrintCapability = null;
+    for (const pendingEvents of this.#pendingDocEvents.values()) {
+      for (const capability of pendingEvents) {
+        capability.reject(new Error("Scripting destroyed."));
+      }
+    }
+    this.#pendingDocEvents.clear();
 
     this.#eventAC?.abort();
     this.#eventAC = null;
