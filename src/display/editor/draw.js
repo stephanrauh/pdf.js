@@ -882,6 +882,7 @@ class DrawingEditor extends AnnotationEditor {
    * @param {number} _params.rotation - The viewport rotation.
    * @param {AnnotationEditorLayer} _params.parent - The parent layer.
    * @param {boolean} _params.isLTR - Whether the direction is left-to-right.
+   * @param {number} _params.timeStamp - The timestamp of the pointer event.
    */
   static createDrawerInstance(_params) {
     unreachable("Not implemented");
@@ -1063,7 +1064,8 @@ class DrawingEditor extends AnnotationEditor {
           y,
           parentWidth,
           parentHeight,
-          rotation
+          rotation,
+          event.timeStamp
         )
       );
       return;
@@ -1078,6 +1080,7 @@ class DrawingEditor extends AnnotationEditor {
       rotation,
       parent,
       isLTR,
+      timeStamp: event.timeStamp,
     });
     DrawingEditor.#currentDrawingOptions = this.getDefaultDrawingOptions();
     this._currentParent = parent;
@@ -1117,13 +1120,16 @@ class DrawingEditor extends AnnotationEditor {
     const coalesced = event.getCoalescedEvents?.();
     if (coalesced?.length) {
       const points = [];
+      const timeStamps = [];
       for (const sample of coalesced) {
         points.push(...this._getPointerCoords(sample, event));
+        timeStamps.push(sample.timeStamp);
       }
-      properties = DrawingEditor.#currentDraw.addPoints(points);
+      properties = DrawingEditor.#currentDraw.addPoints(points, timeStamps);
     } else {
       properties = DrawingEditor.#currentDraw.add(
-        ...this._getPointerCoords(event)
+        ...this._getPointerCoords(event),
+        event.timeStamp
       );
     }
     this._currentParent.drawLayer.updateProperties(
@@ -1183,7 +1189,10 @@ class DrawingEditor extends AnnotationEditor {
     parent.drawLayer.updateProperties(
       this._currentDrawId,
       event?.target === parent.div
-        ? DrawingEditor.#currentDraw.end(...this._getPointerCoords(event))
+        ? DrawingEditor.#currentDraw.end(
+            ...this._getPointerCoords(event),
+            event.timeStamp
+          )
         : DrawingEditor.#currentDraw.end()
     );
 

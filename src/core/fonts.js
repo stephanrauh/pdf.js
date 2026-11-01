@@ -3300,10 +3300,15 @@ class Font {
       adjustType1ToUnicode(properties, properties.builtInEncoding);
     }
 
-    // Type 1 fonts have a notdef inserted at the beginning, so glyph 0
-    // becomes glyph 1. In a CFF font glyph 0 is appended to the end of the
-    // char strings.
-    const glyphZeroId = font instanceof CFFFont ? font.numGlyphs - 1 : 1;
+    // Glyph 0 is reserved for .notdef, hence characters using glyph 0 must be
+    // mapped to a copy of it:
+    //  - Type 1 fonts have a .notdef inserted at the beginning, so glyph 0
+    //    becomes glyph 1.
+    //  - CFF fonts get a copy of glyph 0 appended to the char strings or, when
+    //    the font is full, written over an empty glyph (see
+    //    `CFF.duplicateFirstGlyph`). `CFFFont.glyphZeroId` is the ID of that
+    //    copy, or 0 if no slot was available.
+    const glyphZeroId = font instanceof CFFFont ? font.glyphZeroId : 1;
     const mapping = font.getGlyphMapping(properties);
     let newMapping = null;
     let newCharCodeToGlyphId = mapping;
@@ -3411,6 +3416,11 @@ class Font {
       "head",
       (function fontTableHead() {
         const dateArr = [0x00, 0x00, 0x00, 0x00, 0x9e, 0x0b, 0x7e, 0x27];
+        // The default xMin of 0 clips the accent in bug 1888084 on macOS.
+        // Extend the head bbox without shrinking the default extents.
+        const bbox = font.cff?.topDict.getByName("FontBBox") ?? properties.bbox;
+        const xMin = Math.min(Math.floor(bbox?.[0] || 0), 0);
+        const xMax = Math.max(Math.ceil(bbox?.[2] || 0), 0x0fff);
 
         const head = new DataBuilder({ exactLength: 54 });
         head.setArray([0x00, 0x01, 0x00, 0x00]); // Version number
@@ -3421,9 +3431,9 @@ class Font {
         head.setSafeInt16(unitsPerEm); // unitsPerEM
         head.setArray(dateArr); // creation date
         head.setArray(dateArr); // modifification date
-        head.skip(2); // xMin, skip redundant "\x00\x00"
+        head.setSafeInt16(xMin); // xMin
         head.setSafeInt16(properties.descent); // yMin
-        head.setArray([0x0f, 0xff]); // xMax
+        head.setSafeInt16(xMax); // xMax
         head.setSafeInt16(properties.ascent); // yMax
         head.setInt16(properties.italicAngle ? 2 : 0); // macStyle
         head.setArray([0x00, 0x11]); // lowestRecPPEM

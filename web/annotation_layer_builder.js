@@ -260,6 +260,9 @@ class AnnotationLayerBuilder {
     // #3175 end of modification by ngx-extended-pdf-viewer
     this.#linksInjected = true;
 
+    if (!inferredLinks.length) {
+      return;
+    }
     const newLinks = this.#annotations.length
       ? this.#checkInferredLinks(inferredLinks)
       : inferredLinks;
@@ -267,8 +270,11 @@ class AnnotationLayerBuilder {
     if (!newLinks.length) {
       return;
     }
-
     await this.annotationLayer.addLinkAnnotations(newLinks);
+  }
+
+  get linksInjected() {
+    return this.#linksInjected;
   }
 
   #updatePresentationModeState(state) {

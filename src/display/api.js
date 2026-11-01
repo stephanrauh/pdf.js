@@ -1813,6 +1813,8 @@ class PDFPageProxy {
       return this.getXfa().then(xfa => XfaText.textContent(xfa));
     }
     const readableStream = this.streamTextContent(params);
+    // Faster than `for await`.
+    const reader = readableStream.getReader();
 
     const textContent = {
       items: [],
@@ -1820,30 +1822,15 @@ class PDFPageProxy {
       lang: null,
     };
 
-    // #3210 modified by ngx-extended-pdf-viewer
-    // Read via getReader() instead of `for await (const value of
-    // readableStream)`. In some Safari/WebKit contexts the stream's async
-    // iterator hook is unavailable, and `for await` throws
-    // "undefined is not a function" — which propagates as "Unable to get
-    // text content for page N" and makes the find feature report 0
-    // matches across every page. The getReader() pattern matches what
-    // `_pumpOperatorList` (below) already does and works in every browser
-    // that exposes ReadableStream at all.
-    const reader = readableStream.getReader();
-    try {
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) {
-          break;
-        }
-        textContent.lang ??= value.lang;
-        Object.assign(textContent.styles, value.styles);
-        textContent.items.push(...value.items);
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) {
+        break;
       }
-    } finally {
-      reader.releaseLock();
+      textContent.lang ??= value.lang;
+      Object.assign(textContent.styles, value.styles);
+      textContent.items.push(...value.items);
     }
-    // #3210 end of modification by ngx-extended-pdf-viewer
     return textContent;
   }
 
