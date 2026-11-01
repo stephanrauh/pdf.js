@@ -14,7 +14,7 @@
  */
 
 import { DOMSVGFactory } from "./svg_factory.js";
-import { shadow } from "../shared/util.js";
+import { ngxNextPageWideId, shadow } from "../shared/util.js"; // #3306 modified by ngx-extended-pdf-viewer
 
 /**
  * @typedef DrawLayerOptions
@@ -204,9 +204,11 @@ class DrawLayer {
 
   #toUpdate = new Map();
 
-  static #id = 0;
-
-  static #selectionId = 0;
+  // #3306 modified by ngx-extended-pdf-viewer
+  // The ids of the SVG elements (path_N, mask_N, clip_selection_N) count
+  // page-wide (see ngxNextPageWideId): every viewer has its own copy of this
+  // module, and `url(#path_0)` finds the first path_0 of the page.
+  // #3306 end of modification by ngx-extended-pdf-viewer
 
   /** @type {AbortController | null} */
   static #selectionChangeAC = null;
@@ -595,7 +597,9 @@ class DrawLayer {
       let div = textLayerData.selectionDiv;
       let path = textLayerData.path;
       if (!div) {
-        const clipPathId = `clip_selection_${DrawLayer.#selectionId++}`;
+        // #3306 modified by ngx-extended-pdf-viewer
+        const clipPathId = `clip_selection_${ngxNextPageWideId("drawLayerSelection")}`;
+        // #3306 end of modification by ngx-extended-pdf-viewer
 
         div = document.createElement("div");
         div.className = "selection";
@@ -688,7 +692,7 @@ class DrawLayer {
   }
 
   draw(properties, isPathUpdatable = false, hasClip = false) {
-    const id = DrawLayer.#id++;
+    const id = ngxNextPageWideId("drawLayer"); // #3306 modified by ngx-extended-pdf-viewer
     const root = this.#createSVG();
 
     const defs = DrawLayer._svgFactory.createElement("defs");
@@ -721,7 +725,7 @@ class DrawLayer {
     // it composes with its parent with mix-blend-mode: multiply.
     // But the outline has a different mix-blend-mode, so we need to draw it in
     // its own SVG.
-    const id = DrawLayer.#id++;
+    const id = ngxNextPageWideId("drawLayer"); // #3306 modified by ngx-extended-pdf-viewer
     const root = this.#createSVG();
     const defs = DrawLayer._svgFactory.createElement("defs");
     root.append(defs);

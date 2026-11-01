@@ -1120,6 +1120,17 @@ function getUuid() {
   return bytesToString(buf);
 }
 
+// #3306 modified by ngx-extended-pdf-viewer
+// Every viewer on the page runs its own copy of the pdf.js modules, but the ids
+// that end up in page-wide namespaces (font names in `document.fonts`, the ids
+// of SVG elements) must stay unique across all of them.
+function ngxNextPageWideId(kind) {
+  const counters = (globalThis.ngxPageWideIds ??= Object.create(null));
+  counters[kind] = (counters[kind] ?? -1) + 1;
+  return counters[kind];
+}
+// #3306 end of modification by ngx-extended-pdf-viewer
+
 function _isValidExplicitDest(validRef, validName, dest) {
   if (!Array.isArray(dest) || dest.length < 2) {
     return false;
@@ -1236,6 +1247,7 @@ export {
   FormatError,
   getUuid,
   getVerbosityLevel,
+  ngxNextPageWideId, // #3306 modified by ngx-extended-pdf-viewer
   ImageKind,
   info,
   InvalidPDFException,

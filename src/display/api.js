@@ -25,6 +25,7 @@ import {
   info,
   isNodeJS,
   makeObj,
+  ngxNextPageWideId, // #3306 modified by ngx-extended-pdf-viewer
   RenderingIntentFlag,
   setVerbosityLevel,
   shadow,
@@ -526,8 +527,6 @@ function getDocument(src = {}) {
  * after which individual pages can be rendered.
  */
 class PDFDocumentLoadingTask {
-  static #docId = 0;
-
   /**
    * @private
    */
@@ -560,7 +559,11 @@ class PDFDocumentLoadingTask {
    * Unique identifier for the document loading task.
    * @type {string}
    */
-  docId = `d${PDFDocumentLoadingTask.#docId++}`;
+  // #3306 modified by ngx-extended-pdf-viewer
+  // The fonts are named after the document (g_d0_f1, ...): with a counter per
+  // module copy, two viewers' fonts overwrote each other in `document.fonts`.
+  docId = `d${ngxNextPageWideId("docId")}`;
+  // #3306 end of modification by ngx-extended-pdf-viewer
 
   /**
    * Whether the loading task is destroyed or not.
