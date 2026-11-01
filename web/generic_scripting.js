@@ -44,10 +44,15 @@ class GenericScripting {
           ? import(sandboxBundleSrc) // eslint-disable-line no-unsanitized/method
           : __raw_import__(sandboxBundleSrc);
       sandbox
-        .then(pdfjsSandbox => {
-          resolve(
-            pdfjsSandbox.QuickJSSandbox(new URL(wasmUrl, location.href).href)
-          );
+        .then(pdfjsSandbox =>
+          pdfjsSandbox.QuickJSSandbox(new URL(wasmUrl, location.href).href)
+        )
+        .then(quickJSSandbox => {
+          // #3306 modified by ngx-extended-pdf-viewer: lets the scripting
+          // manager recognize the messages of its own sandbox
+          this.ngxSandbox = quickJSSandbox;
+          // #3306 end of modification by ngx-extended-pdf-viewer
+          resolve(quickJSSandbox);
         })
         .catch(reject);
     });

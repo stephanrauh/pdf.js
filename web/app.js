@@ -3153,6 +3153,7 @@ appConfig: null,
         eventBus.dispatch("updatefromsandbox", {
           source: window,
           detail: evt.detail,
+          ngxSandbox: evt.ngxSandbox, // #3306 modified by ngx-extended-pdf-viewer
         });
       },
       { signal }

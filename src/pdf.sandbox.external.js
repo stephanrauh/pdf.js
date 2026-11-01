@@ -21,8 +21,12 @@ export class SandboxSupportBase {
   /**
    * @param {DOMWindow} win
    */
-  constructor(win) {
+  constructor(win, sandbox) {
     this.win = win;
+    // #3306 modified by ngx-extended-pdf-viewer: every viewer on the page
+    // receives the messages of every sandbox, so tell them who sent it
+    this.ngxSandbox = sandbox;
+    // #3306 end of modification by ngx-extended-pdf-viewer
     this.timeoutIds = new Map();
 
     // Will be assigned after the sandbox is initialized
@@ -164,6 +168,7 @@ export class SandboxSupportBase {
         const event = new this.win.CustomEvent("updatefromsandbox", {
           detail: this.importValueFromSandbox(data),
         });
+        event.ngxSandbox = this.ngxSandbox; // #3306 modified by ngx-extended-pdf-viewer
         this.win.dispatchEvent(event);
       },
     };

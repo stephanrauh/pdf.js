@@ -146,6 +146,7 @@ class PDFScriptingManager {
           eventBus.dispatch("updatefromsandbox", {
             source: window,
             detail: event.detail,
+            ngxSandbox: event.ngxSandbox, // #3306 modified by ngx-extended-pdf-viewer
           });
         },
         { signal: this.#eventAC.signal }
@@ -155,7 +156,13 @@ class PDFScriptingManager {
     eventBus.on(
       "updatefromsandbox",
       event => {
-        if (event?.source === window) {
+        // #3306 modified by ngx-extended-pdf-viewer: ignore the messages of
+        // the sandboxes of the other viewers on the page
+        const isOwnSandbox =
+          !event?.ngxSandbox ||
+          event.ngxSandbox === this.#scripting?.ngxSandbox;
+        // #3306 end of modification by ngx-extended-pdf-viewer
+        if (event?.source === window && isOwnSandbox) {
           this.#updateFromSandbox(event.detail);
         }
       },

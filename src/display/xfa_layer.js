@@ -317,6 +317,15 @@ class XfaLayer {
       }
     }
 
+    // #3306 modified by ngx-extended-pdf-viewer
+    // A form owner of its own keeps the radio group inside this viewer
+    // (see RadioButtonWidgetAnnotationElement).
+    const radioGroupForm = linkService?.ngxRadioGroupForm;
+    if (attributes.type === "radio" && radioGroupForm) {
+      html.setAttribute("form", radioGroupForm);
+    }
+    // #3306 end of modification by ngx-extended-pdf-viewer
+
     if (isHTMLAnchorElement) {
       linkService?.addLinkAttributes(
         html,
