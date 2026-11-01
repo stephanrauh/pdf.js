@@ -1064,6 +1064,27 @@ class PDFDocument {
     };
   }
 
+  #createPage(pageIndex, pageDict, ref) {
+    const { catalog, pdfManager, xfaFactory, xref } = this;
+
+    return new Page({
+      pdfManager,
+      xref,
+      pageIndex,
+      pageDict,
+      ref,
+      globalIdFactory: this._globalIdFactory,
+      fontCache: catalog.fontCache,
+      builtInCMapCache: catalog.builtInCMapCache,
+      standardFontDataCache: catalog.standardFontDataCache,
+      globalColorSpaceCache: catalog.globalColorSpaceCache,
+      globalImageCache: catalog.globalImageCache,
+      systemFontCache: catalog.systemFontCache,
+      nonBlendModesSet: catalog.nonBlendModesSet,
+      xfaFactory,
+    });
+  }
+
   parse(recoveryMode) {
     this.xref.parse(recoveryMode);
     // #2995 modified by ngx-extended-pdf-viewer
@@ -1726,24 +1747,8 @@ class PDFDocument {
     } else {
       promise = catalog.getPageDict(pageIndex);
     }
-    promise = promise.then(
-      ([pageDict, ref]) =>
-        new Page({
-          pdfManager: this.pdfManager,
-          xref: this.xref,
-          pageIndex,
-          pageDict,
-          ref,
-          globalIdFactory: this._globalIdFactory,
-          fontCache: catalog.fontCache,
-          builtInCMapCache: catalog.builtInCMapCache,
-          standardFontDataCache: catalog.standardFontDataCache,
-          globalColorSpaceCache: catalog.globalColorSpaceCache,
-          globalImageCache: catalog.globalImageCache,
-          systemFontCache: catalog.systemFontCache,
-          nonBlendModesSet: catalog.nonBlendModesSet,
-          xfaFactory,
-        })
+    promise = promise.then(([pageDict, ref]) =>
+      this.#createPage(pageIndex, pageDict, ref)
     );
 
     this.#pagePromises.set(pageIndex, promise);
@@ -1827,24 +1832,7 @@ class PDFDocument {
           // Prevent "uncaught exception: Object"-messages in the console.
           promise.catch(() => {});
         } else {
-          promise = Promise.resolve(
-            new Page({
-              pdfManager,
-              xref: this.xref,
-              pageIndex,
-              pageDict,
-              ref,
-              globalIdFactory: this._globalIdFactory,
-              fontCache: catalog.fontCache,
-              builtInCMapCache: catalog.builtInCMapCache,
-              standardFontDataCache: catalog.standardFontDataCache,
-              globalColorSpaceCache: this.globalColorSpaceCache,
-              globalImageCache: catalog.globalImageCache,
-              systemFontCache: catalog.systemFontCache,
-              nonBlendModesSet: catalog.nonBlendModesSet,
-              xfaFactory: null,
-            })
-          );
+          promise = Promise.resolve(this.#createPage(pageIndex, pageDict, ref));
         }
 
         this.#pagePromises.set(pageIndex, promise);
@@ -2292,18 +2280,17 @@ class PDFDocument {
   }
 
   get calculationOrderIds() {
-    const calculationOrder = this.catalog.acroForm?.get("CO");
-    if (!Array.isArray(calculationOrder) || calculationOrder.length === 0) {
-      return shadow(this, "calculationOrderIds", null);
-    }
+    const co = this.catalog.acroForm?.get("CO");
+    let ids = null;
 
-    const ids = [];
-    for (const id of calculationOrder) {
-      if (id instanceof Ref) {
-        ids.push(id.toString());
+    if (Array.isArray(co)) {
+      for (const id of co) {
+        if (id instanceof Ref) {
+          (ids ??= []).push(id.toString());
+        }
       }
     }
-    return shadow(this, "calculationOrderIds", ids.length ? ids : null);
+    return shadow(this, "calculationOrderIds", ids);
   }
 
   get annotationGlobals() {

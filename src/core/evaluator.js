@@ -17,6 +17,8 @@ import {
   AbortException,
   assert,
   BBOX_INIT,
+  DEFAULT_VERTICAL_ADVANCE,
+  DEFAULT_VERTICAL_ORIGIN_Y,
   DrawOPS,
   F32_BBOX_INIT,
   FONT_IDENTITY_MATRIX,
@@ -106,7 +108,6 @@ const DefaultPartialEvaluatorOptions = Object.freeze({
   iccUrl: null,
   standardFontDataUrl: null,
   wasmUrl: null,
-  hasGPU: false,
 });
 
 const PatternType = {
@@ -2986,7 +2987,7 @@ class PartialEvaluator {
         currentTextState !== textState &&
         (currentTextState.fontSize !== textState.fontSize ||
           (currentTextState.fontName !== textState.fontName &&
-            (currentTextState.font.name !== textState.font.name ||
+            (currentTextState.font?.name !== textState.font.name ||
               currentTextState.font.vertical !== textState.font.vertical)))
       ) {
         flushTextContentItem();
@@ -3023,7 +3024,7 @@ class PartialEvaluator {
 
       for (let i = 0, ii = glyphs.length; i < ii; i++) {
         const glyph = glyphs[i];
-        const { category, originalCharCode } = glyph;
+        const { category } = glyph;
 
         if (category.isInvisibleFormatMark) {
           continue;
@@ -3033,7 +3034,7 @@ class PartialEvaluator {
         const glyphWidth = font.vertical ? glyph.vmetric[0] : glyph.width;
         let scaledDim = glyphWidth * scale;
 
-        if (originalCharCode === 0x20) {
+        if (glyph.isSpace) {
           charSpacing += textState.wordSpacing;
         }
 
@@ -4184,7 +4185,9 @@ class PartialEvaluator {
 
       if (properties.vertical) {
         const dw2 = dict.getArray("DW2");
-        let vmetrics = isNumberArray(dw2, 2) ? dw2 : [880, -1000];
+        let vmetrics = isNumberArray(dw2, 2)
+          ? dw2
+          : [DEFAULT_VERTICAL_ORIGIN_Y, -DEFAULT_VERTICAL_ADVANCE];
         defaultVMetrics = [vmetrics[1], defaultWidth * 0.5, vmetrics[0]];
         vmetrics = dict.get("W2");
         if (Array.isArray(vmetrics)) {

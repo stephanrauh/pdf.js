@@ -1439,7 +1439,11 @@ class PDFViewer {
               this.#enableNewAltTextWhenAddingImage,
               this.#mlManager,
               this.#editorUndoBar,
-              this.#supportsPinchToZoom
+              this.#supportsPinchToZoom,
+              // GeckoView's toolbar sticks out of the editor.
+              typeof PDFJSDev === "undefined"
+                ? window.isGECKOVIEW
+                : PDFJSDev.test("GECKOVIEW")
             );
             eventBus.dispatch("annotationeditoruimanager", {
               source: this,
@@ -1825,6 +1829,8 @@ class PDFViewer {
       state = this.#scrollModePageState,
       viewer = this.viewer;
 
+    // Pause translation when inserting the new page in the DOM.
+    this.l10n.pause();
     // Temporarily remove all the pages from the DOM...
     viewer.textContent = "";
     // ... and clear out the active ones.
@@ -1875,6 +1881,7 @@ class PDFViewer {
       }
       viewer.append(spread);
     }
+    this.l10n.resume();
 
     state.scrollDown = pageNumber >= state.previousPageNumber;
     state.previousPageNumber = pageNumber;
@@ -3363,6 +3370,8 @@ class PDFViewer {
     if (this._scrollMode === ScrollMode.PAGE) {
       this.#ensurePageViewVisible();
     } else {
+      // Pause translation when updating the spread mode in the DOM.
+      this.l10n.pause();
       // Temporarily remove all the pages from the DOM.
       viewer.textContent = "";
 
@@ -3385,6 +3394,7 @@ class PDFViewer {
           spread.append(pages[i].div);
         }
       }
+      this.l10n.resume();
     }
 
     // #859 modified by ngx-extended-pdf-viewer

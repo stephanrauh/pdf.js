@@ -1083,7 +1083,8 @@ class AnnotationEditorUIManager {
     enableNewAltTextWhenAddingImage,
     mlManager,
     editorUndoBar,
-    supportsPinchToZoom
+    supportsPinchToZoom,
+    keepToolbarInPage
   ) {
     const signal = (this._signal = this.#abortController.signal);
     this.#container = container;
@@ -1149,6 +1150,7 @@ class AnnotationEditorUIManager {
     this.isShiftKeyDown = false;
     this._editorUndoBar = editorUndoBar || null;
     this._supportsPinchToZoom = supportsPinchToZoom !== false;
+    this._keepToolbarInPage = keepToolbarInPage === true;
     commentManager?.setSidebarUiManager(this);
 
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
