@@ -764,6 +764,11 @@ function getVisibleElements({
       view,
       percent,
       widthPercent: (fractionWidth * 100) | 0,
+      // modified by ngx-extended-pdf-viewer: the pixels cut off, so callers can
+      // tolerate rounding errors of a few pixels (see PDFViewer#updateHelper)
+      hiddenHeight,
+      hiddenWidth,
+      // end of modification by ngx-extended-pdf-viewer
     });
     ids.add(view.id);
   }
