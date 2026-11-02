@@ -2684,17 +2684,19 @@ class PDFViewer {
       (this._scrollMode === ScrollMode.PAGE ||
         this._scrollMode === ScrollMode.VERTICAL);
     const currentPageNumber = this._currentPageNumber;
-    let stillFullyVisible = false;
-
-    for (const page of visiblePages) {
-      if (page.percent < 100) {
-        break;
-      }
-      if (page.id === currentPageNumber && isSimpleLayout) {
-        stillFullyVisible = true;
-        break;
-      }
-    }
+    // modified by ngx-extended-pdf-viewer
+    // A page cut off by a few pixels still counts as fully visible. Scrolling
+    // to a page can leave its top edge a pixel above the viewport (e.g. when
+    // the viewer is its own containing block); with small pages, the next page
+    // then was the only page at 100%, and "next page" skipped a page.
+    const TOLERANCE_PX = 10;
+    const stillFullyVisible =
+      isSimpleLayout &&
+      visiblePages.some(
+        page =>
+          page.id === currentPageNumber && (page.percent === 100 || (page.hiddenHeight <= TOLERANCE_PX && page.hiddenWidth <= TOLERANCE_PX))
+      );
+    // end of modification by ngx-extended-pdf-viewer
     // #1808 modified by ngx-extended-pdf-viewer
     // stop the infinite loop in presentation mode with [(page)]
     // #3069 modified by ngx-extended-pdf-viewer
