@@ -297,6 +297,24 @@ class PDFViewer {
 
   #scaleTimeoutId = null;
 
+  // A touch gesture can pause or pan without changing scale. Keep its final
+  // refresh pending until TouchManager reports that fewer than two fingers
+  // remain. A wheel gesture still uses the normal idle timeout.
+  #touchPinching = false;
+
+  #touchScrollStyles = null;
+
+  // #3069 Native iOS scrolling can replay an older offset after a scripted
+  // pinch adjustment. Keep pdf.js in charge until the two-finger gesture ends.
+  // The diagnostic panel can disable this to compare the browser behavior.
+  touchPinchScrollLock = true;
+
+  #pendingScaleRefresh = null;
+
+  // #3069 Opt-in diagnostic experiment. Avoid exposing the frozen baseline
+  // as an intermediate scroll position during CSS zoom in the normal layout.
+  singleScrollDuringPinch = false;
+
   // #3069 modified by ngx-extended-pdf-viewer
   // Frozen copy of _location captured at the start of a pinch/wheel zoom
   // gesture. During the gesture, scroll events fire _scrollUpdate() →
@@ -306,7 +324,16 @@ class PDFViewer {
   // at gesture start and reusing it for every frame, the scroll correction
   // targets the same position throughout the gesture.
   #frozenLocation = null;
-  #frozenScale = null;
+
+  // The translation, in container pixels, to apply on top of the frozen
+  // location: the content moved by the gesture since it was frozen. Each scale
+  // update composes its zoom around the origin, and its pan, with it, and so
+  // does every `panBy` in between, else restoring the frozen location would
+  // undo the earlier movement of the fingers.
+  #frozenPan = null;
+
+  // The client point which the scale snap at the end of a gesture zooms around.
+  #snapOrigin = null;
   // #3069 end of modification by ngx-extended-pdf-viewer
 
   #signatureManager = null;
@@ -1779,6 +1806,9 @@ class PDFViewer {
   }
 
   _resetView() {
+    this.#frozenLocation = null;
+    this.#frozenPan = null;
+    this.#snapOrigin = null;
     this._pages = [];
     this._currentPageNumber = 1;
     this._currentScale = UNKNOWN_SCALE;
@@ -1947,7 +1977,7 @@ class PDFViewer {
   }
   // #1301 end of modification by ngx-extended-pdf-viewer
 
-  #scrollIntoView(pageView, pageSpot = null) {
+  #scrollIntoView(pageView, pageSpot = null, onScroll = null, preserveCurrentPage = false) {
     // modified by ngx-extended-pdf-viewer
     // to fix a bug that's basically caused by the showcase demo
     if (!pageView) {
@@ -1965,7 +1995,7 @@ class PDFViewer {
 
     // Ensure that `this._currentPageNumber` is correct, when `#scrollIntoView`
     // is called directly (and not from `#resetCurrentPageView`).
-    if (this._currentPageNumber !== id) {
+    if (!preserveCurrentPage && this._currentPageNumber !== id) {
       this._setCurrentPageNumber(id);
     }
     if (this._scrollMode === ScrollMode.PAGE) {
@@ -1993,7 +2023,7 @@ class PDFViewer {
       // which is the reading start position in RTL.
       div.scrollIntoView({ block: "nearest", inline: "end" });
     } else {
-      scrollIntoView(div, pageSpot, false, this.pageViewMode === "infinite-scroll");
+      scrollIntoView(div, pageSpot, false, this.pageViewMode === "infinite-scroll", onScroll);
     }
     // #3155 end of modification by ngx-extended-pdf-viewer
 
@@ -2025,9 +2055,73 @@ class PDFViewer {
    * @param {number} dy - Vertical delta.
    */
   panBy(dx, dy) {
+    // #3069 modified by ngx-extended-pdf-viewer
+    // The next scale update of the gesture restores the frozen location, so
+    // it must know about this movement to keep it: the movement actually
+    // made, else the part a boundary swallowed would still count, and moving
+    // back would first have to use it up.
+    const [appliedX, appliedY] = this.#scrollBy(dx, dy);
+    if (this.#frozenPan) {
+      this.#frozenPan[0] += appliedX;
+      this.#frozenPan[1] += appliedY;
+    }
+    // #3069 end of modification by ngx-extended-pdf-viewer
+  }
+
+  // #3069 modified by ngx-extended-pdf-viewer
+  setTouchPinching(active) {
+    if (active && this.touchPinchScrollLock &&
+        this.pageViewMode !== "infinite-scroll" && !this.#touchScrollStyles) {
+      const { style } = this.container;
+      this.#touchScrollStyles = ["overflow", "overflow-x", "overflow-y"].map(
+        property => ({ property, value: style.getPropertyValue(property),
+          priority: style.getPropertyPriority(property) })
+      );
+      // Programmatic scrolling still works with overflow hidden. Unlike
+      // native scrolling, it uses the current scale and finger coordinates.
+      style.setProperty("overflow", "hidden", "important");
+    } else if (!active && this.#touchScrollStyles) {
+      const { style } = this.container;
+      for (const { property } of this.#touchScrollStyles) {
+        style.removeProperty(property);
+      }
+      for (const { property, value, priority } of this.#touchScrollStyles) {
+        if (value) {
+          style.setProperty(property, value, priority);
+        }
+      }
+      this.#touchScrollStyles = null;
+    }
+    this.#touchPinching = active;
+    if (
+      !active &&
+      this.#pendingScaleRefresh &&
+      this.#scaleTimeoutId === null
+    ) {
+      // The idle timeout already expired during the gesture. Finish on the
+      // next task, allowing touchend/cancel and editor cleanup to complete.
+      this.#scaleTimeoutId = setTimeout(
+        () => this.#finishDeferredScaleUpdate(),
+        0
+      );
+    }
+  }
+
+  #finishDeferredScaleUpdate() {
+    this.#scaleTimeoutId = null;
+    if (this.#touchPinching) {
+      return;
+    }
+    const refresh = this.#pendingScaleRefresh;
+    this.#pendingScaleRefresh = null;
+    refresh?.();
+  }
+  // #3069 end of modification by ngx-extended-pdf-viewer
+
+  #scrollBy(dx, dy, baseline = null) {
     const { container } = this;
     const position = this.#panPosition;
-    const { scrollLeft, scrollTop } = container;
+    const { scrollLeft, scrollTop } = baseline ?? container;
 
     // Keep the fractions which the browser dropped when it snapped the offsets
     // to the device pixels, else they'd be lost on every move and the content
@@ -2043,6 +2137,14 @@ class PDFViewer {
     container.scrollLeft = left;
     container.scrollTop = top;
     this.#staleLocation = true;
+    // #3069 modified by ngx-extended-pdf-viewer
+    // The movement made: less than requested where a boundary clamped the
+    // scroll position. Differences below a pixel are the fractions which the
+    // browser dropped, they count as made (see above).
+    const clampedX = container.scrollLeft - left,
+      clampedY = container.scrollTop - top;
+    return [Math.abs(clampedX) < 1 ? dx : dx - clampedX, Math.abs(clampedY) < 1 ? dy : dy - clampedY];
+    // #3069 end of modification by ngx-extended-pdf-viewer
   }
 
   /**
@@ -2098,6 +2200,15 @@ class PDFViewer {
 
     const postponeDrawing = drawingDelay >= 0 && drawingDelay < 1000;
 
+    // #3069 modified by ngx-extended-pdf-viewer
+    // Bring `this._location` up to date with any panning before the pages take
+    // the new scale: computing it afterwards would combine the new page
+    // geometry with the old scroll position.
+    if (!noScroll) {
+      this.#refreshLocation();
+    }
+    // #3069 end of modification by ngx-extended-pdf-viewer
+
     this.viewer.style.setProperty(
       "--scale-factor",
       newScale * PixelsPerInch.PDF_TO_CSS_UNITS
@@ -2115,34 +2226,46 @@ class PDFViewer {
       // frozen copy prevents cumulative scroll drift.
       if (!this.#frozenLocation && this._location) {
         this.#frozenLocation = { ...this._location };
-        this.#frozenScale = previousScale;
+        this.#frozenPan = [0, 0];
+      }
+      if (Array.isArray(origin)) {
+        // Where the fingers (or the mouse) are after this step.
+        this.#snapOrigin = [origin[0] + (pan?.[0] ?? 0), origin[1] + (pan?.[1] ?? 0)];
       }
       // #3069 end of modification by ngx-extended-pdf-viewer
       // #3069 modified by ngx-extended-pdf-viewer
-      // Reset the timeout on each pinch step. Without this, the timeout
-      // fires mid-gesture if pinching pauses for >400ms, triggering a
-      // full re-render that causes a gray flash.
+      // Reset the idle deadline on each scale update. Expiry alone cannot
+      // finish a touch gesture: #finishDeferredScaleUpdate also waits for
+      // TouchManager's end/cancel, including pauses and two-finger pans.
       if (this.#scaleTimeoutId !== null) {
         clearTimeout(this.#scaleTimeoutId);
       }
       // #3069 end of modification by ngx-extended-pdf-viewer
-      this.#scaleTimeoutId = setTimeout(() => {
-        this.#scaleTimeoutId = null;
+      this.#pendingScaleRefresh = () => {
         // #3069 modified by ngx-extended-pdf-viewer
         this.#frozenLocation = null;
-        this.#frozenScale = null;
+        this.#frozenPan = null;
         // Snap scale to whole percent after gesture ends.
         // During the gesture we use 0.1% precision for smoothness.
         // Use #setScale so the scalechanging event fires and the
         // toolbar dropdown updates to a clean percentage.
+        // The snap zooms around where the gesture ended: without scrolling,
+        // the content would move by the scale change times its distance from
+        // the top of the document - hundreds of pixels deep in a long one.
         const snapped = Math.round(this._currentScale * 100) / 100;
+        const snapOrigin = this.#snapOrigin;
+        this.#snapOrigin = null;
         if (snapped !== this._currentScale) {
-          this.#setScale(snapped, { noScroll: true, drawingDelay: -1 });
+          this.#setScale(snapped, { noScroll: false, drawingDelay: -1, origin: snapOrigin });
           return;
         }
         // #3069 end of modification by ngx-extended-pdf-viewer
         this.refresh();
-      }, drawingDelay);
+      };
+      this.#scaleTimeoutId = setTimeout(
+        () => this.#finishDeferredScaleUpdate(),
+        drawingDelay
+      );
     }
 
     this._currentScale = newScale;
@@ -2221,14 +2344,12 @@ class PDFViewer {
         //    (clientX/Y, both from wheel events and from TouchManager).
         // 2. Use the frozen location during a gesture, so scroll events
         //    mid-gesture cannot drift _location.
-        // 3. Use the cumulative scale change from gesture start, not the
-        //    incremental one: scrollPageIntoView() below resets the scroll to
-        //    the frozen baseline every frame, so the FULL adjustment from the
-        //    initial scale has to be applied, not just the last step's delta.
+        // 3. scrollPageIntoView() below resets the scroll to the frozen
+        //    baseline every frame, so the translation accumulated since the
+        //    gesture began (`#frozenPan`) has to be applied again, after
+        //    composing this step's zoom and pan with it.
         {
           const c = this.container;
-
-          this.#refreshLocation();
 
           const loc = this.#frozenLocation || this._location;
           let page = this._currentPageNumber,
@@ -2243,28 +2364,82 @@ class PDFViewer {
             page = loc.pageNumber;
             dest = [null, { name: "XYZ" }, loc.left, loc.top, null];
           }
+          let baseline = null;
+          const collectScroll =
+            this.singleScrollDuringPinch && postponeDrawing && dest &&
+            this.pageViewMode === "multiple" &&
+            this._scrollMode === ScrollMode.VERTICAL &&
+            !this._isContainerRtl
+              ? (parent, left, top) => {
+                  if (parent === c) {
+                    // Match the bounds of the former baseline scroll, but
+                    // keep it as data until the final correction is known.
+                    baseline = {
+                      scrollLeft: MathClamp(left, 0, c.scrollWidth - c.clientWidth),
+                      scrollTop: MathClamp(top, 0, c.scrollHeight - c.clientHeight),
+                    };
+                  } else {
+                    parent.scrollLeft = left;
+                    parent.scrollTop = top;
+                  }
+                }
+              : null;
           this.scrollPageIntoView({
             pageNumber: page,
             destArray: dest,
             allowNegativeOffset: true,
+            onScroll: collectScroll,
+            // Restoring a zoom anchor is not a navigation. The frozen page
+            // can be far outside the viewport after panning; selecting it
+            // would announce it on every frame before update() selects the
+            // visible page again. Let the normal rendering queue paint the
+            // pages that are actually visible, too.
+            preserveCurrentPage: !!dest && this.pageViewMode === "multiple" &&
+              this._scrollMode !== ScrollMode.PAGE,
           });
 
           // The gesture movement, if any, is applied together with the origin
           // below: both are relative to the position which
           // `scrollPageIntoView` just restored, and a single scroll update
           // only loses the fractions once.
-          let dx = pan?.[0] ?? 0,
-            dy = pan?.[1] ?? 0;
-          if (Array.isArray(origin)) {
-            const baseScale = this.#frozenScale || previousScale;
-            const scaleDiff = newScale / baseScale - 1;
-            const rect = c.getBoundingClientRect();
-            dx -= (origin[0] - rect.left) * scaleDiff;
-            dy -= (origin[1] - rect.top) * scaleDiff;
+          //
+          // A point at `p` (container pixels) moves to
+          //   origin + ratio * (p - origin) + pan,
+          // with the ratio of the scale actually applied. Relative to the
+          // restored baseline, the content was already translated by
+          // `frozenPan`, hence the composition: the translations of all the
+          // steps accumulate instead of only the last one being kept. Without
+          // an origin, the zoom keeps the top-left corner of the container.
+          const frozenPan = loc === this.#frozenLocation ? this.#frozenPan : null;
+          const [tx, ty] = frozenPan ?? [0, 0];
+          let dx = tx + (pan?.[0] ?? 0),
+            dy = ty + (pan?.[1] ?? 0);
+          // No ratio before the first scale is known (`UNKNOWN_SCALE`).
+          if ((Array.isArray(origin) || frozenPan) && previousScale > 0) {
+            let ox = 0,
+              oy = 0;
+            if (Array.isArray(origin)) {
+              const rect = c.getBoundingClientRect();
+              ox = origin[0] - rect.left;
+              oy = origin[1] - rect.top;
+            }
+            const ratio = newScale / previousScale;
+            dx += ox + ratio * (tx - ox) - tx;
+            dy += oy + ratio * (ty - oy) - ty;
           }
-          if (dx || dy) {
+          if (dx || dy || baseline) {
             // Applied before `scalechanging` listeners update `this._location`.
-            this.panBy(dx, dy);
+            // The scroll position which `panBy` keeps the fractions of is
+            // stale: `scrollPageIntoView` just moved the container.
+            this.#panPosition[0] = this.#panPosition[1] = NaN;
+            [dx, dy] = this.#scrollBy(dx, dy, baseline);
+          }
+          // Only the translation actually made is kept: what a boundary
+          // swallowed is dropped, so reversing the fingers there moves the
+          // content at once.
+          if (frozenPan) {
+            frozenPan[0] = dx;
+            frozenPan[1] = dy;
           }
         }
         // #3069 end of modification by ngx-extended-pdf-viewer
@@ -2307,6 +2482,13 @@ class PDFViewer {
     let scale = parseFloat(value);
     // #1095 modified by ngx-extended-pdf-viewer: prevent duplicate rendering
     if (this._currentScale === scale) {
+      // #3069 modified by ngx-extended-pdf-viewer
+      // A pinch at the zoom limit, or rounded away, still moves the content
+      // with the fingers.
+      if (options.pan && !options.noScroll) {
+        this.panBy(options.pan[0], options.pan[1]);
+      }
+      // #3069 end of modification by ngx-extended-pdf-viewer
       return; // nothing to do
     }
     // #1095 end of modification
@@ -2417,6 +2599,10 @@ class PDFViewer {
    * @property {string} [center] - Center the view on the specified coordinates.
    *   The default value is `null`. Possible values are: `null` (don't center),
    *  `horizontal`, `vertical` and `both`.
+   * @property {Function|null} [onScroll] - Internal target collector used by
+   *   the single-scroll zoom experiment.
+   * @property {boolean} [preserveCurrentPage] - Internal zoom-anchor restore:
+   *   keep the current selection and leave rendering to the visibility queue.
    */
 
   /**
@@ -2429,6 +2615,8 @@ class PDFViewer {
     allowNegativeOffset = false,
     ignoreDestinationZoom = false,
     center = null,
+    onScroll = null,
+    preserveCurrentPage = false,
   }) {
     if (!this.pdfDocument) {
       return;
@@ -2540,18 +2728,20 @@ class PDFViewer {
     }
 
     /** #495 modified by ngx-extended-pdf-viewer */
-    this.#ensurePdfPageLoaded(pageView).then(() => {
-      this.renderingQueue.renderView(pageView);
-      if (this.pageViewMode === "single") {
-        if (this.currentPageNumber !== pageNumber) {
-          this.currentPageNumber = pageNumber;
+    if (!preserveCurrentPage) {
+      this.#ensurePdfPageLoaded(pageView).then(() => {
+        this.renderingQueue.renderView(pageView);
+        if (this.pageViewMode === "single") {
+          if (this.currentPageNumber !== pageNumber) {
+            this.currentPageNumber = pageNumber;
+          }
         }
-      }
-    });
+      });
+    }
     /** #495 end of modification by ngx-extended-pdf-viewer */
 
     if (scale === "page-fit" && !destArray[4]) {
-      this.#scrollIntoView(pageView);
+      this.#scrollIntoView(pageView, null, onScroll, preserveCurrentPage);
       return;
     }
 
@@ -2582,7 +2772,7 @@ class PDFViewer {
       left = Math.max(left, 0);
       top = Math.max(top, 0);
     }
-    this.#scrollIntoView(pageView, /* pageSpot = */ { left, top });
+    this.#scrollIntoView(pageView, /* pageSpot = */ { left, top }, onScroll, preserveCurrentPage);
   }
 
   _updateLocation(firstPage) {
@@ -2685,11 +2875,11 @@ class PDFViewer {
         this._scrollMode === ScrollMode.VERTICAL);
     const currentPageNumber = this._currentPageNumber;
     // modified by ngx-extended-pdf-viewer
-    // A page cut off by a few pixels still counts as fully visible. Scrolling
-    // to a page can leave its top edge a pixel above the viewport (e.g. when
+    // Allow one CSS pixel of clipping for rounding errors. Scrolling to a
+    // page can leave its top edge a pixel above the viewport (e.g. when
     // the viewer is its own containing block); with small pages, the next page
     // then was the only page at 100%, and "next page" skipped a page.
-    const TOLERANCE_PX = 10;
+    const TOLERANCE_PX = 1;
     const stillFullyVisible =
       isSimpleLayout &&
       visiblePages.some(
@@ -3041,6 +3231,10 @@ class PDFViewer {
         view,
         percent,
         widthPercent: (fractionWidth * 100) | 0,
+        // Match getVisibleElements so update() can tolerate small clipping
+        // when keeping the current page selected in infinite-scroll mode.
+        hiddenHeight: rect.height - visibleHeight,
+        hiddenWidth: rect.width - visibleWidth,
       });
       ids.add(view.id);
     }
@@ -3124,7 +3318,7 @@ class PDFViewer {
       // If we are zooming, do not re-render the detail views. Re-renders on
       // zoom happen with a delay, and once the rendering happens it will also
       // trigger rendering of the detail views.
-      this.#scaleTimeoutId !== null ||
+      this.#pendingScaleRefresh !== null ||
       // If we are scrolling and the rendering of a detail view was just
       // cancelled, it's because the user is scrolling too quickly and so
       // we constantly need to re-render a different area.
@@ -3643,6 +3837,7 @@ class PDFViewer {
   }
 
   #cleanupTimeouts() {
+    this.#pendingScaleRefresh = null;
     if (this.#scaleTimeoutId !== null) {
       clearTimeout(this.#scaleTimeoutId);
       this.#scaleTimeoutId = null;
