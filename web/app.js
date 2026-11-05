@@ -1283,6 +1283,7 @@ appConfig: null,
   touchPinchEndCallback() {
     this._touchUnusedTicks = 0;
     this._touchUnusedFactor = 1;
+    this.pdfViewer?.setTouchPinching(false);
   },
 
   get pagesCount() {
@@ -3065,6 +3066,7 @@ appConfig: null,
       container: window,
       isPinchingDisabled: () => pdfViewer.isInPresentationMode,
       isPinchingStopped: () => this.overlayManager?.active,
+      onPinchStart: () => pdfViewer.setTouchPinching(true),
       onPinching: this.touchPinchCallback.bind(this),
       onPinchEnd: this.touchPinchEndCallback.bind(this),
       onPanning: this.touchPanCallback.bind(this),
@@ -3093,10 +3095,9 @@ appConfig: null,
     });
     // #1830 end of modification by ngx-extended-pdf-viewer
 
-    window.addEventListener("wheel", onWheel.bind(this), {
-      passive: false,
-      signal,
-    });
+    // #3069 modified by ngx-extended-pdf-viewer: wheel events bubble from
+    // viewerContainer to window. Registering on both zooms twice per event.
+    // The container listener above also confines wheel zoom to this viewer.
     window.addEventListener("click", onClick.bind(this), { signal });
     window.addEventListener("keydown", onKeyDown.bind(this), { signal });
     window.addEventListener("keyup", onKeyUp.bind(this), { signal });
@@ -3247,6 +3248,7 @@ appConfig: null,
   },
 
   unbindWindowEvents() {
+    this._touchManager?.destroy();
     this._windowAC?.abort();
     this._windowAC = null;
     this._touchManager = null;
@@ -3700,6 +3702,18 @@ function onScaleChanging(evt) {
   this.pdfViewer.update(evt.noScroll);
 
   this.pdfViewer.updateBookModeScale(evt);
+
+  // #3069 modified by ngx-extended-pdf-viewer
+  // Zoom adjusts scrolling to keep the gesture's origin fixed. The resulting
+  // scroll event isn't user scrolling: otherwise it sets _isScrolling and
+  // the next trackpad pinch events are discarded by onWheel (notably Safari).
+  // Account for all scale changes, including the deferred whole-percent snap.
+  if (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) {
+    const { scrollTop, scrollLeft } = this.pdfViewer.container;
+    this._lastScrollTop = scrollTop;
+    this._lastScrollLeft = scrollLeft;
+  }
+  // #3069 end of modification by ngx-extended-pdf-viewer
 }
 
 function onRotationChanging(evt) {

@@ -100,9 +100,11 @@ function cancelPendingHiddenScroll() {
  *   specifying the offset from the top left edge.
  * @param {number} [spot.left]
  * @param {number} [spot.top]
+ * @param {Function|null} [onScroll] - Collect a visible scroll target instead
+ *   of applying it, for the opt-in single-scroll zoom experiment.
  */
 // #492 modified by ngx-extended-pdf-viewer
-function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll = false) {
+function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll = false, onScroll = null) {
 // #492 end of modification by ngx-extended-pdf-viewer
   // Assuming offsetParent is available (it's not available when viewer is in
   // hidden iframe or object). We have to scroll: if the offsetParent is not set
@@ -271,8 +273,11 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll = f
   if (parent.id === 'viewer' && parent.offsetParent) {
     const container = parent.offsetParent;
     const containerStyle = getComputedStyle(container);
-    if (containerStyle.overflow === 'auto' || containerStyle.overflow === 'scroll' ||
-        containerStyle.overflowX === 'auto' || containerStyle.overflowX === 'scroll') {
+    // Overflow hidden is still scrollable from script. Touch pinch temporarily
+    // uses it to prevent native scrolling from overriding the zoom position.
+    if ([containerStyle.overflowX, containerStyle.overflowY].some(
+      value => value === "auto" || value === "scroll" || value === "hidden"
+    )) {
       // Accumulate the offset and use the container as parent
       offsetY += parent.offsetTop;
       offsetX += parent.offsetLeft;
@@ -286,26 +291,44 @@ function scrollIntoView(element, spot, scrollMatches = false, infiniteScroll = f
     }
     if (spot.left !== undefined) {
       offsetX += spot.left;
-      parent.scrollLeft = offsetX;
+      if (!onScroll) {
+        parent.scrollLeft = offsetX;
+      }
     }
   // #1823 modified by ngx-extended-pdf-viewer
-  } else if (isDivInViewport(element)) {
+  } else if (isDivInViewport(element, parent)) {
     return; // no need to scroll
   // #1823 end of modification by ngx-extended-pdf-viewer
   }
-  parent.scrollTop = offsetY;
+  if (onScroll) {
+    // #3069 A zoom experiment computes the same baseline, but combines its
+    // origin/pan correction with it before making any scroll mutation.
+    onScroll(parent, spot?.left !== undefined ? offsetX : parent.scrollLeft, offsetY);
+  } else {
+    parent.scrollTop = offsetY;
+  }
 }
 
 // #1823 modified by ngx-extended-pdf-viewer
-function isDivInViewport(element) {
+function isDivInViewport(element, scrollParent) {
   const rect = element.getBoundingClientRect();
 
   // Check if the element is within the viewport's boundaries.
-  return (
+  const inWindow =
     rect.top >= 0 &&
     rect.left >= 0 &&
     rect.bottom <= (window.innerHeight || document.documentElement.clientHeight) &&
-    rect.right <= (window.innerWidth || document.documentElement.clientWidth)
+    rect.right <= (window.innerWidth || document.documentElement.clientWidth);
+  if (!inWindow || !scrollParent) {
+    return inWindow;
+  }
+  // ... and within the part of the scroll container that is visible: a page
+  // clipped by an embedded viewer can still be inside the browser window.
+  const box = scrollParent.getBoundingClientRect();
+  const top = box.top + scrollParent.clientTop;
+  const left = box.left + scrollParent.clientLeft;
+  return (
+    rect.top >= top && rect.left >= left && rect.bottom <= top + scrollParent.clientHeight && rect.right <= left + scrollParent.clientWidth
   );
 }
 // #1823 end of modification by ngx-extended-pdf-viewer
@@ -765,7 +788,7 @@ function getVisibleElements({
       percent,
       widthPercent: (fractionWidth * 100) | 0,
       // modified by ngx-extended-pdf-viewer: the pixels cut off, so callers can
-      // tolerate rounding errors of a few pixels (see PDFViewer#updateHelper)
+      // tolerate one-pixel rounding errors (see PDFViewer#update)
       hiddenHeight,
       hiddenWidth,
       // end of modification by ngx-extended-pdf-viewer
