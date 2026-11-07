@@ -787,6 +787,14 @@ class PDFViewer {
                 height: page1.clientHeight,
                 showCover: true,
                 size: "fixed",
+                // #3310 modified by ngx-extended-pdf-viewer: no page-turn
+                // animation for users who asked for reduced motion
+                flippingTime: globalThis.matchMedia?.(
+                  "(prefers-reduced-motion: reduce)"
+                ).matches
+                  ? 1
+                  : 1000,
+                // #3310 end of modification by ngx-extended-pdf-viewer
                 enableFlipByDrag: this._enableFlipByDrag,
                 showPageCorners: this._showPageCorners, // #3140 modified by ngx-extended-pdf-viewer
                 // modified by ngx-extended-pdf-viewer: the book is built
