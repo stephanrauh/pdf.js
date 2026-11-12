@@ -719,6 +719,17 @@ class PDFDataRangeTransport {
 }
 
 /**
+ * @typedef {object} SaveDocumentParameters
+ * @property {function(Array<object>): Promise<Uint8Array | null>} [printToPDF]
+ *   Firefox-only callback receiving ordered `{ data }` entries. Returns a PDF
+ *   with one page per entry, or `null`. Place each appearance within
+ *   `[0, 0, data.width, data.height]` in points.
+ * @property {Array<number>} [pageOrder] - 1-based page numbers in the order
+ *   the pages are written to the saved document. (#2943 modified by
+ *   ngx-extended-pdf-viewer)
+ */
+
+/**
  * Proxy to a `PDFDocument` in the worker thread.
  */
 class PDFDocumentProxy {
@@ -1027,19 +1038,13 @@ class PDFDocumentProxy {
 
   // #2943 modified by ngx-extended-pdf-viewer
   /**
-   * @param {function(Array<object>): Promise<Uint8Array | null>} [printToPDF] -
-   *   Firefox-only platform appearance renderer. It receives ordered
-   *   `{ data }` entries and returns a PDF with one page per entry, or `null`.
-   *   Each page must place its appearance in
-   *   `[0, 0, data.width, data.height]`, with dimensions in points.
-   * @param {Array<number>} [pageOrder] - 1-based page numbers in the order
-   *   the pages are written to the saved document (#2943).
+   * @param {SaveDocumentParameters} [params] - Save parameters.
    * @returns {Promise<Uint8Array<ArrayBuffer>>} A promise that is
    *   resolved with a {Uint8Array<ArrayBuffer>} containing the
    *   full data of the saved document.
    */
-  saveDocument(printToPDF = null, pageOrder = null) {
-    return this._transport.saveDocument(printToPDF, pageOrder);
+  saveDocument(params) {
+    return this._transport.saveDocument(params);
   }
   // #2943 end of modification by ngx-extended-pdf-viewer
 
@@ -2898,7 +2903,7 @@ class WorkerTransport {
   }
 
   // #2943 modified by ngx-extended-pdf-viewer
-  saveDocument(printToPDF = null, pageOrder = null) {
+  saveDocument({ printToPDF = null, pageOrder = null } = {}) {
     if (this.annotationStorage.size <= 0) {
       warn(
         "saveDocument called while `annotationStorage` is empty, " +
@@ -2922,7 +2927,7 @@ class WorkerTransport {
           annotationStorage: map,
           supportsPrintToPDF: this.#printToPDF !== null,
           filename: this.#fullReader?.filename ?? null,
-          pageOrder: pageOrder
+          pageOrder,
         },
         transfer
       )
