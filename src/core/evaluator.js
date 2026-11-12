@@ -2429,11 +2429,18 @@ class PartialEvaluator {
       height: 0,
       vertical: false,
       prevTransform: null,
+      prevGlyphWidth: 0,
       prevTextRise: 0,
       textAdvanceScale: 0,
       spaceInFlowMin: 0,
       spaceInFlowMax: 0,
       trackingSpaceMin: Infinity,
+      useCharWidthThreshold: false,
+      wideSpaceMax: Infinity,
+      minAdvance: Infinity,
+      pendingSpaceIndex: -1,
+      pendingSpaceAdvance: 0,
+      pendingSpaceExtraCharId: -1,
       negativeSpaceMax: -Infinity,
       notASpace: -Infinity,
       transform: null,
@@ -2499,20 +2506,36 @@ class PartialEvaluator {
     // even if one is present in the text stream.
     const NOT_A_SPACE_FACTOR = 0.03;
 
+    // A reported space wider than fontSize * MAX_SPACE_WIDTH_FACTOR is treated
+    // as unreliable metrics, so trackingSpaceMin isn't derived from it.
+    const MAX_SPACE_WIDTH_FACTOR = 1 / 3;
+
     // A negative white < fontSize * NEGATIVE_SPACE_FACTOR induces
     // a break (a new chunk of text is created).
     // It doesn't change anything when the text is copied but
     // it improves potential mismatch between text layer and canvas.
     const NEGATIVE_SPACE_FACTOR = -0.2;
 
-    // A white with a width in [fontSize * MIN_FACTOR; fontSize * MAX_FACTOR]
-    // is a space which will be inserted in the current flow of words.
+    // A white with a width in [trackingSpaceMin; fontSize * MAX_FACTOR] is a
+    // space which will be inserted in the current flow of words.
     // If the width is outside of this range then the flow is broken
     // (which means a new span in the text layer).
     // It's useful to adjust the best as possible the span in the layer
     // to what is displayed in the canvas.
-    const SPACE_IN_FLOW_MIN_FACTOR = 0.102;
     const SPACE_IN_FLOW_MAX_FACTOR = 0.6;
+
+    // When every gap within a run is wider than the space threshold (e.g.
+    // letter-spaced text), the threshold is raised to this multiple of the
+    // smallest gap, capped at fontSize * WIDE_SPACE_MAX_FACTOR, so the gaps
+    // between letters of a single word aren't turned into spaces.
+    const WIDE_SPACE_MULT = 1.3;
+    const WIDE_SPACE_MAX_FACTOR = 0.4;
+
+    // For fonts without usable space metrics (Type3), the space threshold is
+    // derived from the smaller of the adjacent glyph advances instead of the
+    // font size, since the latter is unreliable when the font matrix does the
+    // scaling. A wide glyph mustn't hide the word space before or after it.
+    const CHAR_WIDTH_SPACE_FACTOR = 0.25;
 
     // If a char is too high/too low compared to the previous we just create
     // a new chunk.
@@ -2532,6 +2555,7 @@ class PartialEvaluator {
     const preprocessor = new EvaluatorPreprocessor(stream, xref, stateManager);
 
     let textState, currentTextState;
+    let lastFakeSpaceExtraCharId = -1;
 
     function pushWhitespace({
       width = 0,
@@ -2626,10 +2650,21 @@ class PartialEvaluator {
       textContentItem.textAdvanceScale = scaleCtmX * scaleLineX;
 
       const { fontSize } = textState;
-      textContentItem.trackingSpaceMin = fontSize * TRACKING_SPACE_FACTOR;
+
+      let trackingFactor = TRACKING_SPACE_FACTOR;
+      if (!font.isType3Font) {
+        const spaceEm = font.spaceWidth / 1000;
+        if (spaceEm > 0 && spaceEm <= MAX_SPACE_WIDTH_FACTOR) {
+          trackingFactor = Math.max(0.5 * spaceEm, TRACKING_SPACE_FACTOR);
+        }
+      }
+      textContentItem.trackingSpaceMin = fontSize * trackingFactor;
+      textContentItem.useCharWidthThreshold = font.isType3Font;
+      textContentItem.spaceInFlowMin = fontSize * trackingFactor;
+      textContentItem.wideSpaceMax = fontSize * WIDE_SPACE_MAX_FACTOR;
+      resetAdaptiveSpacing();
       textContentItem.notASpace = fontSize * NOT_A_SPACE_FACTOR;
       textContentItem.negativeSpaceMax = fontSize * NEGATIVE_SPACE_FACTOR;
-      textContentItem.spaceInFlowMin = fontSize * SPACE_IN_FLOW_MIN_FACTOR;
       textContentItem.spaceInFlowMax = fontSize * SPACE_IN_FLOW_MAX_FACTOR;
       textContentItem.hasEOL = false;
 
@@ -2706,6 +2741,90 @@ class PartialEvaluator {
       ];
     }
 
+    function getTrackingSpaceMin(glyphWidth) {
+      if (textContentItem.useCharWidthThreshold && glyphWidth) {
+        const width = Math.abs(glyphWidth * textState.textHScale);
+        return (
+          Math.sign(textState.fontSize) *
+          Math.min(width, Math.abs(textContentItem.prevGlyphWidth) || width) *
+          CHAR_WIDTH_SPACE_FACTOR
+        );
+      }
+      return textContentItem.trackingSpaceMin;
+    }
+
+    function getSpaceThreshold(trackingSpaceMin) {
+      const { minAdvance, wideSpaceMax } = textContentItem;
+      if (
+        minAdvance > trackingSpaceMin &&
+        minAdvance < WIDE_SPACE_MULT * trackingSpaceMin
+      ) {
+        return Math.min(WIDE_SPACE_MULT * minAdvance, wideSpaceMax);
+      }
+      return trackingSpaceMin;
+    }
+
+    function resetAdaptiveSpacing() {
+      textContentItem.minAdvance = Infinity;
+      textContentItem.pendingSpaceIndex = -1;
+      textContentItem.pendingSpaceAdvance = 0;
+      textContentItem.pendingSpaceExtraCharId = -1;
+    }
+
+    function recordPendingSpace(advance, textOrientation) {
+      if (
+        textContentItem.useCharWidthThreshold ||
+        textContentItem.minAdvance < Infinity
+      ) {
+        return;
+      }
+      textContentItem.pendingSpaceIndex = textContentItem.str.length - 1;
+      textContentItem.pendingSpaceAdvance = textOrientation * advance;
+      textContentItem.pendingSpaceExtraCharId = lastFakeSpaceExtraCharId;
+    }
+
+    function resolvePendingSpace(
+      advance,
+      textOrientation,
+      trackingSpaceMin,
+      spaceThreshold,
+      hasWhitespace
+    ) {
+      if (textContentItem.pendingSpaceIndex < 0) {
+        return;
+      }
+      const { pendingSpaceAdvance } = textContentItem;
+      const forwardAdvance = textOrientation * advance;
+      const baseline = Math.min(pendingSpaceAdvance, forwardAdvance);
+      // An explicit word space isn't evidence of uniform letter spacing.
+      if (
+        !hasWhitespace &&
+        baseline > trackingSpaceMin / WIDE_SPACE_MULT &&
+        forwardAdvance <= spaceThreshold &&
+        pendingSpaceAdvance <= spaceThreshold
+      ) {
+        textContentItem.str.splice(textContentItem.pendingSpaceIndex, 1);
+        if (textContentItem.pendingSpaceExtraCharId >= 0) {
+          intersector?.removeExtraChar(textContentItem.pendingSpaceExtraCharId);
+        }
+      }
+      textContentItem.pendingSpaceIndex = -1;
+      textContentItem.pendingSpaceExtraCharId = -1;
+    }
+
+    function recordMinAdvance(advance, textOrientation, trackingSpaceMin) {
+      if (textContentItem.useCharWidthThreshold) {
+        return;
+      }
+      const forwardAdvance = textOrientation * advance;
+      if (
+        forwardAdvance > trackingSpaceMin &&
+        forwardAdvance < textContentItem.minAdvance
+      ) {
+        textContentItem.minAdvance = forwardAdvance;
+      }
+    }
+
     function compareWithLastPosition(glyphWidth) {
       const currentTransform = getCurrentTextTransform();
       let posX = currentTransform[4];
@@ -2738,6 +2857,7 @@ class PartialEvaluator {
       let lastPosY = textContentItem.prevTransform[5];
 
       if (lastPosX === posX && lastPosY === posY) {
+        textContentItem.minAdvance = Infinity;
         return true;
       }
 
@@ -2822,9 +2942,20 @@ class PartialEvaluator {
           // The real spacing between 2 consecutive chars is thin enough to be
           // considered a non-space.
           resetLastChars();
+          textContentItem.minAdvance = Infinity;
         }
 
-        if (advanceY <= textOrientation * textContentItem.trackingSpaceMin) {
+        const trackingSpaceMin = getTrackingSpaceMin(glyphWidth);
+        const spaceThreshold = getSpaceThreshold(trackingSpaceMin);
+        const hasWhitespace = shouldAddWhitepsace();
+        resolvePendingSpace(
+          advanceY,
+          textOrientation,
+          trackingSpaceMin,
+          spaceThreshold,
+          hasWhitespace
+        );
+        if (advanceY <= textOrientation * spaceThreshold) {
           if (shouldAddWhitepsace()) {
             // The space is very thin, hence it deserves to have its own span in
             // order to avoid too much shift between the canvas and the text
@@ -2847,7 +2978,14 @@ class PartialEvaluator {
             pushWhitespace({ height: Math.abs(advanceY) });
           } else {
             textContentItem.height += advanceY;
+            if (!hasWhitespace) {
+              recordPendingSpace(advanceY, textOrientation);
+            }
           }
+        }
+
+        if (!hasWhitespace) {
+          recordMinAdvance(advanceY, textOrientation, trackingSpaceMin);
         }
 
         if (Math.abs(advanceX) > textContentItem.width * VERTICAL_SHIFT_RATIO) {
@@ -2902,9 +3040,20 @@ class PartialEvaluator {
         // The real spacing between 2 consecutive chars is thin enough to be
         // considered a non-space.
         resetLastChars();
+        textContentItem.minAdvance = Infinity;
       }
 
-      if (advanceX <= textOrientation * textContentItem.trackingSpaceMin) {
+      const trackingSpaceMin = getTrackingSpaceMin(glyphWidth);
+      const spaceThreshold = getSpaceThreshold(trackingSpaceMin);
+      const hasWhitespace = shouldAddWhitepsace();
+      resolvePendingSpace(
+        advanceX,
+        textOrientation,
+        trackingSpaceMin,
+        spaceThreshold,
+        hasWhitespace
+      );
+      if (advanceX <= textOrientation * spaceThreshold) {
         if (shouldAddWhitepsace()) {
           // The space is very thin, hence it deserves to have its own span in
           // order to avoid too much shift between the canvas and the text
@@ -2923,7 +3072,14 @@ class PartialEvaluator {
           pushWhitespace({ width: Math.abs(advanceX) });
         } else {
           textContentItem.width += advanceX;
+          if (!hasWhitespace) {
+            recordPendingSpace(advanceX, textOrientation);
+          }
         }
+      }
+
+      if (!hasWhitespace) {
+        recordMinAdvance(advanceX, textOrientation, trackingSpaceMin);
       }
 
       if (Math.abs(advanceY) > textContentItem.height * VERTICAL_SHIFT_RATIO) {
@@ -3054,6 +3210,7 @@ class PartialEvaluator {
         if (scaledDim) {
           // Save the position of the last visible character.
           textChunk.prevTransform = getCurrentTextTransform();
+          textChunk.prevGlyphWidth = scaledDim;
           textChunk.prevTextRise = textState.textRise;
         }
 
@@ -3105,6 +3262,7 @@ class PartialEvaluator {
     }
 
     function addFakeSpaces(width, transf, textOrientation) {
+      lastFakeSpaceExtraCharId = -1;
       if (
         textOrientation * textContentItem.spaceInFlowMin <= width &&
         width <= textOrientation * textContentItem.spaceInFlowMax
@@ -3112,7 +3270,7 @@ class PartialEvaluator {
         if (textContentItem.initialized) {
           resetLastChars();
           textContentItem.str.push(" ");
-          intersector?.addExtraChar(" ");
+          lastFakeSpaceExtraCharId = intersector?.addExtraChar(" ") ?? -1;
         }
         return false;
       }
@@ -3153,6 +3311,7 @@ class PartialEvaluator {
 
       textContent.items.push(runBidiTransform(textContentItem));
       textContentItem.initialized = false;
+      resetAdaptiveSpacing();
       textContentItem.str.length = 0;
     }
 
@@ -3242,7 +3401,10 @@ class PartialEvaluator {
             textState.textRise = args[0];
             break;
           case OPS.setHScale:
-            textState.textHScale = args[0] / 100;
+            if (textState.textHScale !== args[0] / 100) {
+              textState.textHScale = args[0] / 100;
+              resetAdaptiveSpacing();
+            }
             break;
           case OPS.setLeading:
             textState.leading = args[0];
@@ -3250,14 +3412,17 @@ class PartialEvaluator {
           case OPS.moveText:
             textState.translateTextLineMatrix(args[0], args[1]);
             textState.textMatrix = textState.textLineMatrix.slice();
+            resetAdaptiveSpacing();
             break;
           case OPS.setLeadingMoveText:
             textState.leading = -args[1];
             textState.translateTextLineMatrix(args[0], args[1]);
             textState.textMatrix = textState.textLineMatrix.slice();
+            resetAdaptiveSpacing();
             break;
           case OPS.nextLine:
             textState.carriageReturn();
+            resetAdaptiveSpacing();
             break;
           case OPS.setTextMatrix:
             textState.setTextMatrix(
@@ -3277,16 +3442,24 @@ class PartialEvaluator {
               args[5]
             );
             updateAdvanceScale();
+            resetAdaptiveSpacing();
             break;
           case OPS.setCharSpacing:
-            textState.charSpacing = args[0];
+            if (textState.charSpacing !== args[0]) {
+              textState.charSpacing = args[0];
+              resetAdaptiveSpacing();
+            }
             break;
           case OPS.setWordSpacing:
-            textState.wordSpacing = args[0];
+            if (textState.wordSpacing !== args[0]) {
+              textState.wordSpacing = args[0];
+              resetAdaptiveSpacing();
+            }
             break;
           case OPS.beginText:
             textState.textMatrix = IDENTITY_MATRIX.slice();
             textState.textLineMatrix = IDENTITY_MATRIX.slice();
+            resetAdaptiveSpacing();
             textMarkedContentLevel = markedContentLevel;
             break;
           case OPS.endText:
@@ -3349,6 +3522,7 @@ class PartialEvaluator {
               continue;
             }
             textState.carriageReturn();
+            resetAdaptiveSpacing();
             buildTextContentItem({
               chars: args[0],
               extraSpacing: 0,
@@ -3359,9 +3533,16 @@ class PartialEvaluator {
               self.ensureStateFont(stateManager.state);
               continue;
             }
-            textState.wordSpacing = args[0];
-            textState.charSpacing = args[1];
+            if (
+              textState.wordSpacing !== args[0] ||
+              textState.charSpacing !== args[1]
+            ) {
+              textState.wordSpacing = args[0];
+              textState.charSpacing = args[1];
+              resetAdaptiveSpacing();
+            }
             textState.carriageReturn();
+            resetAdaptiveSpacing();
             buildTextContentItem({
               chars: args[2],
               extraSpacing: 0,
