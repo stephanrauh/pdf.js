@@ -144,8 +144,6 @@ class Catalog {
 
   pageKidsCountCache = new RefMap();
 
-  standardFontDataCache = new Map();
-
   systemFontCache = new Map();
 
   constructor(pdfManager, xref, options = {}) {
@@ -1298,7 +1296,6 @@ class Catalog {
     }
     this.fontCache.clear();
     this.builtInCMapCache.clear();
-    this.standardFontDataCache.clear();
     this.systemFontCache.clear();
   }
 

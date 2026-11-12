@@ -42,14 +42,6 @@ class PDFRenderingQueue {
 
   printing = false;
 
-  constructor() {
-    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
-      Object.defineProperty(this, "hasViewer", {
-        value: () => !!this.#pdfViewer,
-      });
-    }
-  }
-
   /**
    * @param {PDFViewer} pdfViewer
    */

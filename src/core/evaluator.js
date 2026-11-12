@@ -57,7 +57,6 @@ import {
   ZapfDingbatsEncoding,
 } from "./encodings.js";
 import {
-  getFontNameToFileMap,
   getSerifFonts,
   getStandardFontName,
   getStdFontMap,
@@ -87,6 +86,7 @@ import { getFontSubstitution } from "./font_substitutions.js";
 import { getGlyphsUnicode } from "./glyphlist.js";
 import { getMetrics } from "./metrics.js";
 import { getUnicodeForGlyph } from "./unicode.js";
+import { Hellbox } from "./hellbox.js";
 import { MurmurHash3_64 } from "../shared/murmurhash3.js";
 import { PDFImage } from "./image.js";
 import { Stream } from "./stream.js";
@@ -233,7 +233,6 @@ class PartialEvaluator {
     idFactory,
     fontCache,
     builtInCMapCache,
-    standardFontDataCache,
     globalColorSpaceCache,
     globalImageCache,
     systemFontCache,
@@ -246,7 +245,6 @@ class PartialEvaluator {
     this.idFactory = idFactory;
     this.fontCache = fontCache;
     this.builtInCMapCache = builtInCMapCache;
-    this.standardFontDataCache = standardFontDataCache;
     this.globalColorSpaceCache = globalColorSpaceCache;
     this.globalImageCache = globalImageCache;
     this.systemFontCache = systemFontCache;
@@ -430,52 +428,6 @@ class PartialEvaluator {
     this.builtInCMapCache.set(name, data);
 
     return data;
-  }
-
-  async fetchStandardFontData(name) {
-    const cachedData = this.standardFontDataCache.get(name);
-    if (cachedData) {
-      return new Stream(cachedData);
-    }
-
-    // The symbol fonts are not consistent across platforms, always load the
-    // standard font data for them.
-    if (
-      this.options.useSystemFonts &&
-      name !== "Symbol" &&
-      name !== "ZapfDingbats"
-    ) {
-      return null;
-    }
-
-    const standardFontNameToFileName = getFontNameToFileMap(),
-      filename = standardFontNameToFileName[name];
-    let data;
-
-    try {
-      if (this.options.useWorkerFetch) {
-        data = await fetchBinaryData(
-          `${this.options.standardFontDataUrl}${filename}`
-        );
-      } else {
-        if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-          throw new Error("Only worker-thread fetching supported.");
-        }
-        // Get the data on the main-thread instead.
-        data = await this.handler.sendWithPromise("FetchBinaryData", {
-          kind: "standardFontDataUrl",
-          filename,
-        });
-      }
-    } catch (ex) {
-      warn(ex);
-      return null;
-    }
-    // Cache the "raw" standard font data, to avoid fetching it repeatedly
-    // (see e.g. issue 11399).
-    this.standardFontDataCache.set(name, data);
-
-    return new Stream(data);
   }
 
   async buildFormXObject(
@@ -1098,7 +1050,7 @@ class PartialEvaluator {
     const font = state.font;
     const glyphs = font.charsToGlyphs(chars);
 
-    if (font.data) {
+    if (font.data && !font.missingFile) {
       const isAddToPathSet = !!(
         state.textRenderingMode & TextRenderingMode.ADD_TO_PATH_FLAG
       );
@@ -1398,14 +1350,13 @@ class PartialEvaluator {
       this.fontCache.put(font.cacheKey, promise);
     }
 
-    // Keep track of each font we translated so the caller can
-    // load them asynchronously before calling display on a page.
-    font.loadedName = `${this.idFactory.getDocId()}_${fontID}`;
+    // Keep names local: fallback loads share a dictionary.
+    const loadedName = `${this.idFactory.getDocId()}_${fontID}`;
 
-    this.translateFont(preEvaluatedFont)
+    this.translateFont(preEvaluatedFont, loadedName)
       .then(async translatedFont => {
         const translated = new TranslatedFont({
-          loadedName: font.loadedName,
+          loadedName,
           font: translatedFont,
           dict: font,
         });
@@ -1425,7 +1376,7 @@ class PartialEvaluator {
 
         resolve(
           new TranslatedFont({
-            loadedName: font.loadedName,
+            loadedName,
             font: new ErrorFont(reason?.message),
             dict: font,
           })
@@ -3741,7 +3692,7 @@ class PartialEvaluator {
       }
     }
 
-    const nonEmbeddedFont = !properties.file || properties.isInternalFont,
+    const nonEmbeddedFont = !properties.file,
       isSymbolsFontName = getSymbolsFonts()[properties.name];
     // Ignore an incorrectly specified named encoding for non-embedded
     // symbol fonts (fixes issue16464.pdf).
@@ -4497,17 +4448,20 @@ class PartialEvaluator {
     };
   }
 
-  async translateFont({
-    descriptor,
-    dict,
-    baseDict,
-    composite,
-    type,
-    firstChar,
-    lastChar,
-    toUnicode,
-    cssFontInfo,
-  }) {
+  async translateFont(
+    {
+      descriptor,
+      dict,
+      baseDict,
+      composite,
+      type,
+      firstChar,
+      lastChar,
+      toUnicode,
+      cssFontInfo,
+    },
+    loadedName
+  ) {
     const isType3Font = type === "Type3";
 
     if (!descriptor) {
@@ -4547,7 +4501,7 @@ class PartialEvaluator {
         const properties = {
           type,
           name: baseFontName,
-          loadedName: baseDict.loadedName,
+          loadedName,
           systemFontInfo: null,
           widths: metrics.widths,
           defaultWidth: metrics.defaultWidth,
@@ -4563,19 +4517,12 @@ class PartialEvaluator {
         };
         const widths = dict.get("Widths");
 
-        const standardFontName = getStandardFontName(baseFontName);
-        let file = null;
-        if (standardFontName) {
-          file = await this.fetchStandardFontData(standardFontName);
-          properties.isInternalFont = !!file;
-        }
-        if (!properties.isInternalFont && this.options.useSystemFonts) {
+        if (this.options.useSystemFonts) {
           properties.systemFontInfo = getFontSubstitution(
             this.systemFontCache,
             this.idFactory,
-            this.options.standardFontDataUrl,
             baseFontName,
-            standardFontName,
+            getStandardFontName(baseFontName),
             type
           );
         }
@@ -4601,7 +4548,9 @@ class PartialEvaluator {
             newProperties
           );
         }
-        return new Font(baseFontName, file, newProperties, this.options);
+        const font = new Font(baseFontName, null, newProperties, this.options);
+        await Hellbox.generate(this, font);
+        return font;
       }
     }
 
@@ -4686,8 +4635,6 @@ class PartialEvaluator {
       warn(`translateFont - fetching "${fontName.name}" font file: "${ex}".`);
       fontFile = null;
     }
-    let isInternalFont = false;
-    let glyphScaleFactors = null;
     let systemFontInfo = null;
     if (fontFile) {
       if (fontFile.dict) {
@@ -4701,37 +4648,29 @@ class PartialEvaluator {
       }
     } else if (cssFontInfo) {
       // We've a missing XFA font.
-      const standardFontName = getXfaFontName(fontName.name);
-      if (standardFontName) {
+      const xfaFont = getXfaFontName(fontName.name);
+      if (xfaFont) {
         cssFontInfo.fontFamily = `${cssFontInfo.fontFamily}-PdfJS-XFA`;
-        cssFontInfo.metrics = standardFontName.metrics || null;
-        glyphScaleFactors = standardFontName.factors || null;
-        fontFile = await this.fetchStandardFontData(standardFontName.name);
-        isInternalFont = !!fontFile;
-
-        // We're using a substitution font but for example widths (if any)
-        // are related to the glyph positions in the font.
-        // So we overwrite everything here to be sure that widths are
-        // correct.
+        cssFontInfo.metrics = xfaFont.metrics || null;
         baseDict = dict = getXfaFontDict(fontName.name);
         composite = true;
-      }
-    } else if (!isType3Font) {
-      const standardFontName = getStandardFontName(fontName.name);
-      if (standardFontName) {
-        fontFile = await this.fetchStandardFontData(standardFontName);
-        isInternalFont = !!fontFile;
-      }
-      if (!isInternalFont && this.options.useSystemFonts) {
-        systemFontInfo = getFontSubstitution(
-          this.systemFontCache,
-          this.idFactory,
-          this.options.standardFontDataUrl,
-          fontName.name,
-          standardFontName,
-          type
+        const data = await Hellbox.generateXfaFont(
+          this,
+          xfaFont.name,
+          dict.get("W")
         );
+        if (data) {
+          fontFile = new Stream(data);
+        }
       }
+    } else if (!isType3Font && this.options.useSystemFonts) {
+      systemFontInfo = getFontSubstitution(
+        this.systemFontCache,
+        this.idFactory,
+        fontName.name,
+        getStandardFontName(fontName.name),
+        type
+      );
     }
 
     const fontMatrix = lookupMatrix(
@@ -4776,8 +4715,7 @@ class PartialEvaluator {
       length1,
       length2,
       length3,
-      isInternalFont,
-      loadedName: baseDict.loadedName,
+      loadedName,
       composite,
       fixedPitch: false,
       fontMatrix,
@@ -4793,7 +4731,6 @@ class PartialEvaluator {
       italicAngle,
       isType3Font,
       cssFontInfo,
-      scaleFactors: glyphScaleFactors,
       systemFontInfo,
     };
 
@@ -4829,7 +4766,6 @@ class PartialEvaluator {
       const substitution = getFontSubstitution(
         this.systemFontCache,
         this.idFactory,
-        this.options.standardFontDataUrl,
         fontName.name,
         standardFontName,
         type
@@ -4842,6 +4778,7 @@ class PartialEvaluator {
         font.systemFontInfo = substitution;
       }
     }
+    await Hellbox.generate(this, font);
     return font;
   }
 
@@ -4916,7 +4853,7 @@ class TranslatedFont {
   }
 
   fallback(handler, evaluatorOptions) {
-    if (!this.font.data) {
+    if (!this.font.data || this.font.missingFile) {
       return;
     }
     // When font loading failed, fall back to the built-in font renderer.

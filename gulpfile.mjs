@@ -26,7 +26,6 @@ import {
   parseCoverageFormats,
 } from "./external/ccov/coverage_format.mjs";
 import { exec, execSync, spawn, spawnSync } from "child_process";
-import { finished, pipeline as runPipeline } from "stream/promises";
 import { Marked, TextRenderer } from "marked";
 import autoprefixer from "autoprefixer";
 import { buildPrefsSchema } from "./external/chromium/prefs.mjs";
@@ -44,6 +43,7 @@ import postcss from "gulp-postcss";
 import postcssDiscardComments from "postcss-discard-comments";
 import { preprocess } from "./external/builder/builder.mjs";
 import rename from "gulp-rename";
+import { pipeline as runPipeline } from "stream/promises";
 import stream from "stream";
 import TerserPlugin from "terser-webpack-plugin";
 import Vinyl from "vinyl";
@@ -60,8 +60,6 @@ const GENERIC_DIR = BUILD_DIR + "generic/";
 const GENERIC_LEGACY_DIR = BUILD_DIR + "generic-legacy/";
 const COMPONENTS_DIR = BUILD_DIR + "components/";
 const COMPONENTS_LEGACY_DIR = BUILD_DIR + "components-legacy/";
-const IMAGE_DECODERS_DIR = BUILD_DIR + "image_decoders/";
-const IMAGE_DECODERS_LEGACY_DIR = BUILD_DIR + "image_decoders-legacy/";
 const DEFAULT_PREFERENCES_DIR = BUILD_DIR + "default_preferences/";
 const MINIFIED_DIR = BUILD_DIR + "minified/";
 const MINIFIED_LEGACY_DIR = BUILD_DIR + "minified-legacy/";
@@ -166,7 +164,6 @@ const DEFINES = Object.freeze({
   MINIFIED: false,
   COMPONENTS: false,
   LIB: false,
-  IMAGE_DECODERS: false,
   INTERNAL_VIEWER: false,
 });
 
@@ -772,21 +769,6 @@ function createComponentsBundle(defines) {
   );
 }
 
-function createImageDecodersBundle(defines) {
-  const componentsFileConfig = createWebpackConfig(defines, {
-    filename: defines.MINIFIED
-      ? "pdf.image_decoders.min.mjs"
-      : "pdf.image_decoders.mjs",
-    library: {
-      type: "module",
-    },
-  });
-  return createWebpackStream(
-    "./src/pdf.image_decoders.js",
-    componentsFileConfig
-  );
-}
-
 function createCMapBundle() {
   return gulp.src(["external/bcmaps/*.bcmap", "external/bcmaps/LICENSE"], {
     base: "external/bcmaps",
@@ -804,12 +786,13 @@ function createICCBundle() {
 function createStandardFontBundle() {
   return gulp.src(
     [
-      "external/standard_fonts/*.pfb",
-      "external/standard_fonts/*.ttf",
-      "external/standard_fonts/LICENSE_*",
+      "external/hellbox/*.hbgd",
+      "external/hellbox/unicode.bin",
+      "external/hellbox/LICENSE_*",
+      "!external/hellbox/LICENSE_HELLBOX",
     ],
     {
-      base: "external/standard_fonts",
+      base: "external/hellbox",
       encoding: false,
     }
   );
@@ -819,6 +802,7 @@ function createWasmBundle({ includeQuickJS = true } = {}) {
   const modules = [
     ["openjpeg", ["*.wasm", "openjpeg_nowasm_fallback.js", "LICENSE_*"]],
     ["qcms", ["*.wasm", "LICENSE_*"]],
+    ["hellbox", ["*.wasm", "hellbox_nowasm_fallback.js", "LICENSE_HELLBOX"]],
     ["jbig2", ["*.wasm", "jbig2_nowasm_fallback.js", "LICENSE_*"]],
   ];
   if (includeQuickJS) {
@@ -1278,7 +1262,7 @@ gulp.task("default", function (done) {
   done();
 });
 
-gulp.task("release-brotli", async function (done) {
+gulp.task("release-brotli", async function () {
   const hashIndex = process.argv.indexOf("--hash");
   if (hashIndex === -1 || hashIndex + 1 >= process.argv.length) {
     throw new Error('Missing "--hash <commit-hash>" argument.');
@@ -1286,18 +1270,25 @@ gulp.task("release-brotli", async function (done) {
   console.log();
   console.log("### Getting Brotli js file for release");
 
-  const OUTPUT_DIR = "./external/brotli/";
   const hash = process.argv[hashIndex + 1];
   const url = `https://raw.githubusercontent.com/google/brotli/${hash}/js/decode.js`;
-  const outputPath = OUTPUT_DIR + "decode.js";
+  const outputPath = "./external/brotli/decode.js";
   const res = await fetch(url);
-  const fileStream = fs.createWriteStream(outputPath, { flags: "w" });
-  await finished(stream.Readable.fromWeb(res.body).pipe(fileStream));
-  fileStream.end();
+  if (!res.ok) {
+    throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  }
+  // Export the factory so that decoder tables can be initialized lazily.
+  const source = await res.text();
+  const patchedSource = source.replace(
+    /\/\*\*\n \* @type \{[^}]+\}\n \*\/\nexport let BrotliDecode = makeBrotliDecode\(\);/,
+    "export { makeBrotliDecode };"
+  );
+  if (patchedSource === source) {
+    throw new Error("Unexpected `BrotliDecode` export in decode.js.");
+  }
+  fs.writeFileSync(outputPath, patchedSource);
 
   console.log(`Brotli js file saved to: ${outputPath}`);
-
-  done();
 });
 
 function createBuildNumber(done) {
@@ -1637,35 +1628,6 @@ gulp.task(
   })
 );
 
-gulp.task(
-  "image_decoders",
-  gulp.series(createBuildNumber, function createImageDecoders() {
-    console.log("\n### Creating image decoders");
-    const defines = { ...DEFINES, GENERIC: true, IMAGE_DECODERS: true };
-
-    return createImageDecodersBundle(defines).pipe(
-      gulp.dest(IMAGE_DECODERS_DIR)
-    );
-  })
-);
-
-gulp.task(
-  "image_decoders-legacy",
-  gulp.series(createBuildNumber, function createImageDecodersLegacy() {
-    console.log("\n### Creating (legacy) image decoders");
-    const defines = {
-      ...DEFINES,
-      GENERIC: true,
-      IMAGE_DECODERS: true,
-      SKIP_BABEL: false,
-    };
-
-    return createImageDecodersBundle(defines).pipe(
-      gulp.dest(IMAGE_DECODERS_LEGACY_DIR)
-    );
-  })
-);
-
 function buildMinified(defines, dir) {
   fs.rmSync(dir, { recursive: true, force: true });
 
@@ -1679,9 +1641,6 @@ function buildMinified(defines, dir) {
         ? "minified/"
         : "minified-legacy/",
     }).pipe(gulp.dest(dir + "web")),
-    createImageDecodersBundle({ ...defines, IMAGE_DECODERS: true }).pipe(
-      gulp.dest(dir + "image_decoders")
-    ),
     // modified by ngx-extended-pdf-viewer
     gulp.src("LICENSE").pipe(gulp.dest(dir)),
     gulp
@@ -1864,12 +1823,13 @@ async function buildMozcentral(changedFiles = null) {
       create: createICCBundle,
     },
     {
-      files: /^external\/standard_fonts\//,
+      files:
+        /^external\/hellbox\/(?:.*\.hbgd|unicode\.bin|LICENSE_(?!HELLBOX))/,
       dest: MOZCENTRAL_WEB_DIR + "/standard_fonts",
       create: createStandardFontBundle,
     },
     {
-      files: /^external\/(jbig2|openjpeg|qcms)\//,
+      files: /^external\/(hellbox|jbig2|openjpeg|qcms)\//,
       dest: MOZCENTRAL_WEB_DIR + "/wasm",
       create: () => createWasmBundle({ includeQuickJS: false }),
     },
@@ -2162,11 +2122,11 @@ function watchMozcentral(done) {
     "!web/wasm/**", // Generated by the `dev-wasm` task.
     "l10n/en-US/*.ftl",
     "external/bcmaps/*",
+    "external/hellbox/*",
     "external/iccs/*",
     "external/jbig2/*",
     "external/openjpeg/*",
     "external/qcms/*",
-    "external/standard_fonts/*",
     "LICENSE",
   ];
 
@@ -2474,7 +2434,7 @@ function buildLib(defines, dir) {
     gulp.src(
       [
         "src/{core,display,shared}/**/*.js",
-        "src/{pdf,pdf.image_decoders,pdf.worker,pdf.renderer}.js",
+        "src/{pdf,pdf.worker,pdf.renderer}.js",
       ],
       { base: "src/", encoding: false, sourcemaps: enableSourceMaps }
     ),
@@ -2488,7 +2448,7 @@ function buildLib(defines, dir) {
       encoding: false,
       sourcemaps: enableSourceMaps,
     }),
-    ...["openjpeg", "qcms", "jbig2", "brotli"].map(name =>
+    ...["openjpeg", "qcms", "hellbox", "jbig2", "brotli"].map(name =>
       gulp.src(`external/${name}/*.js`, {
         base: `${name}/`,
         encoding: false,
@@ -3265,6 +3225,7 @@ gulp.task(
     function watchWasm() {
       gulp.watch(
         [
+          "external/hellbox/*",
           "external/openjpeg/*",
           "external/qcms/*",
           "external/jbig2/*",
@@ -3638,8 +3599,6 @@ gulp.task(
     "generic-legacy",
     "components",
     "components-legacy",
-    "image_decoders",
-    "image_decoders-legacy",
     "minified",
     "minified-legacy",
     "types",
@@ -3720,23 +3679,12 @@ gulp.task(
           )
           .pipe(gulp.dest(DIST_DIR + "build/")),
         gulp
-          .src(MINIFIED_DIR + "image_decoders/pdf.image_decoders.min.mjs", {
-            encoding: false,
-          })
-          .pipe(gulp.dest(DIST_DIR + "image_decoders/")),
-        gulp
           .src(
             MINIFIED_LEGACY_DIR +
               "build/{pdf,pdf.worker,pdf.sandbox,pdf.renderer}.min.mjs",
             { encoding: false }
           )
           .pipe(gulp.dest(DIST_DIR + "legacy/build/")),
-        gulp
-          .src(
-            MINIFIED_LEGACY_DIR + "image_decoders/pdf.image_decoders.min.mjs",
-            { encoding: false }
-          )
-          .pipe(gulp.dest(DIST_DIR + "legacy/image_decoders/")),
         gulp
           .src(COMPONENTS_DIR + "**/*", {
             base: COMPONENTS_DIR,
@@ -3749,18 +3697,6 @@ gulp.task(
             encoding: false,
           })
           .pipe(gulp.dest(DIST_DIR + "legacy/web/")),
-        gulp
-          .src(IMAGE_DECODERS_DIR + "**/*", {
-            base: IMAGE_DECODERS_DIR,
-            encoding: false,
-          })
-          .pipe(gulp.dest(DIST_DIR + "image_decoders/")),
-        gulp
-          .src(IMAGE_DECODERS_LEGACY_DIR + "**/*", {
-            base: IMAGE_DECODERS_LEGACY_DIR,
-            encoding: false,
-          })
-          .pipe(gulp.dest(DIST_DIR + "legacy/image_decoders/")),
         gulp
           .src(TYPES_DIR + "**/*", { base: TYPES_DIR, encoding: false })
           .pipe(gulp.dest(DIST_DIR + "types/")),
