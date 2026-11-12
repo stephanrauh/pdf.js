@@ -15,7 +15,7 @@
 
 /** @typedef {import("./event_utils").EventBus} EventBus */
 
-import { makeArr, shadow } from "pdfjs-lib";
+import { createPromiseCapability, makeArr, noopFn, shadow } from "pdfjs-lib";
 import { apiPageLayoutToViewerModes } from "./ui_utils.js";
 // modified by ngx-extended-pdf-viewer
 import { NgxConsole } from "../external/ngx-logger/ngx-console.js";
@@ -287,7 +287,7 @@ class PDFScriptingManager {
       return;
     }
     // Queue before dispatch to handle synchronous replies and overlaps.
-    const capability = Promise.withResolvers();
+    const capability = createPromiseCapability();
     const pendingEvents = this.#pendingDocEvents.getOrInsertComputed(
       name,
       makeArr
@@ -448,7 +448,7 @@ class PDFScriptingManager {
       visitedPages = this._visitedPages;
 
     if (initialize) {
-      this.#closeCapability = Promise.withResolvers();
+      this.#closeCapability = createPromiseCapability();
     }
     if (!this.#closeCapability) {
       return; // Scripting isn't fully initialized yet.
@@ -510,7 +510,7 @@ class PDFScriptingManager {
   }
 
   #initScripting() {
-    this.#destroyCapability = Promise.withResolvers();
+    this.#destroyCapability = createPromiseCapability();
 
     if (this.#scripting) {
       throw new Error("#initScripting: Scripting already exists.");
@@ -535,9 +535,8 @@ class PDFScriptingManager {
           // Avoid the scripting/sandbox-destruction hanging indefinitely.
           setTimeout(resolve, 1000);
         }),
-      ]).catch(() => {
-        // Ignore any errors, to ensure that the sandbox is always destroyed.
-      });
+      ]).catch(noopFn); // Ignore any errors, to ensure that the sandbox is always destroyed.
+
       this.#closeCapability = null;
     }
     this.#pdfDocument = null;

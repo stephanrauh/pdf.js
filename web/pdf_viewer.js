@@ -34,8 +34,10 @@ import {
   AnnotationEditorType,
   AnnotationEditorUIManager,
   AnnotationMode,
+  createPromiseCapability,
   makeArr,
   MathClamp,
+  noopFn,
   PermissionFlag,
   PixelsPerInch,
   shadow,
@@ -1221,7 +1223,7 @@ class PDFViewer {
 
     // Handle the window/tab becoming inactive *after* rendering has started;
     // fixes (another part of) bug 1746213.
-    const hiddenCapability = Promise.withResolvers(),
+    const hiddenCapability = createPromiseCapability(),
       ac = new AbortController();
     document.addEventListener(
       "visibilitychange",
@@ -1390,14 +1392,9 @@ class PDFViewer {
       eventBus.dispatch("scrollmodechanged", { source: this, mode });
     }
 
-    this._pagesCapability.promise.then(
-      () => {
-        eventBus.dispatch("pagesloaded", { source: this, pagesCount });
-      },
-      () => {
-        /* Prevent "Uncaught (in promise)"-messages in the console. */
-      }
-    );
+    this._pagesCapability.promise.then(() => {
+      eventBus.dispatch("pagesloaded", { source: this, pagesCount });
+    }, noopFn);
 
     const onBeforeDraw = evt => {
       const pageView = this._pages[evt.pageNumber - 1];
@@ -1822,9 +1819,9 @@ class PDFViewer {
     this._location = null;
     this._pagesRotation = 0;
     this._optionalContentConfigPromise = null;
-    this._firstPageCapability = Promise.withResolvers();
-    this._onePageRenderedCapability = Promise.withResolvers();
-    this._pagesCapability = Promise.withResolvers();
+    this._firstPageCapability = createPromiseCapability();
+    this._onePageRenderedCapability = createPromiseCapability();
+    this._pagesCapability = createPromiseCapability();
     this._scrollMode = ScrollMode.VERTICAL;
     this._previousScrollMode = ScrollMode.UNKNOWN;
     this._spreadMode = SpreadMode.NONE;

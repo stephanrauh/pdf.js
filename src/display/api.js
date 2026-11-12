@@ -21,11 +21,13 @@ import {
   AbortException,
   AnnotationMode,
   assert,
+  createPromiseCapability,
   getVerbosityLevel,
   info,
   isNodeJS,
   makeObj,
   ngxNextPageWideId, // #3306 modified by ngx-extended-pdf-viewer
+  noopFn,
   RenderingIntentFlag,
   setVerbosityLevel,
   shadow,
@@ -522,7 +524,7 @@ class PDFDocumentLoadingTask {
   /**
    * @private
    */
-  _capability = Promise.withResolvers();
+  _capability = createPromiseCapability();
 
   /**
    * Resolves once the load-time setup chain has settled, regardless of
@@ -530,7 +532,7 @@ class PDFDocumentLoadingTask {
    * or definitely never going to be.
    * @private
    */
-  _setupCapability = Promise.withResolvers();
+  _setupCapability = createPromiseCapability();
 
   /**
    * @private
@@ -594,11 +596,6 @@ class PDFDocumentLoadingTask {
    */
   async destroy() {
     this.destroyed = true;
-    // The setup chain rejects `_capability` with "Loading aborted" once the
-    // load-time chain unwinds (see `getDocument`). Claim that rejection
-    // here so it isn't reported as unhandled during the awaits below;
-    // callers awaiting `task.promise` still see it.
-    this._capability.promise.catch(() => {});
 
     try {
       // `_pendingDestroy` must be set synchronously, before any `await`,
@@ -649,7 +646,7 @@ class PDFDocumentLoadingTask {
  * main-thread memory usage, however it will take ownership of the TypedArrays.
  */
 class PDFDataRangeTransport {
-  #capability = Promise.withResolvers();
+  #capability = createPromiseCapability();
 
   #listener = null;
 
@@ -1585,7 +1582,7 @@ class PDFPageProxy {
     // If there's no displayReadyCapability yet, then the operatorList
     // was never requested before. Make the request and create the promise.
     if (!intentState.displayReadyCapability) {
-      intentState.displayReadyCapability = Promise.withResolvers();
+      intentState.displayReadyCapability = createPromiseCapability();
       intentState.operatorList = {
         fnArray: [],
         argsArray: [],
@@ -1756,7 +1753,7 @@ class PDFPageProxy {
     if (!intentState.opListReadCapability) {
       opListTask = Object.create(null);
       opListTask.operatorListChanged = operatorListChanged;
-      intentState.opListReadCapability = Promise.withResolvers();
+      intentState.opListReadCapability = createPromiseCapability();
       (intentState.renderTasks ||= new Set()).add(opListTask);
       intentState.operatorList = {
         fnArray: [],
@@ -2069,9 +2066,7 @@ class PDFPageProxy {
     }
     intentState.streamReader
       .cancel(new AbortException(reason.message))
-      .catch(() => {
-        // Avoid "Uncaught promise" messages in the console.
-      });
+      .catch(noopFn);
     intentState.streamReader = null;
 
     if (this._transport.destroyed) {
@@ -2114,7 +2109,7 @@ class PDFPageProxy {
  * @param {PDFWorkerParameters} params - The worker initialization parameters.
  */
 class PDFWorker {
-  #capability = Promise.withResolvers();
+  #capability = createPromiseCapability();
 
   #messageHandler = null;
 
@@ -2213,10 +2208,9 @@ class PDFWorker {
   #initializeFromPort(port) {
     this.#port = port;
     this.#messageHandler = new MessageHandler("main", "worker", port);
-    this.#messageHandler.on("ready", () => {
-      // Ignoring "ready" event -- MessageHandler should already be initialized
-      // and ready to accept messages.
-    });
+    // Ignoring "ready" event -- MessageHandler should already be initialized
+    // and ready to accept messages.
+    this.#messageHandler.on("ready", noopFn);
     this.#resolve();
   }
 
@@ -2394,7 +2388,7 @@ class PDFWorker {
  * @ignore
  */
 class WorkerTransport {
-  downloadInfoCapability = Promise.withResolvers();
+  downloadInfoCapability = createPromiseCapability();
 
   #fullReader = null;
 
@@ -2584,7 +2578,7 @@ class WorkerTransport {
     }
 
     this.destroyed = true;
-    this.destroyCapability = Promise.withResolvers();
+    this.destroyCapability = createPromiseCapability();
 
     this.#passwordCapability?.reject(
       new Error("Worker was destroyed during onPassword callback")
@@ -2754,7 +2748,7 @@ class WorkerTransport {
     });
 
     messageHandler.on("PasswordRequest", ex => {
-      this.#passwordCapability = Promise.withResolvers();
+      this.#passwordCapability = createPromiseCapability();
 
       try {
         if (!loadingTask.onPassword) {
@@ -2801,16 +2795,13 @@ class WorkerTransport {
     });
 
     // TODO: Connect the core and renderer workers directly.
-    this.rendererWorker?.promise.then(
-      () => {
-        this.rendererWorker?.messageHandler?.on("FontFallback", data =>
-          this.destroyed
-            ? null
-            : messageHandler.sendWithPromise("FontFallback", data)
-        );
-      },
-      () => {} // Rendering handles startup failure.
-    );
+    this.rendererWorker?.promise.then(() => {
+      this.rendererWorker?.messageHandler?.on("FontFallback", data =>
+        this.destroyed
+          ? null
+          : messageHandler.sendWithPromise("FontFallback", data)
+      );
+    }, noopFn); // Rendering handles startup failure.
 
     messageHandler.on("commonobj", ([id, type, exportedData]) => {
       if (this.destroyed) {
@@ -3353,6 +3344,8 @@ class InternalRenderTask {
 
   #waitForGPU = null;
 
+  capability = createPromiseCapability();
+
   static #canvasInUse = new WeakSet();
 
   constructor({
@@ -3391,7 +3384,6 @@ class InternalRenderTask {
     this.graphicsReady = false;
     this._useRequestAnimationFrame = useRequestAnimationFrame === true && typeof window !== "undefined";
     this.cancelled = false;
-    this.capability = Promise.withResolvers();
     this.task = new RenderTask(this);
     // caching this-bound methods
     this._cancelBound = this.cancel.bind(this);
@@ -3417,10 +3409,9 @@ class InternalRenderTask {
   }
 
   get completed() {
-    return this.capability.promise.catch(() => {
-      // Ignoring errors, since we only want to know when rendering is
-      // no longer pending.
-    });
+    // Ignoring errors, since we only want to know when rendering is
+    // no longer pending.
+    return this.capability.promise.catch(noopFn);
   }
 
   get isWorkerRendering() {

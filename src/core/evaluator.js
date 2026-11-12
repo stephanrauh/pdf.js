@@ -17,6 +17,7 @@ import {
   AbortException,
   assert,
   BBOX_INIT,
+  createPromiseCapability,
   DEFAULT_VERTICAL_ADVANCE,
   DEFAULT_VERTICAL_ORIGIN_Y,
   DrawOPS,
@@ -42,13 +43,6 @@ import {
 } from "./fonts_utils.js";
 import { ErrorFont, Font } from "./fonts.js";
 import {
-  fetchBinaryData,
-  IDENTITY_MATRIX,
-  isNumberArray,
-  lookupMatrix,
-  lookupNormalRect,
-} from "./core_utils.js";
-import {
   getEncoding,
   MacRomanEncoding,
   StandardEncoding,
@@ -65,6 +59,12 @@ import {
 } from "./standard_fonts.js";
 import { getTilingPatternIR, Pattern } from "./pattern.js";
 import { getXfaFontDict, getXfaFontName } from "./xfa_fonts.js";
+import {
+  IDENTITY_MATRIX,
+  isNumberArray,
+  lookupMatrix,
+  lookupNormalRect,
+} from "./core_utils.js";
 import { IdentityToUnicodeMap, ToUnicodeMap } from "./to_unicode_map.js";
 import { isPDFFunction, PDFFunctionFactory } from "./function.js";
 import { Lexer, Parser } from "./parser.js";
@@ -91,6 +91,7 @@ import { MurmurHash3_64 } from "../shared/murmurhash3.js";
 import { PDFImage } from "./image.js";
 import { Stream } from "./stream.js";
 import { stringToPDFString } from "./string_utils.js";
+import { WasmLoader } from "./wasm_loader.js";
 
 const DefaultPartialEvaluatorOptions = Object.freeze({
   disableFontFace: false,
@@ -224,6 +225,10 @@ class TimeSlotManager {
 }
 
 class PartialEvaluator {
+  _regionalImageCache = new RegionalImageCache();
+
+  type3FontRefs = null;
+
   constructor({
     xref,
     handler,
@@ -235,7 +240,7 @@ class PartialEvaluator {
     globalColorSpaceCache,
     globalImageCache,
     systemFontCache,
-    options = null,
+    options = DefaultPartialEvaluatorOptions,
   }) {
     this.xref = xref;
     this.handler = handler;
@@ -243,15 +248,14 @@ class PartialEvaluator {
     this.pageProxyId = pageProxyId;
     this.idFactory = idFactory;
     this.fontCache = fontCache;
-    this.builtInCMapCache = builtInCMapCache;
     this.globalColorSpaceCache = globalColorSpaceCache;
     this.globalImageCache = globalImageCache;
     this.systemFontCache = systemFontCache;
-    this.options = options || DefaultPartialEvaluatorOptions;
-    this.type3FontRefs = null;
+    this.options = options;
 
-    this._regionalImageCache = new RegionalImageCache();
-    this._fetchBuiltInCMapBound = this.fetchBuiltInCMap.bind(this);
+    const fetchBuiltInCMap = this.fetchBuiltInCMap.bind(this);
+    this._fetchBuiltInCMapBound = name =>
+      builtInCMapCache.getOrInsertComputed(name, fetchBuiltInCMap);
   }
 
   /**
@@ -393,40 +397,26 @@ class PartialEvaluator {
   }
 
   async fetchBuiltInCMap(name) {
-    const cachedData = this.builtInCMapCache.get(name);
-    if (cachedData) {
-      return cachedData;
+    const { cMapPacked, useWorkerFetch } = this.options;
+    // #376 modified by ngx-extended-pdf-viewer
+    let { cMapUrl } = this.options;
+    if (typeof cMapUrl === "function") {
+      cMapUrl = cMapUrl();
     }
-    let data;
-
-    if (this.options.useWorkerFetch) {
-      // modified by ngx-extended-pdf-viewer #376
-	  let cMapUrl = this.options.cMapUrl;
-	  if (cMapUrl?.constructor.name === "Function") {
-	    cMapUrl = cMapUrl();
-	  }
-      // Only compressed CMaps are (currently) supported here.
-      data = {
-        cMapData: await fetchBinaryData(`${cMapUrl}${name}.bcmap`),
-        isCompressed: true,
-      };
-    } else {
-      if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) {
-        throw new Error("Only worker-thread fetching supported.");
-      }
-      // Get the data on the main-thread instead.
-      data = {
-        cMapData: await this.handler.sendWithPromise("FetchBinaryData", {
-          kind: "cMapUrl",
-          filename: `${name}${this.options.cMapPacked ? ".bcmap" : ""}`,
-        }),
-        isCompressed: this.options.cMapPacked,
-      };
-    }
-    // Cache the CMap data, to avoid fetching it repeatedly.
-    this.builtInCMapCache.set(name, data);
-
-    return data;
+    // #376 end of modification by ngx-extended-pdf-viewer
+    const cMapData = await WasmLoader.fetch(
+      {
+        handler: this.handler,
+        options: {
+          cMapUrl,
+          // Only binary CMaps are supported with worker-thread fetching.
+          useWorkerFetch: useWorkerFetch && cMapPacked,
+        },
+      },
+      "cMapUrl",
+      `${name}${cMapPacked ? ".bcmap" : ""}`
+    );
+    return { cMapData, cMapPacked };
   }
 
   async buildFormXObject(
@@ -1275,7 +1265,7 @@ class PartialEvaluator {
       return this.fontCache.get(font.cacheKey);
     }
 
-    const { promise, resolve } = Promise.withResolvers();
+    const { promise, resolve } = createPromiseCapability();
 
     let preEvaluatedFont;
     try {
@@ -5049,7 +5039,7 @@ class TranslatedFont {
     const { dict, font, type3Dependencies } = this;
     assert(font.isType3Font, "Must be a Type3 font.");
 
-    const { promise, resolve } = Promise.withResolvers();
+    const { promise, resolve } = createPromiseCapability();
     this.#type3Loaded = promise;
 
     // When parsing Type3 glyphs, always ignore them if there are errors.

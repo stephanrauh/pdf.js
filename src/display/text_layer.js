@@ -19,7 +19,9 @@
 
 import {
   AbortException,
+  createPromiseCapability,
   FeatureTest,
+  noopFn,
   shadow,
   Util,
   warn,
@@ -50,7 +52,7 @@ const MAX_TEXT_DIVS_TO_RENDER = 100000;
 const DEFAULT_FONT_SIZE = 30;
 
 class TextLayer {
-  #capability = Promise.withResolvers();
+  #capability = createPromiseCapability();
 
   #container = null;
 
@@ -145,9 +147,7 @@ class TextLayer {
         this.#layoutTextParams = null;
         this.#styleCache = null;
       })
-      .catch(() => {
-        // Avoid "Uncaught promise" messages in the console.
-      });
+      .catch(noopFn);
 
     if (typeof PDFJSDev === "undefined" || PDFJSDev.test("TESTING")) {
       // For testing purposes.
@@ -236,9 +236,7 @@ class TextLayer {
   cancel() {
     const abortEx = new AbortException("TextLayer task cancelled.");
 
-    this.#reader?.cancel(abortEx).catch(() => {
-      // Avoid "Uncaught promise" messages in the console.
-    });
+    this.#reader?.cancel(abortEx).catch(noopFn);
     this.#reader = null;
 
     this.#capability.reject(abortEx);

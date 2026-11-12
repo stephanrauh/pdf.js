@@ -16,8 +16,10 @@
 import {
   AbortException,
   assert,
+  createPromiseCapability,
   info, // #171 modified by ngx-extended-pdf-viewer: still used by the "showUnverifiedSignatures" handler
   isNodeJS,
+  noopFn,
   PasswordException,
   setVerbosityLevel,
   warn,
@@ -66,7 +68,7 @@ if (!Promise.allSettled) {
 }
 // end of modification ngx-extended-pdf-viewer #358
 class WorkerTask {
-  #capability = Promise.withResolvers();
+  #capability = createPromiseCapability();
 
   terminated = false;
 
@@ -254,7 +256,7 @@ class WorkerMessageHandler {
       const pdfStream = new PDFWorkerStream({ msgHandler: handler }),
         fullReader = pdfStream.getFullReader();
 
-      const { promise, resolve, reject } = Promise.withResolvers();
+      const { promise, resolve, reject } = createPromiseCapability();
       let newPdfManager,
         cachedChunks = [];
       cancelXHRs = reason => pdfStream.cancelAllRequests(reason);
@@ -415,14 +417,9 @@ class WorkerMessageHandler {
           }
           pdfManager = newPdfManager;
 
-          pdfManager.requestLoadedStream(/* noFetch = */ true).then(
-            stream => {
-              handler.send("DataLoaded", { length: stream.bytes.byteLength });
-            },
-            () => {
-              // Avoid errors if document loading was terminated.
-            }
-          );
+          pdfManager.requestLoadedStream(/* noFetch = */ true).then(stream => {
+            handler.send("DataLoaded", { length: stream.bytes.byteLength });
+          }, noopFn); // Avoid errors if document loading was terminated.
         })
         .then(pdfManagerReady, onFailure);
     }

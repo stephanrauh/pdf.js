@@ -1179,6 +1179,17 @@ function _isValidExplicitDest(validRef, validName, dest) {
   return true;
 }
 
+// A no-op function, useful e.g. with `catch` handlers that ignore errors.
+function noopFn() {}
+
+// A wrapper around the `Promise.withResolvers()` function, that prevents
+// "uncaught exception: Object"-messages in the console for unhandled promises.
+function createPromiseCapability() {
+  const pc = Promise.withResolvers();
+  pc.promise.catch(noopFn);
+  return pc;
+}
+
 // Helpers for simple `Map.prototype.getOrInsertComputed()` invocations,
 // to avoid duplicate function creation.
 const makeArr = () => [];
@@ -1236,6 +1247,7 @@ export {
   BASELINE_FACTOR,
   BBOX_INIT,
   bytesToString,
+  createPromiseCapability,
   createValidAbsoluteUrl,
   DEFAULT_VERTICAL_ADVANCE,
   DEFAULT_VERTICAL_ORIGIN_Y,
@@ -1260,6 +1272,7 @@ export {
   makeObj,
   makeSet,
   MeshFigureType,
+  noopFn,
   normalizeUnicode,
   OPS,
   PageActionEventType,

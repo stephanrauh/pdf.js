@@ -65,5 +65,10 @@
   "license": "Apache-2.0",
   "dependencies": {
     "canvas-size": "^2.0.0"
+  },
+  "allowScripts": {
+    "core-js": false,
+    "puppeteer": false,
+    "unrs-resolver": false
   }
 }

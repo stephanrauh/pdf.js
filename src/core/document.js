@@ -16,11 +16,13 @@
 import {
   AnnotationEditorPrefix,
   assert,
+  createPromiseCapability,
   FormatError,
   info,
   InvalidPDFException,
   isArrayEqual,
   makeArr,
+  noopFn,
   PageActionEventType,
   RenderingIntentFlag,
   shadow,
@@ -1507,9 +1509,7 @@ class PDFDocument {
 
   loadXfaResources(handler, task) {
     return Promise.all([
-      this.#loadXfaFonts(handler, task).catch(() => {
-        // Ignore errors, to allow the document to load.
-      }),
+      this.#loadXfaFonts(handler, task).catch(noopFn), // Ignore errors, to allow the document to load.
       this.#loadXfaImages(),
     ]);
   }
@@ -1820,17 +1820,14 @@ class PDFDocument {
       }
 
       for (const [pageIndex, [pageDict, ref]] of pagesTree) {
-        let promise;
+        const capability = createPromiseCapability();
+        this.#pagePromises.set(pageIndex, capability.promise);
+
         if (pageDict instanceof Error) {
-          promise = Promise.reject(pageDict);
-
-          // Prevent "uncaught exception: Object"-messages in the console.
-          promise.catch(() => {});
+          capability.reject(pageDict);
         } else {
-          promise = Promise.resolve(this.#createPage(pageIndex, pageDict, ref));
+          capability.resolve(this.#createPage(pageIndex, pageDict, ref));
         }
-
-        this.#pagePromises.set(pageIndex, promise);
       }
       catalog.setActualNumPages(pagesTree.size);
     }

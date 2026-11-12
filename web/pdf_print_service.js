@@ -15,6 +15,8 @@
 
 import {
   AnnotationMode,
+  createPromiseCapability,
+  noopFn,
   PixelsPerInch,
   RenderingCancelledException,
   shadow,
@@ -209,12 +211,6 @@ class PDFPrintService {
       this.pageStyleSheet = null;
       // #2362 end of modification by ngx-extended-pdf-viewer
     }
-    if (this._blobURLs) {
-      for (const url of this._blobURLs) {
-        URL.revokeObjectURL(url);
-      }
-      this._blobURLs = null;
-    }
     this.scratchCanvas.width = this.scratchCanvas.height = 0;
     this.scratchCanvas = null;
     // #3126 modified by ngx-extended-pdf-viewer
@@ -289,7 +285,7 @@ class PDFPrintService {
     this.throwIfInactive();
     const img = document.createElement("img");
 
-    const { promise, resolve, reject } = Promise.withResolvers();
+    const { promise, resolve, reject } = createPromiseCapability();
     img.onload = resolve;
     img.onerror = () => {
       NgxConsole.error("Failed to load printed page image via blob URL, falling back to data URL.");
@@ -341,9 +337,7 @@ class PDFPrintService {
     wrapper.append(img);
     this.printContainer.append(wrapper);
 
-    promise.catch(() => {
-      // Avoid "Uncaught promise" messages in the console.
-    });
+    promise.catch(noopFn); // Avoid "Uncaught promise" messages in the console.
     return promise;
   }
   // #3126 end of modification by ngx-extended-pdf-viewer
@@ -457,9 +451,7 @@ function printPdf() {
           // #643 end of modification
           return activeServiceOnEntry.performPrint();
         })
-        .catch(() => {
-          // Ignore any error messages.
-        })
+        .catch(noopFn)
         .then(() => {
           // aborts acts on the "active" print request, so we need to check
           // whether the print request (activeServiceOnEntry) is still active.
