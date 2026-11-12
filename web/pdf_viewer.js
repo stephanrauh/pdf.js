@@ -459,16 +459,15 @@ class PDFViewer {
     this._showPageCorners = true;
     // #3140 end of modification by ngx-extended-pdf-viewer
 
-    this.defaultRenderingQueue = !options.renderingQueue;
-    if (
-      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
-      this.defaultRenderingQueue
-    ) {
-      // Custom rendering queue is not specified, using default one
-      this.renderingQueue = new PDFRenderingQueue();
-      this.renderingQueue.setViewer(this);
-    } else {
-      this.renderingQueue = options.renderingQueue;
+    this.renderingQueue = options.renderingQueue;
+    if (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) {
+      this.defaultRenderingQueue = !this.renderingQueue;
+
+      if (this.defaultRenderingQueue) {
+        // Custom rendering queue is not specified, using default one
+        this.renderingQueue = new PDFRenderingQueue();
+        this.renderingQueue.setViewer(this);
+      }
     }
 
     const { abortSignal } = options;
@@ -1096,7 +1095,10 @@ class PDFViewer {
       pageNumber,
     });
 
-    if (this.defaultRenderingQueue) {
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+      this.defaultRenderingQueue
+    ) {
       this.update();
     }
   }
@@ -1663,7 +1665,10 @@ class PDFViewer {
           }
         });
 
-        if (this.defaultRenderingQueue) {
+        if (
+          (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+          this.defaultRenderingQueue
+        ) {
           this.update();
         }
       })
@@ -2452,7 +2457,10 @@ class PDFViewer {
       noScroll,
     });
 
-    if (this.defaultRenderingQueue) {
+    if (
+      (typeof PDFJSDev === "undefined" || PDFJSDev.test("GENERIC")) &&
+      this.defaultRenderingQueue
+    ) {
       this.update();
     }
   }

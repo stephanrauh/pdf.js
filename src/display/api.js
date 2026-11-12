@@ -155,9 +155,6 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  *   `getOperatorList`, `getTextContent`, and `RenderTask`, when the associated
  *   PDF data cannot be successfully parsed, instead of attempting to recover
  *   whatever possible of the data. The default value is `false`.
- * @property {number} [maxImageSize] - The maximum allowed image size in total
- *   pixels, i.e. width * height. Images above this value will not be rendered.
- *   Use -1 for no limit, which is also the default value.
  * @property {boolean} [isOffscreenCanvasSupported] - Determines if we can use
  *   `OffscreenCanvas` in the worker. Primarily used to improve performance of
  *   image conversion/rendering.
@@ -273,10 +270,6 @@ function getDocument(src = {}) {
   // #1292 end of modification by ngx-extended-pdf-viewer
   const wasmUrl = getFactoryUrlProp(src.wasmUrl);
   const ignoreErrors = src.stopAtErrors !== true;
-  const maxImageSize =
-    Number.isInteger(src.maxImageSize) && src.maxImageSize > -1
-      ? src.maxImageSize
-      : -1;
   const isOffscreenCanvasSupported =
     typeof src.isOffscreenCanvasSupported === "boolean"
       ? src.isOffscreenCanvasSupported
@@ -413,7 +406,6 @@ function getDocument(src = {}) {
     enableCatalogAAJavaScript: AppOptions.get("enableCatalogAAJavaScript"),
     // #2995 end of modification by ngx-extended-pdf-viewer
     evaluatorOptions: {
-      maxImageSize,
       disableFontFace,
       ignoreErrors,
       isOffscreenCanvasSupported,

@@ -101,7 +101,7 @@ class ViewsManager extends Sidebar {
     },
     eventBus,
     l10n,
-    enableMerge = false,
+    enableMerge = false, // #3141 modified by ngx-extended-pdf-viewer
     enableSplitMerge = false,
     globalAbortSignal,
   }) {
@@ -154,10 +154,14 @@ class ViewsManager extends Sidebar {
       viewsManagerStatus.hidden = true;
     }
     this._enableSplitMerge = enableSplitMerge;
+    // #3141 modified by ngx-extended-pdf-viewer
+    // Upstream folded `enableMerge` into `enableSplitMerge`; the fork keeps
+    // the "Add file" button behind its own switch.
     this._enableMerge = enableMerge;
-    if (!enableMerge) {
+    if (!enableMerge && viewsManagerAddFileButton) {
       viewsManagerAddFileButton.hidden = true;
     }
+    // #3141 end of modification by ngx-extended-pdf-viewer
 
     // PDF.js v5.4.530 introduced a new Menu component for view selector
     // ngx-extended-pdf-viewer's HTML doesn't include these elements yet, so we conditionally create the menu

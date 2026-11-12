@@ -71,7 +71,7 @@ const SPACE_FOR_DRAG_MARKER_WHEN_NO_NEXT_ELEMENT = 15;
  * @property {boolean} [enableNewBadge] - Enables the "new" badge for the split
  *   and merge features.
  * @property {boolean} [enableMerge] - Enables the merge feature.
- *   The default value is `false`.
+ *   The default value is `false`. (#3141 modified by ngx-extended-pdf-viewer)
  * @property {boolean} [enableSplitMerge] - Enables split and merge features.
  *   The default value is `false`.
  * @property {object} [statusBar] - The status bar elements to manage the status
@@ -92,7 +92,7 @@ const SPACE_FOR_DRAG_MARKER_WHEN_NO_NEXT_ELEMENT = 15;
 class PDFThumbnailViewer {
   static #draggingScaleFactor = 0;
 
-  #enableMerge = false;
+  #enableMerge = false; // #3141 modified by ngx-extended-pdf-viewer
 
   #enableSplitMerge = false;
 
@@ -201,7 +201,7 @@ class PDFThumbnailViewer {
     maxCanvasDim,
     pageColors,
     abortSignal,
-    enableMerge,
+    enableMerge, // #3141 modified by ngx-extended-pdf-viewer
     enableSplitMerge,
     enablePageReordering, // #2943 modified by ngx-extended-pdf-viewer
     enableNewBadge,
@@ -221,7 +221,7 @@ class PDFThumbnailViewer {
     this.maxCanvasDim = maxCanvasDim;
     this.pageColors = pageColors || null;
     this.#abortSignal = abortSignal;
-    this.#enableMerge = enableMerge || false;
+    this.#enableMerge = enableMerge || false; // #3141 modified by ngx-extended-pdf-viewer
     this.#enableSplitMerge = enableSplitMerge || false;
     // #2943 modified by ngx-extended-pdf-viewer
     this.#enablePageReordering = enablePageReordering || false;
@@ -1735,7 +1735,7 @@ class PDFThumbnailViewer {
   }
 
   #addExternalFileDropListeners() {
-    if (!this.#enableMerge) {
+    if (!this.#enableMerge) { // #3141 modified by ngx-extended-pdf-viewer
       return;
     }
     const container = this.container;

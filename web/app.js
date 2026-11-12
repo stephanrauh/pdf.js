@@ -411,7 +411,7 @@ appConfig: null,
         enableGuessAltText: x => x === "true",
         enableNewBadge: x => x === "true",
         enablePermissions: x => x === "true",
-        enableMerge: x => x === "true",
+        enableMerge: x => x === "true", // #3141 modified by ngx-extended-pdf-viewer
         enableSelectionRendering: x => x === "true",
         enableSplitMerge: x => x === "true",
         enableUpdatedAddImage: x => x === "true",
@@ -537,7 +537,7 @@ appConfig: null,
           foreground: AppOptions.get("pageColorsForeground"),
         }
       : null;
-    const enableMerge = AppOptions.get("enableMerge");
+    const enableMerge = AppOptions.get("enableMerge"); // #3141 modified by ngx-extended-pdf-viewer
     const enableSplitMerge = AppOptions.get("enableSplitMerge");
 
     let altTextManager;
@@ -822,7 +822,7 @@ appConfig: null,
         pageColors,
         abortSignal,
         enableSplitMerge,
-        enableMerge,
+        enableMerge, // #3141 modified by ngx-extended-pdf-viewer
         enablePageReordering: AppOptions.get("enablePageReordering"), // #2943 modified by ngx-extended-pdf-viewer
         enableNewBadge: AppOptions.get("enableNewBadge"),
         statusBar: viewsManager.viewsManagerStatusBar,
@@ -1024,7 +1024,7 @@ appConfig: null,
         elements: appConfig.viewsManager,
         eventBus,
         l10n,
-        enableMerge,
+        enableMerge, // #3141 modified by ngx-extended-pdf-viewer
         enableSplitMerge,
         globalAbortSignal: abortSignal,
       });
@@ -3828,7 +3828,9 @@ function onWheel(evt) {
     evt.preventDefault();
     // NOTE: this check must be placed *after* preventDefault.
     if (
-      this._isScrolling ||
+      // Allow trackpad pinching during scrolling (bug 1915803), but block
+      // physical Ctrl+wheel to avoid zooming on momentum events (issue #7022).
+      (this._isScrolling && !isPinchToZoom) ||
       document.visibilityState === "hidden" ||
       this.overlayManager.active
     ) {
