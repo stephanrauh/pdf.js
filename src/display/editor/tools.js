@@ -3226,8 +3226,16 @@ class AnnotationEditorUIManager {
   removeEditors(filterFunction = () => true) {
     let hasChanged = false;
     this.#allEditors.forEach(editor => {
-      if (editor?.serialize()) {
-        if (filterFunction(editor.serialize())) {
+      const serialized = editor?.serialize();
+      if (serialized) {
+        // #3271 modified by ngx-extended-pdf-viewer
+        // Let the filter match the stable `customId` (#3225), which serialize()
+        // leaves out, as getSerializedAnnotations() does.
+        if (editor.customId !== undefined && editor.customId !== null) {
+          serialized.customId = editor.customId;
+        }
+        // #3271 end of modification by ngx-extended-pdf-viewer
+        if (filterFunction(serialized)) {
           editor.remove();
           hasChanged = true;
         }
