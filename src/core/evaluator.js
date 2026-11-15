@@ -26,7 +26,6 @@ import {
   FormatError,
   info,
   isArrayEqual,
-  normalizeUnicode,
   OPS,
   shadow,
   TextRenderingMode,
@@ -78,6 +77,7 @@ import {
 import { parseMarkedContentProps, textSinkWrapper } from "./evaluator_utils.js";
 import { BaseStream } from "./base_stream.js";
 import { bidi } from "./bidi.js";
+import { BrotliStream } from "./brotli_stream.js";
 import { CharCodeMap } from "./char_code_map.js";
 import { ColorSpace } from "./colorspace.js";
 import { ColorSpaceUtils } from "./colorspace_utils.js";
@@ -404,7 +404,7 @@ class PartialEvaluator {
       cMapUrl = cMapUrl();
     }
     // #376 end of modification by ngx-extended-pdf-viewer
-    const cMapData = await WasmLoader.fetch(
+    let cMapData = await WasmLoader.fetch(
       {
         handler: this.handler,
         options: {
@@ -414,8 +414,12 @@ class PartialEvaluator {
         },
       },
       "cMapUrl",
-      `${name}${cMapPacked ? ".bcmap" : ""}`
+      `${name}${cMapPacked ? ".bcmap.br" : ""}`
     );
+    if (cMapPacked) {
+      const stream = new BrotliStream(new Stream(cMapData), cMapData.length);
+      cMapData = (await stream.asyncGetBytes()) ?? stream.getBytes();
+    }
     return { cMapData, cMapPacked };
   }
 
@@ -2366,6 +2370,7 @@ class PartialEvaluator {
     keepWhiteSpace = false,
     prevRefs = null,
     intersector = null,
+    markedContentScope = "",
   }) {
     if (stream.isAsync) {
       const bytes = await stream.asyncGetBytes();
@@ -2680,11 +2685,7 @@ class PartialEvaluator {
     }
 
     function runBidiTransform(textChunk) {
-      let text = textChunk.str.join("");
-      if (!disableNormalization) {
-        text = normalizeUnicode(text);
-      }
-      const bidiResult = bidi(text, -1, textChunk.vertical);
+      const bidiResult = bidi(textChunk.str, -1, textChunk.vertical);
       return {
         str: bidiResult.str,
         dir: bidiResult.dir,
@@ -3205,7 +3206,9 @@ class PartialEvaluator {
         }
 
         if (!intersector) {
-          textChunk.str.push(glyphUnicode);
+          textChunk.str.push(
+            disableNormalization ? glyphUnicode : glyph.normalizedUnicode
+          );
         }
 
         if (charSpacing) {
@@ -3594,6 +3597,11 @@ class PartialEvaluator {
                 }
 
                 const localResources = dict.get("Resources");
+                // MCIDs are local to a form XObject having /StructParents.
+                const xObjMarkedContentScope =
+                  Number.isInteger(dict.get("StructParents")) && dict.objId
+                    ? `_x${dict.objId}`
+                    : markedContentScope;
 
                 // Enqueue the `textContent` chunk before parsing the /Form
                 // XObject.
@@ -3617,6 +3625,7 @@ class PartialEvaluator {
                     disableNormalization,
                     keepWhiteSpace,
                     prevRefs: seenRefs,
+                    markedContentScope: xObjMarkedContentScope,
                   })
                   .then(function () {
                     if (!sinkWrapper.enqueueInvoked) {
@@ -3714,7 +3723,7 @@ class PartialEvaluator {
               textContent.items.push({
                 type: "beginMarkedContentProps",
                 id: Number.isInteger(mcid)
-                  ? `${self.idFactory.getPageObjId()}_mc${mcid}`
+                  ? `${self.idFactory.getPageObjId()}${markedContentScope}_mc${mcid}`
                   : null,
                 tag: args[0] instanceof Name ? args[0].name : null,
               });

@@ -209,7 +209,9 @@ const RENDERING_CANCELLED_TIMEOUT = 100; // ms
  *   and wasm files in the main-thread.
  *   The default value is {DOMBinaryDataFactory}.
  * @property {boolean} [enableHWA] - Enables hardware acceleration for
- *   rendering. The default value is `false`.
+ *   rendering. The default value is `true`.
+ * @property {boolean} [enableWebGPU] - Enables WebGPU rendering.
+ *   The default value is `true`.
  * @property {object} [pagesMapper] - The pages mapper that will be used to map
  *   page ids and page numbers. It's used when the page order is changed or some
  *   pages are removed, cloned, etc.
@@ -242,7 +244,9 @@ function getDocument(src = {}) {
   const rangeTransport =
     src.range instanceof PDFDataRangeTransport ? src.range : null;
   const rangeChunkSize =
-    Number.isInteger(src.rangeChunkSize) && src.rangeChunkSize > 0
+    (typeof PDFJSDev === "undefined" || !PDFJSDev.test("MOZCENTRAL")) &&
+    Number.isInteger(src.rangeChunkSize) &&
+    src.rangeChunkSize > 0
       ? src.rangeChunkSize
       : 2 ** 16;
   let worker = src.worker instanceof PDFWorker ? src.worker : null;
@@ -307,8 +311,8 @@ function getDocument(src = {}) {
     (typeof PDFJSDev !== "undefined" && PDFJSDev.test("GENERIC") && isNodeJS
       ? NodeBinaryDataFactory
       : DOMBinaryDataFactory);
-  const enableHWA = src.enableHWA === true;
-  const enableWebGPU = src.enableWebGPU === true;
+  const enableHWA = src.enableHWA !== false;
+  const enableWebGPU = src.enableWebGPU !== false;
   if (enableWebGPU) {
     initGPU(); // Initialize without delaying document loading.
   }
@@ -327,10 +331,10 @@ function getDocument(src = {}) {
       ? src.useSystemFonts
       : !isNodeJS && !disableFontFace;
   const useWorkerFetch =
-    typeof src.useWorkerFetch === "boolean"
+    (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
+    (typeof src.useWorkerFetch === "boolean"
       ? src.useWorkerFetch
-      : (typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")) ||
-        !!(
+      : !!(
           BinaryDataFactory === DOMBinaryDataFactory &&
           cMapUrl &&
           cMapPacked &&
@@ -339,7 +343,7 @@ function getDocument(src = {}) {
           isValidFetchUrl(cMapUrl, document.baseURI) &&
           isValidFetchUrl(standardFontDataUrl, document.baseURI) &&
           isValidFetchUrl(wasmUrl, document.baseURI)
-        );
+        ));
   const disableWorkerRendering =
     src.disableWorkerRendering === true ||
     !isOffscreenCanvasSupported ||

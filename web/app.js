@@ -531,7 +531,12 @@ appConfig: null,
 
     const container = appConfig.mainContainer,
       viewer = appConfig.viewerContainer;
-    const annotationEditorMode = AppOptions.get("annotationEditorMode");
+    const annotationEditorMode =
+      (typeof PDFJSDev === "undefined"
+        ? window.isGECKOVIEW
+        : PDFJSDev.test("GECKOVIEW")) && !AppOptions.get("enableAndroidEditing")
+        ? AnnotationEditorType.DISABLE
+        : AppOptions.get("annotationEditorMode");
     const hasForcedColors =
       AppOptions.get("forcePageColors") ||
       window.matchMedia("(forced-colors: active)").matches;
