@@ -791,6 +791,19 @@ const defaultOptions = new Map([
       kind: OptionKind.VIEWER,
     },
   ],
+  // #3314 modified by ngx-extended-pdf-viewer
+  // Flatten annotations and form fields when the download button saves the
+  // document: false, true or "non-forms" (see `SaveDocumentParameters`).
+  [
+    "flattenOnDownload",
+    {
+      /** @type {boolean | string} */
+      value: false,
+      kind: OptionKind.VIEWER,
+      type: Type.BOOLEAN + Type.STRING,
+    },
+  ],
+  // #3314 end of modification by ngx-extended-pdf-viewer
   ...(typeof PDFJSDev !== "undefined" && PDFJSDev.test("MOZCENTRAL")
     ? [
         [

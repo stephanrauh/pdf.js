@@ -1815,7 +1815,12 @@ appConfig: null,
    * @private
    * @returns {Promise<void>}
    */
-  async _downloadOrSave({ flatten = false, intent = "print" } = {}) {
+  async _downloadOrSave({
+    // #3314 modified by ngx-extended-pdf-viewer
+    flatten = AppOptions.get("flattenOnDownload") ?? false,
+    // #3314 end of modification by ngx-extended-pdf-viewer
+    intent = "print",
+  } = {}) {
     if (!this.downloadManager) {
       if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
         this.eventBus.dispatch("downloadskipped", { source: this });
@@ -1913,27 +1918,44 @@ appConfig: null,
   // #2943 end of modification by ngx-extended-pdf-viewer
 
   // #1685 modified by ngx-extended-pdf-viewer
-  async _exportWithAnnotations() {
+  // #3314 modified by ngx-extended-pdf-viewer
+  // `flatten` and `intent` as in `SaveDocumentParameters`; flattening for print
+  // runs the WillPrint/DidPrint scripts instead of WillSave/DidSave, as save() does.
+  async _exportWithAnnotations({ flatten = false, intent = "print" } = {}) {
     if (this._saveInProgress) {
       throw new Error(`Already downloading`);
     }
     this._saveInProgress = true;
-    await this.pdfScriptingManager.dispatchWillSave();
+    const isPrinting = flatten && intent === "print";
 
     try {
       this._ensureDownloadComplete();
+      const { pdfDocument } = this;
+      if (isPrinting) {
+        if (!(await this._dispatchWillPrintForSaving(pdfDocument))) {
+          throw new Error("the document was replaced");
+        }
+      } else {
+        await this.pdfScriptingManager.dispatchWillSave();
+      }
 
-      const data = await this.pdfDocument.saveDocument();
+      const data = await pdfDocument.saveDocument({ flatten, intent });
       const blob = new Blob([data], { type: "application/pdf" });
 
       return blob;
     } catch (reason) {
       throw new Error(`Error when saving the document: ${reason.message}`);
     } finally {
-      await this.pdfScriptingManager.dispatchDidSave();
-      this._saveInProgress = false;
+      try {
+        await (isPrinting
+          ? this.pdfScriptingManager.dispatchDidPrint()
+          : this.pdfScriptingManager.dispatchDidSave());
+      } finally {
+        this._saveInProgress = false;
+      }
     }
   },
+  // #3314 end of modification by ngx-extended-pdf-viewer
 
   // #2430 modified by ngx-extended-pdf-viewer
   _ensureDownloadComplete() {
@@ -1956,17 +1978,15 @@ appConfig: null,
     }
   },
 
-  async export() {
-    if (this.pdfDocument?.annotationStorage.size > 0) {
-      return this._exportWithAnnotations();
-    }
-    return this._exportWithoutAnnotations();
+  // #3314 modified by ngx-extended-pdf-viewer
+  // Flattening requires a save even without edits.
+  async export(options = {}) {
+    return options.flatten || this.pdfDocument?.annotationStorage.size > 0
+      ? this._exportWithAnnotations(options)
+      : this._exportWithoutAnnotations();
   },
+  // #3314 end of modification by ngx-extended-pdf-viewer
   // #1685 end of modification by ngx-extended-pdf-viewer
-
-  openInExternalApp() {
-    this.downloadOrSave({ openInExternalApp: true });
-  },
 
   /**
    * Run WillPrint before flattening for print.
