@@ -1584,7 +1584,9 @@ function buildGeneric(defines, dir) {
     createCMapBundle().pipe(gulp.dest(dir + "web/cmaps")),
     createICCBundle().pipe(gulp.dest(dir + "web/iccs")),
     createStandardFontBundle().pipe(gulp.dest(dir + "web/standard_fonts")),
-    createWasmBundle().pipe(gulp.dest(dir + "web/wasm")),
+    createWasmBundle()
+      .pipe(brotliCompressFallbacks())
+      .pipe(gulp.dest(dir + "web/wasm")),
 
     preprocessHTML("web/viewer.html", defines).pipe(gulp.dest(dir + "web")),
     preprocessCSS("web/viewer.css", defines)
@@ -2312,9 +2314,9 @@ gulp.task(
         createStandardFontBundle().pipe(
           gulp.dest(CHROME_BUILD_CONTENT_DIR + "web/standard_fonts")
         ),
-        createWasmBundle().pipe(
-          gulp.dest(CHROME_BUILD_CONTENT_DIR + "web/wasm")
-        ),
+        createWasmBundle()
+          .pipe(brotliCompressFallbacks())
+          .pipe(gulp.dest(CHROME_BUILD_CONTENT_DIR + "web/wasm")),
 
         preprocessHTML("web/viewer.html", defines).pipe(
           gulp.dest(CHROME_BUILD_CONTENT_DIR + "web")
@@ -3238,7 +3240,9 @@ gulp.task("dev-wasm", function () {
   fs.rmSync(VIEWER_WASM_OUTPUT, { recursive: true, force: true });
   fs.mkdirSync(VIEWER_WASM_OUTPUT, { recursive: true });
 
-  return createWasmBundle().pipe(gulp.dest(VIEWER_WASM_OUTPUT));
+  return createWasmBundle()
+    .pipe(brotliCompressFallbacks())
+    .pipe(gulp.dest(VIEWER_WASM_OUTPUT));
 });
 
 gulp.task(
@@ -3398,7 +3402,9 @@ function buildInternalViewer(defines, dir) {
     createCMapBundle().pipe(gulp.dest(dir + "web/cmaps")),
     createICCBundle().pipe(gulp.dest(dir + "web/iccs")),
     createStandardFontBundle().pipe(gulp.dest(dir + "web/standard_fonts")),
-    createWasmBundle().pipe(gulp.dest(dir + "web/wasm")),
+    createWasmBundle()
+      .pipe(brotliCompressFallbacks())
+      .pipe(gulp.dest(dir + "web/wasm")),
   ]);
 }
 
@@ -3620,7 +3626,7 @@ function packageJson() {
     bugs: DIST_BUGS_URL,
     license: DIST_LICENSE,
     optionalDependencies: {
-      "@napi-rs/canvas": "^1.1.0",
+      "@napi-rs/canvas": "^1.1.1",
     },
     browser: {
       canvas: false,

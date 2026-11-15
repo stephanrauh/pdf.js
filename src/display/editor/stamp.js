@@ -382,7 +382,8 @@ class StampEditor extends AnnotationEditor {
   setCanvas(annotationElementId, canvas) {
     const { id: bitmapId, bitmap } = this._uiManager.imageManager.getFromCanvas(
       annotationElementId,
-      canvas
+      canvas,
+      this._initialData?.rotation
     );
     canvas.remove();
     if (bitmapId && this._uiManager.imageManager.isValidId(bitmapId)) {
@@ -769,7 +770,8 @@ class StampEditor extends AnnotationEditor {
         delete data.canvas;
         ({ id: bitmapId, bitmap } = uiManager.imageManager.getFromCanvas(
           container.id,
-          canvas
+          canvas,
+          rotation
         ));
         canvas.remove();
       } else {
@@ -820,8 +822,7 @@ class StampEditor extends AnnotationEditor {
       // #3113 end of modification by ngx-extended-pdf-viewer
     }
     const editor = await super.deserialize(data, parent, uiManager);
-    const { rect, bitmap, bitmapUrl, bitmapId, isSvg, accessibilityData } =
-      data;
+    const { bitmap, bitmapUrl, bitmapId, isSvg, accessibilityData } = data;
     if (missingCanvas) {
       uiManager.addMissingCanvas(data.id, editor);
       editor.#missingCanvas = true;
@@ -834,10 +835,6 @@ class StampEditor extends AnnotationEditor {
       editor.#bitmapUrl = bitmapUrl;
     }
     editor.#isSvg = isSvg;
-
-    const [parentWidth, parentHeight] = editor.pageDimensions;
-    editor.width = (rect[2] - rect[0]) / parentWidth;
-    editor.height = (rect[3] - rect[1]) / parentHeight;
 
     if (accessibilityData) {
       editor.altTextData = accessibilityData;

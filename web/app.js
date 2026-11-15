@@ -195,6 +195,7 @@ appConfig: null,
   _contentDispositionFilename: null,
   _contentLength: null,
   _saveInProgress: false,
+  _downloadOrSavePromise: null,
   _wheelUnusedTicks: 0,
   _wheelUnusedFactor: 1,
   _touchManager: null,
@@ -1730,7 +1731,7 @@ appConfig: null,
   },
 
   // #2943 modified by ngx-extended-pdf-viewer
-  async save(pageOrder = null) {
+  async save({ flatten = false, intent = "print", pageOrder = null } = {}) {
     if (!this.downloadManager) {
       if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
         this.eventBus.dispatch("downloadskipped", { source: this });
@@ -1744,11 +1745,20 @@ appConfig: null,
     this._saveInProgress = true;
     // Keep the document that this save belongs to.
     const { pdfDocument } = this;
+    const isPrinting = flatten && intent === "print";
 
     try {
-      await this.pdfScriptingManager.dispatchWillSave();
+      if (isPrinting) {
+        if (!(await this._dispatchWillPrintForSaving(pdfDocument))) {
+          return;
+        }
+      } else {
+        await this.pdfScriptingManager.dispatchWillSave();
+      }
       const data = await pdfDocument.saveDocument({
         printToPDF: this.externalServices.printToPDF,
+        flatten,
+        intent,
         pageOrder, // #2943 modified by ngx-extended-pdf-viewer
       });
       this.downloadManager.download(
@@ -1766,7 +1776,9 @@ appConfig: null,
     } finally {
       try {
         if (pdfDocument === this.pdfDocument) {
-          await this.pdfScriptingManager.dispatchDidSave();
+          await (isPrinting
+            ? this.pdfScriptingManager.dispatchDidPrint()
+            : this.pdfScriptingManager.dispatchDidSave());
         }
       } finally {
         this._saveInProgress = false;
@@ -1785,7 +1797,25 @@ appConfig: null,
     }
   },
 
-  async downloadOrSave() {
+  /**
+   * Download or save the document, coalescing the concurrent requests into a
+   * single one.
+   * @returns {Promise<void>}
+   */
+  downloadOrSave(options) {
+    this._downloadOrSavePromise ??= this._downloadOrSave(options).finally(
+      () => {
+        this._downloadOrSavePromise = null;
+      }
+    );
+    return this._downloadOrSavePromise;
+  },
+
+  /**
+   * @private
+   * @returns {Promise<void>}
+   */
+  async _downloadOrSave({ flatten = false, intent = "print" } = {}) {
     if (!this.downloadManager) {
       if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
         this.eventBus.dispatch("downloadskipped", { source: this });
@@ -1811,12 +1841,25 @@ appConfig: null,
         });
         await this.onSavePages({
           data: this.pdfThumbnailViewer.getStructuralChanges(),
+          flatten,
+          intent,
         });
       } else {
+        const { pdfDocument } = this;
         // #2943 modified by ngx-extended-pdf-viewer
-        const hasChanges = this.pdfDocument?.annotationStorage.size > 0 || !this.pageOrder.every((value, index, array) =>
-          index === 0 || value >= array[index - 1]);
-        await (hasChanges ? this.save(this.pageOrder) : this.download());
+        // A reordered page sequence also requires a save.
+        const pagesReordered = !this.pageOrder.every(
+          (value, index, array) => index === 0 || value >= array[index - 1]
+        );
+        // Flattening requires a save even without edits.
+        const mustSave =
+          pdfDocument &&
+          (flatten ||
+            pdfDocument.annotationStorage.size > 0 ||
+            pagesReordered);
+        await (mustSave
+          ? this.save({ flatten, intent, pageOrder: this.pageOrder })
+          : this.download());
         // #2943 end of modification by ngx-extended-pdf-viewer
       }
       delete this._mergedDocumentNeedsSaving;
@@ -1923,6 +1966,19 @@ appConfig: null,
 
   openInExternalApp() {
     this.downloadOrSave({ openInExternalApp: true });
+  },
+
+  /**
+   * Run WillPrint before flattening for print.
+   * @returns {Promise<boolean>} Whether this is still the active document.
+   */
+  async _dispatchWillPrintForSaving(pdfDocument) {
+    try {
+      await this.pdfScriptingManager.dispatchWillPrint();
+    } catch {
+      // Ignore script errors, as in beforePrint.
+    }
+    return pdfDocument === this.pdfDocument;
   },
 
   /**
@@ -3333,17 +3389,36 @@ appConfig: null,
     this.pdfViewer.onPagesEdited(data);
   },
 
-  async onSavePages({ data: { pageInfos, copyLevels } }) {
+  async onSavePages({
+    data: { pageInfos, copyLevels },
+    flatten = false,
+    intent = "print",
+  }) {
     if (typeof PDFJSDev !== "undefined" && PDFJSDev.test("TESTING")) {
       return;
     }
-    if (!this.downloadManager || !this.pdfDocument) {
+    const { pdfDocument } = this;
+    if (!this.downloadManager || !pdfDocument) {
       return;
     }
-    const modifiedPdfBytes = await this.pdfDocument.extractPages(
-      pageInfos,
-      copyLevels
-    );
+    const isPrinting = flatten && intent === "print";
+    let modifiedPdfBytes;
+    try {
+      if (
+        isPrinting &&
+        !(await this._dispatchWillPrintForSaving(pdfDocument))
+      ) {
+        return;
+      }
+      modifiedPdfBytes = await pdfDocument.extractPages(pageInfos, copyLevels, {
+        flatten,
+        intent,
+      });
+    } finally {
+      if (isPrinting && pdfDocument === this.pdfDocument) {
+        await this.pdfScriptingManager.dispatchDidPrint();
+      }
+    }
     if (!modifiedPdfBytes) {
       console.error(
         "Something wrong happened when saving the edited PDF.\nPlease file a bug."

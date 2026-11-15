@@ -720,6 +720,17 @@ class PDFDataRangeTransport {
  * @property {Array<number>} [pageOrder] - 1-based page numbers in the order
  *   the pages are written to the saved document. (#2943 modified by
  *   ngx-extended-pdf-viewer)
+ * @property {boolean | "non-forms"} [flatten] - Draw visible annotation
+ *   appearances into page content where possible. Keep links, file attachments
+ *   and media annotations interactive. With `true`, also flatten widgets
+ *   and remove widgets hidden for `intent`, except barcodes. Keep visible
+ *   widgets without drawable appearances. Remove AcroForm if this removes all
+ *   page widgets, unless SigFlags declares signatures. With `"non-forms"`, keep
+ *   widgets and AcroForm. Ignored for pure XFA documents. Defaults to `false`.
+ * @property {"display" | "print"} [intent] - Visibility to use when flattening
+ *   annotations. The default value is `"print"`. Ignored unless `flatten` is
+ *   enabled. Document scripts are not executed. Callers handle WillPrint
+ *   before saving and DidPrint afterward for scripted print changes.
  */
 
 /**
@@ -1077,11 +1088,18 @@ class PDFDocumentProxy {
    *  extracted pages sharing the same source page, or -1 if it isn't extracted.
    *  This routes editor annotations when the viewer contains multiple copies
    *  of a source page.
-   * @returns {Promise<Uint8Array>} A promise that is resolved with a
-   *   {Uint8Array} containing the full data of the saved document.
+   * @param {object} [options]
+   * @param {boolean | "non-forms"} [options.flatten] - Flatten extracted
+   *   annotations; see {@link SaveDocumentParameters}. The default value is
+   *   `false`.
+   * @param {"display" | "print"} [options.intent] - Visibility to use when
+   *   flattening; see {@link SaveDocumentParameters}. The default value is
+   *   `"print"`.
+   * @returns {Promise<Uint8Array|null>} The extracted PDF bytes, or `null`
+   *   if extraction fails.
    */
-  extractPages(pageInfos, copyLevels = null) {
-    return this._transport.extractPages(pageInfos, copyLevels);
+  extractPages(pageInfos, copyLevels = null, options = {}) {
+    return this._transport.extractPages(pageInfos, copyLevels, options);
   }
 
   /**
@@ -2505,6 +2523,15 @@ class WorkerTransport {
     return shadow(this, "annotationStorage", new AnnotationStorage());
   }
 
+  #getFlattenIntent(intent) {
+    if (intent !== "display" && intent !== "print") {
+      warn(`Invalid flattening intent: ${intent}, using "print".`);
+    }
+    return intent === "display"
+      ? RenderingIntentFlag.DISPLAY
+      : RenderingIntentFlag.PRINT;
+  }
+
   getRenderingIntent(
     intent,
     annotationMode = AnnotationMode.ENABLE,
@@ -2890,8 +2917,13 @@ class WorkerTransport {
   }
 
   // #2943 modified by ngx-extended-pdf-viewer
-  saveDocument({ printToPDF = null, pageOrder = null } = {}) {
-    if (this.annotationStorage.size <= 0) {
+  saveDocument({
+    printToPDF = null,
+    flatten = false,
+    intent = "print",
+    pageOrder = null,
+  } = {}) {
+    if (this.annotationStorage.size <= 0 && !flatten) {
       warn(
         "saveDocument called while `annotationStorage` is empty, " +
           "please use the getData-method instead."
@@ -2914,7 +2946,9 @@ class WorkerTransport {
           annotationStorage: map,
           supportsPrintToPDF: this.#printToPDF !== null,
           filename: this.#fullReader?.filename ?? null,
-          pageOrder,
+          flatten,
+          intent: this.#getFlattenIntent(intent),
+          pageOrder, // #2943 modified by ngx-extended-pdf-viewer
         },
         transfer
       )
@@ -2925,9 +2959,15 @@ class WorkerTransport {
   }
   // #2943 end of modification by ngx-extended-pdf-viewer
 
-  extractPages(pageInfos, copyLevels = null) {
+  extractPages(
+    pageInfos,
+    copyLevels = null,
+    { flatten = false, intent = "print" } = {}
+  ) {
     const params = {
       pageInfos,
+      flatten,
+      intent: this.#getFlattenIntent(intent),
     };
     let transfer;
     const ImageBitmapCtor = globalThis.ImageBitmap;
